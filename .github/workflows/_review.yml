@@ -30,13 +30,16 @@ jobs:
       security-events: write
       actions: read
       pull-requests: write
-    env:
-      INFRA: ${{ runner.temp }}/ai-review-ci
 
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
+
+      - name: Locate infrastructure clone path
+        # The `runner` context is unavailable in job-level `env`; export the
+        # path once so every later step's shell sees $INFRA.
+        run: echo "INFRA=$RUNNER_TEMP/ai-review-ci" >> "$GITHUB_ENV"
 
       - name: Clone review infrastructure
         run: git clone --depth 1 --branch "${{ inputs.infra_ref }}" https://github.com/dzackgarza/ai-review-ci.git "$INFRA"
