@@ -1,0 +1,324 @@
+"""Post validated review findings to a PR as one review with resolvable threads.
+
+Runner-side automation: consumes the validated artifact and the PR diff,
+never involves the reviewer agent. One review per run: a top-level body
+(summary + metadata) plus one inline, individually-resolvable comment per
+finding. Findings are deduplicated against threads already on the PR via a
+fingerprint marker (``finding_fingerprint``, the same components as the
+SARIF reviewFindingKey: category | path; agent-chosen labels are excluded
+because they are free text reinvented each run).
+
+Anchor classification (computed from the diff before posting, no fallbacks):
+- a finding line visible in the diff       -> line-anchored thread
+- file in diff, lines outside its hunks    -> thread on the file's first
+                                              visible line (body carries the
+                                              real range)
+- file not in the diff                     -> listed in the top-level body
+                                              only (already tracked in code
+                                              scanning)
+
+Thread bodies are diagnosis-only: no remediation is rendered or expected.
+"""
+
+import json
+import os
+import re
+import subprocess
+import sys
+from pathlib import Path
+from typing import Any, NoReturn
+
+from ai_review_ci.models import finding_fingerprint
+
+JsonDict = dict[str, Any]
+
+FINGERPRINT_MARKER = "ai-review-fingerprint:"
+REVIEW_LABELS = {"general": "General Review", "slop": "Slop Review"}
+
+THREADS_QUERY = """
+query($owner: String!, $name: String!, $number: Int!, $cursor: String) {
+  repository(owner: $owner, name: $name) {
+    pullRequest(number: $number) {
+      reviewThreads(first: 100, after: $cursor) {
+        pageInfo { hasNextPage endCursor }
+        nodes { comments(first: 1) { nodes { body } } }
+      }
+    }
+  }
+}
+"""
+
+
+def _fail(msg: str) -> NoReturn:
+    print(f"FATAL: {msg}", file=sys.stderr)
+    sys.exit(1)
+
+
+def _gh_json(args: list[str], body: JsonDict | None = None) -> JsonDict:
+    result = subprocess.run(
+        ["gh", *args],
+        capture_output=True,
+        text=True,
+        input=json.dumps(body) if body is not None else None,
+    )
+    if result.returncode != 0:
+        _fail(f"gh {' '.join(args[:3])} failed: {result.stderr.strip()}")
+    data: JsonDict = json.loads(result.stdout)
+    return data
+
+
+def _diff_target(line: str) -> str | None:
+    """New-side file path from a '+++ ' diff line, or None for deletions."""
+    target = line[4:].split("\t")[0]
+    if target == "/dev/null":
+        return None
+    return target[2:] if target.startswith("b/") else target
+
+
+def _hunk_new_start(line: str) -> int:
+    """Starting RIGHT-side line number from a '@@' hunk header."""
+    m = re.match(r"^@@ -\d+(?:,\d+)? \+(\d+)(?:,(\d+))? @@", line)
+    if not m:
+        _fail(f"unparseable hunk header: {line}")
+    return int(m.group(1))
+
+
+def _advance_hunk_line(line: str, commentable: set[int], new_line: int) -> int | None:
+    """Consume one hunk-body line; return the next RIGHT-side line number.
+
+    Added and context lines are commentable. Deleted lines and the
+    no-newline marker keep the position. Any other content (diff --git /
+    index / similarity headers) ends the hunk body.
+    """
+    if line.startswith("+"):
+        commentable.add(new_line)
+        return new_line + 1
+    if line.startswith("-") or line.startswith("\\"):
+        return new_line
+    if line.startswith(" ") or line == "":
+        commentable.add(new_line)
+        return new_line + 1
+    return None
+
+
+def parse_diff(text: str) -> dict[str, set[int]]:
+    """Map each file in the diff to its commentable RIGHT-side line numbers.
+
+    Commentable lines are those visible in the unified diff on the new side:
+    added lines and context lines within hunks. Deleted files have no new
+    side and are omitted.
+    """
+    files: dict[str, set[int]] = {}
+    current: str | None = None
+    new_line: int | None = None
+    for line in text.splitlines():
+        if line.startswith("+++ "):
+            current = _diff_target(line)
+            if current is not None:
+                files.setdefault(current, set())
+            new_line = None
+        elif line.startswith("@@"):
+            new_line = _hunk_new_start(line)
+        elif current is not None and new_line is not None:
+            new_line = _advance_hunk_line(line, files[current], new_line)
+    return files
+
+
+def existing_fingerprints(repo: str, pr_number: int) -> set[str]:
+    """Fingerprints already present in any review thread on the PR.
+
+    Resolved threads count: a resolved thread is a disposition, equivalent
+    to a dismissed alert — the finding is not re-posted.
+    """
+    owner, name = repo.split("/")
+    found: set[str] = set()
+    cursor: str | None = None
+    while True:
+        args = [
+            "api",
+            "graphql",
+            "-f",
+            f"query={THREADS_QUERY}",
+            "-F",
+            f"owner={owner}",
+            "-F",
+            f"name={name}",
+            "-F",
+            f"number={pr_number}",
+        ]
+        if cursor:
+            args.extend(["-F", f"cursor={cursor}"])
+        data = _gh_json(args)
+        threads = data["data"]["repository"]["pullRequest"]["reviewThreads"]
+        for node in threads["nodes"]:
+            for comment in node["comments"]["nodes"]:
+                for m in re.finditer(
+                    re.escape(FINGERPRINT_MARKER) + r"\s*([0-9a-f]{64})",
+                    comment["body"],
+                ):
+                    found.add(m.group(1))
+        if not threads["pageInfo"]["hasNextPage"]:
+            break
+        cursor = threads["pageInfo"]["endCursor"]
+    return found
+
+
+def pick_anchor(finding: JsonDict, commentable: dict[str, set[int]]) -> int | None:
+    """Best RIGHT-side anchor line for a finding, or None if file is off-diff."""
+    loc = finding["location"]
+    lines = commentable.get(str(loc["path"]))
+    if not lines:
+        return None
+    for ln in range(loc["start_line"], loc["end_line"] + 1):
+        if ln in lines:
+            return ln
+    return min(lines)
+
+
+def render_thread_body(finding: JsonDict, review_label: str, fp: str) -> str:
+    loc = finding["location"]
+    lines = [
+        f"### [{review_label}][{finding['tier']}] {finding['label']}",
+        f"<!-- {FINGERPRINT_MARKER} {fp} -->",
+        "",
+        f"**Location:** `{loc['path']}:{loc['start_line']}-{loc['end_line']}`",
+        f"**Violated invariant:** {finding['violated_invariant']}",
+        f"**Proof:** `{finding['proof_command']}`",
+    ]
+    for key, title in [
+        ("symptom", "Symptom"),
+        ("source", "Source"),
+        ("consequence", "Consequence"),
+        ("pattern", "Pattern"),
+        ("why_it_matters", "Why this matters"),
+    ]:
+        if finding.get(key):
+            lines.append(f"**{title}:** {finding[key]}")
+    ev_parts = [
+        f"`{e['path']}:{e['lines'][0]}-{e['lines'][1]}` ({e['kind']})"
+        for e in finding["evidence"]
+    ]
+    lines.append(f"**Evidence:** {', '.join(ev_parts)}")
+    return "\n".join(lines)
+
+
+def render_review_body(
+    review_label: str,
+    findings: list[JsonDict],
+    posted: int,
+    skipped: int,
+    off_diff: list[JsonDict],
+) -> str:
+    run_url = (
+        f"{os.environ['GITHUB_SERVER_URL']}/{os.environ['GITHUB_REPOSITORY']}"
+        f"/actions/runs/{os.environ['GITHUB_RUN_ID']}"
+    )
+    tier1 = sum(1 for f in findings if f["tier"] == "tier1")
+    tier2 = sum(1 for f in findings if f["tier"] == "tier2")
+    lines = [
+        f"## {review_label} — automated PR review",
+        "",
+        f"Run: {run_url}",
+        f"Findings: {len(findings)} (tier1 {tier1}, tier2 {tier2}) | "
+        f"threads posted: {posted} | duplicates skipped: {skipped} | "
+        f"off-diff (tracker only): {len(off_diff)}",
+    ]
+    if off_diff:
+        lines.extend(
+            [
+                "",
+                "### Off-diff findings (tracked in code scanning, no thread)",
+                "",
+            ]
+        )
+        for f in off_diff:
+            loc = f["location"]
+            lines.append(
+                f"- `{loc['path']}:{loc['start_line']}-{loc['end_line']}` — "
+                f"[{f['tier']}] {f['label']}: {f['violated_invariant']}"
+            )
+    return "\n".join(lines)
+
+
+def partition_findings(
+    findings: list[JsonDict],
+    commentable: dict[str, set[int]],
+    seen: set[str],
+    review_label: str,
+) -> tuple[list[JsonDict], list[JsonDict], int]:
+    """Split findings into inline comments, off-diff entries, and dupes skipped."""
+    comments: list[JsonDict] = []
+    off_diff: list[JsonDict] = []
+    skipped = 0
+    for finding in findings:
+        loc = finding["location"]
+        fp = finding_fingerprint(finding["category"], str(loc["path"]))
+        if fp in seen:
+            skipped += 1
+            continue
+        seen.add(fp)
+        anchor = pick_anchor(finding, commentable)
+        if anchor is None:
+            off_diff.append(finding)
+            continue
+        comments.append(
+            {
+                "path": str(loc["path"]),
+                "line": anchor,
+                "side": "RIGHT",
+                "body": render_thread_body(finding, review_label, fp),
+            }
+        )
+    return comments, off_diff, skipped
+
+
+def post_threads(artifact: Path, diff: Path, repo: str, pr_number: int) -> None:
+    """Post validated findings as resolvable PR review threads.
+
+    Args:
+        artifact: Path to the validated .review-report-artifact.json.
+        diff: Path to the staged PR diff (reviewer-diff.patch).
+        repo: Repository in owner/repo format.
+        pr_number: Pull request number to post the review on.
+    """
+    data: JsonDict = json.loads(artifact.read_text())
+    report_type = data["report_type"]
+    review_label = REVIEW_LABELS[report_type]
+    findings = data["findings"]
+
+    commentable = parse_diff(diff.read_text())
+    seen = existing_fingerprints(repo, pr_number)
+
+    comments, off_diff, skipped = partition_findings(
+        findings, commentable, seen, review_label
+    )
+
+    if not comments and not off_diff:
+        print(
+            f"All {len(findings)} finding(s) already have threads on "
+            f"PR #{pr_number}; nothing to post."
+        )
+        return
+
+    payload = {
+        "event": "COMMENT",
+        "body": render_review_body(
+            review_label, findings, len(comments), skipped, off_diff
+        ),
+        "comments": comments,
+    }
+    _gh_json(
+        [
+            "api",
+            "--method",
+            "POST",
+            f"repos/{repo}/pulls/{pr_number}/reviews",
+            "--input",
+            "-",
+        ],
+        body=payload,
+    )
+    print(
+        f"Posted review to PR #{pr_number}: {len(comments)} thread(s), "
+        f"{skipped} duplicate(s) skipped, {len(off_diff)} off-diff."
+    )

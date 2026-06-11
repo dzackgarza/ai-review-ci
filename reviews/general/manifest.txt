@@ -1,0 +1,13 @@
+# Documents inlined into the reviewer prompt, in order.
+# Paths relative to the reviews/ directory (this file's parent's parent).
+# A directory entry inlines all of its top-level *.md files, sorted by name.
+# Missing entries are fatal.
+vendor/common.md
+vendor/source-coverage.md
+vendor/decay-risks.md
+vendor/ci-sweep-protocol.md
+vendor/policy-index.md
+vendor/bespoke-software-policy.md
+vendor/test-guidelines.md
+vendor/tool-provisioning-and-environment-hygiene.md
+vendor/pr-review-guide.md

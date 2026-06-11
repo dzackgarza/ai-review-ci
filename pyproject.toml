@@ -1,0 +1,38 @@
+[project]
+name = "ai-review-ci"
+version = "0.1.0"
+description = "OpenCode-powered review CI: SARIF-tracked repo-wide audits and PR diff reviews, installed into a repo with one command"
+requires-python = ">=3.14"
+dependencies = [
+    "cyclopts",
+    "pydantic>=2",
+]
+
+[project.scripts]
+ai-review-ci = "ai_review_ci.cli:main"
+
+[dependency-groups]
+dev = ["pytest"]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.importlinter]
+root_packages = ["ai_review_ci"]
+include_external_packages = true
+
+[[tool.importlinter.contracts]]
+name = "Installer is a pure file-copier: no process execution, no network"
+type = "forbidden"
+source_modules = ["ai_review_ci.install"]
+forbidden_modules = ["subprocess", "os", "urllib", "http", "socket", "requests"]
+
+[[tool.importlinter.contracts]]
+name = "Report models are pure validation: no process execution, no network"
+type = "forbidden"
+source_modules = ["ai_review_ci.models"]
+forbidden_modules = ["subprocess", "os", "urllib", "http", "socket", "requests"]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/ai_review_ci"]
