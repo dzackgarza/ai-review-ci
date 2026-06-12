@@ -200,7 +200,7 @@ The single ledger is **GitHub code scanning alerts**, under tool names
   open / dismissed-with-reason / fixed, each with `path:line` and alert URL):
 
   ```bash
-  uv run ci/fetch-reviewer-context.py --repo owner/repo
+  uvx git+https://github.com/dzackgarza/ai-review-ci fetch-context --repo owner/repo
   ```
 
 - Raw API:
@@ -234,12 +234,12 @@ Diff-scoped findings surface twice, deliberately:
 target repo                          this repo (cloned at CI time)
 .github/workflows/review-*.yml  -->  .github/workflows/_review.yml (reusable)
                                        ci/runner.just        all runner recipes
-                                       ci/run-review.py      prompt assembly + opencode loop
+                                       ai_review_ci.harness  prompt assembly + opencode loop
                                        ci/private/           root-owned validator (pydantic)
                                        ci/reviewer_home/     static /home/reviewer template
-                                       ci/report-to-sarif.py artifact -> SARIF
-                                       ci/fetch-reviewer-context.py  alert/thread context
-                                       ci/post-review-threads.py     PR review poster
+                                       ai_review_ci.sarif    artifact -> SARIF
+                                       ai_review_ci.context  alert/thread context
+                                       ai_review_ci.threads  PR review poster
                                        reviews/              templates, manifests, scopes, vendor/
 ```
 
