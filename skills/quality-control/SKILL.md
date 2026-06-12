@@ -257,9 +257,34 @@ Location: `justfile-rust`
 
 Validates:
 
-1. **`Cargo.toml` exists** — Rust QC requires a project manifest.
+1. **At least one `Cargo.toml` exists anywhere in the repository** — Rust QC
+   supports nested Rust layouts such as Tauri projects where the manifest lives in
+   `src-tauri/Cargo.toml`.
 2. **Tests must exist** — Either a `tests/` directory or `#[test]` functions in
    source files.
+
+#### Missing Tests: Test-Writing Triage
+
+Missing tests are not routed through ordinary QC triage. A project with source code and
+no tests needs a separate proof-design workflow, because immediately fixing application
+code or adding placeholder tests launders the absence of proof into a generic QC
+failure.
+
+When a language preflight reports missing tests, it emits the `TEST-WRITING TRIAGE
+REQUIRED` directive and points agents to the global `test-writing` and `test-guidelines`
+skills. The required workflow is:
+
+- A subagent defines the repository's real-world proof obligations: owned behavior,
+  user-visible boundaries, real fixtures/data, and assertions that would prove the
+  behavior.
+- A separate subagent writes and locks in those tests, observes them fail for the
+  expected reason, and commits the red tests.
+- The main agent changes application code until those tests pass.
+- If the main agent believes a test is wrong, it may not edit the test or instruct a
+  fixer to edit it. It must ask the same test-writing subagent, or a fresh neutral
+  subagent primed on all policies and testing guidelines, for an unbiased verdict. The
+  verdict determines whether the app changes or the validating subagent updates the
+  test.
 
 #### Why preflight gates exist
 

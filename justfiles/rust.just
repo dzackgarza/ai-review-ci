@@ -30,6 +30,11 @@ _rust-qc-files:
 	set -euo pipefail
 	find . -name '*.rs' -not -path '*/node_modules/*' -not -path '*/.venv/*' -not -path '*/__pycache__/*' -not -path '*/dist/*' -not -path '*/build/*' -not -path '*/coverage/*' -not -path '*/_ci-support/*' -not -path '*/codeql-db/*' -not -path '*/@girs/*' -not -path '*/__stubs__/*' -not -path '*/external/*' -not -path '*/target/*' -not -path '*/*.bak/*' -not -path '*/.git/*' -not -path '*/.next/*' -not -path '*/.lake/*' -not -path '*/.worktrees/*' -not -path '*/vendor/*' -not -path '*/third_party/*' -not -path '*/venv/*'
 
+_rust-cargo-manifests:
+	#!/usr/bin/env bash
+	set -euo pipefail
+	find . -name 'Cargo.toml' -not -path '*/node_modules/*' -not -path '*/.venv/*' -not -path '*/__pycache__/*' -not -path '*/dist/*' -not -path '*/build/*' -not -path '*/coverage/*' -not -path '*/_ci-support/*' -not -path '*/codeql-db/*' -not -path '*/@girs/*' -not -path '*/__stubs__/*' -not -path '*/external/*' -not -path '*/target/*' -not -path '*/*.bak/*' -not -path '*/.git/*' -not -path '*/.next/*' -not -path '*/.lake/*' -not -path '*/.worktrees/*' -not -path '*/vendor/*' -not -path '*/third_party/*' -not -path '*/venv/*' | sort
+
 _check-rust-project:
 	#!/usr/bin/env bash
 	set -euo pipefail
@@ -37,17 +42,23 @@ _check-rust-project:
 	echo "=== Running: Rust project preflight check ==="
 	echo "# Validates project structure, test presence, and QC config isolation"
 	failed=0
-	# 1. Cargo.toml must exist
-	if [ ! -f "Cargo.toml" ]; then
-		echo "ERROR: Rust project must have a Cargo.toml file."
+	missing_tests=0
+	# 1. At least one Cargo.toml must exist in the repository.
+	mapfile -t cargo_manifests < <(just --justfile {{justfile()}} -d . _rust-cargo-manifests)
+	if [ "${#cargo_manifests[@]}" -eq 0 ]; then
+		echo "ERROR: Rust project must have at least one Cargo.toml file."
 		failed=1
 	fi
-	# 2. Tests must exist (either tests/ directory or #[test] functions in source)
-	if [ ! -d "tests" ]; then
+	# 2. Tests must exist (either a tests/ directory or #[test] functions in source)
+	if ! find . -type d -name tests -not -path '*/target/*' -not -path '*/.git/*' | grep -q .; then
 		if ! rg -l '#\[test\]' --glob '*.rs' --glob '!**/target/**' >/dev/null 2>&1; then
 			echo "ERROR: Rust project must have tests. No tests/ directory and no #[test] functions found."
-			failed=1
+			missing_tests=1
 		fi
+	fi
+	if [ "$missing_tests" -ne 0 ]; then
+		"{{artifacts}}/scripts/emit-test-writing-directive.sh"
+		exit 1
 	fi
 	if [ "$failed" -ne 0 ]; then
 		"{{artifacts}}/scripts/emit-triage-directive.sh"
@@ -67,7 +78,15 @@ _clippy:
 		"{{artifacts}}/scripts/emit-triage-directive.sh"
 		exit 1
 	fi
-	cargo clippy --all-targets --all-features -- -D warnings
+	mapfile -t cargo_manifests < <(just --justfile {{justfile()}} -d . _rust-cargo-manifests)
+	if [ "${#cargo_manifests[@]}" -eq 0 ]; then
+		echo "ERROR: cargo clippy: no Cargo.toml found anywhere in this Rust project."
+		"{{artifacts}}/scripts/emit-triage-directive.sh"
+		exit 1
+	fi
+	for manifest in "${cargo_manifests[@]}"; do
+		cargo clippy --manifest-path "$manifest" --all-targets --all-features -- -D warnings
+	done
 
 _rustfmt:
 	#!/usr/bin/env bash
@@ -81,7 +100,15 @@ _rustfmt:
 		"{{artifacts}}/scripts/emit-triage-directive.sh"
 		exit 1
 	fi
-	cargo fmt --check
+	mapfile -t cargo_manifests < <(just --justfile {{justfile()}} -d . _rust-cargo-manifests)
+	if [ "${#cargo_manifests[@]}" -eq 0 ]; then
+		echo "ERROR: cargo fmt: no Cargo.toml found anywhere in this Rust project."
+		"{{artifacts}}/scripts/emit-triage-directive.sh"
+		exit 1
+	fi
+	for manifest in "${cargo_manifests[@]}"; do
+		cargo fmt --manifest-path "$manifest" --check
+	done
 
 _cargo-test:
 	#!/usr/bin/env bash
@@ -89,12 +116,15 @@ _cargo-test:
 	echo "============================="
 	echo "=== Running: cargo test ==="
 	echo "# Runs Rust unit and integration tests"
-	if [ ! -f Cargo.toml ]; then
+	mapfile -t cargo_manifests < <(just --justfile {{justfile()}} -d . _rust-cargo-manifests)
+	if [ "${#cargo_manifests[@]}" -eq 0 ]; then
 		echo "ERROR: cargo test: no Cargo.toml found — Rust project must have one."
 		"{{artifacts}}/scripts/emit-triage-directive.sh"
 		exit 1
 	fi
-	cargo test --all-features
+	for manifest in "${cargo_manifests[@]}"; do
+		cargo test --manifest-path "$manifest" --all-features
+	done
 
 _codeql:
 	#!/usr/bin/env bash
@@ -107,7 +137,15 @@ _codeql:
 		"{{artifacts}}/scripts/emit-triage-directive.sh"
 		exit 1
 	fi
-	cargo clean
+	mapfile -t cargo_manifests < <(just --justfile {{justfile()}} -d . _rust-cargo-manifests)
+	if [ "${#cargo_manifests[@]}" -eq 0 ]; then
+		echo "ERROR: codeql: no Cargo.toml found anywhere in this Rust project."
+		"{{artifacts}}/scripts/emit-triage-directive.sh"
+		exit 1
+	fi
+	for manifest in "${cargo_manifests[@]}"; do
+		cargo clean --manifest-path "$manifest"
+	done
 	project_root="$(pwd -P)"
 	project_slug="$(printf '%s' "$project_root" | sed 's#[^A-Za-z0-9._-]#_#g')"
 	codeql_root="${XDG_CACHE_HOME:-$HOME/.cache}/quality-control/codeql/$project_slug"

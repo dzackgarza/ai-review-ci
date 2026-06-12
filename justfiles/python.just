@@ -167,7 +167,8 @@ _check-python-project:
 	# 5. Tests must exist
 	if ! rg --files -g 'test_*.py' -g '*_test.py' -g 'tests/*.py' >/dev/null 2>&1; then
 		echo "ERROR: Python project must have tests. No test files found with patterns: test_*.py, *_test.py, tests/*.py"
-		failed=1
+		"{{artifacts}}/scripts/emit-test-writing-directive.sh"
+		exit 1
 	fi
 	if [ "$failed" -ne 0 ]; then
 		"{{artifacts}}/scripts/emit-triage-directive.sh"
@@ -212,7 +213,7 @@ _pytest_with_coverage: _install-tools
 	echo "# Runs pytest with coverage.py to enforce 100% line/branch coverage and generate coverage.xml"
 	if ! rg --files tests -g 'test_*.py' -g '*_test.py' >/dev/null 2>&1; then
 		echo "ERROR: pytest/coverage: no test files found in a Python project."
-		"{{artifacts}}/scripts/emit-triage-directive.sh"
+		"{{artifacts}}/scripts/emit-test-writing-directive.sh"
 		exit 1
 	fi
 	if [ ! -f pyproject.toml ]; then

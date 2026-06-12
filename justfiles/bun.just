@@ -309,7 +309,8 @@ _check-ts-project:
 	# 5. Tests must exist
 	if ! rg --files -g '*.test.ts' -g '*.test.tsx' -g '*.spec.ts' -g '*.spec.tsx' -g 'tests/' >/dev/null 2>&1; then
 		echo "ERROR: TypeScript project must have tests. No test files found with patterns: *.test.ts, *.test.tsx, *.spec.ts, *.spec.tsx, tests/"
-		failed=1
+		"{{artifacts}}/scripts/emit-test-writing-directive.sh"
+		exit 1
 	fi
 	if [ "$failed" -ne 0 ]; then
 		"{{artifacts}}/scripts/emit-triage-directive.sh"
