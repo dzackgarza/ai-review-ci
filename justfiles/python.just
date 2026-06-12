@@ -105,7 +105,13 @@ _mypy: _install-tools
 		exit 1
 	fi
 	effective_config="{{configs}}/mypy-global.ini"
-	if ! uvx --python 3.14 --from mypy mypy \
+	if ! uvx --python 3.14 --from mypy \
+		--with-editable . \
+		--with pytest \
+		--with pydantic \
+		--with cyclopts \
+		--with ai-slop-detector \
+		mypy \
 		--config-file "$effective_config" \
 		"${python_files[@]}"; then
 		ec=$?
