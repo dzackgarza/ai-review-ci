@@ -3,6 +3,7 @@ repo := justfile_directory()
 home := home_directory()
 global_hooks_source_dir := repo / "global-hooks"
 repo_hooks_source_dir := repo / "repo-hooks"
+scaffold_source_dir := repo / "scaffolds"
 global_hooks_dir := env_var_or_default("GIT_GLOBAL_HOOKS_DIR", home / ".config/git/hooks")
 
 # Parse-check every infrastructure source: workflow YAML, runner justfile, shell wrappers
@@ -86,3 +87,40 @@ install-repo-hooks target=".":
     done
 
     echo "$hooks_dir"
+
+# Copy a repo-local QC delegation scaffold into a target repository.
+install-qc-scaffold language target=".":
+    #!/usr/bin/env bash
+    set -euo pipefail
+
+    case "{{language}}" in
+        python|bun|rust|sage) ;;
+        *)
+            echo "Error: language must be one of: python, bun, rust, sage"
+            exit 1
+            ;;
+    esac
+
+    source_dir="{{ scaffold_source_dir }}/{{language}}"
+    target_repo="{{target}}"
+
+    if [[ ! -d "$source_dir" ]]; then
+        echo "Error: missing scaffold source: $source_dir"
+        exit 1
+    fi
+    if [[ ! -d "$target_repo" ]]; then
+        echo "Error: target repository directory does not exist: $target_repo"
+        exit 1
+    fi
+
+    while IFS= read -r -d '' source_file; do
+        relative_path="${source_file#$source_dir/}"
+        target_path="$target_repo/$relative_path"
+        if [[ -e "$target_path" ]]; then
+            echo "Error: refusing to overwrite existing scaffold target: $target_path"
+            exit 1
+        fi
+    done < <(find "$source_dir" -type f -print0)
+
+    cp -R "$source_dir/." "$target_repo/"
+    echo "$target_repo"

@@ -1,0 +1,5 @@
+test:
+    @just -f ~/ai-review-ci/justfiles/rust.just test
+
+test-ci:
+    @just -f ~/ai-review-ci/justfiles/rust.just test-ci

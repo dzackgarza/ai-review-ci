@@ -71,6 +71,117 @@ Requirements in the target repo: GitHub code scanning enabled (free for
 public repos); optionally the Actions vars `GENERAL_FAIL_BELOW` /
 `SLOP_FAIL_BELOW` to gate runs on a health score.
 
+## Installing QC Surfaces
+
+Clone this repository once on the machine that should own the shared QC stack:
+
+```bash
+cd ~
+git clone git@github.com:dzackgarza/ai-review-ci.git
+cd ~/ai-review-ci
+```
+
+### Global Git hooks
+
+Global hooks are user-level Git hooks. The install recipe symlinks
+`global-hooks/pre-commit` and `global-hooks/pre-push` into
+`${GIT_GLOBAL_HOOKS_DIR:-~/.config/git/hooks}` and sets the user's global
+`core.hooksPath` to that directory:
+
+```bash
+cd ~/ai-review-ci
+just install-global-hooks
+```
+
+Verify the active global hook path with:
+
+```bash
+git config --global core.hooksPath
+```
+
+### Repo-local Git hooks
+
+Repo-local hooks are installed into one repository's `.git/hooks` directory.
+They do not change global Git configuration:
+
+```bash
+cd ~/ai-review-ci
+just install-repo-hooks /path/to/target/repo
+```
+
+Use this when a repository needs local hook files without changing the user's
+global hook path.
+
+### Repo-local QC delegation
+
+Target repositories should not copy QC configs, tool pins, or hook scripts.
+Their local `justfile` should delegate the public `test` and `test-ci`
+recipes to the relevant language justfile in `~/ai-review-ci`.
+
+For new projects, install the tracked scaffold instead of hand-writing the
+delegation surface:
+
+```bash
+cd ~/ai-review-ci
+# choose one language scaffold for the target repository
+just install-qc-scaffold python /path/to/new/repo
+just install-qc-scaffold bun /path/to/new/repo
+just install-qc-scaffold rust /path/to/new/repo
+just install-qc-scaffold sage /path/to/new/repo
+```
+
+The recipe copies files from `scaffolds/<language>/` and refuses to overwrite
+existing files. Edit the tracked scaffold here when the standard project
+surface changes; do not copy sample snippets into downstream repos by hand.
+
+The scaffold contents are intentionally small. They install the repo-local
+command surface; the actual QC behavior remains global.
+
+Python:
+
+```justfile
+test:
+    @just -f ~/ai-review-ci/justfiles/python.just test
+
+test-ci:
+    @just -f ~/ai-review-ci/justfiles/python.just test-ci
+```
+
+TypeScript/Bun:
+
+```justfile
+test:
+    @just -f ~/ai-review-ci/justfiles/bun.just test
+
+test-ci:
+    @just -f ~/ai-review-ci/justfiles/bun.just test-ci
+```
+
+Rust:
+
+```justfile
+test:
+    @just -f ~/ai-review-ci/justfiles/rust.just test
+
+test-ci:
+    @just -f ~/ai-review-ci/justfiles/rust.just test-ci
+```
+
+SageMath:
+
+```justfile
+test:
+    @just -f ~/ai-review-ci/justfiles/sage.just test
+
+test-ci:
+    @just -f ~/ai-review-ci/justfiles/sage.just test-ci
+```
+
+Project-specific checks may be added only as private recipes composed after
+the global gate. Generic linting, formatting, typechecking, coverage,
+complexity, copy-paste, slop detection, tool configs, and tool versions stay
+owned by this repository.
+
 ## Canonical Operations
 
 ### Running repo-wide reviews
@@ -140,7 +251,8 @@ The non-CI quality-control stack is split by operational concern:
 |-----------|------|
 | `global-hooks/` | User-level Git hooks installed with `just install-global-hooks`. |
 | `repo-hooks/` | Per-repository hook templates installed with `just install-repo-hooks`. |
-| `tool-configs/` | Static tool configuration, project templates, and QC planning notes. |
+| `scaffolds/` | Repo-local QC delegation scaffolds copied with `just install-qc-scaffold`. |
+| `tool-configs/` | Static tool configuration and QC planning notes. |
 | `tool-artifacts/` | Scripts, generated model artifacts, and helper code consumed by QC recipes. |
 | `justfiles/` | Shared and language-specific QC recipe hierarchy. |
 | `skills/` | Agent-facing QC operating instructions owned by this repo. |
