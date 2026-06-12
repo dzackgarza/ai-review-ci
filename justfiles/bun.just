@@ -116,22 +116,21 @@ _tsc:
 	fi
 	if jq -e '.scripts.typecheck // empty' package.json >/dev/null 2>&1; then
 		output="$(mktemp)"
+		trap 'if [ -e "$output" ]; then gio trash "$output"; fi' EXIT
 		if ! bun run typecheck >"$output" 2>&1; then
 			if grep -vE '/usr/share/ags/js/|\.\./.*usr/share/ags/js/|gi://' "$output" | grep -q 'error TS'; then
 				cat "$output"
-				[ -e "" ] && gio trash ""
 				"{{artifacts}}/scripts/emit-triage-directive.sh"
 				exit 1
 			fi
 			cat "$output"
-			[ -e "" ] && gio trash ""
 			echo "Only system AGS/Gnim TypeScript diagnostics were reported; project-owned TypeScript passed."
 			exit 0
 		fi
 		cat "$output"
-		[ -e "" ] && gio trash ""
 	elif [ -f tsconfig.json ]; then
 		output="$(mktemp)"
+		trap 'if [ -e "$output" ]; then gio trash "$output"; fi' EXIT
 		if [ -x node_modules/.bin/tsc ]; then
 			tsc_cmd=(node_modules/.bin/tsc --noEmit --skipLibCheck -p tsconfig.json)
 		else
@@ -139,16 +138,13 @@ _tsc:
 		fi
 		if "${tsc_cmd[@]}" >"$output" 2>&1; then
 			cat "$output"
-			[ -e "" ] && gio trash ""
 			exit 0
 		fi
 		cat "$output"
 		if grep -vE '/usr/share/ags/js/|\.\./.*usr/share/ags/js/|gi://' "$output" | grep -q 'error TS'; then
-			[ -e "" ] && gio trash ""
 			"{{artifacts}}/scripts/emit-triage-directive.sh"
 			exit 1
 		fi
-		[ -e "" ] && gio trash ""
 		echo "Only system AGS/Gnim TypeScript diagnostics were reported; project-owned TypeScript passed."
 	else
 		echo "ERROR: no package typecheck script and no tsconfig.json found"
