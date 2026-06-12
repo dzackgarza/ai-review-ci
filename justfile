@@ -6,8 +6,12 @@ repo_hooks_source_dir := repo / "repo-hooks"
 scaffold_source_dir := repo / "scaffolds"
 global_hooks_dir := env_var_or_default("GIT_GLOBAL_HOOKS_DIR", home / ".config/git/hooks")
 
+# Normalize infrastructure files before parse checks inspect them
+_normalize:
+    just -f {{repo}}/justfiles/shared.just -d . _format-structured-text
+
 # Parse-check every infrastructure source: workflow YAML, runner justfile, shell wrappers
-check:
+check: _normalize
     python3 -c "import ast, pathlib; [ast.parse(p.read_text()) for p in pathlib.Path('src').rglob('*.py')]; [ast.parse(p.read_text()) for p in pathlib.Path('tests').rglob('*.py')]"
     python3 -c "import yaml, pathlib; yaml.safe_load(pathlib.Path('.github/workflows/_review.yml').read_text())"
     just -f ci/runner.just --list >/dev/null

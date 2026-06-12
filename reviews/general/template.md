@@ -1,6 +1,7 @@
 ## CI Constraints (MANDATORY)
 
 This runs in a CI environment. Follow these rules exactly:
+
 - **Do NOT modify any workflow files, scripts, or CI infrastructure.** You are running in a restricted mode.
 - Do not ask questions. Do not request confirmation. Do not pause for input.
 
@@ -35,10 +36,12 @@ Key rules every finding must satisfy:
 - `evidence`: At least one entry with `kind`, `path`, and `lines` showing the exploration.
 
 **Tier rules:**
+
 - **Tier 1** (significant): Label as `[BLOCKER]` or `[SHOULD FILE ISSUE]`. Must have a non-low-signal category.
 - **Tier 2** (cleanup): Label as `[NOTE]`. Lower-signal categories (code-style, naming, formatting, file-length, etc.) must be Tier 2.
 
 **Forbidden:**
+
 - Findings whose `category` contains `infra`, `infrastructure`, `ci`, `workflow`, or `config`.
 - Findings about files in `.github/`, `.agents/`, `quality-control/`, or `opencode/skills/`.
 - `score` and `report` fields — rejected by the validator.

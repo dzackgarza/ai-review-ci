@@ -92,6 +92,11 @@ _install-tools: _venv
 	echo "=== Running: tool installation ==="
 	echo "# Installs Python/JS tool dependencies to local cache for faster subsequent runs"
 
+_normalize-common:
+	#!/usr/bin/env bash
+	set -euo pipefail
+	just -f {{justfiles}}/shared.just -d . _normalize-common
+
 _mypy: _install-tools
 	#!/usr/bin/env bash
 	set -euo pipefail
@@ -481,13 +486,14 @@ _codeql:
 	PY
 
 # public: all static checks run locally
-test: _check-python-project _normalize _python-syntax _mypy _deptry _import-linter _ast-grep _jscpd-python _lizard-python _vulture _grain _pytest_with_coverage _diff-cover
+test: _check-python-project _normalize-common _normalize _python-syntax _mypy _deptry _import-linter _ast-grep _jscpd-python _lizard-python _vulture _grain _pytest_with_coverage _diff-cover
 	#!/usr/bin/env bash
 	set -euo pipefail
 	just -f {{justfiles}}/shared.just _global-qc
 	echo "Local quality checks completed"
 
 # public: test-ci = test + live/isolated checks
+
 # Add project-specific live tests (needs docker, live server, etc.) here
 test-ci: test
 	#!/usr/bin/env bash

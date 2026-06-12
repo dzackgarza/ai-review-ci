@@ -20,7 +20,7 @@ artifacts := infra / "tool-artifacts"
 justfiles := infra / "justfiles"
 
 default:
-  @just test
+	@just test
 
 _sage-qc-files:
 	#!/usr/bin/env bash
@@ -109,6 +109,11 @@ _sage-syntax:
 		exit 1
 	fi
 
+_normalize-common:
+	#!/usr/bin/env bash
+	set -euo pipefail
+	just -f {{justfiles}}/shared.just -d . _normalize-common
+
 _vulture: _sage-qc-files
 	#!/usr/bin/env bash
 	set -euo pipefail
@@ -163,14 +168,15 @@ _vulture: _sage-qc-files
 		"${generated_sage_python_files[@]}" \
 		"$whitelist_file"
 
-test: _sage-syntax _vulture
+test: _normalize-common _sage-syntax _vulture
 	#!/usr/bin/env bash
 	set -euo pipefail
 	just -f {{justfiles}}/shared.just _check-envrc _check-no-local-qc-override
 	# Run the full Python QC chain via the Python justfile
 	python_qc_repo="{{justfiles}}/python.just"
-	python_qc_recipes=(_python-syntax _no-bypass _mypy _normalize _deptry _import-linter _semgrep _ast-grep _jscpd _lizard _grain _pytest_with_coverage _diff-cover _slop _vibecheck)
+	python_qc_recipes=(_normalize _python-syntax _mypy _deptry _import-linter _ast-grep _jscpd-python _lizard-python _grain _pytest_with_coverage _diff-cover)
 	just -f "$python_qc_repo" "${python_qc_recipes[@]}"
+	just -f {{justfiles}}/shared.just _no-bypass _semgrep _ast-grep _vibecheck _slop
 	echo "Sage QC checks completed"
 
 test-ci: test

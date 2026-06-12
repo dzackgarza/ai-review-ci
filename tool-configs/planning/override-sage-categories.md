@@ -63,7 +63,7 @@ didn’t. The result is a fractured static-analysis surface where some categorie
 checking and others get none, and the difference is invisible to contributors.
 
 This is the wrong model.
-The right model is: Sage’s category resolution machinery *knows* what the ancestor
+The right model is: Sage’s category resolution machinery _knows_ what the ancestor
 methods are. Make the tooling ask Sage, not require every contributor to manually
 re-declare the relationship.
 
@@ -164,7 +164,7 @@ dependency during type-check, etc.). This should be rare.
 Architecturally wrong for the reasons above.
 Not to be used.
 
-* * *
+---
 
 ## Technical Addendum: Minimal-Reinvention Implementation Path
 
@@ -513,12 +513,12 @@ The plugin should not silently invent bases.
 
 Recommended diagnostics:
 
-| Code | Condition |
-| --- | --- |
-| `sage-category-unresolved` | could not instantiate source category |
-| `sage-category-parameterized` | category source class is parameterized and no representative was configured |
-| `sage-category-base-unmapped` | Sage dynamic base could not be mapped back to a source method container |
-| `sage-category-typeinfo-missing` | source base fullname resolved in Sage but not in mypy |
+| Code                             | Condition                                                                   |
+| -------------------------------- | --------------------------------------------------------------------------- |
+| `sage-category-unresolved`       | could not instantiate source category                                       |
+| `sage-category-parameterized`    | category source class is parameterized and no representative was configured |
+| `sage-category-base-unmapped`    | Sage dynamic base could not be mapped back to a source method container     |
+| `sage-category-typeinfo-missing` | source base fullname resolved in Sage but not in mypy                       |
 
 In non-strict mode, unresolved cases can be skipped.
 In strict mode, unresolved cases should be hard errors because missing base injection

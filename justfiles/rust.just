@@ -23,12 +23,12 @@ artifacts := infra / "tool-artifacts"
 justfiles := infra / "justfiles"
 
 default:
-  @just test
+	@just test
 
 _rust-qc-files:
 	#!/usr/bin/env bash
 	set -euo pipefail
-	find . -name '*.rs' -not -path '*/node_modules/*' -not -path '*/.venv/*' -not -path '*/__pycache__/*' -not -path '*/dist/*' -not -path '*/build/*' -not -path '*/coverage/*' -not -path '*/_ci-support/*' -not -path '*/codeql-db/*' -not -path '*/@girs/*' -not -path '*/__stubs__/*' -not -path '*/external/*' -not -path '*/target/*' -not -path '*/*.bak/*' -not -path '*/.git/*' -not -path '*/.next/*' -not -path '*/.lake/*' -not -path '*/.worktrees/*' -not -path '*/vendor/*' -not -path '*/third_party/*' -not -path '*/venv/*'
+	find . -name '*.rs' -not -path '*/node_modules/*' -not -path '*/.venv/*' -not -path '*/.pytest_cache/*' -not -path '*/.import_linter_cache/*' -not -path '*/__pycache__/*' -not -path '*/dist/*' -not -path '*/build/*' -not -path '*/coverage/*' -not -path '*/_ci-support/*' -not -path '*/codeql-db/*' -not -path '*/tool-artifacts/models/*' -not -path '*/@girs/*' -not -path '*/__stubs__/*' -not -path '*/external/*' -not -path '*/target/*' -not -path '*/*.bak/*' -not -path '*/.git/*' -not -path '*/.next/*' -not -path '*/.lake/*' -not -path '*/.worktrees/*' -not -path '*/vendor/*' -not -path '*/third_party/*' -not -path '*/venv/*'
 
 _rust-cargo-manifests:
 	#!/usr/bin/env bash
@@ -65,6 +65,34 @@ _check-rust-project:
 		exit 1
 	fi
 	echo "Rust project configuration OK"
+
+_normalize-common:
+	#!/usr/bin/env bash
+	set -euo pipefail
+	just -f {{justfiles}}/shared.just -d . _normalize-common
+
+_normalize:
+	#!/usr/bin/env bash
+	set -euo pipefail
+	echo "============================="
+	echo "=== Running: cargo fmt auto-format ==="
+	echo "# Formats Rust source before clippy, rustfmt --check, and tests run"
+	mapfile -t cargo_manifests < <(just --justfile {{justfile()}} -d . _rust-cargo-manifests)
+	if [ "${#cargo_manifests[@]}" -eq 0 ]; then
+		echo "ERROR: cargo fmt: no Cargo.toml found anywhere in this Rust project."
+		"{{artifacts}}/scripts/emit-triage-directive.sh"
+		exit 1
+	fi
+	for manifest in "${cargo_manifests[@]}"; do
+		if cargo fmt --manifest-path "$manifest"; then
+			:
+		else
+			ec=$?
+			echo "ERROR: cargo fmt failed for $manifest."
+			"{{artifacts}}/scripts/emit-triage-directive.sh"
+			exit $ec
+		fi
+	done
 
 _clippy:
 	#!/usr/bin/env bash
@@ -193,7 +221,7 @@ _lizard:
 		"${rust_files[@]}"
 
 # public: all static checks run locally
-test: _check-rust-project _clippy _rustfmt _cargo-test _jscpd _lizard _codeql
+test: _check-rust-project _normalize-common _normalize _clippy _rustfmt _cargo-test _jscpd _lizard _codeql
 	#!/usr/bin/env bash
 	set -euo pipefail
 	just -f {{justfiles}}/shared.just _check-envrc _no-bypass _check-no-local-qc-override _semgrep _ast-grep _vibecheck _slop

@@ -1,6 +1,7 @@
 ## CI Constraints (MANDATORY)
 
 This runs in a CI environment. Follow these rules exactly:
+
 - **Do NOT modify any workflow files, scripts, or CI infrastructure.** You are running in a restricted mode.
 - Do not ask questions. Do not request confirmation. Do not pause for input.
 
@@ -28,6 +29,7 @@ into compliance.
 ### Finding Labeling
 
 Each finding MUST carry one of these labels in the JSON `label` field:
+
 - `SLOP` — Definite slop violation.
 - `SLOP SUSPECT` — Likely slop but needs human judgment to confirm.
 - `NOTE` — Minor concern, not clearly slop.
@@ -53,6 +55,7 @@ Key rules every finding must satisfy:
 - `evidence`: At least one entry with `kind`, `path`, and `lines`.
 
 **Forbidden:**
+
 - Findings whose `category` contains `infra`, `infrastructure`, `ci`, `workflow`, or `config`.
 - Findings about files in `.github/`, `.agents/`, `quality-control/`, or `opencode/skills/`.
 - `score` and `report` fields — rejected by the validator.

@@ -2,11 +2,11 @@
 name: quality-control
 description: Use when implementing, understanding, or delegating to the global quality control system in ~/ai-review-ci. Also use when setting up new projects with CI/CD, or when a local justfile needs to reference global QC recipes.
 ---
+
 # Quality Control System
 
 Before configuring, running, or modifying Quality Control checks, consult the central policy index:
 [policy-index](file:///home/dzack/ai-review-ci/reviews/vendor/policy-index.md)
-
 
 The global quality control system at `~/ai-review-ci` provides centralized
 linting, typechecking, formatting, complexity analysis, and code quality enforcement for
@@ -18,15 +18,15 @@ When skill policies conflict, the following authority order determines which rul
 prevails. A domain skill may narrow these policies for its domain but may not weaken
 them.
 
-| Rank | Skill | Owns |
-| --- | --- | --- |
-| **1** | `quality-control` | Generic QC invocation, public recipes, tool pins, configs, and justfile architecture (shared + language-specific). No local reimplementation. |
-| **2** | `test-guidelines` | Testing epistemology: what constitutes a proof, no mocks, no exceptions, no masking. |
-| **3** | `tool-provisioning-and-environment-hygiene` | How tools run: ephemeral by default, uv-only Python, no pipx/pip/global npm. |
-| **4** | `known-solution-first` | External tool/compiler/API uncertainty: public contracts before local probing. |
-| **5** | `reality-grounded-debugging` | Diagnostic command discipline: stderr preservation, surface classification before mutation. |
-| **6** | `writing-scripts-and-cli-interfaces` | CLI design patterns, project-owned dependency decisions, standalone script templates. |
-| **7** | Domain skills | May narrow higher-ranked policies within their domain but may not weaken them. |
+| Rank  | Skill                                       | Owns                                                                                                                                          |
+| ----- | ------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
+| **1** | `quality-control`                           | Generic QC invocation, public recipes, tool pins, configs, and justfile architecture (shared + language-specific). No local reimplementation. |
+| **2** | `test-guidelines`                           | Testing epistemology: what constitutes a proof, no mocks, no exceptions, no masking.                                                          |
+| **3** | `tool-provisioning-and-environment-hygiene` | How tools run: ephemeral by default, uv-only Python, no pipx/pip/global npm.                                                                  |
+| **4** | `known-solution-first`                      | External tool/compiler/API uncertainty: public contracts before local probing.                                                                |
+| **5** | `reality-grounded-debugging`                | Diagnostic command discipline: stderr preservation, surface classification before mutation.                                                   |
+| **6** | `writing-scripts-and-cli-interfaces`        | CLI design patterns, project-owned dependency decisions, standalone script templates.                                                         |
+| **7** | Domain skills                               | May narrow higher-ranked policies within their domain but may not weaken them.                                                                |
 
 **Policy narrowing rule:** A domain skill may impose stricter requirements than a
 higher-ranked skill (e.g., `test-guidelines` may add prohibitions beyond
@@ -53,18 +53,23 @@ just `typecheck` in isolation to bypass the full stack.
 
 ### Auto-Fix Enforcement: Always Apply All Available Fixes
 
-**Rule:** Agents MUST always apply all available auto-fixes when running any default recipe (`just test`, `just test-ci`). This is not optional, not a "best effort," and not conditional on whether failures are expected. Fixes run first, checks run second.
+**Rule:** Agents MUST always apply all available auto-fixes when running any default recipe (`just test`, `just test-ci`). This is not optional, not a "best effort," and not conditional on whether failures are expected. Mutating normalization runs first. Verification checks run second against the post-fix tree.
 
 #### What happens when you run `just test`
 
-The `test` recipe runs `_normalize` before any checks. This applies every auto-fix the toolchain supports:
+The `test` recipe runs common normalization before language-specific normalization and before verification checks. This applies every deterministic auto-fix the toolchain supports:
+
+**Common stack (`~/ai-review-ci/justfiles/shared.just`):**
+| Tool | Flag | Fixes |
+| --- | --- | --- |
+| `prettier` | `--write` | Markdown, JSON, and YAML whitespace/newline/style normalization |
+| `semgrep` | `--autofix --error` | Security and quality pattern fixes before tests; fails if blocking findings remain |
 
 **Python stack (`~/ai-review-ci/justfiles/python.just`):**
 | Tool | Flag | Fixes |
 | --- | --- | --- |
 | `ruff check` | `--fix` | Lint errors (E, F, I, UP) — unused imports, import sorting, pyupgrade patterns |
 | `ruff format` | (implicit) | PEP 8 style formatting |
-| `semgrep` | `--autofix` | Security and quality pattern fixes |
 | `grain` | `--fix` | Unused code removal |
 
 **TypeScript stack (`~/ai-review-ci/justfiles/bun.just`):**
@@ -72,21 +77,28 @@ The `test` recipe runs `_normalize` before any checks. This applies every auto-f
 | --- | --- | --- |
 | `biome check` | `--write --unsafe` | Formatter, linter, import sorting — safe and unsafe fixes |
 | `eslint` | `--fix` | Lint rule auto-fixes |
-| `semgrep` | `--autofix` | Security and quality pattern fixes |
+
+**Rust stack (`~/ai-review-ci/justfiles/rust.just`):**
+| Tool | Flag | Fixes |
+| --- | --- | --- |
+| `cargo fmt` | (implicit) | Rust source formatting before `rustfmt --check`, clippy, and tests |
+
+Late verification gates such as `semgrep`, `rustfmt --check`, `biome check`, `eslint --max-warnings 0`, and `just --list` parse checks must not be the first place deterministic style issues are discovered when a stable autoformatter exists. They verify that normalization succeeded.
 
 #### What agents MUST do
 
-1. **Run `just test` (not individual checks).** The full stack with auto-fix is the only valid workflow. Do not run `ruff` or `biome` or `eslint` in isolation — the recipe handles all of them in the right order with the right flags.
+- **Run `just test` (not individual checks).** The full stack with auto-fix is the only valid workflow. Do not run `ruff` or `biome` or `eslint` in isolation — the recipe handles all of them in the right order with the right flags.
 
-2. **Never skip the auto-fix step.** If `just test` passes without changes, fine. If it applies fixes, those fixes are part of the intended output — they are not noise. Commit them.
+- **Never skip the auto-fix step.** If `just test` passes without changes, fine. If it applies fixes, those fixes are part of the intended output — they are not noise. Commit them.
 
-3. **If a tool has an auto-fix flag that is not wired into the recipe, wire it in.** Do not apply it manually and leave the recipe stale. The justfile is the single source of truth. Add the flag and document it in this table.
+- **If a tool has an auto-fix flag that is not wired into the recipe, wire it in.** Do not apply it manually and leave the recipe stale. The justfile is the single source of truth. Add the flag and document it in this table.
 
-4. **Never use bypass comments (`# noqa`, `@ts-ignore`, `# type: ignore`, etc.) as a substitute for letting auto-fix do its job.** The [No-Bypass Policy](#no-bypass-policy) is stricter than any individual tool's silence mechanism.
+- **Never use bypass comments (`# noqa`, `@ts-ignore`, `# type: ignore`, etc.) as a substitute for letting auto-fix do its job.** The [No-Bypass Policy](#no-bypass-policy) is stricter than any individual tool's silence mechanism.
 
 #### Why this rule exists
 
 Without an explicit auto-fix requirement, agents routinely:
+
 - Run checks without fixing, see failures, and reach for bypass comments instead of letting the tool fix itself
 - Run `ruff check` without `--fix` (diagnostic only), then manually "fix" issues that `--fix` would have handled automatically
 - Apply fixes manually to a subset of files while leaving the rest broken
@@ -129,14 +141,14 @@ There is no "Skipping: no X found; exit 0" path. QC failure is `exit 1` — alwa
 
 This covers all prerequisite types:
 
-| Missing prerequisite | Example failure |
-|---|---|
-| No source files of the correct language | Python QC finds no `.py` files |
-| No tests | `_pytest_with_coverage` finds no test files |
-| No project config | `_deptry`/`_pytest_with_coverage` finds no `pyproject.toml` |
-| No tool config | `_import-linter` finds no `.importlinter` or `[tool.import-linter]` |
-| No tool installation | `_codeql` finds `codeql` CLI not on `PATH` |
-| No coverage output | `_diff-cover` finds no `coverage.xml`/`lcov.info` from preceding step |
+| Missing prerequisite                    | Example failure                                                       |
+| --------------------------------------- | --------------------------------------------------------------------- |
+| No source files of the correct language | Python QC finds no `.py` files                                        |
+| No tests                                | `_pytest_with_coverage` finds no test files                           |
+| No project config                       | `_deptry`/`_pytest_with_coverage` finds no `pyproject.toml`           |
+| No tool config                          | `_import-linter` finds no `.importlinter` or `[tool.import-linter]`   |
+| No tool installation                    | `_codeql` finds `codeql` CLI not on `PATH`                            |
+| No coverage output                      | `_diff-cover` finds no `coverage.xml`/`lcov.info` from preceding step |
 
 **Rationale:** QC is not optional, not best-effort, not advisory. If a prerequisite is
 missing, the project is misconfigured — the correct response is a hard failure with a
@@ -200,12 +212,12 @@ Location: `justfile` (imported by all language justfiles).
 Detects local copies of global QC config files in the project root. Global QC owns
 these tool configs — local overrides are forbidden:
 
-| Config file | Tool | Why it's an override |
-|---|---|---|
-| `semgrep.yml` | Semgrep | Global QC owns semgrep security rules |
-| `.jscpd.json` | jscpd | Global QC owns copy-paste detection config |
-| `.slopconfig.yaml` | ai-slop-detector | Global QC owns slop detection config |
-| `sgconfig.yml` | ast-grep | Global QC owns AST pattern rules |
+| Config file        | Tool             | Why it's an override                       |
+| ------------------ | ---------------- | ------------------------------------------ |
+| `semgrep.yml`      | Semgrep          | Global QC owns semgrep security rules      |
+| `.jscpd.json`      | jscpd            | Global QC owns copy-paste detection config |
+| `.slopconfig.yaml` | ai-slop-detector | Global QC owns slop detection config       |
+| `sgconfig.yml`     | ast-grep         | Global QC owns AST pattern rules           |
 
 If any of these files exist in the project root, the check fails with:
 
@@ -363,13 +375,13 @@ while the ML signal is entirely absent.
 may depend on JS/TS files existing. No recipe in the TS justfile may depend on Python
 files existing.
 
-| Justfile | Type | Recipes |
-|---|---|---|---|
-| `justfile` | Shared (cross-language) | `_no-bypass`, `_semgrep`, `_vibecheck`, `_slop` — language-agnostic QC. Imported by language justfiles; not intended for standalone invocation. |
-| `justfile-python` | Python | Python-specific: `_python-syntax`, `_mypy`, `_normalize`, etc. Imports shared `justfile`. |
-| `justfile-bun` | TypeScript/JS | TypeScript-specific: `_biome`, `_eslint`, `_tsc`, `_knip`, etc. Imports shared `justfile`. |
-| `justfile-rust` | Rust | Rust-specific: `_clippy`, `_rustfmt`, `_cargo-test`, etc. Imports shared `justfile`. |
-| `justfile-sage` | SageMath | Sage-specific: `_sage-syntax`, `_vulture` (Sage-aware). Imports shared `justfile`; calls Python QC via `just -f justfile-python`. |
+| Justfile      | Type                    | Recipes                                                                                                                                                                                                                                                               |
+| ------------- | ----------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `shared.just` | Shared (cross-language) | `_normalize-common`, `_format-structured-text`, `_semgrep-autofix`, `_no-bypass`, `_semgrep`, `_vibecheck`, `_slop` — language-agnostic normalization and QC. Called explicitly by language justfiles; not intended for standalone invocation outside QC composition. |
+| `python.just` | Python                  | Python-specific: `_python-syntax`, `_mypy`, `_normalize`, etc. Calls shared normalization and shared global QC by `just -f shared.just`.                                                                                                                              |
+| `bun.just`    | TypeScript/JS           | TypeScript-specific: `_biome`, `_eslint`, `_tsc`, `_knip`, etc. Calls shared normalization and shared global QC by `just -f shared.just`.                                                                                                                             |
+| `rust.just`   | Rust                    | Rust-specific: `_normalize`, `_clippy`, `_rustfmt`, `_cargo-test`, etc. Calls shared normalization and shared global QC by `just -f shared.just`.                                                                                                                     |
+| `sage.just`   | SageMath                | Sage-specific: `_sage-syntax`, `_vulture` (Sage-aware). Calls shared normalization and shared QC; calls Python QC via `just -f python.just`.                                                                                                                          |
 
 #### Failure mode this policy exists to prevent
 
@@ -392,10 +404,10 @@ _slop-scan:            # does not belong here — hard-fails on pure Python proj
 
 ```
 # Python justfile
-test: _python-syntax _mypy _normalize ...   # Python tools only
+test: _normalize-common _normalize _python-syntax _mypy ...   # common normalization, then Python tools
 
 # TS justfile
-test: _normalize _knip _biome _slop-scan ...  # TS tools only
+test: _normalize-common _normalize _knip _biome _slop-scan ...  # common normalization, then TS tools
 ```
 
 Running the wrong justfile for a project also fails — if Python QC runs on a project
@@ -416,11 +428,11 @@ The QC system is not negotiable per-project.
 **Rule:** Every tool in the QC chain is mandatory. There is no "skip if not installed",
 no `command -v tool || exit 0`, no graceful degradation.
 
-| Tool | Behavior if missing | Before (wrong) | After (correct) |
-|---|---|---|---|
-| `codeql` | Hard fail | `exit 0` "Skipping CodeQL: CLI not installed" | `exit 1` "ERROR: Install CodeQL from ..." |
-| `deptry` | Hard fail | `exit 0` "Skipping: no pyproject.toml" | `exit 1` "ERROR: no pyproject.toml found" |
-| `import-linter` | Hard fail | `exit 0` "Skipping: no config" | `exit 1` "ERROR: no config found" |
+| Tool            | Behavior if missing | Before (wrong)                                | After (correct)                           |
+| --------------- | ------------------- | --------------------------------------------- | ----------------------------------------- |
+| `codeql`        | Hard fail           | `exit 0` "Skipping CodeQL: CLI not installed" | `exit 1` "ERROR: Install CodeQL from ..." |
+| `deptry`        | Hard fail           | `exit 0` "Skipping: no pyproject.toml"        | `exit 1` "ERROR: no pyproject.toml found" |
+| `import-linter` | Hard fail           | `exit 0` "Skipping: no config"                | `exit 1` "ERROR: no config found"         |
 
 If a tool cannot be installed or configured, QC is blocked until it is. This is by
 design: QC must be complete to pass.
@@ -440,11 +452,11 @@ install it globally.
 permanent global or local installation of QC tools is permitted. See
 `tool-provisioning-and-environment-hygiene` (rank 3 in the authority hierarchy).
 
-| Correct | Incorrect |
-|---|---|
-| `uvx --from ruff ruff check --fix` | `pip install ruff && ruff check` |
-| `bun x biome check` | `bun add --global @biomejs/biome && biome check` |
-| `npx -y ast-grep scan` | `npm install -g @ast-grep/cli && ast-grep scan` |
+| Correct                            | Incorrect                                        |
+| ---------------------------------- | ------------------------------------------------ |
+| `uvx --from ruff ruff check --fix` | `pip install ruff && ruff check`                 |
+| `bun x biome check`                | `bun add --global @biomejs/biome && biome check` |
+| `npx -y ast-grep scan`             | `npm install -g @ast-grep/cli && ast-grep scan`  |
 
 **Sole exception:** ESLint flat config requires its plugins to be locally installed in
 `~/ai-review-ci/tool-configs/node_modules/` because the flat config uses ES module imports
@@ -459,8 +471,6 @@ Any exception to these rules must strictly follow the **Policy Exception Protoco
 
 > [!IMPORTANT]
 > **Bridge-Burning Red Flags:** If a construct would let an agent preserve the appearance of correctness while weakening the obligation, treat it as a red flag even if the code currently works. For a comprehensive catalog of code signatures, keywords, and patterns to look for, see the [Bridge-Burning Red Flags Reference Catalog](file:///home/dzack/ai-review-ci/reviews/vendor/reviewing-llm-code-references/bridge-burning-red-flags.md) and the [Runtime Control-Flow Red Flags Catalog](file:///home/dzack/ai-review-ci/reviews/vendor/reviewing-llm-code-references/runtime-control-flow-red-flags.md).
-
-
 
 ## Purpose
 
@@ -478,21 +488,23 @@ Any exception to these rules must strictly follow the **Policy Exception Protoco
 
 ## Justfile Architecture
 
-The QC system uses one shared justfile (`justfile`) and multiple language-specific
-justfiles. Each language justfile imports the shared justfile via Just 1.51's `import`
-directive and adds its own recipes.
+The QC system uses one shared justfile (`shared.just`) and multiple language-specific
+justfiles. Language justfiles call shared recipes explicitly with `just -f shared.just`
+so language-specific recipe names can remain isolated without import conflicts.
 
 ### Shared Justfile (`justfile`)
 
 Location: `~/ai-review-ci/justfiles/shared.just`
 
-Cross-language recipes available to all language justfiles via `import`:
+Cross-language recipes called by language justfiles:
 
+- `_normalize-common` — Runs common mutating normalization before language checks
+- `_format-structured-text` — Formats Markdown, JSON, and YAML with Prettier
+- `_semgrep-autofix` — Applies Semgrep autofixes before later verification
 - `_no-bypass` — Blocks bypass comments (`# noqa`, `@ts-ignore`, `# type: ignore`, etc.)
-- `_semgrep` — Security and quality pattern scanning
+- `_semgrep` — Security and quality pattern verification
 - `_vibecheck` — Anti-slop pattern detection
 - `_slop` — ML-based code quality detection (preflight checks `models/slop_classifier.pkl`; fails hard if model file missing)
-- `_src-files` — Lists all source files across all known languages
 
 This file is **not** intended for standalone invocation. Language justfiles compose its
 recipes into their `test` chains.
@@ -501,13 +513,14 @@ recipes into their `test` chains.
 
 Location: `~/ai-review-ci/justfiles/python.just`
 
-Imports: `justfile` (shared).
+Shared recipe composition: calls `shared.just` explicitly.
 
-Recipes: `_python-syntax`, `_mypy`, `_normalize` (ruff), `_pytest_with_coverage`,
+Recipes: `_normalize-common` wrapper, `_python-syntax`, `_mypy`, `_normalize` (ruff), `_pytest_with_coverage`,
 `_diff-cover`, `_vulture`, `_deptry`, `_import-linter`, `_grain`, `_ast-grep`,
-`_jscpd`, `_lizard`, `_codeql` plus all shared recipes.
+`_jscpd-python`, `_lizard-python`, `_codeql` plus shared recipe calls.
 
 Invocations:
+
 - `just -f ~/ai-review-ci/justfiles/python.just test`
 - `just -f ~/ai-review-ci/justfiles/python.just test-ci`
 
@@ -515,13 +528,14 @@ Invocations:
 
 Location: `~/ai-review-ci/justfiles/bun.just`
 
-Imports: `justfile` (shared).
+Shared recipe composition: calls `shared.just` explicitly.
 
-Recipes: `_normalize` (biome + eslint), `_coverage`, `_diff-cover`, `_knip`, `_biome`,
+Recipes: `_normalize-common` wrapper, `_normalize` (biome + eslint), `_coverage`, `_diff-cover`, `_knip`, `_biome`,
 `_eslint`, `_tsc`, `_ast-grep`, `_jscpd`, `_lizard`, `_codeql`, `_slop-scan`,
-`_lint-staged` plus all shared recipes.
+`_lint-staged` plus shared recipe calls.
 
 Invocations:
+
 - `just -f ~/ai-review-ci/justfiles/bun.just test`
 - `just -f ~/ai-review-ci/justfiles/bun.just test-ci`
 
@@ -529,12 +543,12 @@ Invocations:
 
 Location: `~/ai-review-ci/justfiles/rust.just`
 
-Imports: `justfile` (shared).
+Shared recipe composition: calls `shared.just` explicitly.
 
-Recipes: `_clippy`, `_rustfmt`, `_cargo-test`, `_jscpd`, `_lizard`, `_codeql` plus all
-shared recipes.
+Recipes: `_normalize-common` wrapper, `_normalize` (cargo fmt), `_clippy`, `_rustfmt`, `_cargo-test`, `_jscpd`, `_lizard`, `_codeql` plus shared recipe calls.
 
 Invocations:
+
 - `just -f ~/ai-review-ci/justfiles/rust.just test`
 - `just -f ~/ai-review-ci/justfiles/rust.just test-ci`
 
@@ -542,30 +556,23 @@ Invocations:
 
 Location: `~/ai-review-ci/justfiles/sage.just`
 
-Imports: `justfile` (shared). Calls Python QC via `just -f justfile-python` subcommands
-(does not import `justfile-python` directly to avoid recipe conflicts).
+Shared recipe composition: calls `shared.just` explicitly. Calls Python QC via `just -f python.just` subcommands.
 
-Recipes: `_sage-syntax`, `_vulture` (Sage-aware preparse), plus all shared recipes.
+Recipes: `_normalize-common` wrapper, `_sage-syntax`, `_vulture` (Sage-aware preparse), plus shared and Python recipe calls.
 
 Invocations:
+
 - `just -f ~/ai-review-ci/justfiles/sage.just test`
 - `just -f ~/ai-review-ci/justfiles/sage.just test-ci`
 
-### Import and Recipe Override
+### Shared Composition Rule
 
-Just 1.51's `import` directive makes imported recipes available in the importing file.
-**It is an error to redefine an imported recipe.** If two justfiles define a recipe with
-the same name, they must not have a direct import relationship. This constrains the
-architecture:
+Do not import `shared.just` into language justfiles. Shared composition is explicit:
+language recipes call `just -f {{justfiles}}/shared.just ...`.
+This prevents recipe-name conflicts while keeping cross-language normalization and global QC centralized.
 
-- `justfile` (shared) is imported by all language justfiles → it must NOT define
-  `default`, `test`, or `test-ci` (each language defines its own).
-- `justfile-python` is NOT imported by `justfile-sage` because both define `default`,
-  `_vulture`, and potentially other recipes that would conflict. Instead,
-  `justfile-sage` imports `justfile` (shared) and calls Python QC via `-f` subcommands.
-- Language-specific recipes like `_jscpd` and `_lizard` are defined in each language
-  justfile, not in `justfile` (shared), because their invocation flags differ per
-  language.
+Shared recipes must stay language-agnostic.
+Language-specific recipes like `_jscpd-python`, `_lizard-python`, `_jscpd-bun`, and `_lizard-bun` stay in their language justfiles because their invocation flags differ per language.
 
 ## Usage in Local Projects
 
@@ -573,6 +580,7 @@ architecture:
 language justfile:
 
 **Python projects:**
+
 ```justfile
 # my-project/justfile
 test:
@@ -594,6 +602,7 @@ test-ci:
 ```
 
 **Rust projects:**
+
 ```justfile
 # my-project/justfile
 test:
@@ -604,6 +613,7 @@ test-ci:
 ```
 
 **SageMath projects:**
+
 ```justfile
 # my-project/justfile
 test:
@@ -629,6 +639,7 @@ they do not belong in local recipes or dev dependencies.
 ### QC Ownership
 
 **Global QC owns:**
+
 - generic linting, formatting, typechecking
 - coverage machinery and thresholds
 - bypass detection
@@ -639,6 +650,7 @@ they do not belong in local recipes or dev dependencies.
 - generic runner strategy (how tests execute, what gates compose)
 
 **The project owns:**
+
 - runtime dependencies
 - build dependencies truly required by the project
 - domain tests proving repository-owned behavior
@@ -646,6 +658,7 @@ they do not belong in local recipes or dev dependencies.
 - minimal private adapters that connect project-specific tests to the global gate
 
 **The project does not own:**
+
 - its own generic lint/type/format/coverage stack
 - duplicate tool pins
 - local replacements for global QC
@@ -692,9 +705,9 @@ Extension Gate above. Additionally:
 
 Any change that adds project-local QC must report one of:
 
-- "This is domain-specific and should remain local because ___."
-- "This is reusable and was promoted to global QC in ___."
-- "This appears reusable but was not promoted because ___; QC-owner follow-up
+- "This is domain-specific and should remain local because \_\_\_."
+- "This is reusable and was promoted to global QC in \_\_\_."
+- "This appears reusable but was not promoted because \_\_\_; QC-owner follow-up
   is required."
 
 ### Mutation Testing
@@ -706,6 +719,7 @@ A surviving mutant means tests are insufficient — the code might be buggy but
 the tests are too weak to notice.
 
 **Tools by language:**
+
 - Python: `mutmut`, `mutpy`
 - TypeScript/JavaScript: `stryker`
 - Rust: `cargo-mutants`
@@ -723,6 +737,7 @@ This catches edge cases, off-by-one errors, type-incorrect assumptions, and
 "works on my examples" reasoning — all common LLM failure modes.
 
 **Tools by language:**
+
 - Python: `hypothesis`, `crosshair` (symbolic/contract-based PBT)
 - TypeScript/JavaScript: `fast-check`
 - Rust: `proptest`, `quickcheck`
@@ -748,7 +763,7 @@ The following modalities are hard to game without actual correctness:
   testing are the primary countermeasures because they cannot be satisfied by
   mimicking test structure.
 - **Slop patterns:** Redundant assertions, tautological checks (e.g., `assert x
-  is not None` without asserting actual values), testing only constructors or
+is not None` without asserting actual values), testing only constructors or
   trivial getters, mocking external dependencies to avoid real integration
   testing, bypass comments (`# pragma: no cover`, `# type: ignore`).
 - **Failure modes:** Off-by-one errors, swapped arguments, silent truncation,
@@ -764,6 +779,7 @@ structural validation catches these at runtime or compile time without brittle
 regex heuristics.
 
 **Python:**
+
 - `pydantic` — runtime data validation with type coercion, JSON schema export,
   and strict mode. Enforced via mypy's pydantic plugin.
 - `msgspec` — fast serialization with schema enforcement.
@@ -771,16 +787,19 @@ regex heuristics.
   invariants where pydantic is overkill.
 
 **TypeScript/JavaScript:**
+
 - `zod`, `io-ts`, `valibot` — runtime schema validation at API and storage
   boundaries.
 - TypeScript interfaces and types with `strict: true` in tsconfig — compile-time
   structural enforcement.
 
 **Rust:**
+
 - `serde` with `#[derive(Deserialize, Serialize)]` — compile-time contract
   enforcement for serialization boundaries.
 
 **Go:**
+
 - Struct tags with `go-playground/validator` — runtime boundary enforcement.
 
 **Integration:**
@@ -834,23 +853,23 @@ just --justfile ~/ai-review-ci/justfile install-global-hooks
 
 The QC system uses these configs (all stored in `~/ai-review-ci/tool-configs/`):
 
-| Config | Tool | Purpose |
-| --- | --- | --- |
-| `ruff-global.toml` | Ruff | Python linting (E, F, I, UP), Python 3.14, strict |
-| `mypy-global.ini` | Mypy | Python type checking, strict mode |
-| `pytest-local.ini` | pytest | Python test configuration |
-| `pyproject.toml` | Various | Python project metadata |
-| `biome.json` | Biome | TypeScript/JS formatting and linting |
-| `eslint.config.js` | ESLint | TypeScript/JS linting |
-| `knip.json` | Knip | TypeScript/JS dead code detection |
-| `semgrep.yml` | Semgrep | Custom security and quality rules |
-| `grain.toml` | Grain | Unused code and low-quality pattern detection |
-| `.jscpd.json` | jscpd | Copy-paste detection |
-| `sgconfig.yml` | ast-grep | Custom AST-based rules |
-| `.lintstagedrc.json` | lint-staged | Pre-commit hook staged file processing |
-| `.slopconfig.yaml` | ai-slop-detector | AI-generated code detection |
-| `.coveragerc` | coverage.py | Coverage configuration |
-| `ast-grep/rules/` | ast-grep | Custom rule definitions |
+| Config               | Tool             | Purpose                                           |
+| -------------------- | ---------------- | ------------------------------------------------- |
+| `ruff-global.toml`   | Ruff             | Python linting (E, F, I, UP), Python 3.14, strict |
+| `mypy-global.ini`    | Mypy             | Python type checking, strict mode                 |
+| `pytest-local.ini`   | pytest           | Python test configuration                         |
+| `pyproject.toml`     | Various          | Python project metadata                           |
+| `biome.json`         | Biome            | TypeScript/JS formatting and linting              |
+| `eslint.config.js`   | ESLint           | TypeScript/JS linting                             |
+| `knip.json`          | Knip             | TypeScript/JS dead code detection                 |
+| `semgrep.yml`        | Semgrep          | Custom security and quality rules                 |
+| `grain.toml`         | Grain            | Unused code and low-quality pattern detection     |
+| `.jscpd.json`        | jscpd            | Copy-paste detection                              |
+| `sgconfig.yml`       | ast-grep         | Custom AST-based rules                            |
+| `.lintstagedrc.json` | lint-staged      | Pre-commit hook staged file processing            |
+| `.slopconfig.yaml`   | ai-slop-detector | AI-generated code detection                       |
+| `.coveragerc`        | coverage.py      | Coverage configuration                            |
+| `ast-grep/rules/`    | ast-grep         | Custom rule definitions                           |
 
 ## Workflows
 
@@ -870,6 +889,7 @@ Projects should run `just test-ci` in CI to match local + CI checks.
 Project tests must not enforce generic policy by inspecting code shape or asserting absence of banned constructs.
 
 Global QC owns policy policing:
+
 - mocks/fakes/stubs;
 - type ignores and `as any`;
 - runtime defaults/fallbacks;
@@ -880,6 +900,7 @@ Global QC owns policy policing:
 - exact-string assertion patterns where mechanically detectable.
 
 Project tests own behavior proof:
+
 - real boundary exercised;
 - semantic output asserted;
 - side effects verified;
@@ -918,10 +939,10 @@ When a QC check fails:
 
 ### Triage vs. Debugging
 
-| Phase | Action | Skill |
-|---|---|---|
-| **Triage** | Present findings to user. Do not self-fix. Delegate to subagents. | `reviewing-llm-code/references/qc-triage.md` |
-| **Debugging** | Investigate opaque errors after triage is complete. | `reality-grounded-debugging` |
+| Phase         | Action                                                            | Skill                                        |
+| ------------- | ----------------------------------------------------------------- | -------------------------------------------- |
+| **Triage**    | Present findings to user. Do not self-fix. Delegate to subagents. | `reviewing-llm-code/references/qc-triage.md` |
+| **Debugging** | Investigate opaque errors after triage is complete.               | `reality-grounded-debugging`                 |
 
 The triage protocol takes priority over debugging. Do not start debugging until
 the triage workflow (present to user → get approval → spawn subagents) has

@@ -45,6 +45,11 @@ _eslint-deps:
 	cd {{configs}}
 	bun install --frozen-lockfile
 
+_normalize-common:
+	#!/usr/bin/env bash
+	set -euo pipefail
+	just -f {{justfiles}}/shared.just -d . _normalize-common
+
 _coverage:
 	#!/usr/bin/env bash
 	set -euo pipefail
@@ -328,25 +333,36 @@ _normalize: _eslint-deps
 	[ -d src ] && dirs+=(src)
 	[ -d tests ] && dirs+=(tests)
 	[ ${#dirs[@]} -eq 0 ] && dirs=(.)
-	bun x biome check --write --unsafe --config-path {{configs}}/biome.json "${dirs[@]}"
+	if bun x biome check --write --unsafe --config-path {{configs}}/biome.json "${dirs[@]}"; then
+		:
+	else
+		ec=$?
+		echo "ERROR: biome auto-fix left blocking TypeScript/JavaScript issues."
+		"{{artifacts}}/scripts/emit-triage-directive.sh"
+		exit $ec
+	fi
 	echo "=== Running: eslint auto-fix ==="
-	"{{configs}}/node_modules/.bin/eslint" \
+	if "{{configs}}/node_modules/.bin/eslint" \
 		--config {{configs}}/eslint.config.js \
 		--fix \
-		. 2>&1 || true
-	echo "=== Running: semgrep auto-fix ==="
-	uvx semgrep --config {{configs}}/semgrep.yml --config=p/ci \
-		--autofix \
-		--exclude=codeql-db 2>&1 || true
+		.; then
+		:
+	else
+		ec=$?
+		echo "ERROR: eslint auto-fix left blocking TypeScript/JavaScript issues."
+		"{{artifacts}}/scripts/emit-triage-directive.sh"
+		exit $ec
+	fi
 
 # public: all static checks run locally
-test: _check-ts-project _normalize _coverage _diff-cover _knip _biome _ast-grep _eslint _tsc _jscpd-bun _lizard-bun _slop-scan
+test: _check-ts-project _normalize-common _normalize _coverage _diff-cover _knip _biome _ast-grep _eslint _tsc _jscpd-bun _lizard-bun _slop-scan
 	#!/usr/bin/env bash
 	set -euo pipefail
 	just -f {{justfiles}}/shared.just _global-qc
 	echo "Local quality checks completed"
 
 # public: test-ci = test + live/isolated checks
+
 # Add project-specific live tests (needs docker, live server, etc.) here
 test-ci: test
 	#!/usr/bin/env bash

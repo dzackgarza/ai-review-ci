@@ -26,17 +26,17 @@ uvx git+https://github.com/dzackgarza/ai-review-ci install
 
 This writes exactly three files into `.github/workflows/` and nothing else:
 
-| File | Triggers |
-|------|----------|
-| `review-general.yml` | weekly cron, push to main, manual dispatch |
-| `review-slop.yml` | weekly cron, push to main, manual dispatch |
-| `review-pr.yml` | every pull request (both types, diff-scoped) |
+| File                 | Triggers                                     |
+| -------------------- | -------------------------------------------- |
+| `review-general.yml` | weekly cron, push to main, manual dispatch   |
+| `review-slop.yml`    | weekly cron, push to main, manual dispatch   |
+| `review-pr.yml`      | every pull request (both types, diff-scoped) |
 
 The three files are minimally-correct base configuration and become
 **repo-owned** the moment they are installed: edit crons, branches,
 thresholds, and the upstream `@ref` directly in the YAML — that is the
 whole downstream surface. The installer never overwrites them. All review
-*behavior* lives upstream and needs no reinstall: every run clones this
+_behavior_ lives upstream and needs no reinstall: every run clones this
 repo fresh.
 
 What an installed trigger looks like (`review-general.yml` — pure
@@ -249,23 +249,25 @@ target repo                          this repo (cloned at CI time)
 
 The non-CI quality-control stack is split by operational concern:
 
-| Directory | Owns |
-|-----------|------|
-| `global-hooks/` | User-level Git hooks installed with `just install-global-hooks`. |
-| `repo-hooks/` | Per-repository hook templates installed with `just install-repo-hooks`. |
-| `scaffolds/` | Repo-local QC delegation scaffolds copied with `just install-qc-scaffold`. |
-| `tool-configs/` | Static tool configuration and QC planning notes. |
+| Directory         | Owns                                                                        |
+| ----------------- | --------------------------------------------------------------------------- |
+| `global-hooks/`   | User-level Git hooks installed with `just install-global-hooks`.            |
+| `repo-hooks/`     | Per-repository hook templates installed with `just install-repo-hooks`.     |
+| `scaffolds/`      | Repo-local QC delegation scaffolds copied with `just install-qc-scaffold`.  |
+| `tool-configs/`   | Static tool configuration and QC planning notes.                            |
 | `tool-artifacts/` | Scripts, generated model artifacts, and helper code consumed by QC recipes. |
-| `justfiles/` | Shared and language-specific QC recipe hierarchy. |
-| `skills/` | Agent-facing QC operating instructions owned by this repo. |
-| `ci/` | Review CI runner, reviewer home, and private validator surface. |
-| `reviews/` | Review prompt templates, manifests, scopes, and vendored policy text. |
+| `justfiles/`      | Shared and language-specific QC recipe hierarchy.                           |
+| `skills/`         | Agent-facing QC operating instructions owned by this repo.                  |
+| `ci/`             | Review CI runner, reviewer home, and private validator surface.             |
+| `reviews/`        | Review prompt templates, manifests, scopes, and vendored policy text.       |
 
 Use the migrated quality gate directly from a target repo:
 
 ```bash
 just -f ~/ai-review-ci/justfiles/python.just test
 ```
+
+Every language-specific `test` recipe runs shared normalization first: Markdown/JSON/YAML formatting and Semgrep autofix happen before language-specific checks and before verification gates.
 
 The root `test` recipe for this repo routes through that same migrated hierarchy.
 

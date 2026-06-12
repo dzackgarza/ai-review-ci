@@ -10,7 +10,7 @@ mathematical conventions, fix the code.
 If it cannot, justify the ignore here.
 No third category ("too hard," “not worth it,” "phase-appropriate").
 
-* * *
+---
 
 ## ruff E741: Ambiguous variable name detection
 
@@ -23,7 +23,7 @@ ambiguous with numerals or other characters — `I` (vs `l`), `O` (vs `0`), `l` 
 
 Mathematical code uses single-letter identifiers as standard notation.
 This is not lazy naming — it is the canonical surface language of algebra, and replacing
-these identifiers with descriptive names would make the code *less* readable to its
+these identifiers with descriptive names would make the code _less_ readable to its
 domain audience:
 
 - `I` for an ideal is universal in commutative algebra and algebraic number theory.
@@ -72,7 +72,7 @@ work.
 when assigned from known ideal constructors, or a per-pattern allowlist, this ignore
 should be replaced with that narrower mechanism.
 
-* * *
+---
 
 ## ruff UP049: Private type parameter names in PEP 695 generics
 
@@ -91,7 +91,7 @@ underscore.
 
 **Why we disable it**:
 
-The `_` prefix on a name communicates *intent* to human readers: this identifier is an
+The `_` prefix on a name communicates _intent_ to human readers: this identifier is an
 internal implementation detail, not part of the public API surface.
 This convention is well-established in Python and universally understood.
 UP049’s premise — that the leading underscore is unnecessary because PEP 695 type
@@ -114,7 +114,7 @@ apparently-public names with no semantic benefit and actively misleads readers a
 which names belong to the public surface.
 
 The user reviewed this rule during a live fix session (2026-05-13) and explicitly
-concluded: the `_` prefix makes implicit behaviour *explicit* — the opposite of what
+concluded: the `_` prefix makes implicit behaviour _explicit_ — the opposite of what
 UP049 claims. The rule is wrong for this codebase.
 
 **Alternatives considered**:

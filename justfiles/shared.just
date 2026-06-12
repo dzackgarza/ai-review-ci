@@ -1,14 +1,14 @@
 # justfile — Cross-language (shared) quality control recipes
 #
 # This file contains QC recipes that are language-agnostic.
-# Language-specific justfiles import this file and compose its
-# recipes into their `test` chain alongside their own recipes.
+# Language-specific justfiles call this file explicitly and compose its
+# recipes into their `test` chain alongside language-specific recipes.
 #
 # Language justfiles:
-#   justfile-python  — Python QC (imports this file)
-#   justfile-bun     — TypeScript QC (imports this file)
-#   justfile-rust    — Rust QC (imports this file)
-#   justfile-sage    — SageMath QC (imports this file, delegates to Python)
+#   python.just  — Python QC (calls this file)
+#   bun.just     — TypeScript QC (calls this file)
+#   rust.just    — Rust QC (calls this file)
+#   sage.just    — SageMath QC (calls this file, delegates to Python)
 #
 # CONFIGS:
 #   tool-configs/semgrep.yml       → semgrep local rules (--config flag)
@@ -20,6 +20,73 @@ configs := infra / "tool-configs"
 artifacts := infra / "tool-artifacts"
 
 # ── Cross-language recipes ────────────────────────────────────────
+
+_format-structured-text:
+	#!/usr/bin/env bash
+	set -euo pipefail
+	echo "============================="
+	echo "=== Running: structured text formatting ==="
+	echo "# Formats Markdown, JSON, and YAML before agents spend time on whitespace"
+	prune_args=()
+	while IFS= read -r dir; do
+		prune_args+=(-path "./$dir" -o -path "*/$dir" -o -path "*/$dir/*" -o)
+	done < <(uv run {{artifacts}}/scripts/read_qc_excludes.py {{configs}}/qc-excludes.toml)
+	if [ "${#prune_args[@]}" -eq 0 ]; then
+		echo "ERROR: qc-excludes.toml produced no exclusions for structured text formatting."
+		"{{artifacts}}/scripts/emit-triage-directive.sh"
+		exit 1
+	fi
+	unset 'prune_args[${#prune_args[@]}-1]'
+	files=()
+	while IFS= read -r -d '' file; do
+		files+=("$file")
+	done < <(
+		find . -type d \( "${prune_args[@]}" \) -prune -o \
+			-type f \( \
+				-name '*.md' -o \
+				-name '*.markdown' -o \
+				-name '*.json' -o \
+				-name '*.jsonc' -o \
+				-name '*.yaml' -o \
+				-name '*.yml' \
+			\) \
+			-print0
+	)
+	if [ "${#files[@]}" -eq 0 ]; then
+		echo "No Markdown, JSON, or YAML files found"
+		exit 0
+	fi
+	npx -y prettier --write --config {{configs}}/prettier-global.json "${files[@]}"
+
+_semgrep-autofix:
+	#!/usr/bin/env bash
+	set -euo pipefail
+	echo "============================="
+	echo "=== Running: semgrep auto-fix ==="
+	echo "# Applies Semgrep autofixes before later checks verify the post-fix tree"
+	if uvx --from semgrep semgrep scan \
+		--config={{configs}}/semgrep.yml \
+		--config=p/ci \
+		--exclude=codeql-db \
+		--scan-unknown-extensions \
+		--error \
+		--autofix; then
+		:
+	else
+		ec=$?
+		echo ""
+		echo "!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!"
+		echo "  ERROR: semgrep auto-fix left blocking pattern violations."
+		echo "  Fix the project code, not the QC tooling."
+		echo "!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!"
+		"{{artifacts}}/scripts/emit-triage-directive.sh"
+		exit $ec
+	fi
+
+_normalize-common: _format-structured-text _semgrep-autofix
+	#!/usr/bin/env bash
+	set -euo pipefail
+	echo "Common normalization completed"
 
 _check-envrc:
 	#!/usr/bin/env bash
@@ -172,14 +239,16 @@ _semgrep:
 	#!/usr/bin/env bash
 	set -euo pipefail
 	echo "============================="
-	echo "=== Running: semgrep security pattern scanning ==="
-	echo "# Static analysis for code quality and fraud patterns"
-	if ! uvx --from semgrep semgrep scan \
+	echo "=== Running: semgrep security pattern verification ==="
+	echo "# Static analysis for code quality and fraud patterns after normalization"
+	if uvx --from semgrep semgrep scan \
 		--config={{configs}}/semgrep.yml \
 		--config=p/ci \
 		--exclude=codeql-db \
 		--scan-unknown-extensions \
-		--autofix; then
+		--error; then
+		:
+	else
 		ec=$?
 		echo ""
 		echo "!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!"
@@ -270,9 +339,9 @@ _slop:
 	fi
 
 # ── Config Sync ───────────────────────────────────────────────────
-
 # Sync qc-excludes.toml into every tool config (biome, eslint, knip,
 # jscpd, slop-scan, pyright, grain, and justfile-rust _rust-qc-files).
+
 # Run this whenever qc-excludes.toml changes.
 _sync-qc-excludes:
 	#!/usr/bin/env bash

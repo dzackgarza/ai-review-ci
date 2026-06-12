@@ -143,8 +143,8 @@ _Comments processed in this run: <list of comment IDs or "all">_
    - Any sentence containing "should", "need", "must", "requires"
    - Assignment of priority, severity, or urgency not present in the original
      finding
-   If the finding label or source comment itself contains such language,
-   quote it verbatim as the label but do not expand or editorialize.
+     If the finding label or source comment itself contains such language,
+     quote it verbatim as the label but do not expand or editorialize.
 
 3. **Cross-refs, not notes.** The "Cross-refs" field (renamed from "Notes")
    is restricted to factual metadata only:
@@ -162,6 +162,7 @@ _Comments processed in this run: <list of comment IDs or "all">_
 ## GitHub API Reference
 
 **Post a review comment (line-level):**
+
 ```
 gh api repos/{owner}/{repo}/pulls/{num}/comments --method POST \
   --input - <<'EOF'
@@ -170,29 +171,34 @@ EOF
 ```
 
 **Post a reply to an existing review comment:**
+
 ```
 gh api repos/{owner}/{repo}/pulls/{num}/comments/{comment_id}/replies \
   --method POST --field body="..."
 ```
 
 **Update an issue comment (for index):**
+
 ```
 gh api repos/{owner}/{repo}/issues/comments/{comment_id} --method PATCH \
   --field body="..."
 ```
 
 **Create a new issue comment (for index):**
+
 ```
 gh api repos/{owner}/{repo}/issues/{num}/comments --method POST \
   --field body="..."
 ```
 
 **List review comments:**
+
 ```
 gh api repos/{owner}/{repo}/pulls/{num}/comments
 ```
 
 **List issue comments:**
+
 ```
 gh api repos/{owner}/{repo}/issues/{num}/comments
 ```

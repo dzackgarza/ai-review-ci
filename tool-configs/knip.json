@@ -1,19 +1,6 @@
 {
-  "entry": [
-    "src/index.ts",
-    "src/**/*.ts",
-    "app.tsx",
-    "lib/**/*.ts"
-  ],
-  "project": [
-    "src/**/*.ts",
-    "src/**/*.tsx",
-    "lib/**/*.ts",
-    "lib/**/*.tsx",
-    "widget/**/*.tsx",
-    "services/**/*.ts",
-    "app.tsx"
-  ],
+  "entry": ["src/index.ts", "src/**/*.ts", "app.tsx", "lib/**/*.ts"],
+  "project": ["src/**/*.ts", "src/**/*.tsx", "lib/**/*.ts", "lib/**/*.tsx", "widget/**/*.tsx", "services/**/*.ts", "app.tsx"],
   "ignore": [
     "**/*.test.ts",
     "**/*.spec.ts",
@@ -22,12 +9,15 @@
     "**/*.tsx",
     "**/node_modules/**",
     "**/.venv/**",
+    "**/.pytest_cache/**",
+    "**/.import_linter_cache/**",
     "**/__pycache__/**",
     "**/dist/**",
     "**/build/**",
     "**/coverage/**",
     "**/_ci-support/**",
     "**/codeql-db/**",
+    "**/tool-artifacts/models/**",
     "**/@girs/**",
     "**/__stubs__/**",
     "**/external/**",
@@ -41,15 +31,7 @@
     "**/third_party/**",
     "**/venv/**"
   ],
-  "ignoreDependencies": [
-    "gi",
-    "@girs",
-    "@logtape/logtape",
-    "@ags/shared",
-    "ags"
-  ],
-  "ignoreBinaries": [
-    "ags"
-  ],
+  "ignoreDependencies": ["gi", "@girs", "@logtape/logtape", "@ags/shared", "ags"],
+  "ignoreBinaries": ["ags"],
   "ignoreExportsUsedInFile": true
 }
