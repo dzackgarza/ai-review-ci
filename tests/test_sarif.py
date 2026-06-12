@@ -1,6 +1,7 @@
 """SARIF ledger tests for carried-forward code-scanning alerts."""
 
 import os
+from pathlib import Path
 from typing import Any
 
 from ai_review_ci.models import finding_fingerprint
@@ -46,7 +47,7 @@ def result_fingerprints(sarif: JsonDict) -> list[str]:
     ]
 
 
-def test_build_sarif_carries_existing_open_alerts(checkout) -> None:
+def test_build_sarif_carries_existing_open_alerts(checkout: Path) -> None:
     os.environ["GITHUB_SHA"] = "abc123"
     os.environ["GITHUB_SERVER_URL"] = "https://github.com"
     os.environ["GITHUB_REPOSITORY"] = "owner/repo"
@@ -70,10 +71,13 @@ def test_build_sarif_carries_existing_open_alerts(checkout) -> None:
 
     fingerprints = result_fingerprints(sarif)
     assert finding_fingerprint("carried-forward", APP_FILE) in fingerprints
-    assert finding_fingerprint("new-review-finding", "tests/test_app.py") in fingerprints
+    assert (
+        finding_fingerprint("new-review-finding", "tests/test_app.py")
+        in fingerprints
+    )
 
 
-def test_new_finding_replaces_matching_carried_alert(checkout) -> None:
+def test_new_finding_replaces_matching_carried_alert(checkout: Path) -> None:
     os.environ["GITHUB_SHA"] = "abc123"
     os.environ["GITHUB_SERVER_URL"] = "https://github.com"
     os.environ["GITHUB_REPOSITORY"] = "owner/repo"

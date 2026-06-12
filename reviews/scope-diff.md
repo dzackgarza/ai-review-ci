@@ -10,6 +10,7 @@ outside the diff, report it too: it joins the repository-wide tracker rather
 than being lost. Do not let off-diff exploration crowd out the diff itself.
 
 EXCEPTION: the reviewer context above lists findings already tracked for this
-repository (open code scanning alerts). Do NOT re-raise these unless you have
-new evidence, the problem reappears in a materially different form, or the
-previous resolution is directly contradicted by the current code.
+repository. Open code scanning alerts are carried forward into the next SARIF
+upload by automation. Do NOT duplicate them in your report unless you have new
+evidence, the problem reappears in a materially different form, or the previous
+resolution is directly contradicted by the current code.

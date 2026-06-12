@@ -211,10 +211,12 @@ The single ledger is **GitHub code scanning alerts**, under tool names
 
 - Humans: the repo's Security tab → Code scanning.
 
-Disposition semantics: an alert stays **open** until remediated (the next
-analysis stops reporting its fingerprint → auto-closes as fixed) or
-**dismissed** with a reason. Both states feed back into every future
-reviewer's context as do-not-re-raise instructions.
+Disposition semantics: each run uploads a complete ledger snapshot for its
+tool/category. The snapshot is the union of existing open, non-dismissed
+alerts carried forward by automation and new findings from the current
+reviewer. Reviewer omission is not a disposition. Dismissed/fixed alerts feed
+future reviewer context as do-not-re-raise instructions, but only open alerts
+are carried into the next SARIF upload.
 
 ### PR findings
 
@@ -314,8 +316,11 @@ infrastructure, and discovers the report schema only through
 (`partialFingerprints.reviewFindingKey`) and PR threads (an
 `ai-review-fingerprint` marker in the thread body). Labels, line numbers,
 and SHAs are excluded so the same defect class in the same file maps to one
-tracked item across runs; duplicates are skipped at posting time, and
-resolved threads / dismissed alerts count as dispositions.
+tracked item across runs. During SARIF conversion, existing open alerts are
+re-emitted unless the current reviewer report contains the same fingerprint,
+in which case the current report replaces the carried copy. Resolved PR
+threads and dismissed/fixed code-scanning alerts are dispositions, not
+carry-forward entries.
 
 ## Developing
 

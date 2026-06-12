@@ -13,6 +13,7 @@ Coverage strategy:
 4. Read source code from high-churn and old files.
 
 EXCEPTION: the reviewer context above lists findings already tracked for this
-repository (open code scanning alerts). Do NOT re-raise these unless you have
-new evidence, the problem reappears in a materially different form, or the
-previous resolution is directly contradicted by the current code.
+repository. Open code scanning alerts are carried forward into the next SARIF
+upload by automation. Do NOT duplicate them in your report unless you have new
+evidence, the problem reappears in a materially different form, or the previous
+resolution is directly contradicted by the current code.

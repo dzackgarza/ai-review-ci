@@ -18,6 +18,7 @@ fetch-context tool_name pr_number:
       --repo "${GITHUB_REPOSITORY}" \
       --tool-names "{{tool_name}}" \
       --output "{{control_repo}}/.reviewer-context.md" \
+      --alerts-output "{{control_repo}}/.reviewer-alerts.json" \
       --pr-number "{{pr_number}}"
 
 create-reviewer:
@@ -99,6 +100,7 @@ convert-sarif category:
     uv run --project {{infra}} ai-review-ci to-sarif \
       --artifact "{{control_repo}}/.review-report-artifact.json" \
       --output "{{control_repo}}/.review-report.sarif" \
+      --carry-forward-alerts "{{control_repo}}/.reviewer-alerts.json" \
       --category "{{category}}"
 
 post-threads pr_number:

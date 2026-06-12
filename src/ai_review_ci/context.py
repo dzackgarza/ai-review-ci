@@ -1,7 +1,7 @@
 """Generate a compact reviewer context file from code scanning alert state.
 
-This context is given to review agents before they run, to prevent re-raising
-existing issues without new evidence.
+This context is given to review agents before they run. It suppresses duplicate
+report prose; open alerts are carried forward mechanically by SARIF conversion.
 
 Queries code scanning alerts for the relevant SARIF tool names
 (ai-review/general, ai-review/slop) and formats them by state
@@ -11,9 +11,10 @@ NOT by the upload-sarif category.
 The output is a markdown file with open/dismissed/fixed findings grouped
 by state. Pass it to the review agent as instructions:
 
-  "Do not intentionally re-raise these issues unless you have new evidence,
-  the problem reappears in a materially different form, or the previous
-  resolution is directly contradicted by the current code."
+  "Open alerts are carried forward by automation. Do not duplicate them in your
+  report unless you have new evidence, the problem reappears in a materially
+  different form, or the previous resolution is directly contradicted by the
+  current code."
 """
 
 import json
@@ -33,7 +34,9 @@ def _fail(msg: str) -> NoReturn:
     sys.exit(1)
 
 
-def _fetch_alerts(repo: str, tool_name: str, ref: str | None = None) -> list[JsonDict]:
+def _fetch_alerts(
+    repo: str, tool_name: str, ref: str | None = None, state: str | None = None
+) -> list[JsonDict]:
     """Fetch code scanning alerts for a repo, filtered by tool and optional ref.
 
     Returns an empty list when no analysis exists (404), which is the
@@ -42,22 +45,33 @@ def _fetch_alerts(repo: str, tool_name: str, ref: str | None = None) -> list[Jso
     params: dict[str, str] = {"per_page": "100", "tool_name": tool_name}
     if ref:
         params["ref"] = ref
+    if state:
+        params["state"] = state
 
     path = f"repos/{repo}/code-scanning/alerts"
-    args = ["gh", "api", "--method", "GET", path]
-    for k, v in params.items():
-        args.extend(["--field", f"{k}={v}"])
+    alerts: list[JsonDict] = []
+    page = 1
 
-    result = subprocess.run(args, capture_output=True, text=True)
+    while True:
+        args = ["gh", "api", "--method", "GET", path]
+        for k, v in params.items():
+            args.extend(["--field", f"{k}={v}"])
+        args.extend(["--field", f"page={page}"])
 
-    if result.returncode == 0:
-        alerts: list[JsonDict] = json.loads(result.stdout)
-        return alerts
+        result = subprocess.run(args, capture_output=True, text=True)
 
-    if "no analysis found" in result.stderr:
-        return []
+        if result.returncode != 0:
+            if "no analysis found" in result.stderr:
+                return []
+            _fail(f"gh api GET {path} failed: {result.stderr.strip()}")
 
-    _fail(f"gh api GET {path} failed: {result.stderr.strip()}")
+        page_alerts = json.loads(result.stdout)
+        if not isinstance(page_alerts, list):
+            _fail(f"gh api GET {path} returned non-list JSON")
+        alerts.extend(page_alerts)
+        if len(page_alerts) < 100:
+            return alerts
+        page += 1
 
 
 _THREADS_QUERY = """
@@ -201,16 +215,37 @@ def _alert_section(cat: str, alerts: list[JsonDict]) -> list[str]:
     return lines
 
 
-def _collect_alerts(repo: str, cat: str, pr_number: int) -> list[JsonDict]:
+def _collect_alerts(
+    repo: str, cat: str, pr_number: int, state: str | None = None
+) -> list[JsonDict]:
     """Repo-wide alerts for a tool, merged with PR-ref alerts on PR runs."""
-    alerts = _fetch_alerts(repo, tool_name=cat)
+    alerts = _fetch_alerts(repo, tool_name=cat, state=state)
     if pr_number:
         pr_alerts = _fetch_alerts(
-            repo, tool_name=cat, ref=f"refs/pull/{pr_number}/merge"
+            repo, tool_name=cat, ref=f"refs/pull/{pr_number}/merge", state=state
         )
         known = {a.get("number") for a in alerts}
         alerts.extend(a for a in pr_alerts if a.get("number") not in known)
     return alerts
+
+
+def _collect_context_alerts(repo: str, cat: str, pr_number: int) -> list[JsonDict]:
+    """Alerts rendered for reviewer context, grouped by GitHub state."""
+    alerts: list[JsonDict] = []
+    for state in ("open", "dismissed", "fixed"):
+        alerts.extend(_collect_alerts(repo, cat, pr_number, state=state))
+    return alerts
+
+
+def _carry_forward_payload(repo: str, cats: list[str], pr_number: int) -> JsonDict:
+    """Open alert payload consumed later by SARIF conversion."""
+    entries: list[JsonDict] = []
+    for cat in cats:
+        entries.extend(
+            {"tool_name": cat, "alert": alert}
+            for alert in _collect_alerts(repo, cat, pr_number, state="open")
+        )
+    return {"schema_version": 1, "alerts": entries}
 
 
 def _pr_thread_lines(repo: str, pr_number: int) -> list[str]:
@@ -237,6 +272,7 @@ def fetch_context(
     repo: str,
     tool_names: str = DEFAULT_TOOL_NAMES,
     output: Path | None = None,
+    alerts_output: Path | None = None,
     pr_number: int = 0,
 ) -> None:
     """Generate reviewer context from code scanning alerts.
@@ -245,6 +281,8 @@ def fetch_context(
         repo: Repository in owner/repo format.
         tool_names: Comma-separated SARIF tool names (tool.driver.name) to query.
         output: Output file path (default: stdout).
+        alerts_output: JSON sidecar for open alerts that must be carried into
+            the next SARIF upload.
         pr_number: PR number for diff-scoped runs; adds PR-ref alerts and the
             digest of review threads already on the PR (0 = not a PR run).
     """
@@ -253,15 +291,16 @@ def fetch_context(
     lines: list[str] = [
         "## Existing repo-wide review findings",
         "",
-        "Do not intentionally re-raise these issues unless you have new "
-        "evidence, the problem reappears in a materially different form, "
-        "or the previous resolution is directly contradicted by the "
-        "current code.",
+        "Open alerts are carried forward into the next SARIF upload by "
+        "automation. Do not duplicate them in your report unless you have "
+        "new evidence, the problem reappears in a materially different form, "
+        "or the previous resolution is directly contradicted by the current "
+        "code.",
         "",
     ]
 
     for cat in names:
-        lines.extend(_alert_section(cat, _collect_alerts(repo, cat, pr_number)))
+        lines.extend(_alert_section(cat, _collect_context_alerts(repo, cat, pr_number)))
 
     if pr_number:
         lines.extend(_pr_thread_lines(repo, pr_number))
@@ -273,3 +312,9 @@ def fetch_context(
         print(f"Reviewer context written to {output}", file=sys.stderr)
     else:
         print(text)
+
+    if alerts_output:
+        alerts_output.write_text(
+            json.dumps(_carry_forward_payload(repo, names, pr_number), indent=2) + "\n"
+        )
+        print(f"Carry-forward alerts written to {alerts_output}", file=sys.stderr)
