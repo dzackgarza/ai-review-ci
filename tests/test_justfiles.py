@@ -197,6 +197,76 @@ def test_tsc_removes_temp_output_on_success(tmp_path: pathlib.Path) -> None:
     assert sorted(tmpdir.iterdir()) == []
 
 
+def test_pytest_with_coverage_fails_when_threshold_fails(
+    tmp_path: pathlib.Path,
+) -> None:
+    project = tmp_path / "python-project"
+    package_dir = project / "src" / "coverage_failure_project"
+    tests_dir = project / "tests"
+    package_dir.mkdir(parents=True)
+    tests_dir.mkdir()
+    (project / "pyproject.toml").write_text(
+        "\n".join(
+            [
+                "[project]",
+                'name = "coverage-failure-project"',
+                'version = "0.1.0"',
+                'requires-python = ">=3.14"',
+                "",
+                "[build-system]",
+                'requires = ["setuptools"]',
+                'build-backend = "setuptools.build_meta"',
+                "",
+                "[tool.setuptools.packages.find]",
+                'where = ["src"]',
+                "",
+            ]
+        )
+    )
+    (package_dir / "__init__.py").write_text(
+        "\n".join(
+            [
+                "def covered() -> int:",
+                "    return 1",
+                "",
+                "",
+                "def uncovered() -> int:",
+                "    return 2",
+                "",
+            ]
+        )
+    )
+    (tests_dir / "test_package.py").write_text(
+        "\n".join(
+            [
+                "from coverage_failure_project import covered",
+                "",
+                "",
+                "def test_covered() -> None:",
+                "    assert covered() == 1",
+                "",
+            ]
+        )
+    )
+
+    result = subprocess.run(
+        [
+            "just",
+            "--justfile",
+            str(ROOT / "justfiles" / "python.just"),
+            "-d",
+            str(project),
+            "_pytest_with_coverage",
+        ],
+        cwd=project,
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+
+    assert result.returncode != 0, result.stdout + result.stderr
+
+
 def test_rust_preflight_accepts_nested_cargo_manifest_and_routes_missing_tests(
     tmp_path: pathlib.Path,
 ) -> None:
