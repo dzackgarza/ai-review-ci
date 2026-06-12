@@ -31,7 +31,7 @@ exclude = [
 ]
 
 # Standard formatting
-line-length = 88
+line-length = 176
 indent-width = 4
 
 # Target Python 3.14 (latest stable)
