@@ -143,6 +143,7 @@ The non-CI quality-control stack is split by operational concern:
 | `tool-configs/` | Static tool configuration, project templates, and QC planning notes. |
 | `tool-artifacts/` | Scripts, generated model artifacts, and helper code consumed by QC recipes. |
 | `justfiles/` | Shared and language-specific QC recipe hierarchy. |
+| `skills/` | Agent-facing QC operating instructions owned by this repo. |
 | `ci/` | Review CI runner, reviewer home, and private validator surface. |
 | `reviews/` | Review prompt templates, manifests, scopes, and vendored policy text. |
 
