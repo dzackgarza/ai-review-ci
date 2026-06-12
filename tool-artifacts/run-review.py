@@ -54,7 +54,7 @@ def collect_repo_docs(repo_root: pathlib.Path) -> str:
     )
 
 
-def load_skills(skills_dir: pathlib.Path, slop_mode: bool = False) -> str:
+def collect_shared_guides() -> list[str]:
     skills_repo = pathlib.Path("opencode/skills").resolve()
     guides = []
     for fname in ["common.md", "source-coverage.md", "decay-risks.md"]:
@@ -76,20 +76,29 @@ def load_skills(skills_dir: pathlib.Path, slop_mode: bool = False) -> str:
         if p.exists():
             guides.append(p.read_text())
 
-    if slop_mode:
-        for skill_name in ["anti-slop", "reviewing-llm-code", "fixing-slop"]:
-            p = skills_repo / skill_name / "SKILL.md"
-            if p.exists():
-                guides.append(p.read_text())
-        for ref_dir in [
-            skills_repo / "reviewing-llm-code" / "references",
-            skills_repo / "anti-slop" / "references",
-        ]:
-            if ref_dir.exists():
-                for f in sorted(ref_dir.iterdir()):
-                    if f.suffix == ".md":
-                        guides.append(f.read_text())
+    return guides
 
+
+def collect_slop_guides() -> list[str]:
+    skills_repo = pathlib.Path("opencode/skills").resolve()
+    guides = []
+    for skill_name in ["anti-slop", "reviewing-llm-code", "fixing-slop"]:
+        p = skills_repo / skill_name / "SKILL.md"
+        if p.exists():
+            guides.append(p.read_text())
+    for ref_dir in [
+        skills_repo / "reviewing-llm-code" / "references",
+        skills_repo / "anti-slop" / "references",
+    ]:
+        if ref_dir.exists():
+            for f in sorted(ref_dir.iterdir()):
+                if f.suffix == ".md":
+                    guides.append(f.read_text())
+    return guides
+
+
+def collect_review_context_guides(skills_dir: pathlib.Path) -> list[str]:
+    guides = []
     p = skills_dir / "brooks-review" / "pr-review-guide.md"
     if p.exists():
         guides.append(p.read_text())
@@ -97,6 +106,19 @@ def load_skills(skills_dir: pathlib.Path, slop_mode: bool = False) -> str:
     repo_docs = collect_repo_docs(pathlib.Path.cwd())
     if repo_docs:
         guides.append(repo_docs)
+    return guides
+
+
+def load_review_skills(skills_dir: pathlib.Path) -> str:
+    guides = collect_shared_guides()
+    guides.extend(collect_review_context_guides(skills_dir))
+    return "\n\n---\n\n".join(guides)
+
+
+def load_slop_review_skills(skills_dir: pathlib.Path) -> str:
+    guides = collect_shared_guides()
+    guides.extend(collect_slop_guides())
+    guides.extend(collect_review_context_guides(skills_dir))
     return "\n\n---\n\n".join(guides)
 
 
@@ -165,7 +187,11 @@ def main():
 
     repo_sha = subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip()
 
-    system = load_skills(skills_dir, slop_mode=(args.mode == "slop"))
+    system = (
+        load_slop_review_skills(skills_dir)
+        if args.mode == "slop"
+        else load_review_skills(skills_dir)
+    )
     template = template_path.read_text()
     # Remove PR_NUMBER from the body entirely to de-anchor the agent
     body = substitute(template, REPO_SHA=repo_sha)
