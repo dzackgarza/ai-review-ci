@@ -54,7 +54,7 @@ def collect_repo_docs(repo_root: pathlib.Path) -> str:
     )
 
 
-def collect_shared_guides() -> list[str]:
+def collect_shared_guides(skills_dir: pathlib.Path) -> list[str]:
     skills_repo = pathlib.Path("opencode/skills").resolve()
     guides = []
     for fname in ["common.md", "source-coverage.md", "decay-risks.md"]:
@@ -110,13 +110,13 @@ def collect_review_context_guides(skills_dir: pathlib.Path) -> list[str]:
 
 
 def load_review_skills(skills_dir: pathlib.Path) -> str:
-    guides = collect_shared_guides()
+    guides = collect_shared_guides(skills_dir)
     guides.extend(collect_review_context_guides(skills_dir))
     return "\n\n---\n\n".join(guides)
 
 
 def load_slop_review_skills(skills_dir: pathlib.Path) -> str:
-    guides = collect_shared_guides()
+    guides = collect_shared_guides(skills_dir)
     guides.extend(collect_slop_guides())
     guides.extend(collect_review_context_guides(skills_dir))
     return "\n\n---\n\n".join(guides)
