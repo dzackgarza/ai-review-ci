@@ -1,11 +1,14 @@
 """SARIF ledger tests for carried-forward code-scanning alerts."""
 
+import json
 import os
 from pathlib import Path
 from typing import Any
 
+import pytest
+
 from ai_review_ci.models import finding_fingerprint
-from ai_review_ci.sarif import build_sarif
+from ai_review_ci.sarif import CARRY_FORWARD_SCHEMA_VERSION, build_sarif, to_sarif
 from tests.conftest import APP_FILE, general_candidate, general_finding
 
 JsonDict = dict[str, Any]
@@ -47,10 +50,14 @@ def result_fingerprints(sarif: JsonDict) -> list[str]:
     ]
 
 
-def test_build_sarif_carries_existing_open_alerts(checkout: Path) -> None:
+def configure_github_env() -> None:
     os.environ["GITHUB_SHA"] = "abc123"
     os.environ["GITHUB_SERVER_URL"] = "https://github.com"
     os.environ["GITHUB_REPOSITORY"] = "owner/repo"
+
+
+def test_build_sarif_carries_existing_open_alerts(checkout: Path) -> None:
+    configure_github_env()
 
     artifact = general_candidate(
         findings=[
@@ -78,9 +85,7 @@ def test_build_sarif_carries_existing_open_alerts(checkout: Path) -> None:
 
 
 def test_new_finding_replaces_matching_carried_alert(checkout: Path) -> None:
-    os.environ["GITHUB_SHA"] = "abc123"
-    os.environ["GITHUB_SERVER_URL"] = "https://github.com"
-    os.environ["GITHUB_REPOSITORY"] = "owner/repo"
+    configure_github_env()
 
     artifact = general_candidate(
         findings=[
@@ -104,3 +109,150 @@ def test_new_finding_replaces_matching_carried_alert(checkout: Path) -> None:
     messages = [result["message"]["text"] for result in sarif["runs"][0]["results"]]
     assert "Updated reviewer evidence for the same ledger item" in messages
     assert "Existing invariant violation" not in messages
+
+
+def test_to_sarif_writes_artifact_with_optional_carried_alert_sidecar(
+    checkout: Path,
+    tmp_path: Path,
+) -> None:
+    configure_github_env()
+    artifact_path = tmp_path / "artifact.json"
+    sidecar_path = tmp_path / "carry-forward.json"
+    first_output = tmp_path / "first.sarif"
+    second_output = tmp_path / "second.sarif"
+    carried_alert = existing_alert()
+    del carried_alert["alert"]["most_recent_instance"]["location"]["end_line"]
+    artifact_path.write_text(json.dumps(general_candidate(findings=[])))
+    sidecar_path.write_text(
+        json.dumps(
+            {
+                "schema_version": CARRY_FORWARD_SCHEMA_VERSION,
+                "alerts": [carried_alert],
+            }
+        )
+    )
+
+    to_sarif(artifact_path, first_output, "ai-general-review")
+    to_sarif(artifact_path, second_output, "ai-general-review", sidecar_path)
+
+    first_sarif = json.loads(first_output.read_text())
+    second_sarif = json.loads(second_output.read_text())
+    assert first_sarif["runs"][0]["results"] == []
+    carried_result = second_sarif["runs"][0]["results"][0]
+    assert carried_result["partialFingerprints"]["reviewFindingKey"] == (
+        finding_fingerprint("carried-forward", APP_FILE)
+    )
+    assert (
+        carried_result["locations"][0]["physicalLocation"]["region"]
+        == {"startLine": 2}
+    )
+
+
+def test_build_sarif_ignores_non_target_and_resolved_carried_alerts(
+    checkout: Path,
+) -> None:
+    configure_github_env()
+    other_tool = existing_alert()
+    other_tool["tool_name"] = "ai-review/slop"
+
+    sarif = build_sarif(
+        general_candidate(findings=[]),
+        report_type="general",
+        category="ai-general-review",
+        carried_alerts=[
+            other_tool,
+            existing_alert(state="dismissed"),
+            existing_alert(state="fixed"),
+            existing_alert(state="closed"),
+        ],
+    )
+
+    assert sarif["runs"][0]["results"] == []
+
+
+@pytest.mark.parametrize(
+    ("carried_alert", "broken_location_key"),
+    [
+        ({"tool_name": "ai-review/general", "alert": []}, None),
+        ({"tool_name": "ai-review/general", "alert": {"state": ""}}, None),
+        (existing_alert(state="unexpected"), None),
+        (existing_alert(), "start_line"),
+        (existing_alert(), "end_line"),
+    ],
+)
+def test_build_sarif_rejects_malformed_carried_alerts(
+    checkout: Path,
+    carried_alert: JsonDict,
+    broken_location_key: str | None,
+) -> None:
+    configure_github_env()
+    if broken_location_key is not None:
+        location = carried_alert["alert"]["most_recent_instance"]["location"]
+        location[broken_location_key] = str(location[broken_location_key])
+
+    with pytest.raises(SystemExit):
+        build_sarif(
+            general_candidate(findings=[]),
+            report_type="general",
+            category="ai-general-review",
+            carried_alerts=[carried_alert],
+        )
+
+
+@pytest.mark.parametrize(
+    "sidecar_payload",
+    [
+        {"schema_version": CARRY_FORWARD_SCHEMA_VERSION + 1, "alerts": []},
+        {"schema_version": CARRY_FORWARD_SCHEMA_VERSION, "alerts": {}},
+    ],
+)
+def test_to_sarif_rejects_invalid_carry_forward_sidecars(
+    checkout: Path,
+    tmp_path: Path,
+    sidecar_payload: JsonDict,
+) -> None:
+    configure_github_env()
+    artifact_path = tmp_path / "artifact.json"
+    sidecar_path = tmp_path / "carry-forward.json"
+    artifact_path.write_text(json.dumps(general_candidate(findings=[])))
+    sidecar_path.write_text(json.dumps(sidecar_payload))
+
+    with pytest.raises(SystemExit):
+        to_sarif(
+            artifact_path,
+            tmp_path / "out.sarif",
+            "ai-general-review",
+            sidecar_path,
+        )
+
+
+def test_to_sarif_rejects_missing_carry_forward_sidecar(
+    checkout: Path,
+    tmp_path: Path,
+) -> None:
+    configure_github_env()
+    artifact_path = tmp_path / "artifact.json"
+    artifact_path.write_text(json.dumps(general_candidate(findings=[])))
+
+    with pytest.raises(SystemExit):
+        to_sarif(
+            artifact_path,
+            tmp_path / "out.sarif",
+            "ai-general-review",
+            tmp_path / "missing.json",
+        )
+
+
+def test_to_sarif_rejects_missing_or_unknown_artifacts(
+    checkout: Path,
+    tmp_path: Path,
+) -> None:
+    configure_github_env()
+    invalid_artifact = tmp_path / "invalid-artifact.json"
+    invalid_artifact.write_text(json.dumps(general_candidate(report_type="unknown")))
+
+    with pytest.raises(SystemExit):
+        to_sarif(tmp_path / "missing-artifact.json", tmp_path / "missing.sarif", "x")
+
+    with pytest.raises(SystemExit):
+        to_sarif(invalid_artifact, tmp_path / "invalid.sarif", "x")

@@ -267,7 +267,9 @@ _ast-grep:
 	echo "# Structural code pattern analysis for bridge-burning policy violations"
 	sg_config="{{configs}}/ast-grep/sgconfig.yml"
 	if [ -f "$sg_config" ]; then
-		if ! /bin/ast-grep scan --config "$sg_config" .; then
+		if /bin/ast-grep scan --config "$sg_config" .; then
+			:
+		else
 			ec=$?
 			echo ""
 			echo "!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!"
@@ -285,7 +287,9 @@ _vibecheck:
 	echo "============================="
 	echo "=== Running: vibecheck anti-slop pattern detection ==="
 	echo "# Runs qinnovates/vibecheck-slop-stopper via uvx against the project root"
-	if ! uvx --from git+https://github.com/qinnovates/vibecheck-slop-stopper vibecheck . --severity high; then
+	if uvx --from git+https://github.com/qinnovates/vibecheck-slop-stopper vibecheck . --severity high; then
+		:
+	else
 		ec=$?
 		echo ""
 		echo "!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!"
