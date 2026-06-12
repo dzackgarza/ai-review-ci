@@ -1,17 +1,4 @@
 rules:
-  - id: no-print-statements
-    pattern: print(...)
-    message: Print statements should not be committed
-    languages:
-      - python
-    severity: ERROR
-  - id: no-console-log
-    pattern: console.log(...)
-    message: Console.log should not be committed
-    languages:
-      - typescript
-      - javascript
-    severity: ERROR
   - id: no-nullish-coalescing
     pattern: $X ?? $Y
     message: Nullish coalescing (??) creates a runtime fallback. Use an explicit assertion or fail loudly if the value can be null/undefined.
@@ -337,24 +324,44 @@ rules:
     languages:
       - generic
     severity: ERROR
+    paths:
+      include:
+        - justfile
+        - '**/justfile'
+        - '**/*.just'
   - id: just-no-option-or-default
     pattern-regex: option_or_default\s*\(
     message: option_or_default(...) provides a runtime default for CLI options in justfiles. Use option() which fails loudly if the option is not provided.
     languages:
       - generic
     severity: ERROR
+    paths:
+      include:
+        - justfile
+        - '**/justfile'
+        - '**/*.just'
   - id: just-no-or-fallback
     pattern-regex: \|\|
     message: '|| provides a fallback/default in justfiles. Require values explicitly instead of using OR fallback.'
     languages:
       - generic
     severity: ERROR
+    paths:
+      include:
+        - justfile
+        - '**/justfile'
+        - '**/*.just'
   - id: just-no-command-v
     pattern-regex: command\s+-v\s+
     message: command -v checks whether a command exists before using it, enabling silent fallback when a tool is absent. In justfiles this is never legitimate — require the tool to be present and fail loudly if it is not.
     languages:
       - generic
     severity: ERROR
+    paths:
+      include:
+        - justfile
+        - '**/justfile'
+        - '**/*.just'
   - id: py-no-deprecated-typing
     message: Deprecated typing imports. Python >=3.9 supports native generics (dict, list, type, set, tuple) and `|` syntax for Union/Optional. Abstract base classes (Callable, Iterable, Mapping, Sequence) should be imported from `collections.abc`.
     languages:
