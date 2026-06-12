@@ -2,6 +2,10 @@ id: no-boolean-param
 language: python
 rule:
   kind: function_definition
-  regex: "def\\s+\\w+\\s*\\([^)]*\\b(bool)\\b[^)]*\\)"
-message: 'Boolean parameter in function definition. Use a dedicated enum, struct, keyword-arg class, or an options object instead.'
+  regex: def\s+\w+\s*\([^)]*\b(bool)\b[^)]*\)
+message: 'Boolean mode flag in owned API: this hides multiple behaviors behind one call surface
+  and forces callers to know what true/false selects. Do not merely rename the boolean to
+  an enum. Split the behavior into explicit functions, or introduce a real domain variant
+  with exhaustive dispatch when the mode is actually part of the data model. See reviews/vendor/anti-slop.md#8-no-boolean-mode-flags-in-owned-apis
+  and reviews/vendor/reviewing-llm-code-references/bridge-burning-red-flags.md#boolean-mode-parameters.'
 severity: warning
