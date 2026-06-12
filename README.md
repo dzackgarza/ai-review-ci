@@ -132,6 +132,28 @@ target repo                          this repo (cloned at CI time)
                                        reviews/              templates, manifests, scopes, vendor/
 ```
 
+## QC Layout
+
+The non-CI quality-control stack is split by operational concern:
+
+| Directory | Owns |
+|-----------|------|
+| `global-hooks/` | User-level Git hooks installed with `just install-global-hooks`. |
+| `repo-hooks/` | Per-repository hook templates installed with `just install-repo-hooks`. |
+| `tool-configs/` | Static tool configuration, project templates, and QC planning notes. |
+| `tool-artifacts/` | Scripts, generated model artifacts, and helper code consumed by QC recipes. |
+| `justfiles/` | Shared and language-specific QC recipe hierarchy. |
+| `ci/` | Review CI runner, reviewer home, and private validator surface. |
+| `reviews/` | Review prompt templates, manifests, scopes, and vendored policy text. |
+
+Use the migrated quality gate directly from a target repo:
+
+```bash
+just -f ~/ai-review-ci/justfiles/python.just test
+```
+
+The root `test` recipe for this repo routes through that same migrated hierarchy.
+
 ### How a run works
 
 ```
