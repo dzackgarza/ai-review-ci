@@ -36,7 +36,6 @@ _python-qc-files:
 	done < <(uv run {{artifacts}}/scripts/read_qc_excludes.py {{configs}}/qc-excludes.toml)
 	rg --files \
 		-g '*.py' \
-		-g '!*.sage.py' \
 		"${exclude_args[@]}"
 
 _python-syntax:
@@ -79,66 +78,6 @@ _python-syntax:
 	raise SystemExit(1 if failed else 0)
 	PY
 
-
-
-	sage_bin="${SAGE_BIN:-sage}"
-	sage_preparse_dir="$(mktemp -d "${TMPDIR:-/tmp}/qc-sage-syntax.XXXXXX")"
-	trap 'if [ -e "" ]; then gio trash ""; fi' EXIT
-	echo "# Preparsing and compiling ${#sage_files[@]} Sage file(s)"
-	copied_sage_files=()
-	compile_args=()
-	failed=0
-	for sage_file in "${sage_files[@]}"; do
-		target="$sage_preparse_dir/$sage_file"
-		mkdir -p "$(dirname "$target")"
-		cp "$sage_file" "$target"
-		generated_file="$target.py"
-		copied_sage_files+=("$sage_file")
-		compile_args+=("$sage_file" "$generated_file")
-	done
-
-	if ! (cd "$sage_preparse_dir"; "$sage_bin" --preparse "${copied_sage_files[@]}" >/dev/null); then
-		ec=$?
-		echo "ERROR: Sage preparse failed for one or more .sage files."
-		"{{artifacts}}/scripts/emit-triage-directive.sh"
-		exit $ec
-	fi
-
-	for sage_file in "${sage_files[@]}"; do
-		generated_file="$sage_preparse_dir/$sage_file.py"
-		if [ ! -f "$generated_file" ]; then
-			echo "ERROR: Sage preparse did not produce $generated_file for $sage_file"
-			failed=1
-		fi
-	done
-	if [ "$failed" -ne 0 ]; then
-		"{{artifacts}}/scripts/emit-triage-directive.sh"
-		exit 1
-	fi
-
-	if ! "$sage_bin" -python - "${compile_args[@]}" <<'PY'
-	import py_compile
-	import sys
-
-	args = sys.argv[1:]
-	failed = False
-	for index in range(0, len(args), 2):
-	    original = args[index]
-	    generated = args[index + 1]
-	    try:
-	        py_compile.compile(generated, doraise=True)
-	    except py_compile.PyCompileError as exc:
-	        print(exc.msg, file=sys.stderr, end="" if exc.msg.endswith("\n") else "\n")
-	        print(f"ERROR: Sage syntax validation failed for {original}", file=sys.stderr)
-	        failed = True
-
-	raise SystemExit(1 if failed else 0)
-	PY
-	then
-		"{{artifacts}}/scripts/emit-triage-directive.sh"
-		exit 1
-	fi
-
 _venv:
 	#!/usr/bin/env bash
 	set -euo pipefail
@@ -165,21 +104,7 @@ _mypy: _install-tools
 		"{{artifacts}}/scripts/emit-triage-directive.sh"
 		exit 1
 	fi
-	# If the project provides sage-mypy-plugin.ini, merge it with the global config.
-	# ConfigParser merge (read_string twice) handles duplicate sections correctly:
-	# later keys extend or override earlier ones.  This lets the project ini add
-	# [mypy] mypy_path for the plugin's generated stub root without forking the
-	# global config.
-	global_config="{{configs}}/mypy-global.ini"
-	if [ -f "sage-mypy-plugin.ini" ]; then
-		merged_config=$(mktemp /tmp/mypy-merged-XXXXX.ini)
-		trap 'if [ -e "" ]; then gio trash ""; fi' EXIT
-		python3 "{{artifacts}}/scripts/merge_ini.py" \
-			"$global_config" "sage-mypy-plugin.ini" "$merged_config"
-		effective_config="$merged_config"
-	else
-		effective_config="$global_config"
-	fi
+	effective_config="{{configs}}/mypy-global.ini"
 	if ! uvx --python 3.14 --from mypy mypy \
 		--config-file "$effective_config" \
 		"${python_files[@]}"; then
@@ -262,44 +187,21 @@ _normalize: _install-tools
 		"{{artifacts}}/scripts/emit-triage-directive.sh"
 		exit 1
 	fi
-	if [ -n "${SAGE_PYTEST:-}" ]; then
-		if ! sage -python -m ruff check --fix \
-			--config {{configs}}/ruff-global.toml \
-			--extension sage:python \
-			"${python_files[@]}"; then
-			ec=$?
-			echo "ERROR: ruff check found issues in project code."
-			"{{artifacts}}/scripts/emit-triage-directive.sh"
-			exit $ec
-		fi
-		if ! sage -python -m ruff format \
-			--config {{configs}}/ruff-global.toml \
-			--extension sage:python \
-			"${python_files[@]}"; then
-			ec=$?
-			echo "ERROR: ruff format found issues in project code."
-			"{{artifacts}}/scripts/emit-triage-directive.sh"
-			exit $ec
-		fi
-	else
-		if ! uvx --from ruff ruff check --fix \
-			--config {{configs}}/ruff-global.toml \
-			--extension sage:python \
-			"${python_files[@]}"; then
-			ec=$?
-			echo "ERROR: ruff check found issues in project code."
-			"{{artifacts}}/scripts/emit-triage-directive.sh"
-			exit $ec
-		fi
-		if ! uvx --from ruff ruff format \
-			--config {{configs}}/ruff-global.toml \
-			--extension sage:python \
-			"${python_files[@]}"; then
-			ec=$?
-			echo "ERROR: ruff format found issues in project code."
-			"{{artifacts}}/scripts/emit-triage-directive.sh"
-			exit $ec
-		fi
+	if ! uvx --from ruff ruff check --fix \
+		--config {{configs}}/ruff-global.toml \
+		"${python_files[@]}"; then
+		ec=$?
+		echo "ERROR: ruff check found issues in project code."
+		"{{artifacts}}/scripts/emit-triage-directive.sh"
+		exit $ec
+	fi
+	if ! uvx --from ruff ruff format \
+		--config {{configs}}/ruff-global.toml \
+		"${python_files[@]}"; then
+		ec=$?
+		echo "ERROR: ruff format found issues in project code."
+		"{{artifacts}}/scripts/emit-triage-directive.sh"
+		exit $ec
 	fi
 
 _pytest_with_coverage: _install-tools
@@ -440,7 +342,6 @@ _jscpd-python:
 	if ! npx -y jscpd \
 		--config {{configs}}/jscpd.json \
 		--format python \
-		--formats-exts python:py,sage \
 		"${python_files[@]}"; then
 		ec=$?
 		echo "ERROR: jscpd found code duplication in project."
