@@ -277,11 +277,9 @@ class GeneralReport(BaseModel):
         },
     )
     schema_version: Annotated[int, Field(ge=1)] = Field(
-        default=1,
-        description="Report format version. Currently 1.",
+        description="Report format version. Must be provided explicitly.",
     )
     report_type: Literal["general"] = Field(
-        default="general",
         description="Must be 'general'. Selects the GeneralFinding model for validation.",
     )
     repo_sha: str = Field(
@@ -547,11 +545,9 @@ class SlopReport(BaseModel):
         },
     )
     schema_version: Annotated[int, Field(ge=1)] = Field(
-        default=1,
-        description="Report format version. Currently 1.",
+        description="Report format version. Must be provided explicitly.",
     )
     report_type: Literal["slop"] = Field(
-        default="slop",
         description="Must be 'slop'. Selects the SlopFinding model for validation.",
     )
     repo_sha: str = Field(
