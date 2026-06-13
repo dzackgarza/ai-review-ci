@@ -80,6 +80,24 @@ def _tier_to_level(tier: str) -> str:
     return "error" if tier == "tier1" else "warning"
 
 
+def _location_properties(location: JsonDict) -> JsonDict:
+    props = location.get("properties")
+    if isinstance(props, dict):
+        return props
+    return {}
+
+
+def _alert_level(rule: JsonDict, location: JsonDict) -> str | None:
+    props = _location_properties(location)
+    tier = props.get("tier")
+    if isinstance(tier, str) and tier:
+        return _tier_to_level(tier)
+    severity = rule.get("severity")
+    if severity in ("error", "warning", "note", "none"):
+        return severity
+    return None
+
+
 def _rule_for(finding: JsonDict) -> JsonDict:
     """SARIF rule entry seeded from the first finding of its category."""
     return {
@@ -98,18 +116,16 @@ def _rule_for_alert(alert: JsonDict) -> JsonDict:
         ),
         "alert.most_recent_instance.location",
     )
-    props = _mapping(
-        loc.get("properties"), "alert.most_recent_instance.location.properties"
-    )
-    tier = _string(props, "tier", "alert.most_recent_instance.location.properties")
-    return {
+    sarif_rule = {
         "id": _string(rule, "id", "alert.rule"),
         "name": _string(rule, "name", "alert.rule"),
         "shortDescription": {
             "text": _string(rule, "description", "alert.rule")[:200]
         },
-        "defaultConfiguration": {"level": _tier_to_level(tier)},
     }
+    if level := _alert_level(rule, loc):
+        sarif_rule["defaultConfiguration"] = {"level": level}
+    return sarif_rule
 
 
 def _region(start_line: int, end_line: int) -> JsonDict:
@@ -181,17 +197,12 @@ def _sarif_result_for_alert(alert: JsonDict, rule_index: int) -> JsonDict:
     instance = _mapping(alert.get("most_recent_instance"), "alert.most_recent_instance")
     message = _mapping(instance.get("message"), "alert.most_recent_instance.message")
     loc = _mapping(instance.get("location"), "alert.most_recent_instance.location")
-    props = _mapping(
-        loc.get("properties"), "alert.most_recent_instance.location.properties"
-    )
+    props = _location_properties(loc)
     category = _string(rule, "id", "alert.rule")
     path = _string(loc, "path", "alert.most_recent_instance.location")
-    return {
+    result = {
         "ruleId": category,
         "ruleIndex": rule_index,
-        "level": _tier_to_level(
-            _string(props, "tier", "alert.most_recent_instance.location.properties")
-        ),
         "message": {
             "text": _string(message, "text", "alert.most_recent_instance.message")
         },
@@ -209,8 +220,12 @@ def _sarif_result_for_alert(alert: JsonDict, rule_index: int) -> JsonDict:
         "partialFingerprints": {
             "reviewFindingKey": finding_fingerprint(category, path)
         },
-        "properties": dict(props),
     }
+    if level := _alert_level(rule, loc):
+        result["level"] = level
+    if props:
+        result["properties"] = dict(props)
+    return result
 
 
 def _result_fingerprint(finding: JsonDict) -> str:
