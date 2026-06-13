@@ -1,10 +1,9 @@
 qc-type := "python"
 repo := justfile_directory()
-home := home_directory()
 global_hooks_source_dir := repo / "global-hooks"
 repo_hooks_source_dir := repo / "repo-hooks"
 scaffold_source_dir := repo / "scaffolds"
-global_hooks_dir := env_var_or_default("GIT_GLOBAL_HOOKS_DIR", home / ".config/git/hooks")
+global_hooks_dir := env_var("GIT_GLOBAL_HOOKS_DIR")
 
 # Normalize infrastructure files before parse checks inspect them
 _normalize:

@@ -109,9 +109,8 @@ _tsc:
 	set -euo pipefail
 	if jq -e '.scripts.types // empty' package.json >/dev/null 2>&1; then
 		bun run types
-	elif command -v ags >/dev/null 2>&1 \
-		&& [ -f tsconfig.json ] \
-		&& jq -e '.compilerOptions.jsxImportSource == "ags/gtk4" or ((.compilerOptions.paths // {}) | has("gi://Astal?version=4.0"))' tsconfig.json >/dev/null 2>&1; then
+	elif [ -f tsconfig.json ] \
+		&& jq -e '.compilerOptions.jsxImportSource == "ags/gtk4" or ((.compilerOptions.paths // {}) | has("gi://Astal?version=4.0"))' tsconfig.json >/dev/null; then
 		ags types 'Astal*' --ignore Gtk3 --ignore Astal3 --update
 	fi
 	if jq -e '.scripts.typecheck // empty' package.json >/dev/null 2>&1; then
@@ -255,15 +254,9 @@ _slop-scan:
 _codeql:
 	#!/usr/bin/env bash
 	set -euo pipefail
-	if ! command -v codeql >/dev/null 2>&1; then
-		echo "ERROR: CodeQL: codeql CLI is not installed. Install CodeQL from https://github.com/github/codeql-cli."
-		"{{artifacts}}/scripts/emit-triage-directive.sh"
-		exit 1
-	fi
-	codeql database create codeql-db --overwrite --language=typescript --source-root=. --search-path=/dev/null 2>&1 | grep -v "Extracting\|Done extracting\|already exists" || true
-	codeql database analyze codeql-db --format=sarif-latest --output=codeql-report.sarif || true
-	[ -e codeql-db ] && gio trash codeql-db
-	[ -e codeql-report.sarif ] && gio trash codeql-report.sarif
+	trap 'if [ -e codeql-db ]; then gio trash codeql-db; fi; if [ -e codeql-report.sarif ]; then gio trash codeql-report.sarif; fi' EXIT
+	codeql database create codeql-db --overwrite --language=typescript --source-root=. --search-path=/dev/null
+	codeql database analyze codeql-db --format=sarif-latest --output=codeql-report.sarif
 
 _lint-staged:
 	#!/usr/bin/env bash

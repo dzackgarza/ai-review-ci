@@ -100,7 +100,7 @@ _clippy:
 	echo "============================="
 	echo "=== Running: clippy Rust linting ==="
 	echo "# Runs cargo clippy with deny-level warnings"
-	mapfile -t rust_files < <(just --justfile {{justfile()}} -d . _rust-qc-files 2>/dev/null || true)
+	mapfile -t rust_files < <(just --justfile {{justfile()}} -d . _rust-qc-files)
 	if [ "${#rust_files[@]}" -eq 0 ]; then
 		echo "ERROR: clippy: no Rust files found in a Rust project."
 		"{{artifacts}}/scripts/emit-triage-directive.sh"
@@ -122,7 +122,7 @@ _rustfmt:
 	echo "============================="
 	echo "=== Running: rustfmt formatting check ==="
 	echo "# Checks Rust source formatting against rustfmt defaults"
-	mapfile -t rust_files < <(just --justfile {{justfile()}} -d . _rust-qc-files 2>/dev/null || true)
+	mapfile -t rust_files < <(just --justfile {{justfile()}} -d . _rust-qc-files)
 	if [ "${#rust_files[@]}" -eq 0 ]; then
 		echo "ERROR: rustfmt: no Rust files found in a Rust project."
 		"{{artifacts}}/scripts/emit-triage-directive.sh"
@@ -160,11 +160,6 @@ _codeql:
 	echo "============================="
 	echo "=== Running: codeql security analysis (Rust) ==="
 	echo "# GitHub's static analysis engine for code quality and security vulnerabilities"
-	if ! command -v codeql >/dev/null 2>&1; then
-		echo "ERROR: CodeQL: codeql CLI is not installed. Install CodeQL from https://github.com/github/codeql-cli."
-		"{{artifacts}}/scripts/emit-triage-directive.sh"
-		exit 1
-	fi
 	mapfile -t cargo_manifests < <(just --justfile {{justfile()}} -d . _rust-cargo-manifests)
 	if [ "${#cargo_manifests[@]}" -eq 0 ]; then
 		echo "ERROR: codeql: no Cargo.toml found anywhere in this Rust project."
@@ -206,7 +201,7 @@ _lizard:
 	echo "============================="
 	echo "=== Running: lizard complexity analysis (Rust) ==="
 	echo "# Computes cyclomatic complexity number (CCN), line count, and parameter count"
-	mapfile -t rust_files < <(just --justfile {{justfile()}} -d . _rust-qc-files 2>/dev/null || true)
+	mapfile -t rust_files < <(just --justfile {{justfile()}} -d . _rust-qc-files)
 	if [ "${#rust_files[@]}" -eq 0 ]; then
 		echo "ERROR: lizard: no Rust files found in a Rust project."
 		"{{artifacts}}/scripts/emit-triage-directive.sh"

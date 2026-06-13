@@ -148,25 +148,36 @@ def _fetch_pr_threads(repo: str, pr_number: int) -> list[JsonDict]:
 
 
 def _alert_label(alert: JsonDict) -> str:
-    """Extract finding label from alert properties or rule description."""
-    props = (
-        alert.get("most_recent_instance", {}).get("location", {}).get("properties", {})
-    )
-    if props and props.get("label"):
-        label: str = props["label"]
-        return label
-    rule = alert.get("rule", {})
-    name: str = rule.get("name", rule.get("id", "?"))
+    loc = alert["most_recent_instance"]["location"]
+    if "properties" in loc:
+        props = loc["properties"]
+        assert isinstance(props, dict)
+        if "label" in props:
+            label = props["label"]
+            assert isinstance(label, str) and label
+            return label
+    rule = alert["rule"]
+    name = rule["name"]
+    assert isinstance(name, str) and name
     return name
 
 
 def _alert_location(alert: JsonDict) -> str:
-    loc = alert.get("most_recent_instance", {}).get("location", {})
-    return f"{loc.get('path', '?')}:{loc.get('start_line', '?')}"
+    loc = alert["most_recent_instance"]["location"]
+    path = loc["path"]
+    start_line = loc["start_line"]
+    assert isinstance(path, str) and path
+    assert isinstance(start_line, int)
+    return f"{path}:{start_line}"
 
 
 def _alert_url(alert: JsonDict) -> str:
-    return str(alert.get("html_url") or alert.get("url") or "?")
+    if "html_url" in alert:
+        url = alert["html_url"]
+    else:
+        url = alert["url"]
+    assert isinstance(url, str) and url
+    return url
 
 
 def _format_alert(alert: JsonDict) -> str:
@@ -187,8 +198,10 @@ def _dismissed_lines(alerts: list[JsonDict]) -> list[str]:
         return []
     lines = ["", "**Dismissed / rejected findings:**"]
     for a in alerts:
-        reason = a.get("dismissed_reason", "?")
-        comment = a.get("dismissed_comment", "")
+        reason = a["dismissed_reason"]
+        assert isinstance(reason, str) and reason
+        comment = a["dismissed_comment"] if "dismissed_comment" in a else None
+        assert comment is None or isinstance(comment, str)
         extra = f" ({reason}: {comment})" if comment else f" ({reason})"
         lines.append(_format_alert(a) + extra)
     return lines

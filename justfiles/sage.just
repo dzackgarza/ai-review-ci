@@ -32,7 +32,7 @@ _sage-qc-files:
 	rg --files \
 		-g '*.sage' \
 		-g '!*.sage.py' \
-		"${exclude_args[@]}" || true
+		"${exclude_args[@]}"
 
 _sage-syntax:
 	#!/usr/bin/env bash
@@ -47,12 +47,7 @@ _sage-syntax:
 		exit 1
 	fi
 
-	sage_bin="${SAGE_BIN:-sage}"
-	if ! command -v "$sage_bin" >/dev/null 2>&1; then
-		echo "ERROR: .sage files found, but Sage is unavailable. Set SAGE_BIN or put sage on PATH."
-		"{{artifacts}}/scripts/emit-triage-directive.sh"
-		exit 1
-	fi
+	sage_bin="${SAGE_BIN:?SAGE_BIN must be set to the Sage executable path}"
 
 	sage_preparse_dir="$(mktemp -d "${TMPDIR:-/tmp}/qc-sage-syntax.XXXXXX")"
 	trap 'if [ -e "$sage_preparse_dir" ]; then gio trash "$sage_preparse_dir"; fi' EXIT
@@ -131,12 +126,7 @@ _vulture: _sage-qc-files
 	fi
 
 	if [ "${#sage_files[@]}" -gt 0 ]; then
-		sage_bin="${SAGE_BIN:-sage}"
-		if ! command -v "$sage_bin" >/dev/null 2>&1; then
-			echo "ERROR: .sage files found, but Sage is unavailable. Set SAGE_BIN or put sage on PATH."
-			"{{artifacts}}/scripts/emit-triage-directive.sh"
-			exit 1
-		fi
+		sage_bin="${SAGE_BIN:?SAGE_BIN must be set to the Sage executable path}"
 
 		sage_preparse_dir="$(mktemp -d "${TMPDIR:-/tmp}/qc-vulture-sage.XXXXXX")"
 		trap 'if [ -e "$sage_preparse_dir" ]; then gio trash "$sage_preparse_dir"; fi' EXIT

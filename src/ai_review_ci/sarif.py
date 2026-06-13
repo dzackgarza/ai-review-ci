@@ -358,7 +358,7 @@ def to_sarif(
 
     data: JsonDict = json.loads(artifact.read_text())
 
-    report_type = data.get("report_type", "")
+    report_type = data["report_type"]
     if report_type not in ("general", "slop"):
         _die(f"unknown report_type '{report_type}' in artifact")
 
