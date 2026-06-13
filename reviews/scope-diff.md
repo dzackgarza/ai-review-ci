@@ -1,13 +1,28 @@
 # Review Scope: Pull Request Diff
 
-You are reviewing a pull request. The full diff against the PR base branch is
-in `.reviewer-diff.patch` at the repository root. Read it first.
+You are reviewing a pull request. The full unified diff against the PR base
+branch is inlined below by the harness. Read that diff first.
 
-Focus on defects introduced or materially touched by this diff — these are
-what block the merge. Read any surrounding source files needed to judge the
-changes in context. If that reading surfaces a real pre-existing defect
-outside the diff, report it too: it joins the repository-wide tracker rather
-than being lost. Do not let off-diff exploration crowd out the diff itself.
+Focus on defects introduced or materially touched by this diff. Read only the
+surrounding source files needed to judge those changed lines in context.
+Do not run repository-wide discovery (`tree`, churn scans, `git log`, stale-file
+searches, command inventories, quality-surface checks). PR review is not a
+repo-wide sweep.
+
+If the diff is absent, empty, malformed, or too incomplete to identify changed
+files, do not submit a report. Let the run fail so a human can inspect the
+review setup.
+
+Do not inspect review-runner infrastructure to learn the schema or game
+validation. The only allowed validator interactions are:
+
+- `submit-candidate --help`
+- write `.agents/review-runner/candidates/submitted.json`
+- `submit-candidate`
+
+Do not read, search for, or execute alternate copies of `submit-candidate`.
+Do not inspect `/opt/ai-review`, `/home/reviewer/.review/infra`, or
+`.agents/review-runner/` except to write the submitted JSON.
 
 EXCEPTION: the reviewer context above lists findings already tracked for this
 repository. Open code scanning alerts are carried forward into the next SARIF

@@ -24,12 +24,8 @@ def checkout(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     root = tmp_path / "checkout"
     (root / "src").mkdir(parents=True)
     (root / "tests").mkdir()
-    (root / APP_FILE).write_text(
-        "".join(f"line {i}\n" for i in range(1, APP_LINES + 1))
-    )
-    (root / TEST_FILE).write_text(
-        "".join(f"assert {i}\n" for i in range(1, TEST_LINES + 1))
-    )
+    (root / APP_FILE).write_text("".join(f"line {i}\n" for i in range(1, APP_LINES + 1)))
+    (root / TEST_FILE).write_text("".join(f"assert {i}\n" for i in range(1, TEST_LINES + 1)))
     monkeypatch.chdir(root)
     return root
 
@@ -74,7 +70,7 @@ def general_candidate(**overrides: Any) -> JsonDict:
 def slop_finding(**overrides: Any) -> JsonDict:
     finding: JsonDict = {
         "tier": "tier1",
-        "label": "RUNTIME_DEFAULT",
+        "label": "SLOP",
         "category": "bridge-burning",
         "location": {"path": APP_FILE, "start_line": 2, "end_line": 4},
         "violated_invariant": "Every error path fails loudly, but this code substitutes a synthetic default on failure",
@@ -98,15 +94,6 @@ def slop_candidate(**overrides: Any) -> JsonDict:
         "report_type": "slop",
         "review_scope": [APP_FILE],
         "findings": [slop_finding()],
-        "checked_surfaces": [
-            {
-                "path": APP_FILE,
-                "reason": "high-churn",
-                "lines_read": [1, APP_LINES],
-                "result": "finding",
-            }
-        ],
-        "rejected_easy_wins": ["long lines in tests/test_app.py — line-length only"],
     }
     candidate.update(overrides)
     return candidate

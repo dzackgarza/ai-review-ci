@@ -5,6 +5,11 @@ Prompt assembly order: reviewer context (existing tracked findings), scope
 instructions (repo-wide sweep or PR diff), manifest documents (skills and
 guides, statically declared per review type), repo docs, task template.
 
+For PR-diff scope, the staged unified diff is inlined into the prompt and
+repo README/AGENTS docs are not auto-injected. Diff reviewers need the changed
+surface and the central review contract, not broad repository instructions that
+compete with the diff.
+
 The agent writes a candidate report to a fixed path, then calls
 submit-candidate (no arguments) to validate and submit. submit-candidate
 copies the validated report to .review-report-artifact.json. This harness
@@ -31,8 +36,10 @@ IGNORE_DIRS = {
 }
 
 ARTIFACT_PATH = Path(".review-report-artifact.json")
+DIFF_PATH = Path(".reviewer-diff.patch")
 MAX_ATTEMPTS = 5
 OPENCODE_TIMEOUT = 600
+OPENCODE_BIN = Path("/usr/local/bin/opencode")
 SUBMITTED_CANDIDATE = "submitted.json"
 
 
@@ -93,6 +100,20 @@ def load_manifest(manifest_path: Path) -> str:
     return "\n\n---\n\n".join(sections)
 
 
+def is_diff_scope(scope_path: Path) -> bool:
+    """True when the current review is a PR diff review."""
+    return scope_path.name == "scope-diff.md"
+
+
+def diff_prompt_section(repo_root: Path) -> str:
+    """Inline the staged PR diff; diff scope is invalid without it."""
+    diff_path = repo_root / DIFF_PATH
+    if not diff_path.is_file() or diff_path.stat().st_size == 0:
+        print(f"FATAL: diff-scope review requires non-empty {DIFF_PATH}", file=sys.stderr)
+        sys.exit(1)
+    return "## Pull Request Unified Diff\n\n```diff\n" + diff_path.read_text() + "\n```"
+
+
 def build_initial_prompt(
     template_path: Path,
     scope_path: Path,
@@ -101,13 +122,15 @@ def build_initial_prompt(
     repo_root: Path,
 ) -> str:
     """Assemble the full reviewer prompt in the documented order."""
+    diff_scope = is_diff_scope(scope_path)
     sections = [
         ctx_path.read_text(),
         scope_path.read_text(),
-        load_manifest(manifest_path),
     ]
-    repo_docs = collect_repo_docs(repo_root)
-    if repo_docs:
+    if diff_scope:
+        sections.append(diff_prompt_section(repo_root))
+    sections.append(load_manifest(manifest_path))
+    if not diff_scope and (repo_docs := collect_repo_docs(repo_root)):
         sections.append(repo_docs)
     sections.append(template_path.read_text())
     return "\n\n".join(sections)
@@ -125,7 +148,7 @@ def retry_prompt(submitted_path: Path) -> str:
 
 def opencode_command(attempt: int) -> list[str]:
     """opencode invocation for an attempt; retries continue the session."""
-    cmd = ["opencode", "run"]
+    cmd = [str(OPENCODE_BIN), "run"]
     if attempt > 1:
         cmd.append("-c")
     return cmd
@@ -162,9 +185,7 @@ def _require_files(*paths: Path) -> None:
             sys.exit(1)
 
 
-def run_review(
-    template: Path, scope: Path, manifest: Path, reviewer_context: Path
-) -> None:
+def run_review(template: Path, scope: Path, manifest: Path, reviewer_context: Path) -> None:
     """Assemble the reviewer prompt and loop opencode until an artifact exists.
 
     Args:
@@ -180,9 +201,7 @@ def run_review(
     candidates_dir.mkdir(parents=True, exist_ok=True)
     task_path = run_dir / "task.md"
 
-    initial_prompt = build_initial_prompt(
-        template, scope, manifest, reviewer_context, Path.cwd()
-    )
+    initial_prompt = build_initial_prompt(template, scope, manifest, reviewer_context, Path.cwd())
 
     submitted_path = candidates_dir / SUBMITTED_CANDIDATE
 
@@ -203,8 +222,7 @@ def run_review(
             print("--- opencode timed out ---", file=sys.stderr)
         except FileNotFoundError:
             print(
-                "FATAL: 'opencode' executable not found in PATH. "
-                "This is a non-transient failure — exiting immediately.",
+                "FATAL: 'opencode' executable not found in PATH. This is a non-transient failure — exiting immediately.",
                 file=sys.stderr,
             )
             sys.exit(1)
