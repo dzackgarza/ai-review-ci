@@ -22,11 +22,12 @@ Thread bodies are diagnosis-only: no remediation is rendered or expected.
 
 import json
 import os
-import re
 import subprocess
 import sys
 from pathlib import Path
 from typing import Any, NoReturn
+
+from unidiff import PatchSet
 
 from ai_review_ci.models import finding_fingerprint
 
@@ -67,40 +68,6 @@ def _gh_json(args: list[str], body: JsonDict | None = None) -> JsonDict:
     return data
 
 
-def _diff_target(line: str) -> str | None:
-    """New-side file path from a '+++ ' diff line, or None for deletions."""
-    target = line[4:].split("\t")[0]
-    if target == "/dev/null":
-        return None
-    return target[2:] if target.startswith("b/") else target
-
-
-def _hunk_new_start(line: str) -> int:
-    """Starting RIGHT-side line number from a '@@' hunk header."""
-    m = re.match(r"^@@ -\d+(?:,\d+)? \+(\d+)(?:,(\d+))? @@", line)
-    if not m:
-        _fail(f"unparseable hunk header: {line}")
-    return int(m.group(1))
-
-
-def _advance_hunk_line(line: str, commentable: set[int], new_line: int) -> int | None:
-    """Consume one hunk-body line; return the next RIGHT-side line number.
-
-    Added and context lines are commentable. Deleted lines and the
-    no-newline marker keep the position. Any other content (diff --git /
-    index / similarity headers) ends the hunk body.
-    """
-    if line.startswith("+"):
-        commentable.add(new_line)
-        return new_line + 1
-    if line.startswith("-") or line.startswith("\\"):
-        return new_line
-    if line.startswith(" ") or line == "":
-        commentable.add(new_line)
-        return new_line + 1
-    return None
-
-
 def parse_diff(text: str) -> dict[str, set[int]]:
     """Map each file in the diff to its commentable RIGHT-side line numbers.
 
@@ -109,18 +76,18 @@ def parse_diff(text: str) -> dict[str, set[int]]:
     side and are omitted.
     """
     files: dict[str, set[int]] = {}
-    current: str | None = None
-    new_line: int | None = None
-    for line in text.splitlines():
-        if line.startswith("+++ "):
-            current = _diff_target(line)
-            if current is not None:
-                files.setdefault(current, set())
-            new_line = None
-        elif line.startswith("@@"):
-            new_line = _hunk_new_start(line)
-        elif current is not None and new_line is not None:
-            new_line = _advance_hunk_line(line, files[current], new_line)
+    for patched_file in PatchSet(text.splitlines(keepends=True)):
+        if patched_file.is_removed_file:
+            continue
+        commentable: set[int] = set()
+        for hunk in patched_file:
+            for line in hunk:
+                if not (line.is_added or line.is_context):
+                    continue
+                if line.target_line_no is None:
+                    _fail(f"missing target line number in diff for {patched_file.path}")
+                commentable.add(line.target_line_no)
+        files[patched_file.path] = commentable
     return files
 
 

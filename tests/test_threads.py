@@ -6,7 +6,7 @@ def test_parse_diff_maps_new_side_commentable_lines() -> None:
 index 1111111..2222222 100644
 --- a/src/example.py
 +++ b/src/example.py
-@@ -10,4 +10,5 @@ def example() -> None:
+@@ -10,3 +10,4 @@ def example() -> None:
  context
 -old
 +new
