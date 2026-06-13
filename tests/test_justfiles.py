@@ -267,6 +267,58 @@ def test_pytest_with_coverage_fails_when_threshold_fails(
     assert result.returncode != 0, result.stdout + result.stderr
 
 
+def test_deptry_accepts_declared_distributions_with_different_import_names(
+    tmp_path: pathlib.Path,
+) -> None:
+    project = tmp_path / "mapped-dependency-project"
+    package_dir = project / "src" / "mapped_dependency_project"
+    package_dir.mkdir(parents=True)
+    (project / "pyproject.toml").write_text(
+        "\n".join(
+            [
+                "[project]",
+                'name = "mapped-dependency-project"',
+                'version = "0.1.0"',
+                'requires-python = ">=3.14"',
+                "dependencies = [",
+                '    "python-slugify>=8",',
+                '    "PyYAML>=6",',
+                '    "types-PyYAML>=6",',
+                "]",
+                "",
+            ]
+        )
+    )
+    (package_dir / "__init__.py").write_text(
+        "\n".join(
+            [
+                "import yaml",
+                "from slugify import slugify",
+                "",
+                'VALUE = yaml.safe_dump({"slug": slugify("A B")})',
+                "",
+            ]
+        )
+    )
+
+    result = subprocess.run(
+        [
+            "just",
+            "--justfile",
+            str(ROOT / "justfiles" / "python.just"),
+            "-d",
+            str(project),
+            "_deptry",
+        ],
+        cwd=project,
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+
+    assert result.returncode == 0, result.stdout + result.stderr
+
+
 def test_rust_preflight_accepts_nested_cargo_manifest_and_routes_missing_tests(
     tmp_path: pathlib.Path,
 ) -> None:
