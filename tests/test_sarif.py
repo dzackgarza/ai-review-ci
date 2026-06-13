@@ -148,6 +148,31 @@ def test_to_sarif_writes_artifact_with_optional_carried_alert_sidecar(
     )
 
 
+def test_build_sarif_carries_github_rest_alert_without_location_properties(
+    checkout: Path,
+) -> None:
+    configure_github_env()
+    carried_alert = existing_alert()
+    carried_alert["alert"]["rule"]["severity"] = "error"
+    del carried_alert["alert"]["most_recent_instance"]["location"]["properties"]
+
+    sarif = build_sarif(
+        general_candidate(findings=[]),
+        report_type="general",
+        category="ai-general-review",
+        carried_alerts=[carried_alert],
+    )
+
+    carried_result = sarif["runs"][0]["results"][0]
+    assert carried_result["ruleId"] == "carried-forward"
+    assert carried_result["level"] == "error"
+    assert carried_result["properties"] == {
+        "category": "carried-forward",
+        "label": "CARRIED_FORWARD",
+        "tier": "tier1",
+    }
+
+
 def test_build_sarif_ignores_non_target_and_resolved_carried_alerts(
     checkout: Path,
 ) -> None:
