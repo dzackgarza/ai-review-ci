@@ -17,14 +17,24 @@ into compliance.
 
 ### Execution
 
-1. Identify the Python and TypeScript source files in scope.
-2. For each file, examine the code for the slop categories defined in the loaded references.
-3. Check these specific slop categories:
+1. Start from the in-scope diff or repo-scope instructions above. For PR diff
+   scope, the unified diff is already in the prompt; use it as the source of
+   changed files before opening anything else.
+2. Read the changed code and only the surrounding files needed to understand
+   the changed behavior. Do not run broad repository-discovery probes unless
+   the scope instructions explicitly say this is a repository-wide sweep.
+3. Report actual slop patterns in any changed or materially touched file,
+   including workflow, config, agent-facing, test, and documentation files.
+4. Check these specific slop categories:
    - **Bridge-Burning Red Flags**: Runtime defaults, fallbacks, try-import, mock/fake as proof, backwards-compat shims, boolean mode flags, stringly errors, soft guards.
    - **Runtime Control-Flow Red Flags**: Conditional logic compensating for model code-writing failure.
    - **Test Pattern Violations**: Meta-assertions on source, helper-level proof laundered as boundary proof, smoke tests in proof paths, fake data.
    - **Text Pattern Violations**: Weasel words, hedged claims, presenting procedural completion as substantive.
    - **UX Antipatterns**: Silent failure, error swallowing, missing diagnostics.
+   - **Review-Gaming Patterns**: checking boxes instead of reading the diff,
+     probing validator internals, treating schema success as review success,
+     submitting clean-shaped findings, or using unrelated command failures as
+     evidence.
 
 ### Finding Labeling
 
@@ -32,9 +42,11 @@ Each finding MUST carry one of these labels in the JSON `label` field:
 
 - `SLOP` — Definite slop violation.
 - `SLOP SUSPECT` — Likely slop but needs human judgment to confirm.
-- `NOTE` — Minor concern, not clearly slop.
 
-If any `SLOP` or `SLOP SUSPECT` findings exist, report them and skip `NOTE`.
+Do not submit `NOTE`, "clean", "no issues", or all-clear findings. Code under
+review is assumed to contain slop. If you cannot identify a real `SLOP` or
+`SLOP SUSPECT` finding from the in-scope material, do not submit a report; let
+the CI attempt fail.
 
 ### No Remediation
 
@@ -45,7 +57,12 @@ Slop review is an adversarial audit. Diagnose the fraud and trace its causal pat
 Write a JSON report to `.agents/review-runner/candidates/submitted.json`.
 
 To get the exact schema (fields, types, constraints), run:
-`submit-candidate --help`
+`/home/reviewer/bin/submit-candidate --help`
+
+Do not inspect validator internals. Do not read or search for `submit-candidate`
+implementations. Do not inspect `/opt/ai-review`, `/home/reviewer/.review/infra`,
+`quality-control/ci`, or alternate copies of review infrastructure. Validation
+is not a research surface; it is only the final report gate.
 
 Key rules every finding must satisfy:
 
@@ -56,15 +73,18 @@ Key rules every finding must satisfy:
 
 **Forbidden:**
 
-- Findings whose `category` contains `infra`, `infrastructure`, `ci`, `workflow`, or `config`.
-- Findings about files in `.github/`, `.agents/`, `quality-control/`, or `opencode/skills/`.
+- Clean-report findings: labels, patterns, invariants, or narratives claiming
+  the diff is clean, has no issues, or has nothing to report.
+- Review-theater fields such as `checked_surfaces` or `rejected_easy_wins`.
 - `score` and `report` fields — rejected by the validator.
 
 ## Submitting Your Report
 
 Write your report to `.agents/review-runner/candidates/submitted.json`.
-Then run `submit-candidate` (no arguments).
+Then run `/home/reviewer/bin/submit-candidate` (no arguments).
 
 If the script exits 0, your report was accepted and you are done.
-If it exits non-zero, read the errors, fix the SAME file, and re-run the script.
-Repeat until the script exits 0.
+If it exits non-zero, read the errors, fix the SAME JSON file, and re-run the
+script only if you have a real slop finding to submit. If the error shows that
+your report is clean-shaped, out of scope, or based on review-runner internals,
+delete the candidate file and stop without submitting an artifact.

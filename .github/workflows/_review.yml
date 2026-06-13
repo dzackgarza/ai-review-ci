@@ -42,7 +42,9 @@ jobs:
         run: echo "INFRA=$RUNNER_TEMP/ai-review-ci" >> "$GITHUB_ENV"
 
       - name: Clone review infrastructure
-        run: git clone --depth 1 --branch "${{ inputs.infra_ref }}" https://github.com/dzackgarza/ai-review-ci.git "$INFRA"
+        env:
+          INFRA_REF: ${{ inputs.infra_ref }}
+        run: git clone --depth 1 --branch "$INFRA_REF" https://github.com/dzackgarza/ai-review-ci.git "$INFRA"
 
       - name: Setup Python
         uses: actions/setup-python@v5
@@ -63,23 +65,32 @@ jobs:
       - name: Fetch reviewer context
         env:
           GH_TOKEN: ${{ github.token }}
-        run: just -f "$INFRA/ci/runner.just" fetch-context "ai-review/${{ inputs.report_type }}" "${{ github.event.number || 0 }}"
+          REPORT_TYPE: ${{ inputs.report_type }}
+          PR_NUMBER: ${{ github.event.number || 0 }}
+        run: just -f "$INFRA/ci/runner.just" fetch-context "ai-review/$REPORT_TYPE" "$PR_NUMBER"
 
       - name: Prepare reviewer
         run: just -f "$INFRA/ci/runner.just" prepare
 
       - name: Stage PR diff
         if: inputs.scope == 'diff'
-        run: just -f "$INFRA/ci/runner.just" stage-pr-diff "${{ github.base_ref }}"
+        env:
+          BASE_REF: ${{ github.base_ref }}
+        run: just -f "$INFRA/ci/runner.just" stage-pr-diff "$BASE_REF"
 
       - name: Run review
-        run: just -f "$INFRA/ci/runner.just" run-review "${{ inputs.report_type }}" "${{ inputs.scope }}"
+        env:
+          REPORT_TYPE: ${{ inputs.report_type }}
+          REVIEW_SCOPE: ${{ inputs.scope }}
+        run: just -f "$INFRA/ci/runner.just" run-review "$REPORT_TYPE" "$REVIEW_SCOPE"
 
       - name: Collect review output
         run: just -f "$INFRA/ci/runner.just" collect-output
 
       - name: Convert report to SARIF
-        run: just -f "$INFRA/ci/runner.just" convert-sarif "ai-${{ inputs.report_type }}-review"
+        env:
+          REPORT_TYPE: ${{ inputs.report_type }}
+        run: just -f "$INFRA/ci/runner.just" convert-sarif "ai-$REPORT_TYPE-review"
 
       - name: Upload review findings
         uses: github/codeql-action/upload-sarif@v4
@@ -91,16 +102,19 @@ jobs:
         if: inputs.scope == 'diff'
         env:
           GH_TOKEN: ${{ github.token }}
-        run: just -f "$INFRA/ci/runner.just" post-threads "${{ github.event.number }}"
+          PR_NUMBER: ${{ github.event.number }}
+        run: just -f "$INFRA/ci/runner.just" post-threads "$PR_NUMBER"
 
       - name: Check threshold
         if: inputs.fail_below != ''
+        env:
+          FAIL_BELOW: ${{ inputs.fail_below }}
         run: |
           tier1=$(jq '[.findings[] | select(.tier == "tier1")] | length' .review-report-artifact.json)
           tier2=$(jq '[.findings[] | select(.tier == "tier2")] | length' .review-report-artifact.json)
           score=$((100 - tier1 * 20 - tier2 * 5))
           score=$(( score < 0 ? 0 : score ))
-          if [ "$score" -lt "${{ inputs.fail_below }}" ]; then
-            echo "Health score $score is below threshold ${{ inputs.fail_below }}"
+          if [ "$score" -lt "$FAIL_BELOW" ]; then
+            echo "Health score $score is below threshold $FAIL_BELOW"
             exit 1
           fi
