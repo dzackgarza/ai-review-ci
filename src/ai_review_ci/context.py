@@ -8,7 +8,7 @@ Queries code scanning alerts for the relevant SARIF tool names
 (open, dismissed, fixed). The alerts API filters by tool.driver.name,
 NOT by the upload-sarif category.
 
-The output is a markdown file with open/dismissed/fixed findings grouped
+The output is a markdown file with open/dismissed/fixed guardrails grouped
 by state. Pass it to the review agent as instructions:
 
   "Open alerts are carried forward by automation. Do not duplicate them in your
@@ -82,7 +82,7 @@ query($owner: String!, $name: String!, $number: Int!, $cursor: String) {
         pageInfo { hasNextPage endCursor }
         nodes {
           isResolved
-          comments(first: 1) { nodes { path body } }
+          comments(first: 1) { nodes { path } }
         }
       }
     }
@@ -118,7 +118,7 @@ def _thread_page(owner: str, name: str, pr_number: int, cursor: str | None) -> J
 
 
 def _fetch_pr_threads(repo: str, pr_number: int) -> list[JsonDict]:
-    """Digest of existing review threads on the PR: path, headline, state."""
+    """Digest of existing review threads on the PR: path and state only."""
     owner, name = repo.split("/")
     threads: list[JsonDict] = []
     cursor: str | None = None
@@ -128,13 +128,9 @@ def _fetch_pr_threads(repo: str, pr_number: int) -> list[JsonDict]:
             comments = node["comments"]["nodes"]
             if not comments:
                 continue
-            headline = (
-                comments[0]["body"].splitlines()[0] if comments[0]["body"] else ""
-            )
             threads.append(
                 {
                     "path": comments[0].get("path") or "?",
-                    "headline": headline,
                     "resolved": node["isResolved"],
                 }
             )
@@ -142,19 +138,6 @@ def _fetch_pr_threads(repo: str, pr_number: int) -> list[JsonDict]:
             break
         cursor = page["pageInfo"]["endCursor"]
     return threads
-
-
-def _alert_label(alert: JsonDict) -> str:
-    """Extract finding label from alert properties or rule description."""
-    props = (
-        alert.get("most_recent_instance", {}).get("location", {}).get("properties", {})
-    )
-    if props and props.get("label"):
-        label: str = props["label"]
-        return label
-    rule = alert.get("rule", {})
-    name: str = rule.get("name", rule.get("id", "?"))
-    return name
 
 
 def _alert_location(alert: JsonDict) -> str:
@@ -166,35 +149,42 @@ def _alert_url(alert: JsonDict) -> str:
     return str(alert.get("html_url") or alert.get("url") or "?")
 
 
-def _format_alert(alert: JsonDict) -> str:
-    label = _alert_label(alert)
+def _format_alert_guardrail(alert: JsonDict) -> str:
+    number = alert.get("number", "?")
+    state = alert.get("state", "?")
     loc = _alert_location(alert)
     url = _alert_url(alert)
-    return f"- **{label}** at `{loc}`  \n  Alert: {url}"
+    return f"- alert #{number}; state={state}; location=`{loc}`; url={url}"
 
 
 def _open_lines(alerts: list[JsonDict]) -> list[str]:
     if not alerts:
         return []
-    return ["", "**Open / accepted findings:**", *(_format_alert(a) for a in alerts)]
+    return [
+        "",
+        "**Open / accepted finding guardrails:**",
+        *(_format_alert_guardrail(a) for a in alerts),
+    ]
 
 
 def _dismissed_lines(alerts: list[JsonDict]) -> list[str]:
     if not alerts:
         return []
-    lines = ["", "**Dismissed / rejected findings:**"]
+    lines = ["", "**Dismissed / rejected finding guardrails:**"]
     for a in alerts:
         reason = a.get("dismissed_reason", "?")
-        comment = a.get("dismissed_comment", "")
-        extra = f" ({reason}: {comment})" if comment else f" ({reason})"
-        lines.append(_format_alert(a) + extra)
+        lines.append(f"{_format_alert_guardrail(a)}; disposition={reason}")
     return lines
 
 
 def _fixed_lines(alerts: list[JsonDict]) -> list[str]:
     if not alerts:
         return []
-    return ["", "**Fixed findings:**", *(_format_alert(a) for a in alerts)]
+    return [
+        "",
+        "**Fixed finding guardrails:**",
+        *(_format_alert_guardrail(a) for a in alerts),
+    ]
 
 
 _STATE_RENDERERS: tuple[tuple[str, Callable[[list[JsonDict]], list[str]]], ...] = (
@@ -254,14 +244,15 @@ def _pr_thread_lines(repo: str, pr_number: int) -> list[str]:
     lines = [
         "## Review items already surfaced on this PR",
         "",
-        "These findings already have review threads on this pull request. "
+        "These paths already have review threads on this pull request. "
+        "They are non-actionable guardrails, not examples or evidence. "
         "Do not re-raise them; a resolved thread is a disposition.",
         "",
     ]
     if threads:
         for t in threads:
             state = "resolved" if t["resolved"] else "open"
-            lines.append(f"- [{state}] `{t['path']}` — {t['headline']}")
+            lines.append(f"- [{state}] `{t['path']}`")
     else:
         lines.append("_No existing review threads._")
     lines.append("")
@@ -296,6 +287,11 @@ def fetch_context(
         "new evidence, the problem reappears in a materially different form, "
         "or the previous resolution is directly contradicted by the current "
         "code.",
+        "",
+        "The entries below are denylist guardrails, not examples and not "
+        "evidence for a new report. Do not reuse prior alert labels, review "
+        "thread wording, dismissed comments, or nearby paraphrases as finding "
+        "content.",
         "",
     ]
 
