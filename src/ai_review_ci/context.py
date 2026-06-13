@@ -34,9 +34,7 @@ def _fail(msg: str) -> NoReturn:
     sys.exit(1)
 
 
-def _fetch_alerts(
-    repo: str, tool_name: str, ref: str | None = None, state: str | None = None
-) -> list[JsonDict]:
+def _fetch_alerts(repo: str, tool_name: str, ref: str | None = None, state: str | None = None) -> list[JsonDict]:
     """Fetch code scanning alerts for a repo, filtered by tool and optional ref.
 
     Returns an empty list when no analysis exists (404), which is the
@@ -112,9 +110,7 @@ def _thread_page(owner: str, name: str, pr_number: int, cursor: str | None) -> J
     result = subprocess.run(args, capture_output=True, text=True)
     if result.returncode != 0:
         _fail(f"gh api graphql reviewThreads failed: {result.stderr.strip()}")
-    page: JsonDict = json.loads(result.stdout)["data"]["repository"]["pullRequest"][
-        "reviewThreads"
-    ]
+    page: JsonDict = json.loads(result.stdout)["data"]["repository"]["pullRequest"]["reviewThreads"]
     return page
 
 
@@ -231,15 +227,11 @@ def _alert_section(cat: str, alerts: list[JsonDict]) -> list[str]:
     return lines
 
 
-def _collect_alerts(
-    repo: str, cat: str, pr_number: int, state: str | None = None
-) -> list[JsonDict]:
+def _collect_alerts(repo: str, cat: str, pr_number: int, state: str | None = None) -> list[JsonDict]:
     """Repo-wide alerts for a tool, merged with PR-ref alerts on PR runs."""
     alerts = _fetch_alerts(repo, tool_name=cat, state=state)
     if pr_number:
-        pr_alerts = _fetch_alerts(
-            repo, tool_name=cat, ref=f"refs/pull/{pr_number}/merge", state=state
-        )
+        pr_alerts = _fetch_alerts(repo, tool_name=cat, ref=f"refs/pull/{pr_number}/merge", state=state)
         known = {a.get("number") for a in alerts}
         alerts.extend(a for a in pr_alerts if a.get("number") not in known)
     return alerts
@@ -257,10 +249,7 @@ def _carry_forward_payload(repo: str, cats: list[str], pr_number: int) -> JsonDi
     """Open alert payload consumed later by SARIF conversion."""
     entries: list[JsonDict] = []
     for cat in cats:
-        entries.extend(
-            {"tool_name": cat, "alert": alert}
-            for alert in _collect_alerts(repo, cat, pr_number, state="open")
-        )
+        entries.extend({"tool_name": cat, "alert": alert} for alert in _collect_alerts(repo, cat, pr_number, state="open"))
     return {"schema_version": 1, "alerts": entries}
 
 
@@ -270,8 +259,7 @@ def _pr_thread_lines(repo: str, pr_number: int) -> list[str]:
     lines = [
         "## Review items already surfaced on this PR",
         "",
-        "These findings already have review threads on this pull request. "
-        "Do not re-raise them; a resolved thread is a disposition.",
+        "These findings already have review threads on this pull request. Do not re-raise them; a resolved thread is a disposition.",
         "",
     ]
     if threads:
@@ -330,7 +318,5 @@ def fetch_context(
         print(text)
 
     if alerts_output:
-        alerts_output.write_text(
-            json.dumps(_carry_forward_payload(repo, names, pr_number), indent=2) + "\n"
-        )
+        alerts_output.write_text(json.dumps(_carry_forward_payload(repo, names, pr_number), indent=2) + "\n")
         print(f"Carry-forward alerts written to {alerts_output}", file=sys.stderr)

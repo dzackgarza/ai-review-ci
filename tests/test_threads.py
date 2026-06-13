@@ -79,9 +79,7 @@ def test_partition_findings_surfaces_existing_fingerprint_for_disposition() -> N
     }
     seen = {finding_fingerprint("DOC_CONSISTENCY", "src/example.py")}
 
-    comments, off_diff, possible_duplicates = partition_findings(
-        [finding], {"src/example.py": {12}}, seen, "General Review"
-    )
+    comments, off_diff, possible_duplicates = partition_findings([finding], {"src/example.py": {12}}, seen, "General Review")
 
     assert len(comments) == 1
     assert not off_diff

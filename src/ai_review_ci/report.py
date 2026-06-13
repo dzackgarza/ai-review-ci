@@ -48,10 +48,7 @@ def validate_report(path: Path, report_type: ReportType, output: Path) -> None:
     try:
         data: dict[str, object] = json.loads(path.read_text())
     except json.JSONDecodeError as exc:
-        print(
-            f"Report validation FAILED:\n  invalid JSON in {path}: {exc}\n"
-            f"  FIX: the candidate must be a single valid JSON document."
-        )
+        print(f"Report validation FAILED:\n  invalid JSON in {path}: {exc}\n  FIX: the candidate must be a single valid JSON document.")
         sys.exit(1)
 
     if "report_type" not in data:
