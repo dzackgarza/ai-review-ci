@@ -117,9 +117,9 @@ _check-envrc:
 		exit 1
 	fi
 	# 3. No .env files — they are env var definitions outside .envrc
-	if find . -maxdepth 3 -name '.env*' -type f -not -path '*/.git/*' -not -path '*/node_modules/*' 2>/dev/null | grep -q .; then
+	if find . -maxdepth 3 -name '.env*' -not -name '.envrc' -type f -not -path '*/.git/*' -not -path '*/node_modules/*' 2>/dev/null | grep -q .; then
 		echo "ERROR: Found .env files — these are env var definitions that belong in .envrc."
-		find . -maxdepth 3 -name '.env*' -type f -not -path '*/.git/*' -not -path '*/node_modules/*' 2>/dev/null
+		find . -maxdepth 3 -name '.env*' -not -name '.envrc' -type f -not -path '*/.git/*' -not -path '*/node_modules/*' 2>/dev/null
 		echo "       Move these variables to .envrc and delete the .env files."
 		"{{artifacts}}/scripts/emit-triage-directive.sh"
 		exit 1
@@ -267,7 +267,9 @@ _ast-grep:
 	echo "# Structural code pattern analysis for bridge-burning policy violations"
 	sg_config="{{configs}}/ast-grep/sgconfig.yml"
 	if [ -f "$sg_config" ]; then
-		if ! /bin/ast-grep scan --config "$sg_config" .; then
+		if /bin/ast-grep scan --config "$sg_config" .; then
+			:
+		else
 			ec=$?
 			echo ""
 			echo "!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!"
@@ -285,7 +287,9 @@ _vibecheck:
 	echo "============================="
 	echo "=== Running: vibecheck anti-slop pattern detection ==="
 	echo "# Runs qinnovates/vibecheck-slop-stopper via uvx against the project root"
-	if ! uvx --from git+https://github.com/qinnovates/vibecheck-slop-stopper vibecheck . --severity high; then
+	if uvx --from git+https://github.com/qinnovates/vibecheck-slop-stopper vibecheck . --severity high; then
+		:
+	else
 		ec=$?
 		echo ""
 		echo "!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!"

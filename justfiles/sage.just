@@ -55,7 +55,7 @@ _sage-syntax:
 	fi
 
 	sage_preparse_dir="$(mktemp -d "${TMPDIR:-/tmp}/qc-sage-syntax.XXXXXX")"
-	trap 'if [ -e "" ]; then gio trash ""; fi' EXIT
+	trap 'if [ -e "$sage_preparse_dir" ]; then gio trash "$sage_preparse_dir"; fi' EXIT
 	echo "# Preparsing and compiling ${#sage_files[@]} Sage file(s)"
 	copied_sage_files=()
 	compile_args=()
@@ -139,7 +139,7 @@ _vulture: _sage-qc-files
 		fi
 
 		sage_preparse_dir="$(mktemp -d "${TMPDIR:-/tmp}/qc-vulture-sage.XXXXXX")"
-		trap 'if [ -e "" ]; then gio trash ""; fi' EXIT
+		trap 'if [ -e "$sage_preparse_dir" ]; then gio trash "$sage_preparse_dir"; fi' EXIT
 		echo "# Preparsing ${#sage_files[@]} Sage file(s) for vulture"
 		copied_sage_files=()
 		for sage_file in "${sage_files[@]}"; do

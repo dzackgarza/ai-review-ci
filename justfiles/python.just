@@ -238,13 +238,17 @@ _pytest_with_coverage: _install-tools
 	coverage_data="$coverage_root/.coverage"
 	coverage_xml="$coverage_root/coverage.xml"
 	mkdir -p "$coverage_root"
-	if ! COVERAGE_FILE="$coverage_data" uvx --from coverage --with pytest --with-editable . coverage run -m pytest; then
+	if COVERAGE_FILE="$coverage_data" uvx --from coverage --with pytest --with-editable . coverage run -m pytest; then
+		:
+	else
 		ec=$?
 		echo "ERROR: pytest failed."
 		"{{artifacts}}/scripts/emit-triage-directive.sh"
 		exit $ec
 	fi
-	if ! COVERAGE_FILE="$coverage_data" uvx --from coverage coverage xml --fail-under=100 -o "$coverage_xml"; then
+	if COVERAGE_FILE="$coverage_data" uvx --from coverage coverage xml --fail-under=100 -o "$coverage_xml"; then
+		:
+	else
 		ec=$?
 		echo "ERROR: coverage below 100% threshold."
 		"{{artifacts}}/scripts/emit-triage-directive.sh"
@@ -266,7 +270,9 @@ _diff-cover: _pytest_with_coverage
 		"{{artifacts}}/scripts/emit-triage-directive.sh"
 		exit 1
 	fi
-	if ! uvx --from diff-cover diff-cover "$coverage_xml" --compare-branch ${DIFF_COVER_BASE:-main}; then
+	if uvx --from diff-cover diff-cover "$coverage_xml" --compare-branch ${DIFF_COVER_BASE:-main}; then
+		:
+	else
 		ec=$?
 		echo "ERROR: diff-cover found coverage gaps in changed code."
 		"{{artifacts}}/scripts/emit-triage-directive.sh"
@@ -308,7 +314,9 @@ _deptry: _install-tools
 		"{{artifacts}}/scripts/emit-triage-directive.sh"
 		exit 1
 	fi
-	if ! uvx --from deptry deptry .; then
+	if uvx --from deptry deptry .; then
+		:
+	else
 		ec=$?
 		echo "ERROR: deptry found dependency issues in project."
 		"{{artifacts}}/scripts/emit-triage-directive.sh"
@@ -328,7 +336,7 @@ _ast-grep: _install-tools
 		exit 1
 	fi
 	findings_file=$(mktemp)
-	trap 'if [ -e "" ]; then gio trash ""; fi' EXIT
+	trap 'if [ -e "$findings_file" ]; then gio trash "$findings_file"; fi' EXIT
 	npx -y ast-grep scan \
 		--config {{configs}}/sgconfig.yml \
 		--report-style short \
@@ -373,7 +381,9 @@ _lizard-python: _install-tools
 		"{{artifacts}}/scripts/emit-triage-directive.sh"
 		exit 1
 	fi
-	if ! uvx --from lizard lizard -l python -C 7 -L 100 -a 5 -i 0 "${python_files[@]}"; then
+	if uvx --from lizard lizard -l python -C 7 -L 100 -a 5 -i 0 "${python_files[@]}"; then
+		:
+	else
 		ec=$?
 		echo "ERROR: lizard found excessive complexity in project code."
 		"{{artifacts}}/scripts/emit-triage-directive.sh"
@@ -398,7 +408,9 @@ _import-linter: _install-tools
 		"{{artifacts}}/scripts/emit-triage-directive.sh"
 		exit 1
 	fi
-	if ! uvx --from import-linter --with-editable . lint-imports --config "$config"; then
+	if uvx --from import-linter --with-editable . lint-imports --config "$config"; then
+		:
+	else
 		ec=$?
 		echo "ERROR: import-linter found import rule violations in project."
 		"{{artifacts}}/scripts/emit-triage-directive.sh"
@@ -412,7 +424,9 @@ _grain:
 	echo "=== Running: grain unused code detection ==="
 	echo "# Finds unused imports and variables that can be safely removed"
 	cp {{configs}}/grain.toml .grain.toml
-	if ! uvx --from git+https://github.com/mmartoccia/grain grain check --all --fix; then
+	if uvx --from git+https://github.com/mmartoccia/grain grain check --all --fix; then
+		:
+	else
 		ec=$?
 		[ -e .grain.toml ] && gio trash .grain.toml
 		echo "ERROR: grain found unused code in project."
@@ -433,13 +447,17 @@ _codeql:
 	db="$codeql_root/codeql-db"
 	report="$codeql_root/codeql-report.sarif"
 	mkdir -p "$codeql_root"
-	if ! codeql database create "$db" --overwrite --language=python --source-root="$project_root"; then
+	if codeql database create "$db" --overwrite --language=python --source-root="$project_root"; then
+		:
+	else
 		ec=$?
 		echo "ERROR: CodeQL database creation failed."
 		"{{artifacts}}/scripts/emit-triage-directive.sh"
 		exit $ec
 	fi
-	if ! codeql database analyze "$db" --format=sarif-latest --output="$report"; then
+	if codeql database analyze "$db" --format=sarif-latest --output="$report"; then
+		:
+	else
 		ec=$?
 		echo "ERROR: CodeQL analysis failed."
 		"{{artifacts}}/scripts/emit-triage-directive.sh"
