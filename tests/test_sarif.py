@@ -25,6 +25,7 @@ def existing_alert(
                 "id": category,
                 "name": "CARRIED_FORWARD",
                 "description": "Existing finding that remains open",
+                "severity": "error",
             },
             "most_recent_instance": {
                 "message": {"text": "Existing invariant violation"},
@@ -32,11 +33,6 @@ def existing_alert(
                     "path": path,
                     "start_line": 2,
                     "end_line": 4,
-                    "properties": {
-                        "label": "CARRIED_FORWARD",
-                        "tier": "tier1",
-                        "category": category,
-                    },
                 },
             },
         },
@@ -153,8 +149,6 @@ def test_build_sarif_carries_github_rest_alert_without_location_properties(
 ) -> None:
     configure_github_env()
     carried_alert = existing_alert()
-    carried_alert["alert"]["rule"]["severity"] = "error"
-    del carried_alert["alert"]["most_recent_instance"]["location"]["properties"]
 
     sarif = build_sarif(
         general_candidate(findings=[]),

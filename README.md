@@ -69,7 +69,8 @@ The canonical templates live in
 
 Requirements in the target repo: GitHub code scanning enabled (free for
 public repos); optionally the Actions vars `GENERAL_FAIL_BELOW` /
-`SLOP_FAIL_BELOW` to gate runs on a health score.
+`SLOP_FAIL_BELOW` to gate runs on a health score. The PR trigger passes
+those same vars to the diff-scoped general and slop jobs.
 
 ## Installing QC Surfaces
 
