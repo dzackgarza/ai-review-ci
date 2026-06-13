@@ -1,4 +1,5 @@
-from ai_review_ci.threads import parse_diff, pick_anchor
+from ai_review_ci.models import finding_fingerprint
+from ai_review_ci.threads import parse_diff, partition_findings, pick_anchor
 
 
 def test_parse_diff_maps_new_side_commentable_lines() -> None:
@@ -49,3 +50,40 @@ def test_pick_anchor_prefers_reported_line_when_visible() -> None:
     }
 
     assert pick_anchor(finding, {"src/example.py": {10, 12, 13}}) == 12
+
+
+def test_partition_findings_surfaces_existing_fingerprint_for_disposition() -> None:
+    finding = {
+        "tier": "tier2",
+        "label": "Duplicate-shaped finding",
+        "category": "DOC_CONSISTENCY",
+        "location": {
+            "path": "src/example.py",
+            "start_line": 12,
+            "end_line": 13,
+        },
+        "violated_invariant": "Distinct findings can share a category and path.",
+        "proof_command": "review existing thread and candidate evidence",
+        "symptom": "same category/path fingerprint",
+        "source": "candidate review output",
+        "consequence": "automatic suppression could hide a true positive",
+        "pattern": "possible duplicate",
+        "why_it_matters": "disposition needs semantic comparison",
+        "evidence": [
+            {
+                "path": "src/example.py",
+                "lines": [12, 13],
+                "kind": "primary",
+            }
+        ],
+    }
+    seen = {finding_fingerprint("DOC_CONSISTENCY", "src/example.py")}
+
+    comments, off_diff, possible_duplicates = partition_findings(
+        [finding], {"src/example.py": {12}}, seen, "General Review"
+    )
+
+    assert len(comments) == 1
+    assert not off_diff
+    assert possible_duplicates == 1
+    assert "Possible duplicate disposition required" in comments[0]["body"]
