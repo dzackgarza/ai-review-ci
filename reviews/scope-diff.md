@@ -13,16 +13,24 @@ If the diff is absent, empty, malformed, or too incomplete to identify changed
 files, do not submit a report. Let the run fail so a human can inspect the
 review setup.
 
+The inlined diff is review input, not repository evidence. Do not include
+`.reviewer-diff.patch`, deleted file paths, or other runner artifacts in
+`review_scope`, `location.path`, or `evidence[].path`. Those fields must name
+files that exist in the current checkout. When a deleted file or diff hunk is
+material to the finding, describe the hunk in `proof_command` or the finding
+narrative and use current checkout files for structured evidence.
+
 Do not inspect review-runner infrastructure to learn the schema or game
 validation. The only allowed validator interactions are:
 
-- `submit-candidate --help`
+- `/home/reviewer/bin/submit-candidate --help`
 - write `.agents/review-runner/candidates/submitted.json`
-- `submit-candidate`
+- `/home/reviewer/bin/submit-candidate`
 
 Do not read, search for, or execute alternate copies of `submit-candidate`.
-Do not inspect `/opt/ai-review`, `/home/reviewer/.review/infra`, or
-`.agents/review-runner/` except to write the submitted JSON.
+Do not inspect `/opt/ai-review` or `/home/reviewer/.review/infra`.
+Do not inspect `quality-control/ci`.
+Do not inspect `.agents/review-runner/` except to write the submitted JSON.
 
 EXCEPTION: the reviewer context above lists findings already tracked for this
 repository. Open code scanning alerts are carried forward into the next SARIF

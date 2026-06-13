@@ -57,12 +57,12 @@ Slop review is an adversarial audit. Diagnose the fraud and trace its causal pat
 Write a JSON report to `.agents/review-runner/candidates/submitted.json`.
 
 To get the exact schema (fields, types, constraints), run:
-`submit-candidate --help`
+`/home/reviewer/bin/submit-candidate --help`
 
 Do not inspect validator internals. Do not read or search for `submit-candidate`
 implementations. Do not inspect `/opt/ai-review`, `/home/reviewer/.review/infra`,
-or alternate copies of review infrastructure. Validation is not a research
-surface; it is only the final report gate.
+`quality-control/ci`, or alternate copies of review infrastructure. Validation
+is not a research surface; it is only the final report gate.
 
 Key rules every finding must satisfy:
 
@@ -81,7 +81,7 @@ Key rules every finding must satisfy:
 ## Submitting Your Report
 
 Write your report to `.agents/review-runner/candidates/submitted.json`.
-Then run `submit-candidate` (no arguments).
+Then run `/home/reviewer/bin/submit-candidate` (no arguments).
 
 If the script exits 0, your report was accepted and you are done.
 If it exits non-zero, read the errors, fix the SAME JSON file, and re-run the

@@ -26,7 +26,7 @@ handled by separate agents after disposition.
 Write a JSON report to `.agents/review-runner/candidates/submitted.json`.
 
 To get the exact schema (fields, types, constraints), run:
-`submit-candidate --help`
+`/home/reviewer/bin/submit-candidate --help`
 
 Key rules every finding must satisfy:
 
@@ -42,14 +42,15 @@ Key rules every finding must satisfy:
 
 **Forbidden:**
 
-- Findings whose `category` contains `infra`, `infrastructure`, `ci`, `workflow`, or `config`.
-- Findings about files in `.github/`, `.agents/`, `quality-control/`, or `opencode/skills/`.
+- Runner-internals findings about `/opt/ai-review`,
+  `/home/reviewer/.review/infra`, `quality-control/ci`, or validator
+  implementation files.
 - `score` and `report` fields — rejected by the validator.
 
 ## Submitting Your Report
 
 Write your report to `.agents/review-runner/candidates/submitted.json`.
-Then run `submit-candidate` (no arguments).
+Then run `/home/reviewer/bin/submit-candidate` (no arguments).
 
 If the script exits 0, your report was accepted and you are done.
 If it exits non-zero, read the errors, fix the SAME file, and re-run the script.

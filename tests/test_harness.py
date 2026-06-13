@@ -54,6 +54,58 @@ def test_diff_scope_prompt_inlines_diff_and_skips_repo_docs(tmp_path: Path) -> N
     assert "run tree before every local exploration" not in prompt
 
 
+def test_real_diff_scope_prompt_names_submission_contract(tmp_path: Path) -> None:
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    (repo / ".reviewer-diff.patch").write_text("diff --git a/src/app.py b/src/app.py\n")
+    context = tmp_path / "context.md"
+    context.write_text("No prior findings.\n")
+
+    result = subprocess.run(
+        [
+            sys.executable,
+            "-c",
+            (
+                "import sys; "
+                "from pathlib import Path; "
+                "from ai_review_ci.harness import build_initial_prompt; "
+                "print("
+                "build_initial_prompt(*(Path(arg) for arg in sys.argv[1:])), "
+                "end=''"
+                ")"
+            ),
+            "reviews/slop/template.md",
+            "reviews/scope-diff.md",
+            "reviews/slop/manifest.txt",
+            str(context),
+            str(repo),
+        ],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    prompt = result.stdout
+
+    assert ".agents/review-runner/candidates/submitted.json" in prompt
+    assert "/home/reviewer/bin/submit-candidate --help" in prompt
+    assert "Then run `/home/reviewer/bin/submit-candidate`" in prompt
+    assert "Do not inspect `quality-control/ci`" in prompt
+    assert "npx submit-candidate" not in prompt
+    assert "uvx submit-candidate" not in prompt
+    assert "opx submit-candidate" not in prompt
+
+
+def test_retry_prompt_uses_absolute_submit_candidate_path(tmp_path: Path) -> None:
+    from ai_review_ci.harness import retry_prompt
+
+    submitted = tmp_path / ".agents" / "review-runner" / "candidates" / "submitted.json"
+    prompt = retry_prompt(submitted)
+
+    assert str(submitted) in prompt
+    assert "/home/reviewer/bin/submit-candidate with no arguments" in prompt
+    assert "run submit-candidate with no arguments" not in prompt
+
+
 def test_reviewer_path_contract_does_not_expose_just() -> None:
     runner = Path("ci/runner.just").read_text()
 

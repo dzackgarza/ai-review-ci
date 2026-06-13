@@ -10,8 +10,8 @@ repo README/AGENTS docs are not auto-injected. Diff reviewers need the changed
 surface and the central review contract, not broad repository instructions that
 compete with the diff.
 
-The agent writes a candidate report to a fixed path, then calls
-submit-candidate (no arguments) to validate and submit. submit-candidate
+The agent writes a candidate report to a fixed path, then calls the reviewer
+submission command (no arguments) to validate and submit. submit-candidate
 copies the validated report to .review-report-artifact.json. This harness
 only checks for that artifact's existence after each opencode invocation;
 on timeout or a missing artifact it continues the session with
@@ -40,6 +40,7 @@ DIFF_PATH = Path(".reviewer-diff.patch")
 MAX_ATTEMPTS = 5
 OPENCODE_TIMEOUT = 600
 OPENCODE_BIN = Path("/usr/local/bin/opencode")
+SUBMIT_CANDIDATE_BIN = Path("/home/reviewer/bin/submit-candidate")
 SUBMITTED_CANDIDATE = "submitted.json"
 
 
@@ -142,7 +143,7 @@ def retry_prompt(submitted_path: Path) -> str:
         f"The previous invocation in this opencode session ended without "
         f"a valid report at {ARTIFACT_PATH}. Continue the existing session. "
         f"Write the report to {submitted_path}, then run "
-        f"submit-candidate with no arguments."
+        f"{SUBMIT_CANDIDATE_BIN} with no arguments."
     )
 
 
