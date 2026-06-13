@@ -21,17 +21,14 @@ import json
 import os
 import sys
 from pathlib import Path
-from typing import Any
+from typing import Any, NoReturn
 
 from ai_review_ci.models import finding_fingerprint
 
 JsonDict = dict[str, Any]
 
 SARIF_VERSION = "2.1.0"
-SARIF_SCHEMA = (
-    "https://raw.githubusercontent.com/oasis-tcs/sarif-spec/"
-    "master/Schemata/sarif-schema-2.1.0.json"
-)
+SARIF_SCHEMA = "https://raw.githubusercontent.com/oasis-tcs/sarif-spec/master/Schemata/sarif-schema-2.1.0.json"
 
 CATEGORY_PREFIX = "ai-review"
 
@@ -47,15 +44,29 @@ _OPTIONAL_PROPERTY_KEYS = (
 CARRY_FORWARD_SCHEMA_VERSION = 1
 
 
-def _die(message: str) -> None:
+def _die(message: str) -> NoReturn:
     print(f"FATAL: {message}", file=sys.stderr)
     sys.exit(1)
 
 
 def _mapping(value: object, label: str) -> JsonDict:
     if not isinstance(value, dict):
-        _die(f"invalid carry-forward alert: {label} must be an object")
-    return value
+        _die(f"invalid JSON payload: {label} must be an object")
+    mapping: JsonDict = {}
+    for key, item in value.items():
+        if not isinstance(key, str):
+            _die(f"invalid JSON payload: {label} keys must be strings")
+        mapping[key] = item
+    return mapping
+
+
+def _mapping_list(value: object, label: str) -> list[JsonDict]:
+    if not isinstance(value, list):
+        _die(f"invalid JSON payload: {label} must be a list")
+    entries: list[JsonDict] = []
+    for index, entry in enumerate(value):
+        entries.append(_mapping(entry, f"{label}[{index}]"))
+    return entries
 
 
 def _string(mapping: JsonDict, key: str, label: str) -> str:
@@ -103,12 +114,8 @@ def _rule_for_alert(alert: JsonDict) -> JsonDict:
     return {
         "id": _string(rule, "id", "alert.rule"),
         "name": _string(rule, "name", "alert.rule"),
-        "shortDescription": {
-            "text": _string(rule, "description", "alert.rule")[:200]
-        },
-        "defaultConfiguration": {
-            "level": _string(rule, "severity", "alert.rule")
-        },
+        "shortDescription": {"text": _string(rule, "description", "alert.rule")[:200]},
+        "defaultConfiguration": {"level": _string(rule, "severity", "alert.rule")},
     }
 
 
@@ -149,9 +156,7 @@ def _sarif_result(finding: JsonDict, rule_index: int) -> JsonDict:
                 }
             }
         ],
-        "partialFingerprints": {
-            "reviewFindingKey": finding_fingerprint(finding["category"], loc["path"])
-        },
+        "partialFingerprints": {"reviewFindingKey": finding_fingerprint(finding["category"], loc["path"])},
         "properties": _result_properties(finding),
     }
 
@@ -189,9 +194,7 @@ def _sarif_result_for_alert(alert: JsonDict, rule_index: int) -> JsonDict:
         "ruleId": category,
         "ruleIndex": rule_index,
         "level": level,
-        "message": {
-            "text": _string(message, "text", "alert.most_recent_instance.message")
-        },
+        "message": {"text": _string(message, "text", "alert.most_recent_instance.message")},
         "locations": [
             {
                 "physicalLocation": {
@@ -203,9 +206,7 @@ def _sarif_result_for_alert(alert: JsonDict, rule_index: int) -> JsonDict:
                 }
             }
         ],
-        "partialFingerprints": {
-            "reviewFindingKey": finding_fingerprint(category, path)
-        },
+        "partialFingerprints": {"reviewFindingKey": finding_fingerprint(category, path)},
         "properties": {
             "label": label,
             "tier": _level_to_tier(level),
@@ -234,9 +235,7 @@ def _append_result(
     results.append(result)
 
 
-def _carried_open_alerts(
-    carried_alerts: list[JsonDict], report_type: str
-) -> list[JsonDict]:
+def _carried_open_alerts(carried_alerts: list[JsonDict], report_type: str) -> list[JsonDict]:
     target_tool = _tool_name(report_type)
     alerts: list[JsonDict] = []
     for entry in carried_alerts:
@@ -259,7 +258,7 @@ def build_sarif(
     carried_alerts: list[JsonDict] | None = None,
 ) -> JsonDict:
     """Build the full SARIF document from a validated artifact."""
-    findings: list[JsonDict] = artifact["findings"]
+    findings = _mapping_list(artifact.get("findings"), "artifact.findings")
     run_sha = os.environ["GITHUB_SHA"]
     new_fingerprints = {_result_fingerprint(finding) for finding in findings}
 
@@ -299,10 +298,7 @@ def build_sarif(
                 "tool": {
                     "driver": {
                         "name": _tool_name(report_type),
-                        "informationUri": (
-                            f"{os.environ['GITHUB_SERVER_URL']}/"
-                            f"{os.environ['GITHUB_REPOSITORY']}"
-                        ),
+                        "informationUri": (f"{os.environ['GITHUB_SERVER_URL']}/{os.environ['GITHUB_REPOSITORY']}"),
                         "rules": rules,
                     }
                 },
@@ -327,15 +323,10 @@ def _load_carried_alerts(path: Path | None) -> list[JsonDict]:
         return []
     if not path.is_file():
         _die(f"carry-forward alerts file not found: {path}")
-    payload = json.loads(path.read_text())
+    payload = _mapping(json.loads(path.read_text()), "carry_forward")
     if payload.get("schema_version") != CARRY_FORWARD_SCHEMA_VERSION:
         _die(f"unsupported carry-forward alerts schema in {path}")
-    alerts = payload.get("alerts")
-    if not isinstance(alerts, list):
-        _die(f"invalid carry-forward alerts file: {path}")
-    for entry in alerts:
-        _mapping(entry, "carry_forward_entry")
-    return alerts
+    return _mapping_list(payload.get("alerts"), "carry_forward.alerts")
 
 
 def to_sarif(
@@ -356,9 +347,9 @@ def to_sarif(
     if not artifact.is_file():
         _die(f"artifact not found: {artifact}")
 
-    data: JsonDict = json.loads(artifact.read_text())
+    data = _mapping(json.loads(artifact.read_text()), "artifact")
 
-    report_type = data["report_type"]
+    report_type = _string(data, "report_type", "artifact")
     if report_type not in ("general", "slop"):
         _die(f"unknown report_type '{report_type}' in artifact")
 

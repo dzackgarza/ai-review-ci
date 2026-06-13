@@ -23,7 +23,7 @@ QC_DIR = Path(__file__).resolve().parents[2]
 MODEL_DIR = QC_DIR / "tool-artifacts" / "models"
 
 
-def main():
+def main() -> None:
     MODEL_DIR.mkdir(parents=True, exist_ok=True)
 
     from slop_detector.ml.pipeline import MLPipeline

@@ -120,9 +120,7 @@ def find_config() -> Path:
         candidate = parent / "qc-excludes.toml"
         if candidate.is_file():
             return candidate.resolve()
-    print(
-        "ERROR: qc-excludes.toml not found in any ancestor directory.", file=sys.stderr
-    )
+    print("ERROR: qc-excludes.toml not found in any ancestor directory.", file=sys.stderr)
     sys.exit(1)
 
 
@@ -131,7 +129,13 @@ def load_toml_dirs(config: Path) -> list[str]:
 
     with config.open("rb") as data:
         cfg = tomllib.load(data)
-    return cfg["directories"]
+    directories = cfg["directories"]
+    assert isinstance(directories, list), "qc-excludes directories must be a list"
+    result: list[str] = []
+    for directory in directories:
+        assert isinstance(directory, str), "qc-excludes directories must contain strings"
+        result.append(directory)
+    return result
 
 
 def _build_entries(cfg: ToolConfig, dirs: list[str]) -> list[str]:
