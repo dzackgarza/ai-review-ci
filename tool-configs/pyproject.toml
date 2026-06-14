@@ -8,3 +8,8 @@ paths = ["src", "tests"]
 
 [tool.deptry]
 root = ["src"]
+
+[tool.deptry.package_module_name_map]
+python-slugify = "slugify"
+PyYAML = "yaml"
+types-PyYAML = "yaml"

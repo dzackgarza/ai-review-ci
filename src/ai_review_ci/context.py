@@ -81,8 +81,9 @@ query($owner: String!, $name: String!, $number: Int!, $cursor: String) {
       reviewThreads(first: 100, after: $cursor) {
         pageInfo { hasNextPage endCursor }
         nodes {
+          path
           isResolved
-          comments(first: 1) { nodes { path } }
+          comments(first: 1) { nodes { body } }
         }
       }
     }
@@ -117,6 +118,18 @@ def _thread_page(owner: str, name: str, pr_number: int, cursor: str | None) -> J
     return page
 
 
+def _thread_digest(node: JsonDict) -> JsonDict | None:
+    comments = node["comments"]["nodes"]
+    if not comments:
+        return None
+    headline = comments[0]["body"].splitlines()[0] if comments[0]["body"] else ""
+    return {
+        "path": node["path"],
+        "headline": headline,
+        "resolved": node["isResolved"],
+    }
+
+
 def _fetch_pr_threads(repo: str, pr_number: int) -> list[JsonDict]:
     """Digest of existing review threads on the PR: path and state only."""
     owner, name = repo.split("/")
@@ -125,15 +138,9 @@ def _fetch_pr_threads(repo: str, pr_number: int) -> list[JsonDict]:
     while True:
         page = _thread_page(owner, name, pr_number, cursor)
         for node in page["nodes"]:
-            comments = node["comments"]["nodes"]
-            if not comments:
-                continue
-            threads.append(
-                {
-                    "path": comments[0].get("path") or "?",
-                    "resolved": node["isResolved"],
-                }
-            )
+            digest = _thread_digest(node)
+            if digest is not None:
+                threads.append(digest)
         if not page["pageInfo"]["hasNextPage"]:
             break
         cursor = page["pageInfo"]["endCursor"]
