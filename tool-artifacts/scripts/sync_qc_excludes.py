@@ -150,16 +150,7 @@ def write_eslint_config(qc_root: Path, cfg: ToolConfig, dirs: list[str]) -> None
     path = qc_root / cfg["path"]
     entries = _build_entries(cfg, dirs)
     ignore_lines = "\n".join(f'      "{entry}",' for entry in entries)
-    new_text = (
-        "/** @type {import('eslint').Linter.FlatConfig[]} */\n"
-        "export default [\n"
-        "  {\n"
-        "    ignores: [\n"
-        f"{ignore_lines}\n"
-        "    ],\n"
-        "  },\n"
-        "];\n"
-    )
+    new_text = f"/** @type {{import('eslint').Linter.FlatConfig[]}} */\nexport default [\n  {{\n    ignores: [\n{ignore_lines}\n    ],\n  }},\n];\n"
     if new_text == path.read_text():
         print(f"  No change: {cfg['path']}")
         return
@@ -194,16 +185,7 @@ def write_toml_config(qc_root: Path, cfg: ToolConfig, dirs: list[str]) -> None:
     path = qc_root / cfg["path"]
     entries = _build_entries(cfg, dirs)
     entry_lines = "\n".join(f'  "{entry}",' for entry in entries)
-    new_text = (
-        "[grain]\n"
-        "fail-under = 0.0\n"
-        "min-tokens = 50\n"
-        "similarity = 0.8\n"
-        "languages = [\"python\"]\n"
-        "exclude = [\n"
-        f"{entry_lines}\n"
-        "]\n"
-    )
+    new_text = f'[grain]\nfail-under = 0.0\nmin-tokens = 50\nsimilarity = 0.8\nlanguages = ["python"]\nexclude = [\n{entry_lines}\n]\n'
     if new_text == path.read_text():
         print(f"  No change: {cfg['path']}")
         return
@@ -217,9 +199,9 @@ def write_rust_qc_files(repo_root: Path, dirs: list[str]) -> None:
     new_text = (
         "# justfile-rust — Rust-specific quality control\n"
         "\n"
-        "infra := justfile_directory() / \"..\"\n"
-        "configs := infra / \"tool-configs\"\n"
-        "artifacts := infra / \"tool-artifacts\"\n"
+        'infra := justfile_directory() / ".."\n'
+        'configs := infra / "tool-configs"\n'
+        'artifacts := infra / "tool-artifacts"\n'
         "\n"
         "_rust-qc-files:\n"
         "\t#!/usr/bin/env bash\n"
@@ -230,8 +212,8 @@ def write_rust_qc_files(repo_root: Path, dirs: list[str]) -> None:
         "\t#!/usr/bin/env bash\n"
         "\tset -euo pipefail\n"
         "\tmapfile -t rust_files < <(just --justfile {{justfile()}} -d . _rust-qc-files)\n"
-        "\tif [ \"${#rust_files[@]}\" -eq 0 ]; then\n"
-        "\t\techo \"ERROR: Rust QC: no Rust files found.\"\n"
+        '\tif [ "${#rust_files[@]}" -eq 0 ]; then\n'
+        '\t\techo "ERROR: Rust QC: no Rust files found."\n'
         "\t\texit 1\n"
         "\tfi\n"
         "\tcargo fmt --check\n"
