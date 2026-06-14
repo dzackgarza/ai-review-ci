@@ -52,7 +52,7 @@ class ReportingDescriptor(BaseModel):
     ) -> None: ...
 
 class Result(BaseModel):
-    ruleIndex: int | None
+    ruleIndex: int
 
     def __init__(
         self,
