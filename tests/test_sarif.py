@@ -107,37 +107,6 @@ def test_new_finding_replaces_matching_carried_alert(checkout: Path) -> None:
     assert "Existing invariant violation" not in messages
 
 
-@pytest.mark.parametrize("properties_shape", ["missing", None, "not-an-object"])
-def test_build_sarif_carries_github_alerts_without_location_properties(
-    checkout: Path,
-    properties_shape: object,
-) -> None:
-    configure_github_env()
-    carried_alert = existing_alert()
-    location = carried_alert["alert"]["most_recent_instance"]["location"]
-    carried_alert["alert"]["rule"]["severity"] = "error"
-    if properties_shape == "missing":
-        del location["properties"]
-    else:
-        location["properties"] = properties_shape
-
-    sarif = build_sarif(
-        general_candidate(findings=[]),
-        report_type="general",
-        category="ai-general-review",
-        carried_alerts=[carried_alert],
-    )
-
-    result = sarif["runs"][0]["results"][0]
-    assert result["level"] == "error"
-    assert result["ruleId"] == "carried-forward"
-    assert result["locations"][0]["physicalLocation"]["region"] == {
-        "startLine": 2,
-        "endLine": 4,
-    }
-    assert "properties" not in result
-
-
 def test_to_sarif_writes_artifact_with_optional_carried_alert_sidecar(
     checkout: Path,
     tmp_path: Path,

@@ -8,7 +8,7 @@ Queries code scanning alerts for the relevant SARIF tool names
 (open, dismissed, fixed). The alerts API filters by tool.driver.name,
 NOT by the upload-sarif category.
 
-The output is a markdown file with open/dismissed/fixed guardrails grouped
+The output is a markdown file with open/dismissed/fixed findings grouped
 by state. Pass it to the review agent as instructions:
 
   "Open alerts are carried forward by automation. Do not duplicate them in your
@@ -131,7 +131,7 @@ def _thread_digest(node: JsonDict) -> JsonDict | None:
 
 
 def _fetch_pr_threads(repo: str, pr_number: int) -> list[JsonDict]:
-    """Digest of existing review threads on the PR: path and state only."""
+    """Digest of existing review threads on the PR: path, headline, state."""
     owner, name = repo.split("/")
     threads: list[JsonDict] = []
     cursor: str | None = None
@@ -147,6 +147,19 @@ def _fetch_pr_threads(repo: str, pr_number: int) -> list[JsonDict]:
     return threads
 
 
+def _alert_label(alert: JsonDict) -> str:
+    """Extract finding label from alert properties or rule description."""
+    props = (
+        alert.get("most_recent_instance", {}).get("location", {}).get("properties", {})
+    )
+    if props and props.get("label"):
+        label: str = props["label"]
+        return label
+    rule = alert.get("rule", {})
+    name: str = rule.get("name", rule.get("id", "?"))
+    return name
+
+
 def _alert_location(alert: JsonDict) -> str:
     loc = alert.get("most_recent_instance", {}).get("location", {})
     return f"{loc.get('path', '?')}:{loc.get('start_line', '?')}"
@@ -156,42 +169,35 @@ def _alert_url(alert: JsonDict) -> str:
     return str(alert.get("html_url") or alert.get("url") or "?")
 
 
-def _format_alert_guardrail(alert: JsonDict) -> str:
-    number = alert.get("number", "?")
-    state = alert.get("state", "?")
+def _format_alert(alert: JsonDict) -> str:
+    label = _alert_label(alert)
     loc = _alert_location(alert)
     url = _alert_url(alert)
-    return f"- alert #{number}; state={state}; location=`{loc}`; url={url}"
+    return f"- **{label}** at `{loc}`  \n  Alert: {url}"
 
 
 def _open_lines(alerts: list[JsonDict]) -> list[str]:
     if not alerts:
         return []
-    return [
-        "",
-        "**Open / accepted finding guardrails:**",
-        *(_format_alert_guardrail(a) for a in alerts),
-    ]
+    return ["", "**Open / accepted findings:**", *(_format_alert(a) for a in alerts)]
 
 
 def _dismissed_lines(alerts: list[JsonDict]) -> list[str]:
     if not alerts:
         return []
-    lines = ["", "**Dismissed / rejected finding guardrails:**"]
+    lines = ["", "**Dismissed / rejected findings:**"]
     for a in alerts:
         reason = a.get("dismissed_reason", "?")
-        lines.append(f"{_format_alert_guardrail(a)}; disposition={reason}")
+        comment = a.get("dismissed_comment", "")
+        extra = f" ({reason}: {comment})" if comment else f" ({reason})"
+        lines.append(_format_alert(a) + extra)
     return lines
 
 
 def _fixed_lines(alerts: list[JsonDict]) -> list[str]:
     if not alerts:
         return []
-    return [
-        "",
-        "**Fixed finding guardrails:**",
-        *(_format_alert_guardrail(a) for a in alerts),
-    ]
+    return ["", "**Fixed findings:**", *(_format_alert(a) for a in alerts)]
 
 
 _STATE_RENDERERS: tuple[tuple[str, Callable[[list[JsonDict]], list[str]]], ...] = (
@@ -251,15 +257,14 @@ def _pr_thread_lines(repo: str, pr_number: int) -> list[str]:
     lines = [
         "## Review items already surfaced on this PR",
         "",
-        "These paths already have review threads on this pull request. "
-        "They are non-actionable guardrails, not examples or evidence. "
+        "These findings already have review threads on this pull request. "
         "Do not re-raise them; a resolved thread is a disposition.",
         "",
     ]
     if threads:
         for t in threads:
             state = "resolved" if t["resolved"] else "open"
-            lines.append(f"- [{state}] `{t['path']}`")
+            lines.append(f"- [{state}] `{t['path']}` — {t['headline']}")
     else:
         lines.append("_No existing review threads._")
     lines.append("")
@@ -294,11 +299,6 @@ def fetch_context(
         "new evidence, the problem reappears in a materially different form, "
         "or the previous resolution is directly contradicted by the current "
         "code.",
-        "",
-        "The entries below are denylist guardrails, not examples and not "
-        "evidence for a new report. Do not reuse prior alert labels, review "
-        "thread wording, dismissed comments, or nearby paraphrases as finding "
-        "content.",
         "",
     ]
 

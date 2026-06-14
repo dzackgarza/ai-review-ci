@@ -31,8 +31,6 @@ def test_install_writes_trigger_workflows(tmp_path: pathlib.Path) -> None:
     assert "fail_below: ${{ vars.GENERAL_FAIL_BELOW }}" in pr
     assert "fail_below: ${{ vars.SLOP_FAIL_BELOW }}" in pr
     assert "pull_request" in pr
-    assert "fail_below: ${{ vars.GENERAL_FAIL_BELOW }}" in pr
-    assert "fail_below: ${{ vars.SLOP_FAIL_BELOW }}" in pr
 
 
 def test_install_refuses_non_git_dir(tmp_path: pathlib.Path) -> None:

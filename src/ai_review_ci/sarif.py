@@ -110,9 +110,6 @@ def _rule_for_alert(alert: JsonDict) -> JsonDict:
             "level": _string(rule, "severity", "alert.rule")
         },
     }
-    if level := _alert_level(rule, loc):
-        sarif_rule["defaultConfiguration"] = {"level": level}
-    return sarif_rule
 
 
 def _region(start_line: int, end_line: int) -> JsonDict:
@@ -188,7 +185,7 @@ def _sarif_result_for_alert(alert: JsonDict, rule_index: int) -> JsonDict:
     label = _string(rule, "name", "alert.rule")
     level = _string(rule, "severity", "alert.rule")
     path = _string(loc, "path", "alert.most_recent_instance.location")
-    result = {
+    return {
         "ruleId": category,
         "ruleIndex": rule_index,
         "level": level,
@@ -215,11 +212,6 @@ def _sarif_result_for_alert(alert: JsonDict, rule_index: int) -> JsonDict:
             "category": category,
         },
     }
-    if level := _alert_level(rule, loc):
-        result["level"] = level
-    if props:
-        result["properties"] = dict(props)
-    return result
 
 
 def _result_fingerprint(finding: JsonDict) -> str:
