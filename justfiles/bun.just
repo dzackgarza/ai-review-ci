@@ -111,7 +111,13 @@ _tsc:
 		bun run types
 	elif [ -f tsconfig.json ] \
 		&& jq -e '.compilerOptions.jsxImportSource == "ags/gtk4" or ((.compilerOptions.paths // {}) | has("gi://Astal?version=4.0"))' tsconfig.json >/dev/null; then
-		ags types 'Astal*' --ignore Gtk3 --ignore Astal3 --update
+		if ags types 'Astal*' --ignore Gtk3 --ignore Astal3 --update; then
+			:
+		else
+			ec=$?
+			"{{artifacts}}/scripts/emit-triage-directive.sh"
+			exit $ec
+		fi
 	fi
 	if jq -e '.scripts.typecheck // empty' package.json >/dev/null 2>&1; then
 		output="$(mktemp)"
