@@ -15,7 +15,6 @@ Usage:
 """
 
 import json
-import re
 import sys
 from pathlib import Path
 
@@ -149,17 +148,19 @@ def _build_entries(cfg: ToolConfig, dirs: list[str]) -> list[str]:
 
 def write_eslint_config(qc_root: Path, cfg: ToolConfig, dirs: list[str]) -> None:
     path = qc_root / cfg["path"]
-    original = path.read_text()
     entries = _build_entries(cfg, dirs)
-    lines = "\n".join(f'      "{e}",' for e in entries)
-    new_text = re.sub(
-        r"ignores:\s*\[.*?\]",
-        f"ignores: [\n{lines}\n    ]",
-        original,
-        count=1,
-        flags=re.DOTALL,
+    ignore_lines = "\n".join(f'      "{entry}",' for entry in entries)
+    new_text = (
+        "/** @type {import('eslint').Linter.FlatConfig[]} */\n"
+        "export default [\n"
+        "  {\n"
+        "    ignores: [\n"
+        f"{ignore_lines}\n"
+        "    ],\n"
+        "  },\n"
+        "];\n"
     )
-    if new_text == original:
+    if new_text == path.read_text():
         print(f"  No change: {cfg['path']}")
         return
     path.write_text(new_text)
@@ -192,19 +193,18 @@ def write_json_config(qc_root: Path, cfg: ToolConfig, dirs: list[str]) -> None:
 def write_toml_config(qc_root: Path, cfg: ToolConfig, dirs: list[str]) -> None:
     path = qc_root / cfg["path"]
     entries = _build_entries(cfg, dirs)
-    text = path.read_text()
-
-    toml_body = "\n".join(f'  "{e}",' for e in entries)
-    toml_array = f"[\n{toml_body}\n]"
-
-    new_text = re.sub(
-        r"exclude\s*=\s*\[.*?\]",
-        f"exclude = {toml_array}",
-        text,
-        count=1,
-        flags=re.DOTALL,
+    entry_lines = "\n".join(f'  "{entry}",' for entry in entries)
+    new_text = (
+        "[grain]\n"
+        "fail-under = 0.0\n"
+        "min-tokens = 50\n"
+        "similarity = 0.8\n"
+        "languages = [\"python\"]\n"
+        "exclude = [\n"
+        f"{entry_lines}\n"
+        "]\n"
     )
-    if new_text == text:
+    if new_text == path.read_text():
         print(f"  No change: {cfg['path']}")
         return
     path.write_text(new_text)
@@ -213,15 +213,32 @@ def write_toml_config(qc_root: Path, cfg: ToolConfig, dirs: list[str]) -> None:
 
 def write_rust_qc_files(repo_root: Path, dirs: list[str]) -> None:
     path = repo_root / "justfiles" / "rust.just"
-    text = path.read_text()
     not_paths = " ".join(f"-not -path '*/{d}/*'" for d in dirs)
-    new_text = re.sub(
-        r"find \. -name '\*\.rs' -not -path.*",
-        f"find . -name '*.rs' {not_paths}",
-        text,
-        count=1,
+    new_text = (
+        "# justfile-rust — Rust-specific quality control\n"
+        "\n"
+        "infra := justfile_directory() / \"..\"\n"
+        "configs := infra / \"tool-configs\"\n"
+        "artifacts := infra / \"tool-artifacts\"\n"
+        "\n"
+        "_rust-qc-files:\n"
+        "\t#!/usr/bin/env bash\n"
+        "\tset -euo pipefail\n"
+        f"\tfind . -name '*.rs' {not_paths}\n"
+        "\n"
+        "test: _rust-qc-files\n"
+        "\t#!/usr/bin/env bash\n"
+        "\tset -euo pipefail\n"
+        "\tmapfile -t rust_files < <(just --justfile {{justfile()}} -d . _rust-qc-files)\n"
+        "\tif [ \"${#rust_files[@]}\" -eq 0 ]; then\n"
+        "\t\techo \"ERROR: Rust QC: no Rust files found.\"\n"
+        "\t\texit 1\n"
+        "\tfi\n"
+        "\tcargo fmt --check\n"
+        "\tcargo clippy --all-targets --all-features -- -D warnings\n"
+        "\tcargo test --all-targets --all-features\n"
     )
-    if new_text == text:
+    if new_text == path.read_text():
         print("  No change: justfiles/rust.just")
         return
     path.write_text(new_text)
