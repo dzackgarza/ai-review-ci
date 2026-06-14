@@ -3,8 +3,180 @@ import os
 import pathlib
 import shutil
 import subprocess
+import tomllib
+
+import pytest
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
+TRIAGE_MARKER = "QC FAILURE"
+
+
+def run_just(
+    justfile: pathlib.Path,
+    workdir: pathlib.Path,
+    recipe: str,
+    *,
+    env: dict[str, str] | None = None,
+) -> subprocess.CompletedProcess[str]:
+    return subprocess.run(
+        [
+            "just",
+            "--justfile",
+            str(justfile),
+            "-d",
+            str(workdir),
+            recipe,
+        ],
+        cwd=workdir,
+        env=env,
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+
+
+def path_with_only(tmp_path: pathlib.Path, *commands: str) -> str:
+    bin_dir = tmp_path / "bin"
+    bin_dir.mkdir()
+    for command in commands:
+        target = shutil.which(command)
+        assert target is not None, f"required command missing for test setup: {command}"
+        (bin_dir / command).symlink_to(target)
+    return str(bin_dir)
+
+
+def project_with_sage_file(tmp_path: pathlib.Path) -> pathlib.Path:
+    project = tmp_path / "sage-project"
+    project.mkdir()
+    (project / "example.sage").write_text("x = 1\n")
+    return project
+
+
+@pytest.mark.parametrize("recipe", ["_sage-syntax", "_vulture"])
+@pytest.mark.parametrize("configured_path", ["missing", "not-executable"])
+def test_sage_recipes_require_configured_executable_sage_path(
+    tmp_path: pathlib.Path,
+    recipe: str,
+    configured_path: str,
+) -> None:
+    project = project_with_sage_file(tmp_path)
+    env = os.environ.copy()
+    env.pop("SAGE_BIN", None)
+    if configured_path == "not-executable":
+        sage_bin = tmp_path / "not-executable-sage"
+        sage_bin.write_text("#!/usr/bin/env bash\nexit 0\n")
+        env["SAGE_BIN"] = str(sage_bin)
+
+    result = run_just(ROOT / "justfiles" / "sage.just", project, recipe, env=env)
+
+    output = result.stdout + result.stderr
+    assert result.returncode != 0, output
+    assert TRIAGE_MARKER in output
+
+
+def test_tsc_requires_ags_when_tsconfig_declares_ags(tmp_path: pathlib.Path) -> None:
+    project = tmp_path / "ags-project"
+    project.mkdir()
+    (project / "package.json").write_text(json.dumps({"scripts": {}}) + "\n")
+    (project / "tsconfig.json").write_text(json.dumps({"compilerOptions": {"jsxImportSource": "ags/gtk4"}}) + "\n")
+    env = os.environ | {"PATH": path_with_only(tmp_path, "bash", "cat", "jq", "just")}
+
+    result = run_just(ROOT / "justfiles" / "bun.just", project, "_tsc", env=env)
+
+    output = result.stdout + result.stderr
+    assert result.returncode != 0, output
+    assert TRIAGE_MARKER in output
+
+
+def test_install_global_hooks_requires_env_only_inside_recipe(tmp_path: pathlib.Path) -> None:
+    home = tmp_path / "home"
+    home.mkdir()
+    env = os.environ | {
+        "HOME": str(home),
+        "GIT_CONFIG_GLOBAL": str(home / ".gitconfig"),
+    }
+    env.pop("GIT_GLOBAL_HOOKS_DIR", None)
+
+    recipe_list = subprocess.run(
+        ["just", "--justfile", str(ROOT / "justfile"), "--list"],
+        cwd=tmp_path,
+        env=env,
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+    assert recipe_list.returncode == 0, recipe_list.stdout + recipe_list.stderr
+
+    install = run_just(ROOT / "justfile", tmp_path, "install-global-hooks", env=env)
+
+    output = install.stdout + install.stderr
+    assert install.returncode != 0, output
+    assert "ERROR:" in output
+    assert "GIT_GLOBAL_HOOKS_DIR" in output
+    assert not (home / ".config" / "git" / "hooks").exists()
+
+
+def test_sync_qc_excludes_preserves_non_owned_artifacts_and_updates_grain(
+    tmp_path: pathlib.Path,
+) -> None:
+    repo = tmp_path / "repo"
+    qc_root = repo / "tool-configs"
+    justfiles = repo / "justfiles"
+    qc_root.mkdir(parents=True)
+    justfiles.mkdir()
+
+    for file_name in (
+        "biome.json",
+        "knip.json",
+        "jscpd.json",
+        "slop-scan.config.json",
+        "pyright-local.json",
+        "grain.toml",
+    ):
+        shutil.copy(ROOT / "tool-configs" / file_name, qc_root / file_name)
+    (qc_root / "qc-excludes.toml").write_text('directories = ["central-owned"]\n')
+    eslint_config = qc_root / "eslint.config.js"
+    rust_justfile = justfiles / "rust.just"
+    eslint_config.write_text("export default [{ ignores: ['sentinel'] }];\n")
+    rust_justfile.write_text("# rust sentinel\n")
+
+    result = subprocess.run(
+        [
+            "uv",
+            "run",
+            str(ROOT / "tool-artifacts" / "scripts" / "sync_qc_excludes.py"),
+            str(qc_root / "qc-excludes.toml"),
+        ],
+        cwd=repo,
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+
+    output = result.stdout + result.stderr
+    assert result.returncode == 0, output
+    grain = tomllib.loads((qc_root / "grain.toml").read_text())
+    assert "fail_on" in grain["grain"]
+    assert "central-owned/*" in grain["grain"]["exclude"]
+    assert eslint_config.read_text() == "export default [{ ignores: ['sentinel'] }];\n"
+    assert rust_justfile.read_text() == "# rust sentinel\n"
+
+
+def test_rust_qc_files_consume_central_excludes(tmp_path: pathlib.Path) -> None:
+    project = tmp_path / "rust-project"
+    source_dir = project / "src"
+    excluded_source_dir = project / "vendor"
+    source_dir.mkdir(parents=True)
+    excluded_source_dir.mkdir()
+    (source_dir / "lib.rs").write_text("pub fn kept() -> u8 { 1 }\n")
+    (excluded_source_dir / "ignored.rs").write_text("pub fn ignored() -> u8 { 2 }\n")
+
+    result = run_just(ROOT / "justfiles" / "rust.just", project, "_rust-qc-files")
+
+    output = result.stdout + result.stderr
+    assert result.returncode == 0, output
+    assert "src/lib.rs" in result.stdout
+    assert "vendor/ignored.rs" not in result.stdout
 
 
 def test_python_syntax_recipe_is_isolated_from_sage_state(
@@ -118,6 +290,7 @@ def test_eslint_flat_config_imports_with_declared_tool_config_deps(
     tool_config.mkdir()
     for file_name in ("package.json", "bun.lock", "eslint.config.js"):
         shutil.copy(ROOT / "tool-configs" / file_name, tool_config / file_name)
+    (tool_config / "qc-excludes.toml").write_text('directories = ["central-owned"]\n')
 
     install = subprocess.run(
         ["bun", "install", "--frozen-lockfile"],
@@ -129,13 +302,20 @@ def test_eslint_flat_config_imports_with_declared_tool_config_deps(
     assert install.returncode == 0, install.stdout + install.stderr
 
     config_import = subprocess.run(
-        ["node", "-e", 'import("./eslint.config.js")'],
+        [
+            "node",
+            "-e",
+            'import("./eslint.config.js").then((config) => console.log(JSON.stringify(config.default[0].ignores)))',
+        ],
         cwd=tool_config,
         text=True,
         capture_output=True,
         check=False,
     )
     assert config_import.returncode == 0, config_import.stdout + config_import.stderr
+    ignores = json.loads(config_import.stdout)
+    assert "**/env.d.ts" in ignores
+    assert "**/central-owned/**" in ignores
 
 
 def test_bun_scaffold_delegates_qc_in_project_directory(
@@ -173,9 +353,7 @@ def test_tsc_removes_temp_output_on_success(tmp_path: pathlib.Path) -> None:
     project.mkdir()
     tmpdir = tmp_path / "tmp"
     tmpdir.mkdir()
-    (project / "package.json").write_text(
-        json.dumps({"scripts": {"typecheck": "printf typecheck-ok"}}) + "\n"
-    )
+    (project / "package.json").write_text(json.dumps({"scripts": {"typecheck": "printf typecheck-ok"}}) + "\n")
 
     result = subprocess.run(
         [
@@ -317,6 +495,281 @@ def test_deptry_accepts_declared_distributions_with_different_import_names(
     )
 
     assert result.returncode == 0, result.stdout + result.stderr
+
+
+def test_deptry_accepts_first_party_imports_in_src_layout(
+    tmp_path: pathlib.Path,
+) -> None:
+    project = tmp_path / "first-party-project"
+    package_dir = project / "src" / "first_party_project"
+    package_dir.mkdir(parents=True)
+    (project / "pyproject.toml").write_text(
+        "\n".join(
+            [
+                "[project]",
+                'name = "first-party-project"',
+                'version = "0.1.0"',
+                'requires-python = ">=3.14"',
+                "dependencies = []",
+                "",
+            ]
+        )
+    )
+    (package_dir / "core.py").write_text("VALUE = 42\n")
+    (package_dir / "__init__.py").write_text(
+        "\n".join(
+            [
+                "from first_party_project.core import VALUE",
+                "",
+                "RESULT = VALUE",
+                "",
+            ]
+        )
+    )
+
+    result = subprocess.run(
+        [
+            "just",
+            "--justfile",
+            str(ROOT / "justfiles" / "python.just"),
+            "-d",
+            str(project),
+            "_deptry",
+        ],
+        cwd=project,
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+
+    assert result.returncode == 0, result.stdout + result.stderr
+
+
+def test_deptry_treats_pep723_script_dependencies_as_script_owned(
+    tmp_path: pathlib.Path,
+) -> None:
+    project = tmp_path / "pep723-script-project"
+    package_dir = project / "src" / "pep723_script_project"
+    script_dir = project / "tool-artifacts" / "scripts"
+    package_dir.mkdir(parents=True)
+    script_dir.mkdir(parents=True)
+    (project / "pyproject.toml").write_text(
+        "\n".join(
+            [
+                "[project]",
+                'name = "pep723-script-project"',
+                'version = "0.1.0"',
+                'requires-python = ">=3.14"',
+                "dependencies = []",
+                "",
+            ]
+        )
+    )
+    (package_dir / "__init__.py").write_text("VALUE = 42\n")
+    (script_dir / "make_slug.py").write_text(
+        "\n".join(
+            [
+                "# /// script",
+                '# dependencies = ["python-slugify>=8"]',
+                "# ///",
+                "",
+                "from slugify import slugify",
+                "",
+                'VALUE = slugify("A B")',
+                "",
+            ]
+        )
+    )
+
+    result = subprocess.run(
+        [
+            "just",
+            "--justfile",
+            str(ROOT / "justfiles" / "python.just"),
+            "-d",
+            str(project),
+            "_deptry",
+        ],
+        cwd=project,
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+
+    assert result.returncode == 0, result.stdout + result.stderr
+
+
+def test_mypy_recipe_fails_when_mypy_reports_type_errors(
+    tmp_path: pathlib.Path,
+) -> None:
+    project = tmp_path / "typed-failure-project"
+    package_dir = project / "src" / "typed_failure_project"
+    package_dir.mkdir(parents=True)
+    (project / "pyproject.toml").write_text(
+        "\n".join(
+            [
+                "[project]",
+                'name = "typed-failure-project"',
+                'version = "0.1.0"',
+                'requires-python = ">=3.14"',
+                "dependencies = []",
+                "",
+                "[build-system]",
+                'requires = ["setuptools"]',
+                'build-backend = "setuptools.build_meta"',
+                "",
+                "[tool.setuptools.packages.find]",
+                'where = ["src"]',
+                "",
+            ]
+        )
+    )
+    (package_dir / "__init__.py").write_text('VALUE: int = "not an int"\n')
+
+    result = subprocess.run(
+        [
+            "just",
+            "--justfile",
+            str(ROOT / "justfiles" / "python.just"),
+            "-d",
+            str(project),
+            "_mypy",
+        ],
+        cwd=project,
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+
+    assert result.returncode != 0, result.stdout + result.stderr
+
+
+def test_mypy_uses_declared_dependency_group_type_stubs(
+    tmp_path: pathlib.Path,
+) -> None:
+    project = tmp_path / "stub-project"
+    package_dir = project / "src" / "stub_project"
+    package_dir.mkdir(parents=True)
+    (project / "pyproject.toml").write_text(
+        "\n".join(
+            [
+                "[project]",
+                'name = "stub-project"',
+                'version = "0.1.0"',
+                'requires-python = ">=3.14"',
+                'dependencies = ["unidiff>=0.7.5"]',
+                "",
+                "[dependency-groups]",
+                'dev = ["types-unidiff>=0.7.0.20260518"]',
+                "",
+                "[build-system]",
+                'requires = ["setuptools"]',
+                'build-backend = "setuptools.build_meta"',
+                "",
+                "[tool.setuptools.packages.find]",
+                'where = ["src"]',
+                "",
+            ]
+        )
+    )
+    (package_dir / "__init__.py").write_text(
+        "\n".join(
+            [
+                "from unidiff import PatchSet",
+                "",
+                "",
+                "def parse_patch(text: str) -> int:",
+                "    return len(PatchSet(text.splitlines(keepends=True)))",
+                "",
+            ]
+        )
+    )
+
+    result = subprocess.run(
+        [
+            "just",
+            "--justfile",
+            str(ROOT / "justfiles" / "python.just"),
+            "-d",
+            str(project),
+            "_mypy",
+        ],
+        cwd=project,
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+
+    output = result.stdout + result.stderr
+    assert result.returncode == 0, output
+    assert "Library stubs not installed" not in output
+
+
+def test_mypy_uses_pep723_script_dependencies(
+    tmp_path: pathlib.Path,
+) -> None:
+    project = tmp_path / "script-typed-project"
+    package_dir = project / "src" / "script_typed_project"
+    script_dir = project / "tool-artifacts" / "scripts"
+    package_dir.mkdir(parents=True)
+    script_dir.mkdir(parents=True)
+    (project / "pyproject.toml").write_text(
+        "\n".join(
+            [
+                "[project]",
+                'name = "script-typed-project"',
+                'version = "0.1.0"',
+                'requires-python = ">=3.14"',
+                "dependencies = []",
+                "",
+                "[build-system]",
+                'requires = ["setuptools"]',
+                'build-backend = "setuptools.build_meta"',
+                "",
+                "[tool.setuptools.packages.find]",
+                'where = ["src"]',
+                "",
+            ]
+        )
+    )
+    (package_dir / "__init__.py").write_text("VALUE = 42\n")
+    (script_dir / "fetch_status.py").write_text(
+        "\n".join(
+            [
+                "# /// script",
+                '# dependencies = ["requests>=2", "types-requests>=2"]',
+                "# ///",
+                "",
+                "import requests",
+                "",
+                "",
+                "def fetch_status(url: str) -> int:",
+                "    response = requests.get(url, timeout=3)",
+                "    return response.status_code",
+                "",
+            ]
+        )
+    )
+
+    result = subprocess.run(
+        [
+            "just",
+            "--justfile",
+            str(ROOT / "justfiles" / "python.just"),
+            "-d",
+            str(project),
+            "_mypy",
+        ],
+        cwd=project,
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+
+    output = result.stdout + result.stderr
+    assert result.returncode == 0, output
+    assert 'Cannot find implementation or library stub for module named "requests"' not in output
+    assert 'Library stubs not installed for "requests"' not in output
 
 
 def test_rust_preflight_accepts_nested_cargo_manifest_and_routes_missing_tests(

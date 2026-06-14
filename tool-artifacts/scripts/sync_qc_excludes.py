@@ -1,11 +1,14 @@
 #!/usr/bin/env -S uv run --script
 # /// script
 # requires-python = ">=3.11"
+# dependencies = [
+#   "tomlkit>=0.13.2",
+# ]
 # ///
-"""Sync qc-excludes.toml into each tool config file.
+"""Sync qc-excludes.toml into structured tool config exclude arrays.
 
-Each tool config gets the UNION of its own static entries (preserved
-verbatim, first) and the canonical directory-exclusion list from
+Each owned JSON/TOML exclude array gets the UNION of its own static entries
+(preserved verbatim, first) and the canonical directory-exclusion list from
 qc-excludes.toml (converted to the tool's glob format, appended).
 
 Usage:
@@ -15,15 +18,16 @@ Usage:
 """
 
 import json
-import re
 import sys
 from pathlib import Path
+
+import tomlkit
 
 # ── Tool config descriptors ──────────────────────────────────────────────────
 # Each entry describes how to update one config file.
 #
 #   path       : relative to QC root
-#   format     : "json", "toml", or "eslint"
+#   format     : "json" or "toml"
 #   key        : [key, ...] path to the exclude array (for json/toml)
 #   is_dir_fn  : lambda(str) → glob pattern for a TOML directory entry
 #   static     : list of entries preserved verbatim, emitted before TOML dirs
@@ -33,14 +37,6 @@ from pathlib import Path
 ToolConfig = dict
 
 configs: list[ToolConfig] = [
-    {
-        "path": "eslint.config.js",
-        "format": "eslint",
-        "is_dir_fn": lambda d: f"**/{d}/**",
-        "static": [
-            "**/env.d.ts",
-        ],
-    },
     {
         "path": "biome.json",
         "format": "json",
@@ -120,9 +116,7 @@ def find_config() -> Path:
         candidate = parent / "qc-excludes.toml"
         if candidate.is_file():
             return candidate.resolve()
-    print(
-        "ERROR: qc-excludes.toml not found in any ancestor directory.", file=sys.stderr
-    )
+    print("ERROR: qc-excludes.toml not found in any ancestor directory.", file=sys.stderr)
     sys.exit(1)
 
 
@@ -131,7 +125,13 @@ def load_toml_dirs(config: Path) -> list[str]:
 
     with config.open("rb") as data:
         cfg = tomllib.load(data)
-    return cfg["directories"]
+    directories = cfg["directories"]
+    assert isinstance(directories, list), "qc-excludes directories must be a list"
+    result: list[str] = []
+    for directory in directories:
+        assert isinstance(directory, str), "qc-excludes directories must contain strings"
+        result.append(directory)
+    return result
 
 
 def _build_entries(cfg: ToolConfig, dirs: list[str]) -> list[str]:
@@ -141,25 +141,6 @@ def _build_entries(cfg: ToolConfig, dirs: list[str]) -> list[str]:
     for d in dirs:
         result.append(fn(d))
     return result
-
-
-def write_eslint_config(qc_root: Path, cfg: ToolConfig, dirs: list[str]) -> None:
-    path = qc_root / cfg["path"]
-    original = path.read_text()
-    entries = _build_entries(cfg, dirs)
-    lines = "\n".join(f'      "{e}",' for e in entries)
-    new_text = re.sub(
-        r"ignores:\s*\[.*?\]",
-        f"ignores: [\n{lines}\n    ]",
-        original,
-        count=1,
-        flags=re.DOTALL,
-    )
-    if new_text == original:
-        print(f"  No change: {cfg['path']}")
-        return
-    path.write_text(new_text)
-    print(f"  Updated {cfg['path']} ({len(entries)} entries)")
 
 
 def write_json_config(qc_root: Path, cfg: ToolConfig, dirs: list[str]) -> None:
@@ -188,40 +169,24 @@ def write_json_config(qc_root: Path, cfg: ToolConfig, dirs: list[str]) -> None:
 def write_toml_config(qc_root: Path, cfg: ToolConfig, dirs: list[str]) -> None:
     path = qc_root / cfg["path"]
     entries = _build_entries(cfg, dirs)
-    text = path.read_text()
+    document = tomlkit.parse(path.read_text())
 
-    toml_body = "\n".join(f'  "{e}",' for e in entries)
-    toml_array = f"[\n{toml_body}\n]"
+    parent = document
+    for key in cfg["key"][:-1]:
+        parent = parent[key]
+    last_key = cfg["key"][-1]
 
-    new_text = re.sub(
-        r"exclude\s*=\s*\[.*?\]",
-        f"exclude = {toml_array}",
-        text,
-        count=1,
-        flags=re.DOTALL,
-    )
-    if new_text == text:
+    if list(parent[last_key]) == entries:
         print(f"  No change: {cfg['path']}")
         return
-    path.write_text(new_text)
+
+    exclude = tomlkit.array()
+    exclude.multiline(True)
+    for entry in entries:
+        exclude.append(entry)
+    parent[last_key] = exclude
+    path.write_text(tomlkit.dumps(document))
     print(f"  Updated {cfg['path']} ({len(entries)} entries)")
-
-
-def write_rust_qc_files(repo_root: Path, dirs: list[str]) -> None:
-    path = repo_root / "justfiles" / "rust.just"
-    text = path.read_text()
-    not_paths = " ".join(f"-not -path '*/{d}/*'" for d in dirs)
-    new_text = re.sub(
-        r"find \. -name '\*\.rs' -not -path.*",
-        f"find . -name '*.rs' {not_paths}",
-        text,
-        count=1,
-    )
-    if new_text == text:
-        print("  No change: justfiles/rust.just")
-        return
-    path.write_text(new_text)
-    print(f"  Updated _rust-qc-files in justfiles/rust.just ({len(dirs)} entries)")
 
 
 def main() -> None:
@@ -236,7 +201,6 @@ def main() -> None:
         config_path = config_path.resolve()
 
     qc_root = config_path.parent
-    repo_root = qc_root.parent
     dirs = load_toml_dirs(config_path)
 
     print(f"QC root: {qc_root}")
@@ -249,14 +213,11 @@ def main() -> None:
     print()
     for cfg in configs:
         fmt = cfg["format"]
-        if fmt == "eslint":
-            write_eslint_config(qc_root, cfg, dirs)
-        elif fmt == "json":
+        if fmt == "json":
             write_json_config(qc_root, cfg, dirs)
         elif fmt == "toml":
             write_toml_config(qc_root, cfg, dirs)
 
-    write_rust_qc_files(repo_root, dirs)
     print("\nDone.")
 
 

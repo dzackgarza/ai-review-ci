@@ -49,9 +49,7 @@ def collect_repo_docs(repo_root: pathlib.Path) -> str:
             if not p.is_file() or p.stat().st_size > 500_000:
                 continue
             sections.append(f"### Repo doc: {rel}\n\n{p.read_text()}")
-    return (
-        "## Repo Documentation\n\n" + "\n\n---\n\n".join(sections) if sections else ""
-    )
+    return "## Repo Documentation\n\n" + "\n\n---\n\n".join(sections) if sections else ""
 
 
 def collect_shared_guides(skills_dir: pathlib.Path) -> list[str]:
@@ -155,7 +153,7 @@ def run_opencode(task_path: pathlib.Path) -> int:
     return res.returncode
 
 
-def main():
+def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--mode", default="review")
     parser.add_argument("--skills-dir", default="opencode/skills")
@@ -187,11 +185,7 @@ def main():
 
     repo_sha = subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip()
 
-    system = (
-        load_slop_review_skills(skills_dir)
-        if args.mode == "slop"
-        else load_review_skills(skills_dir)
-    )
+    system = load_slop_review_skills(skills_dir) if args.mode == "slop" else load_review_skills(skills_dir)
     template = template_path.read_text()
     # Remove PR_NUMBER from the body entirely to de-anchor the agent
     body = substitute(template, REPO_SHA=repo_sha)
@@ -215,9 +209,7 @@ current code. The index is maintained by a separate gardener agent — respect i
     if args.reviewer_context:
         ctx_path = pathlib.Path(args.reviewer_context)
         if not ctx_path.is_file():
-            print(
-                f"FATAL: --reviewer-context file not found: {ctx_path}", file=sys.stderr
-            )
+            print(f"FATAL: --reviewer-context file not found: {ctx_path}", file=sys.stderr)
             sys.exit(1)
         ctx = ctx_path.read_text()
         current_prompt = f"{ctx}\n\n{current_prompt}"
@@ -238,8 +230,7 @@ current code. The index is maintained by a separate gardener agent — respect i
             print("--- opencode timed out ---", file=sys.stderr)
         except FileNotFoundError:
             print(
-                "FATAL: 'opencode' executable not found in PATH. "
-                "This is a non-transient failure — exiting immediately.",
+                "FATAL: 'opencode' executable not found in PATH. This is a non-transient failure — exiting immediately.",
                 file=sys.stderr,
             )
             sys.exit(1)

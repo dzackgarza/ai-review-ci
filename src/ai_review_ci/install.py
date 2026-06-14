@@ -39,18 +39,14 @@ def install(target: pathlib.Path = pathlib.Path(".")) -> None:
     existing = [n for n in TEMPLATES if (wf_dir / n).exists()]
     if existing:
         print(
-            f"FATAL: already installed in {target}: {', '.join(existing)} — "
-            "these are repo-owned configuration; edit them directly, or "
-            "remove them first to re-initialize.",
+            f"FATAL: already installed in {target}: {', '.join(existing)} — these are repo-owned configuration; edit them directly, or remove them first to re-initialize.",
             file=sys.stderr,
         )
         sys.exit(1)
 
     wf_dir.mkdir(parents=True, exist_ok=True)
     for name in TEMPLATES:
-        (wf_dir / name).write_text(
-            (files("ai_review_ci") / "templates" / name).read_text()
-        )
+        (wf_dir / name).write_text((files("ai_review_ci") / "templates" / name).read_text())
         print(f"installed .github/workflows/{name}")
 
     print(

@@ -34,9 +34,7 @@ def _fail(msg: str) -> NoReturn:
     sys.exit(1)
 
 
-def _fetch_alerts(
-    repo: str, tool_name: str, ref: str | None = None, state: str | None = None
-) -> list[JsonDict]:
+def _fetch_alerts(repo: str, tool_name: str, ref: str | None = None, state: str | None = None) -> list[JsonDict]:
     """Fetch code scanning alerts for a repo, filtered by tool and optional ref.
 
     Returns an empty list when no analysis exists (404), which is the
@@ -112,9 +110,7 @@ def _thread_page(owner: str, name: str, pr_number: int, cursor: str | None) -> J
     result = subprocess.run(args, capture_output=True, text=True)
     if result.returncode != 0:
         _fail(f"gh api graphql reviewThreads failed: {result.stderr.strip()}")
-    page: JsonDict = json.loads(result.stdout)["data"]["repository"]["pullRequest"][
-        "reviewThreads"
-    ]
+    page: JsonDict = json.loads(result.stdout)["data"]["repository"]["pullRequest"]["reviewThreads"]
     return page
 
 
@@ -148,25 +144,36 @@ def _fetch_pr_threads(repo: str, pr_number: int) -> list[JsonDict]:
 
 
 def _alert_label(alert: JsonDict) -> str:
-    """Extract finding label from alert properties or rule description."""
-    props = (
-        alert.get("most_recent_instance", {}).get("location", {}).get("properties", {})
-    )
-    if props and props.get("label"):
-        label: str = props["label"]
-        return label
-    rule = alert.get("rule", {})
-    name: str = rule.get("name", rule.get("id", "?"))
+    loc = alert["most_recent_instance"]["location"]
+    if "properties" in loc:
+        props = loc["properties"]
+        assert isinstance(props, dict)
+        if "label" in props:
+            label = props["label"]
+            assert isinstance(label, str) and label
+            return label
+    rule = alert["rule"]
+    name = rule["name"]
+    assert isinstance(name, str) and name
     return name
 
 
 def _alert_location(alert: JsonDict) -> str:
-    loc = alert.get("most_recent_instance", {}).get("location", {})
-    return f"{loc.get('path', '?')}:{loc.get('start_line', '?')}"
+    loc = alert["most_recent_instance"]["location"]
+    path = loc["path"]
+    start_line = loc["start_line"]
+    assert isinstance(path, str) and path
+    assert isinstance(start_line, int)
+    return f"{path}:{start_line}"
 
 
 def _alert_url(alert: JsonDict) -> str:
-    return str(alert.get("html_url") or alert.get("url") or "?")
+    if "html_url" in alert:
+        url = alert["html_url"]
+    else:
+        url = alert["url"]
+    assert isinstance(url, str) and url
+    return url
 
 
 def _format_alert(alert: JsonDict) -> str:
@@ -187,8 +194,10 @@ def _dismissed_lines(alerts: list[JsonDict]) -> list[str]:
         return []
     lines = ["", "**Dismissed / rejected findings:**"]
     for a in alerts:
-        reason = a.get("dismissed_reason", "?")
-        comment = a.get("dismissed_comment", "")
+        reason = a["dismissed_reason"]
+        assert isinstance(reason, str) and reason
+        comment = a["dismissed_comment"] if "dismissed_comment" in a else None
+        assert comment is None or isinstance(comment, str)
         extra = f" ({reason}: {comment})" if comment else f" ({reason})"
         lines.append(_format_alert(a) + extra)
     return lines
@@ -218,15 +227,11 @@ def _alert_section(cat: str, alerts: list[JsonDict]) -> list[str]:
     return lines
 
 
-def _collect_alerts(
-    repo: str, cat: str, pr_number: int, state: str | None = None
-) -> list[JsonDict]:
+def _collect_alerts(repo: str, cat: str, pr_number: int, state: str | None = None) -> list[JsonDict]:
     """Repo-wide alerts for a tool, merged with PR-ref alerts on PR runs."""
     alerts = _fetch_alerts(repo, tool_name=cat, state=state)
     if pr_number:
-        pr_alerts = _fetch_alerts(
-            repo, tool_name=cat, ref=f"refs/pull/{pr_number}/merge", state=state
-        )
+        pr_alerts = _fetch_alerts(repo, tool_name=cat, ref=f"refs/pull/{pr_number}/merge", state=state)
         known = {a.get("number") for a in alerts}
         alerts.extend(a for a in pr_alerts if a.get("number") not in known)
     return alerts
@@ -244,10 +249,7 @@ def _carry_forward_payload(repo: str, cats: list[str], pr_number: int) -> JsonDi
     """Open alert payload consumed later by SARIF conversion."""
     entries: list[JsonDict] = []
     for cat in cats:
-        entries.extend(
-            {"tool_name": cat, "alert": alert}
-            for alert in _collect_alerts(repo, cat, pr_number, state="open")
-        )
+        entries.extend({"tool_name": cat, "alert": alert} for alert in _collect_alerts(repo, cat, pr_number, state="open"))
     return {"schema_version": 1, "alerts": entries}
 
 
@@ -257,8 +259,7 @@ def _pr_thread_lines(repo: str, pr_number: int) -> list[str]:
     lines = [
         "## Review items already surfaced on this PR",
         "",
-        "These findings already have review threads on this pull request. "
-        "Do not re-raise them; a resolved thread is a disposition.",
+        "These findings already have review threads on this pull request. Do not re-raise them; a resolved thread is a disposition.",
         "",
     ]
     if threads:
@@ -317,7 +318,5 @@ def fetch_context(
         print(text)
 
     if alerts_output:
-        alerts_output.write_text(
-            json.dumps(_carry_forward_payload(repo, names, pr_number), indent=2) + "\n"
-        )
+        alerts_output.write_text(json.dumps(_carry_forward_payload(repo, names, pr_number), indent=2) + "\n")
         print(f"Carry-forward alerts written to {alerts_output}", file=sys.stderr)

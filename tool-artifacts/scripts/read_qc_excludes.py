@@ -26,9 +26,7 @@ def find_config() -> Path:
         candidate = parent / "qc-excludes.toml"
         if candidate.is_file():
             return candidate.resolve()
-    print(
-        "ERROR: qc-excludes.toml not found in any ancestor directory.", file=sys.stderr
-    )
+    print("ERROR: qc-excludes.toml not found in any ancestor directory.", file=sys.stderr)
     sys.exit(1)
 
 
@@ -37,7 +35,13 @@ def load_excludes(config: Path) -> list[str]:
 
     with config.open("rb") as f:
         data = tomllib.load(f)
-    return data["directories"]
+    directories = data["directories"]
+    assert isinstance(directories, list), "qc-excludes directories must be a list"
+    result: list[str] = []
+    for directory in directories:
+        assert isinstance(directory, str), "qc-excludes directories must contain strings"
+        result.append(directory)
+    return result
 
 
 def main() -> None:
@@ -79,9 +83,7 @@ def main() -> None:
     elif fmt == "codeql":
         # CodeQL uses --search-path exclusions
         for d in dirs:
-            print(
-                f"--search-path=/dev/null --additional-packs=/dev/null  # excludes {d}"
-            )
+            print(f"--search-path=/dev/null --additional-packs=/dev/null  # excludes {d}")
     else:
         print(f"ERROR: unknown format '{fmt}'", file=sys.stderr)
         sys.exit(1)

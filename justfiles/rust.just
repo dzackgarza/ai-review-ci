@@ -28,12 +28,20 @@ default:
 _rust-qc-files:
 	#!/usr/bin/env bash
 	set -euo pipefail
-	find . -name '*.rs' -not -path '*/node_modules/*' -not -path '*/.venv/*' -not -path '*/.pytest_cache/*' -not -path '*/.import_linter_cache/*' -not -path '*/__pycache__/*' -not -path '*/dist/*' -not -path '*/build/*' -not -path '*/coverage/*' -not -path '*/_ci-support/*' -not -path '*/codeql-db/*' -not -path '*/tool-artifacts/models/*' -not -path '*/@girs/*' -not -path '*/__stubs__/*' -not -path '*/external/*' -not -path '*/target/*' -not -path '*/*.bak/*' -not -path '*/.git/*' -not -path '*/.next/*' -not -path '*/.lake/*' -not -path '*/.worktrees/*' -not -path '*/vendor/*' -not -path '*/third_party/*' -not -path '*/venv/*'
+	exclude_args=()
+	while IFS= read -r dir; do
+		exclude_args+=(-not -path "*/$dir/*")
+	done < <(uv run {{artifacts}}/scripts/read_qc_excludes.py {{configs}}/qc-excludes.toml)
+	find . -name '*.rs' "${exclude_args[@]}"
 
 _rust-cargo-manifests:
 	#!/usr/bin/env bash
 	set -euo pipefail
-	find . -name 'Cargo.toml' -not -path '*/node_modules/*' -not -path '*/.venv/*' -not -path '*/__pycache__/*' -not -path '*/dist/*' -not -path '*/build/*' -not -path '*/coverage/*' -not -path '*/_ci-support/*' -not -path '*/codeql-db/*' -not -path '*/@girs/*' -not -path '*/__stubs__/*' -not -path '*/external/*' -not -path '*/target/*' -not -path '*/*.bak/*' -not -path '*/.git/*' -not -path '*/.next/*' -not -path '*/.lake/*' -not -path '*/.worktrees/*' -not -path '*/vendor/*' -not -path '*/third_party/*' -not -path '*/venv/*' | sort
+	exclude_args=()
+	while IFS= read -r dir; do
+		exclude_args+=(-not -path "*/$dir/*")
+	done < <(uv run {{artifacts}}/scripts/read_qc_excludes.py {{configs}}/qc-excludes.toml)
+	find . -name 'Cargo.toml' "${exclude_args[@]}" | sort
 
 _check-rust-project:
 	#!/usr/bin/env bash
@@ -100,7 +108,7 @@ _clippy:
 	echo "============================="
 	echo "=== Running: clippy Rust linting ==="
 	echo "# Runs cargo clippy with deny-level warnings"
-	mapfile -t rust_files < <(just --justfile {{justfile()}} -d . _rust-qc-files 2>/dev/null || true)
+	mapfile -t rust_files < <(just --justfile {{justfile()}} -d . _rust-qc-files)
 	if [ "${#rust_files[@]}" -eq 0 ]; then
 		echo "ERROR: clippy: no Rust files found in a Rust project."
 		"{{artifacts}}/scripts/emit-triage-directive.sh"
@@ -122,7 +130,7 @@ _rustfmt:
 	echo "============================="
 	echo "=== Running: rustfmt formatting check ==="
 	echo "# Checks Rust source formatting against rustfmt defaults"
-	mapfile -t rust_files < <(just --justfile {{justfile()}} -d . _rust-qc-files 2>/dev/null || true)
+	mapfile -t rust_files < <(just --justfile {{justfile()}} -d . _rust-qc-files)
 	if [ "${#rust_files[@]}" -eq 0 ]; then
 		echo "ERROR: rustfmt: no Rust files found in a Rust project."
 		"{{artifacts}}/scripts/emit-triage-directive.sh"
@@ -160,11 +168,6 @@ _codeql:
 	echo "============================="
 	echo "=== Running: codeql security analysis (Rust) ==="
 	echo "# GitHub's static analysis engine for code quality and security vulnerabilities"
-	if ! command -v codeql >/dev/null 2>&1; then
-		echo "ERROR: CodeQL: codeql CLI is not installed. Install CodeQL from https://github.com/github/codeql-cli."
-		"{{artifacts}}/scripts/emit-triage-directive.sh"
-		exit 1
-	fi
 	mapfile -t cargo_manifests < <(just --justfile {{justfile()}} -d . _rust-cargo-manifests)
 	if [ "${#cargo_manifests[@]}" -eq 0 ]; then
 		echo "ERROR: codeql: no Cargo.toml found anywhere in this Rust project."
@@ -206,7 +209,7 @@ _lizard:
 	echo "============================="
 	echo "=== Running: lizard complexity analysis (Rust) ==="
 	echo "# Computes cyclomatic complexity number (CCN), line count, and parameter count"
-	mapfile -t rust_files < <(just --justfile {{justfile()}} -d . _rust-qc-files 2>/dev/null || true)
+	mapfile -t rust_files < <(just --justfile {{justfile()}} -d . _rust-qc-files)
 	if [ "${#rust_files[@]}" -eq 0 ]; then
 		echo "ERROR: lizard: no Rust files found in a Rust project."
 		"{{artifacts}}/scripts/emit-triage-directive.sh"

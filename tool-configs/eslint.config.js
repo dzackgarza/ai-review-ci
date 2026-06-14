@@ -1,5 +1,8 @@
 // ESLint flat config for TypeScript QC
 
+import { readFileSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 import tsPlugin from "@typescript-eslint/eslint-plugin";
 import tsParser from "@typescript-eslint/parser";
 import fpPlugin from "eslint-plugin-fp";
@@ -7,35 +10,32 @@ import promisePlugin from "eslint-plugin-promise";
 import reactHooksPlugin from "eslint-plugin-react-hooks";
 import reactRefreshPlugin from "eslint-plugin-react-refresh";
 import globals from "globals";
+import { parse as parseToml } from "smol-toml";
+
+const configDir = dirname(fileURLToPath(import.meta.url));
+const qcExcludeConfig = parseToml(
+  readFileSync(join(configDir, "qc-excludes.toml"), "utf8"),
+);
+const centralExcludeDirs = qcExcludeConfig.directories;
+if (!Array.isArray(centralExcludeDirs)) {
+  throw new Error("qc-excludes.toml directories must be an array");
+}
+const centralIgnoreGlobs = centralExcludeDirs.map((directory, index) => {
+  if (typeof directory !== "string") {
+    throw new Error(`qc-excludes.toml directories[${index}] must be a string`);
+  }
+  if (directory.length === 0) {
+    throw new Error(`qc-excludes.toml directories[${index}] must be a non-empty string`);
+  }
+  return `**/${directory}/**`;
+});
 
 export default [
   // Global ignores: apply before any rule config
   {
     ignores: [
       "**/env.d.ts",
-      "**/node_modules/**",
-      "**/.venv/**",
-      "**/.pytest_cache/**",
-      "**/.import_linter_cache/**",
-      "**/__pycache__/**",
-      "**/dist/**",
-      "**/build/**",
-      "**/coverage/**",
-      "**/_ci-support/**",
-      "**/codeql-db/**",
-      "**/tool-artifacts/models/**",
-      "**/@girs/**",
-      "**/__stubs__/**",
-      "**/external/**",
-      "**/target/**",
-      "**/*.bak/**",
-      "**/.git/**",
-      "**/.next/**",
-      "**/.lake/**",
-      "**/.worktrees/**",
-      "**/vendor/**",
-      "**/third_party/**",
-      "**/venv/**",
+      ...centralIgnoreGlobs,
     ],
   },
   {

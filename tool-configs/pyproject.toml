@@ -10,6 +10,18 @@ paths = ["src", "tests"]
 root = ["src"]
 
 [tool.deptry.package_module_name_map]
+ai-slop-detector = "slop_detector"
+beautifulsoup4 = "bs4"
+opencv-contrib-python = "cv2"
+opencv-python = "cv2"
+opencv-python-headless = "cv2"
+Pillow = "PIL"
+python-dateutil = "dateutil"
+python-dotenv = "dotenv"
 python-slugify = "slugify"
 PyYAML = "yaml"
+pyzmq = "zmq"
+sarif-pydantic = "sarif_pydantic"
+scikit-image = "skimage"
+scikit-learn = "sklearn"
 types-PyYAML = "yaml"
