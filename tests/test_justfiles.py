@@ -3,8 +3,165 @@ import os
 import pathlib
 import shutil
 import subprocess
+import tomllib
+
+import pytest
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
+TRIAGE_MARKER = "QC FAILURE"
+
+
+def run_just(
+    justfile: pathlib.Path,
+    workdir: pathlib.Path,
+    recipe: str,
+    *,
+    env: dict[str, str] | None = None,
+) -> subprocess.CompletedProcess[str]:
+    return subprocess.run(
+        [
+            "just",
+            "--justfile",
+            str(justfile),
+            "-d",
+            str(workdir),
+            recipe,
+        ],
+        cwd=workdir,
+        env=env,
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+
+
+def path_with_only(tmp_path: pathlib.Path, *commands: str) -> str:
+    bin_dir = tmp_path / "bin"
+    bin_dir.mkdir()
+    for command in commands:
+        target = shutil.which(command)
+        assert target is not None, f"required command missing for test setup: {command}"
+        (bin_dir / command).symlink_to(target)
+    return str(bin_dir)
+
+
+def project_with_sage_file(tmp_path: pathlib.Path) -> pathlib.Path:
+    project = tmp_path / "sage-project"
+    project.mkdir()
+    (project / "example.sage").write_text("x = 1\n")
+    return project
+
+
+@pytest.mark.parametrize("recipe", ["_sage-syntax", "_vulture"])
+@pytest.mark.parametrize("configured_path", ["missing", "not-executable"])
+def test_sage_recipes_require_configured_executable_sage_path(
+    tmp_path: pathlib.Path,
+    recipe: str,
+    configured_path: str,
+) -> None:
+    project = project_with_sage_file(tmp_path)
+    env = os.environ.copy()
+    env.pop("SAGE_BIN", None)
+    if configured_path == "not-executable":
+        sage_bin = tmp_path / "not-executable-sage"
+        sage_bin.write_text("#!/usr/bin/env bash\nexit 0\n")
+        env["SAGE_BIN"] = str(sage_bin)
+
+    result = run_just(ROOT / "justfiles" / "sage.just", project, recipe, env=env)
+
+    output = result.stdout + result.stderr
+    assert result.returncode != 0, output
+    assert TRIAGE_MARKER in output
+
+
+def test_tsc_requires_ags_when_tsconfig_declares_ags(tmp_path: pathlib.Path) -> None:
+    project = tmp_path / "ags-project"
+    project.mkdir()
+    (project / "package.json").write_text(json.dumps({"scripts": {}}) + "\n")
+    (project / "tsconfig.json").write_text(
+        json.dumps({"compilerOptions": {"jsxImportSource": "ags/gtk4"}}) + "\n"
+    )
+    env = os.environ | {"PATH": path_with_only(tmp_path, "bash", "jq", "just")}
+
+    result = run_just(ROOT / "justfiles" / "bun.just", project, "_tsc", env=env)
+
+    output = result.stdout + result.stderr
+    assert result.returncode != 0, output
+    assert TRIAGE_MARKER in output
+
+
+def test_install_global_hooks_requires_env_only_inside_recipe(tmp_path: pathlib.Path) -> None:
+    home = tmp_path / "home"
+    home.mkdir()
+    env = os.environ | {
+        "HOME": str(home),
+        "GIT_CONFIG_GLOBAL": str(home / ".gitconfig"),
+    }
+    env.pop("GIT_GLOBAL_HOOKS_DIR", None)
+
+    recipe_list = subprocess.run(
+        ["just", "--justfile", str(ROOT / "justfile"), "--list"],
+        cwd=tmp_path,
+        env=env,
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+    assert recipe_list.returncode == 0, recipe_list.stdout + recipe_list.stderr
+
+    install = run_just(ROOT / "justfile", tmp_path, "install-global-hooks", env=env)
+
+    output = install.stdout + install.stderr
+    assert install.returncode != 0, output
+    assert "ERROR:" in output
+    assert "GIT_GLOBAL_HOOKS_DIR" in output
+    assert not (home / ".config" / "git" / "hooks").exists()
+
+
+def test_sync_qc_excludes_preserves_non_owned_artifacts_and_updates_grain(
+    tmp_path: pathlib.Path,
+) -> None:
+    repo = tmp_path / "repo"
+    qc_root = repo / "tool-configs"
+    justfiles = repo / "justfiles"
+    qc_root.mkdir(parents=True)
+    justfiles.mkdir()
+
+    for file_name in (
+        "biome.json",
+        "knip.json",
+        "jscpd.json",
+        "slop-scan.config.json",
+        "pyright-local.json",
+        "grain.toml",
+    ):
+        shutil.copy(ROOT / "tool-configs" / file_name, qc_root / file_name)
+    (qc_root / "qc-excludes.toml").write_text('directories = ["central-owned"]\n')
+    eslint_config = qc_root / "eslint.config.js"
+    rust_justfile = justfiles / "rust.just"
+    eslint_config.write_text("export default [{ ignores: ['sentinel'] }];\n")
+    rust_justfile.write_text("# rust sentinel\n")
+
+    result = subprocess.run(
+        [
+            "uv",
+            "run",
+            str(ROOT / "tool-artifacts" / "scripts" / "sync_qc_excludes.py"),
+            str(qc_root / "qc-excludes.toml"),
+        ],
+        cwd=repo,
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+
+    output = result.stdout + result.stderr
+    assert result.returncode == 0, output
+    grain = tomllib.loads((qc_root / "grain.toml").read_text())
+    assert "fail_on" in grain["grain"]
+    assert "central-owned/*" in grain["grain"]["exclude"]
+    assert eslint_config.read_text() == "export default [{ ignores: ['sentinel'] }];\n"
+    assert rust_justfile.read_text() == "# rust sentinel\n"
 
 
 def test_python_syntax_recipe_is_isolated_from_sage_state(
