@@ -588,8 +588,8 @@ def test_mypy_uses_pep723_script_dependencies(
 
     output = result.stdout + result.stderr
     assert result.returncode == 0, output
-    assert "Cannot find implementation or library stub for module named \"requests\"" not in output
-    assert "Library stubs not installed for \"requests\"" not in output
+    assert 'Cannot find implementation or library stub for module named "requests"' not in output
+    assert 'Library stubs not installed for "requests"' not in output
 
 
 def test_rust_preflight_accepts_nested_cargo_manifest_and_routes_missing_tests(

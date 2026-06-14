@@ -4,10 +4,8 @@ version = "0.1.0"
 description = "OpenCode-powered review CI: SARIF-tracked repo-wide audits and PR diff reviews, installed into a repo with one command"
 requires-python = ">=3.14"
 dependencies = [
-    "ai-slop-detector>=3.8",
     "cyclopts",
     "pydantic>=2",
-    "types-unidiff>=0.7.0.20260518",
     "unidiff>=0.7.5",
 ]
 
@@ -17,6 +15,7 @@ ai-review-ci = "ai_review_ci.cli:main"
 [dependency-groups]
 dev = [
     "pytest",
+    "types-unidiff>=0.7.0.20260518",
 ]
 
 [build-system]
