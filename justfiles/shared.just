@@ -26,7 +26,7 @@ _format-structured-text:
 	set -euo pipefail
 	echo "============================="
 	echo "=== Running: structured text formatting ==="
-	echo "# Formats Markdown, JSON, and YAML before agents spend time on whitespace"
+	echo "# Formats Markdown (flowmark), JSON, and YAML (prettier) before agents spend time on whitespace"
 	prune_args=()
 	while IFS= read -r dir; do
 		prune_args+=(-path "./$dir" -o -path "*/$dir" -o -path "*/$dir/*" -o)
@@ -37,14 +37,25 @@ _format-structured-text:
 		exit 1
 	fi
 	unset 'prune_args[${#prune_args[@]}-1]'
-	files=()
+	# Markdown is formatted by flowmark, NOT prettier. Prettier's CommonMark
+	# formatter corrupts pandoc markdown: it escapes underscores in attribute
+	# paths (path="_includes/x" -> path="\_includes/x"), rewrites emphasis
+	# delimiters (*x* -> _x_), and reformats embedded code blocks. flowmark is
+	# the canonical markdown formatter.
+	md_files=()
 	while IFS= read -r -d '' file; do
-		files+=("$file")
+		md_files+=("$file")
+	done < <(
+		find . -type d \( "${prune_args[@]}" \) -prune -o \
+			-type f \( -name '*.md' -o -name '*.markdown' \) \
+			-print0
+	)
+	data_files=()
+	while IFS= read -r -d '' file; do
+		data_files+=("$file")
 	done < <(
 		find . -type d \( "${prune_args[@]}" \) -prune -o \
 			-type f \( \
-				-name '*.md' -o \
-				-name '*.markdown' -o \
 				-name '*.json' -o \
 				-name '*.jsonc' -o \
 				-name '*.yaml' -o \
@@ -52,11 +63,17 @@ _format-structured-text:
 			\) \
 			-print0
 	)
-	if [ "${#files[@]}" -eq 0 ]; then
+	if [ "${#md_files[@]}" -eq 0 ] && [ "${#data_files[@]}" -eq 0 ]; then
 		echo "No Markdown, JSON, or YAML files found"
 		exit 0
 	fi
-	npx -y prettier --write --config {{configs}}/prettier-global.json "${files[@]}"
+	if [ "${#md_files[@]}" -gt 0 ]; then
+		uvx --from 'git+https://github.com/dzackgarza/flowmark.git' flowmark \
+			--inplace --nobackup --semantic --no-respect-gitignore "${md_files[@]}"
+	fi
+	if [ "${#data_files[@]}" -gt 0 ]; then
+		npx -y prettier --write --config {{configs}}/prettier-global.json "${data_files[@]}"
+	fi
 
 _semgrep-autofix:
 	#!/usr/bin/env bash
