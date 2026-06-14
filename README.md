@@ -21,7 +21,7 @@ Each type runs in two scopes: **repo** (full-repository sweep) and **diff**
 
 ```bash
 cd /path/to/your/repo
-uvx git+https://github.com/dzackgarza/ai-review-ci install
+uvx --from git+https://github.com/dzackgarza/ai-review-ci ai-review-ci install
 ```
 
 This writes exactly three files into `.github/workflows/` and nothing else:
@@ -69,7 +69,8 @@ The canonical templates live in
 
 Requirements in the target repo: GitHub code scanning enabled (free for
 public repos); optionally the Actions vars `GENERAL_FAIL_BELOW` /
-`SLOP_FAIL_BELOW` to gate runs on a health score.
+`SLOP_FAIL_BELOW` to gate runs on a health score. The PR trigger passes
+those same vars to the diff-scoped general and slop jobs.
 
 ## Installing QC Surfaces
 
@@ -201,7 +202,7 @@ The single ledger is **GitHub code scanning alerts**, under tool names
   open / dismissed-with-reason / fixed, each with `path:line` and alert URL):
 
   ```bash
-  uvx git+https://github.com/dzackgarza/ai-review-ci fetch-context --repo owner/repo
+  uvx --from git+https://github.com/dzackgarza/ai-review-ci ai-review-ci fetch-context --repo owner/repo
   ```
 
 - Raw API:
@@ -287,7 +288,8 @@ trigger -> _review.yml (cross-repo reusable workflow)
      manifest-inlined guides + repo docs + template), loop `opencode run`
      until a validated artifact exists
        agent: analyze -> write report JSON to fixed path ->
-              `submit-candidate --help` for schema -> submit -> fix on
+              `/home/reviewer/bin/submit-candidate --help` for schema ->
+              `/home/reviewer/bin/submit-candidate` -> fix on
               FIX-guided rejection -> repeat until exit 0
   -> convert artifact to SARIF -> upload to code scanning
   -> [diff scope] post resolvable review threads to the PR
@@ -311,7 +313,7 @@ The CI workflow runs as `runner`. The agent runs as a dedicated `reviewer`
 user with exactly one sudo rule: the private submit command. It reads a
 sanitized repo copy (no `.git`, no `.github`), cannot see this
 infrastructure, and discovers the report schema only through
-`submit-candidate --help`.
+`/home/reviewer/bin/submit-candidate --help`.
 
 ### Finding identity
 

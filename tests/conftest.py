@@ -70,7 +70,7 @@ def general_candidate(**overrides: Any) -> JsonDict:
 def slop_finding(**overrides: Any) -> JsonDict:
     finding: JsonDict = {
         "tier": "tier1",
-        "label": "RUNTIME_DEFAULT",
+        "label": "SLOP",
         "category": "bridge-burning",
         "location": {"path": APP_FILE, "start_line": 2, "end_line": 4},
         "violated_invariant": "Every error path fails loudly, but this code substitutes a synthetic default on failure",
@@ -94,15 +94,6 @@ def slop_candidate(**overrides: Any) -> JsonDict:
         "report_type": "slop",
         "review_scope": [APP_FILE],
         "findings": [slop_finding()],
-        "checked_surfaces": [
-            {
-                "path": APP_FILE,
-                "reason": "high-churn",
-                "lines_read": [1, APP_LINES],
-                "result": "finding",
-            }
-        ],
-        "rejected_easy_wins": ["long lines in tests/test_app.py — line-length only"],
     }
     candidate.update(overrides)
     return candidate

@@ -28,8 +28,6 @@ from pydantic import (
     model_validator,
 )
 
-INFRA_PREFIXES = [".github/", ".agents/", "quality-control/", "opencode/skills/"]
-
 LOW_SIGNAL_CATEGORIES = frozenset(
     {
         "code-style",
@@ -64,6 +62,18 @@ _INVARIANT_REJECT = [
     ]
 ]
 
+_CLEAN_REPORT_REJECT = [
+    re.compile(p, re.IGNORECASE)
+    for p in [
+        r"\bclean\b",
+        r"no slop",
+        r"no issues?",
+        r"nothing (?:to |)report",
+        r"all clear",
+        r"all good",
+    ]
+]
+
 
 def finding_fingerprint(category: str, path: str) -> str:
     """Deterministic finding identity, stable across line shifts and runs.
@@ -87,25 +97,9 @@ def _line_count(path: Path) -> int:
     return len((Path.cwd() / path).read_text(errors="replace").splitlines())
 
 
-def _is_infra_path(p: Path) -> bool:
-    s = p.as_posix()
-    return any(s.startswith(prefix) for prefix in INFRA_PREFIXES)
-
-
 # ---------------------------------------------------------------------------
 # Shared validator logic (parameterized by the per-report-type FIX guidance)
 # ---------------------------------------------------------------------------
-
-
-def reject_infra_category(value: str, *, fix_examples: str, subject: str) -> str:
-    """Reject categories that describe the CI layer instead of the defect."""
-    v_lower = value.lower()
-    for cat in ("infra", "infrastructure", "ci", "workflow", "config"):
-        if cat in v_lower:
-            raise ValueError(
-                f"REJECTED: forbidden category '{value}'. FIX: use a defect-type category like {fix_examples}, etc. Category describes {subject}, not the CI layer."
-            )
-    return value
 
 
 def reject_blanket_invariant(value: str, *, good_example: str) -> str:
@@ -118,6 +112,19 @@ def reject_blanket_invariant(value: str, *, good_example: str) -> str:
                 f"FIX: violated_invariant must name a specific violated contract "
                 f"or behavior. Bad: 'clean code'. "
                 f"Good: '{good_example}'."
+            )
+    return value
+
+
+def reject_clean_report_language(value: str) -> str:
+    """Reject slop findings that try to encode an all-clear report."""
+    for pat in _CLEAN_REPORT_REJECT:
+        if pat.search(value):
+            raise ValueError(
+                f"REJECTED: clean-report language contains prohibited pattern "
+                f"'{pat.pattern}'. "
+                f"FIX: slop reports must name an actual slop pattern; if no "
+                f"finding can be produced, do not submit a report."
             )
     return value
 
@@ -153,13 +160,6 @@ class ReportFinding(Protocol):
 def _check_finding_paths(i: int, finding: ReportFinding) -> None:
     """Checkout-grounding checks for one finding: paths exist, lines in range."""
     loc_path = finding.location.path
-    if _is_infra_path(loc_path):
-        raise ValueError(
-            f"REJECTED: findings[{i}] location is an infrastructure "
-            f"path: {loc_path}. "
-            f"FIX: findings must target source or test files in the PR diff, "
-            f"not CI/agent infrastructure files."
-        )
     if not _path_in_checkout(loc_path):
         raise ValueError(
             f"REJECTED: findings[{i}] location path '{loc_path}' "
@@ -196,7 +196,7 @@ def _check_evidence_paths(i: int, j: int, ev: Evidence) -> None:
 
 
 def validate_checkout_paths(review_scope: Sequence[Path], findings: Sequence[ReportFinding]) -> None:
-    """Every cited path must exist in the checkout; findings must not target infra."""
+    """Every cited path must exist in the checkout."""
     for i, p in enumerate(review_scope):
         if not _path_in_checkout(p):
             raise ValueError(
@@ -267,7 +267,6 @@ class CheckedSurface(BaseModel):
 # General review
 # ---------------------------------------------------------------------------
 
-_GENERAL_CATEGORY_EXAMPLES = "'semantic-regression', 'incorrect-output', 'test-quality', 'null-safety'"
 _GENERAL_TIER_EXAMPLES = "'semantic-regression', 'test-quality'"
 _GENERAL_INVARIANT_GOOD = "The CI runner silently swallows diff-retrieval failures instead of aborting"
 
@@ -308,14 +307,7 @@ class GeneralFinding(BaseModel):
         description="Defect type. Ground it in known categories from policy-index "
         "and the bridge-burning rules. "
         "Examples: semantic-regression, test-quality, null-safety, "
-        "missing-error-handling, logic-error. "
-        "Forbidden: infra, infrastructure, ci, workflow, config.",
-        json_schema_extra={
-            "x-custom-validation": {
-                "rule": "Rejected if value contains: infra, infrastructure, ci, workflow, config",
-                "validator": "_no_infra_categories",
-            }
-        },
+        "missing-error-handling, logic-error, ci-pipeline, workflow.",
     )
     location: Location = Field(description="File and line range where the finding occurs.")
     violated_invariant: str = Field(
@@ -351,11 +343,6 @@ class GeneralFinding(BaseModel):
         description="Supporting evidence proving the finding. At least one item required.",
     )
 
-    @field_validator("category")
-    @classmethod
-    def _no_infra_categories(cls, v: str) -> str:
-        return reject_infra_category(v, fix_examples=_GENERAL_CATEGORY_EXAMPLES, subject="the defect")
-
     @model_validator(mode="after")
     def _tier_category_consistency(self) -> Self:
         require_tier2_for_low_signal(self.tier, self.category, fix_examples=_GENERAL_TIER_EXAMPLES)
@@ -377,7 +364,7 @@ class GeneralReport(BaseModel):
                     "validator": "_require_substantive_finding",
                 },
                 "_check_paths": {
-                    "rule": "Every path must exist in the reviewed checkout and not be in INFRA_PREFIXES",
+                    "rule": "Every path must exist in the reviewed checkout",
                     "validator": "_check_paths",
                 },
             }
@@ -424,7 +411,6 @@ class GeneralReport(BaseModel):
 # Slop review
 # ---------------------------------------------------------------------------
 
-_SLOP_CATEGORY_EXAMPLES = "'bridge-burning', 'runtime-control-flow', 'validation-evasion', 'defaults-and-fallbacks'"
 _SLOP_TIER_EXAMPLES = "'bridge-burning', 'validation-evasion'"
 _SLOP_INVARIANT_GOOD = "The agent suppresses stderr to construct synthetic fallback results instead of failing on missing files"
 
@@ -454,25 +440,15 @@ class SlopFinding(BaseModel):
             }
         },
     )
-    label: str = Field(
-        description="Short label grounded in the specific bridge-burning construct. "
-        "Look at the actual code pattern: is it a runtime default, a suppressed "
-        "error, a mock without assertion, a conditional import, a boolean mode "
-        "flag? The label should name the construct, not grade it. "
-        "See bridge-burning-red-flags.md for the inventory of recognized patterns.",
+    label: Literal["SLOP", "SLOP SUSPECT"] = Field(
+        description="Finding disposition. SLOP is definite; SLOP SUSPECT is a credible slop pattern requiring human judgment. NOTE and clean-report labels are rejected."
     )
     category: str = Field(
         description="Slop pattern category from the anti-slop skill taxonomy. "
         "Look at policy-index and the bridge-burning inventory for grounded "
         "categories like: bridge-burning, runtime-control-flow, "
-        "validation-evasion, defaults-and-fallbacks, proof-laundering. "
-        "Forbidden: infra, infrastructure, ci, workflow, config.",
-        json_schema_extra={
-            "x-custom-validation": {
-                "rule": "Rejected if value contains: infra, infrastructure, ci, workflow, config",
-                "validator": "_no_infra_categories",
-            }
-        },
+        "validation-evasion, defaults-and-fallbacks, proof-laundering, workflow, "
+        "ci-pipeline, config.",
     )
     location: Location = Field(description="File and line range where the slop pattern occurs.")
     violated_invariant: str = Field(
@@ -537,11 +513,6 @@ class SlopFinding(BaseModel):
         description="Supporting evidence proving the slop pattern. At least one item required. Should include file-read or diff-snippet showing the offending construct.",
     )
 
-    @field_validator("category")
-    @classmethod
-    def _no_infra_categories(cls, v: str) -> str:
-        return reject_infra_category(v, fix_examples=_SLOP_CATEGORY_EXAMPLES, subject="the slop pattern")
-
     @model_validator(mode="after")
     def _tier_category_consistency(self) -> Self:
         require_tier2_for_low_signal(self.tier, self.category, fix_examples=_SLOP_TIER_EXAMPLES)
@@ -551,6 +522,11 @@ class SlopFinding(BaseModel):
     @classmethod
     def _no_empty_invariant(cls, v: str) -> str:
         return reject_blanket_invariant(v, good_example=_SLOP_INVARIANT_GOOD)
+
+    @field_validator("pattern", "slop_narrative")
+    @classmethod
+    def _no_clean_report_language(cls, v: str) -> str:
+        return reject_clean_report_language(v)
 
 
 class SlopReport(BaseModel):
@@ -563,7 +539,7 @@ class SlopReport(BaseModel):
                     "validator": "_require_substantive_finding",
                 },
                 "_check_paths": {
-                    "rule": "Every path must exist in the reviewed checkout and not be in INFRA_PREFIXES",
+                    "rule": "Every path must exist in the reviewed checkout",
                     "validator": "_check_paths",
                 },
             }
@@ -582,14 +558,6 @@ class SlopReport(BaseModel):
     findings: list[SlopFinding] = Field(
         min_length=1,
         description="Slop review findings. At least one required; at least one must be substantive (Tier 1 or non-low-signal category).",
-    )
-    checked_surfaces: list[CheckedSurface] = Field(
-        description="Surfaces inspected during review, whether findings were found or not. Documents review thoroughness.",
-    )
-    rejected_easy_wins: list[str] = Field(
-        description="Low-signal observations or potential slop patterns the agent "
-        "considered but declined to elevate. Brief reason for each. Documents "
-        "that non-trivial patterns were evaluated, not missed.",
     )
 
     @model_validator(mode="after")

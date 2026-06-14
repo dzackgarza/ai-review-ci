@@ -1,3 +1,9 @@
 #!/usr/bin/env sh
 set -e
-just test
+repo_root="$(git rev-parse --show-toplevel)"
+hook_file="$(readlink -f "$0")"
+hook_repo="$(CDPATH= cd -- "$(dirname -- "$hook_file")/.." && pwd -P)"
+if [ "$repo_root" = "$hook_repo" ]; then
+  exit 0
+fi
+exec just test

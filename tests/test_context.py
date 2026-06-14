@@ -8,7 +8,7 @@ from pathlib import Path
 
 import pytest
 
-from ai_review_ci.context import _format_alert, _validated_alert_page, fetch_context
+from ai_review_ci.context import _format_alert, _thread_digest, _validated_alert_page, fetch_context
 
 
 def _alert(number: int, state: str, label: str, path: str, line: int) -> dict[str, object]:
@@ -122,12 +122,12 @@ def test_fetch_context_renders_alert_states_threads_and_carry_forward(tmp_path: 
         {
             "nodes": [
                 {
+                    "path": "justfiles/python.just",
                     "isResolved": False,
                     "comments": {
                         "nodes": [
                             {
                                 "body": "Keep vulture status nonzero\nfull comment body",
-                                "path": "justfiles/python.just",
                             }
                         ]
                     },
@@ -199,12 +199,12 @@ def test_fetch_context_renders_resolved_paginated_threads_and_empty_open_group(t
             {
                 "nodes": [
                     {
+                        "path": "src/context.py",
                         "isResolved": True,
                         "comments": {
                             "nodes": [
                                 {
                                     "body": "Resolved finding\nfull comment body",
-                                    "path": "src/context.py",
                                 }
                             ]
                         },
@@ -350,3 +350,33 @@ def test_fetch_context_reads_alert_pages_until_short_page(tmp_path: Path, gh_fix
         "schema_version": 1,
         "alerts": [{"tool_name": "ai-review/general", "alert": alert} for alert in alerts],
     }
+
+
+def test_thread_digest_uses_review_thread_path() -> None:
+    node = {
+        "path": "src/ai_review_ci/context.py",
+        "isResolved": False,
+        "comments": {
+            "nodes": [
+                {
+                    "body": "### Finding headline\n\nFinding body.",
+                }
+            ]
+        },
+    }
+
+    assert _thread_digest(node) == {
+        "path": "src/ai_review_ci/context.py",
+        "headline": "### Finding headline",
+        "resolved": False,
+    }
+
+
+def test_thread_digest_skips_threads_without_comments() -> None:
+    node = {
+        "path": "src/ai_review_ci/context.py",
+        "isResolved": True,
+        "comments": {"nodes": []},
+    }
+
+    assert _thread_digest(node) is None

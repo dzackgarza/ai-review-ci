@@ -76,24 +76,79 @@ def test_nonexistent_paths_rejected(checkout: Path) -> None:
     assert "location path 'src/ghost.py' does not exist" in str(loc_exc.value)
 
 
-def test_infra_path_rejected_even_when_file_exists(checkout: Path) -> None:
+def test_workflow_path_can_be_reviewed_when_it_is_in_scope(checkout: Path) -> None:
     wf = checkout / ".github" / "workflows"
     wf.mkdir(parents=True)
     (wf / "x.yml").write_text("name: x\n")
-    bad = slop_candidate(
-        findings=[
-            slop_finding(
-                location={
-                    "path": ".github/workflows/x.yml",
-                    "start_line": 1,
-                    "end_line": 1,
-                }
-            )
-        ]
+    report = SlopReport.model_validate(
+        slop_candidate(
+            review_scope=[".github/workflows/x.yml"],
+            findings=[
+                slop_finding(
+                    location={
+                        "path": ".github/workflows/x.yml",
+                        "start_line": 1,
+                        "end_line": 1,
+                    },
+                    evidence=[
+                        {
+                            "kind": "diff-snippet",
+                            "path": ".github/workflows/x.yml",
+                            "lines": [1, 1],
+                        }
+                    ],
+                )
+            ],
+        )
+    )
+    assert str(report.findings[0].location.path) == ".github/workflows/x.yml"
+
+
+def test_slop_report_rejects_note_label(checkout: Path) -> None:
+    with pytest.raises(ValidationError) as exc:
+        SlopReport.model_validate(slop_candidate(findings=[slop_finding(label="NOTE")]))
+    assert "SLOP" in str(exc.value)
+
+
+def test_slop_report_does_not_accept_review_theater_fields(checkout: Path) -> None:
+    theatrical = slop_candidate(
+        checked_surfaces=[
+            {
+                "path": APP_FILE,
+                "reason": "high-churn",
+                "lines_read": [1, APP_LINES],
+                "result": "finding",
+            }
+        ],
+        rejected_easy_wins=["long lines in tests/test_app.py — line-length only"],
     )
     with pytest.raises(ValidationError) as exc:
+        SlopReport.model_validate(theatrical)
+    assert "checked_surfaces" in str(exc.value)
+    assert "rejected_easy_wins" in str(exc.value)
+
+    stripped = slop_candidate()
+    report = SlopReport.model_validate(stripped)
+    assert report.findings[0].label == "SLOP"
+
+
+def test_slop_report_rejects_clean_report_language(checkout: Path) -> None:
+    bad = slop_candidate()
+    bad["findings"] = [
+        slop_finding(
+            label="SLOP SUSPECT",
+            pattern="clean delegation",
+            slop_narrative="The diff is clean and no slop was found.",
+        )
+    ]
+    with pytest.raises(ValidationError) as exc:
         SlopReport.model_validate(bad)
-    assert "location is an infrastructure path" in str(exc.value)
+    assert "clean-report language" in str(exc.value)
+
+
+def test_workflow_category_can_be_reviewed(checkout: Path) -> None:
+    report = SlopReport.model_validate(slop_candidate(findings=[slop_finding(category="workflow")]))
+    assert report.findings[0].category == "workflow"
 
 
 def test_low_signal_category_cannot_be_tier1(checkout: Path) -> None:
@@ -125,10 +180,9 @@ def test_forbidden_score_and_report_fields_rejected(checkout: Path) -> None:
         GeneralReport.model_validate(general_candidate(report="all good"))
 
 
-def test_infra_categories_rejected(checkout: Path) -> None:
-    with pytest.raises(ValidationError) as exc:
-        GeneralReport.model_validate(general_candidate(findings=[general_finding(category="ci-pipeline")]))
-    assert "forbidden category 'ci-pipeline'" in str(exc.value)
+def test_general_review_accepts_ci_categories(checkout: Path) -> None:
+    report = GeneralReport.model_validate(general_candidate(findings=[general_finding(category="ci-pipeline")]))
+    assert report.findings[0].category == "ci-pipeline"
 
 
 def test_blanket_invariant_claims_rejected(checkout: Path) -> None:
@@ -179,13 +233,6 @@ def test_validation_preserves_agent_analysis_verbatim(checkout: Path) -> None:
     assert f.evidence[0].kind == raw["evidence"][0]["kind"]
     assert f.evidence[0].lines == raw["evidence"][0]["lines"]
     assert f.location.start_line == raw["location"]["start_line"]
-    surface = report.checked_surfaces[0]
-    raw_surface = candidate["checked_surfaces"][0]
-    assert surface.reason == raw_surface["reason"]
-    assert surface.lines_read == raw_surface["lines_read"]
-    assert surface.result == raw_surface["result"]
-    assert str(surface.path) == raw_surface["path"]
-    assert report.rejected_easy_wins == candidate["rejected_easy_wins"]
     assert [str(p) for p in report.review_scope] == candidate["review_scope"]
 
 

@@ -85,7 +85,7 @@ stage-pr-diff base_ref:
 
 run-review report_type scope:
     sudo -u reviewer -H env \
-      PATH="{{reviewer_home}}/bin:/usr/local/bin:/usr/bin:/bin" \
+      PATH="{{reviewer_home}}/bin:/usr/bin:/bin" \
       HOME="{{reviewer_home}}" \
       XDG_CONFIG_HOME="{{reviewer_home}}/.config" \
       XDG_DATA_HOME="{{reviewer_home}}/.local/share" \
@@ -94,7 +94,7 @@ run-review report_type scope:
       REPORT_TYPE="{{report_type}}" \
       REVIEWER_REPO="{{reviewer_repo}}" \
       CONTROL_REPO="{{control_repo}}" \
-      bash -lc 'cd {{reviewer_repo}} && opencode --version && uv run --project {{reviewer_infra}} ai-review-ci run-review \
+      bash -lc 'cd {{reviewer_repo}} && /usr/local/bin/opencode --version && /usr/local/bin/uv run --project {{reviewer_infra}} ai-review-ci run-review \
         --template "{{reviewer_infra}}/reviews/{{report_type}}/template.md" \
         --scope "{{reviewer_infra}}/reviews/scope-{{scope}}.md" \
         --manifest "{{reviewer_infra}}/reviews/{{report_type}}/manifest.txt" \

@@ -121,8 +121,9 @@ query($owner: String!, $name: String!, $number: Int!, $cursor: String) {
       reviewThreads(first: 100, after: $cursor) {
         pageInfo { hasNextPage endCursor }
         nodes {
+          path
           isResolved
-          comments(first: 1) { nodes { path body } }
+          comments(first: 1) { nodes { body } }
         }
       }
     }
@@ -155,6 +156,25 @@ def _thread_page(owner: str, name: str, pr_number: int, cursor: str | None) -> J
     return page
 
 
+def _thread_digest(node: JsonDict) -> JsonDict | None:
+    comments_value = _mapping(_required_value(node, "comments", "review_thread"), "review_thread.comments")
+    comments = _required_value(comments_value, "nodes", "review_thread.comments")
+    if not isinstance(comments, list):
+        _fail("missing or invalid array at review_thread.comments.nodes")
+    if not comments:
+        return None
+    first_comment = _mapping(comments[0], "review_thread.comments.nodes[0]")
+    body = _string(first_comment, "body", "review_thread.comments.nodes[0]")
+    resolved = _required_value(node, "isResolved", "review_thread")
+    if not isinstance(resolved, bool):
+        _fail("missing or invalid boolean at review_thread.isResolved")
+    return {
+        "path": _string(node, "path", "review_thread"),
+        "headline": body.splitlines()[0],
+        "resolved": resolved,
+    }
+
+
 def _fetch_pr_threads(repo: str, pr_number: int) -> list[JsonDict]:
     """Digest of existing review threads on the PR: path, headline, state."""
     owner, name = repo.split("/")
@@ -163,19 +183,9 @@ def _fetch_pr_threads(repo: str, pr_number: int) -> list[JsonDict]:
     while True:
         page = _thread_page(owner, name, pr_number, cursor)
         for node in page["nodes"]:
-            comments = node["comments"]["nodes"]
-            if not comments:
-                continue
-            first_comment = _mapping(comments[0], "review_thread.comments.nodes[0]")
-            body = _string(first_comment, "body", "review_thread.comments.nodes[0]")
-            headline = body.splitlines()[0]
-            threads.append(
-                {
-                    "path": _string(first_comment, "path", "review_thread.comments.nodes[0]"),
-                    "headline": headline,
-                    "resolved": node["isResolved"],
-                }
-            )
+            digest = _thread_digest(node)
+            if digest is not None:
+                threads.append(digest)
         if not page["pageInfo"]["hasNextPage"]:
             break
         cursor = page["pageInfo"]["endCursor"]

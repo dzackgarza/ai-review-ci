@@ -28,6 +28,8 @@ import sys
 from pathlib import Path
 from typing import Any, NoReturn
 
+from unidiff import PatchSet
+
 from ai_review_ci.models import finding_fingerprint
 
 JsonDict = dict[str, Any]
@@ -67,40 +69,6 @@ def _gh_json(args: list[str], body: JsonDict | None = None) -> JsonDict:
     return data
 
 
-def _diff_target(line: str) -> str | None:
-    """New-side file path from a '+++ ' diff line, or None for deletions."""
-    target = line[4:].split("\t")[0]
-    if target == "/dev/null":
-        return None
-    return target[2:] if target.startswith("b/") else target
-
-
-def _hunk_new_start(line: str) -> int:
-    """Starting RIGHT-side line number from a '@@' hunk header."""
-    m = re.match(r"^@@ -\d+(?:,\d+)? \+(\d+)(?:,(\d+))? @@", line)
-    if not m:
-        _fail(f"unparseable hunk header: {line}")
-    return int(m.group(1))
-
-
-def _advance_hunk_line(line: str, commentable: set[int], new_line: int) -> int | None:
-    """Consume one hunk-body line; return the next RIGHT-side line number.
-
-    Added and context lines are commentable. Deleted lines and the
-    no-newline marker keep the position. Any other content (diff --git /
-    index / similarity headers) ends the hunk body.
-    """
-    if line.startswith("+"):
-        commentable.add(new_line)
-        return new_line + 1
-    if line.startswith("-") or line.startswith("\\"):
-        return new_line
-    if line.startswith(" ") or line == "":
-        commentable.add(new_line)
-        return new_line + 1
-    return None
-
-
 def parse_diff(text: str) -> dict[str, set[int]]:
     """Map each file in the diff to its commentable RIGHT-side line numbers.
 
@@ -109,27 +77,23 @@ def parse_diff(text: str) -> dict[str, set[int]]:
     side and are omitted.
     """
     files: dict[str, set[int]] = {}
-    current: str | None = None
-    new_line: int | None = None
-    for line in text.splitlines():
-        if line.startswith("+++ "):
-            current = _diff_target(line)
-            if current is not None:
-                files.setdefault(current, set())
-            new_line = None
-        elif line.startswith("@@"):
-            new_line = _hunk_new_start(line)
-        elif current is not None and new_line is not None:
-            new_line = _advance_hunk_line(line, files[current], new_line)
+    for patched_file in PatchSet(text.splitlines(keepends=True)):
+        if patched_file.is_removed_file:
+            continue
+        commentable: set[int] = set()
+        for hunk in patched_file:
+            for line in hunk:
+                if not (line.is_added or line.is_context):
+                    continue
+                if line.target_line_no is None:
+                    _fail(f"missing target line number in diff for {patched_file.path}")
+                commentable.add(line.target_line_no)
+        files[patched_file.path] = commentable
     return files
 
 
 def existing_fingerprints(repo: str, pr_number: int) -> set[str]:
-    """Fingerprints already present in any review thread on the PR.
-
-    Resolved threads count: a resolved thread is a disposition, equivalent
-    to a dismissed alert — the finding is not re-posted.
-    """
+    """Fingerprints already present in any review thread on the PR."""
     owner, name = repo.split("/")
     found: set[str] = set()
     cursor: str | None = None
@@ -175,7 +139,9 @@ def pick_anchor(finding: JsonDict, commentable: dict[str, set[int]]) -> int | No
     return min(lines)
 
 
-def render_thread_body(finding: JsonDict, review_label: str, fp: str) -> str:
+def render_thread_body(
+    finding: JsonDict, review_label: str, fp: str, possible_duplicate: bool
+) -> str:
     loc = finding["location"]
     lines = [
         f"### [{review_label}][{finding['tier']}] {finding['label']}",
@@ -185,6 +151,16 @@ def render_thread_body(finding: JsonDict, review_label: str, fp: str) -> str:
         f"**Violated invariant:** {finding['violated_invariant']}",
         f"**Proof:** `{finding['proof_command']}`",
     ]
+    if possible_duplicate:
+        lines.extend(
+            [
+                "",
+                "**Possible duplicate disposition required:** a prior PR thread "
+                "has this category/path fingerprint. Compare invariant, source, "
+                "consequence, and evidence before resolving; do not suppress this "
+                "finding by similarity alone.",
+            ]
+        )
     for key, title in [
         ("symptom", "Symptom"),
         ("source", "Source"),
@@ -203,7 +179,7 @@ def render_review_body(
     review_label: str,
     findings: list[JsonDict],
     posted: int,
-    skipped: int,
+    possible_duplicates: int,
     off_diff: list[JsonDict],
 ) -> str:
     run_url = f"{os.environ['GITHUB_SERVER_URL']}/{os.environ['GITHUB_REPOSITORY']}/actions/runs/{os.environ['GITHUB_RUN_ID']}"
@@ -213,7 +189,9 @@ def render_review_body(
         f"## {review_label} — automated PR review",
         "",
         f"Run: {run_url}",
-        f"Findings: {len(findings)} (tier1 {tier1}, tier2 {tier2}) | threads posted: {posted} | duplicates skipped: {skipped} | off-diff (tracker only): {len(off_diff)}",
+        f"Findings: {len(findings)} (tier1 {tier1}, tier2 {tier2}) | "
+        f"threads posted: {posted} | possible duplicates: {possible_duplicates} | "
+        f"off-diff (tracker only): {len(off_diff)}",
     ]
     if off_diff:
         lines.extend(
@@ -235,16 +213,16 @@ def partition_findings(
     seen: set[str],
     review_label: str,
 ) -> tuple[list[JsonDict], list[JsonDict], int]:
-    """Split findings into inline comments, off-diff entries, and dupes skipped."""
+    """Split findings into inline comments, off-diff entries, and duplicate flags."""
     comments: list[JsonDict] = []
     off_diff: list[JsonDict] = []
-    skipped = 0
+    possible_duplicates = 0
     for finding in findings:
         loc = finding["location"]
         fp = finding_fingerprint(finding["category"], str(loc["path"]))
-        if fp in seen:
-            skipped += 1
-            continue
+        possible_duplicate = fp in seen
+        if possible_duplicate:
+            possible_duplicates += 1
         seen.add(fp)
         anchor = pick_anchor(finding, commentable)
         if anchor is None:
@@ -255,10 +233,12 @@ def partition_findings(
                 "path": str(loc["path"]),
                 "line": anchor,
                 "side": "RIGHT",
-                "body": render_thread_body(finding, review_label, fp),
+                "body": render_thread_body(
+                    finding, review_label, fp, possible_duplicate
+                ),
             }
         )
-    return comments, off_diff, skipped
+    return comments, off_diff, possible_duplicates
 
 
 def post_threads(artifact: Path, diff: Path, repo: str, pr_number: int) -> None:
@@ -278,7 +258,9 @@ def post_threads(artifact: Path, diff: Path, repo: str, pr_number: int) -> None:
     commentable = parse_diff(diff.read_text())
     seen = existing_fingerprints(repo, pr_number)
 
-    comments, off_diff, skipped = partition_findings(findings, commentable, seen, review_label)
+    comments, off_diff, possible_duplicates = partition_findings(
+        findings, commentable, seen, review_label
+    )
 
     if not comments and not off_diff:
         print(f"All {len(findings)} finding(s) already have threads on PR #{pr_number}; nothing to post.")
@@ -286,7 +268,9 @@ def post_threads(artifact: Path, diff: Path, repo: str, pr_number: int) -> None:
 
     payload = {
         "event": "COMMENT",
-        "body": render_review_body(review_label, findings, len(comments), skipped, off_diff),
+        "body": render_review_body(
+            review_label, findings, len(comments), possible_duplicates, off_diff
+        ),
         "comments": comments,
     }
     _gh_json(
@@ -300,4 +284,7 @@ def post_threads(artifact: Path, diff: Path, repo: str, pr_number: int) -> None:
         ],
         body=payload,
     )
-    print(f"Posted review to PR #{pr_number}: {len(comments)} thread(s), {skipped} duplicate(s) skipped, {len(off_diff)} off-diff.")
+    print(
+        f"Posted review to PR #{pr_number}: {len(comments)} thread(s), "
+        f"{possible_duplicates} possible duplicate(s), {len(off_diff)} off-diff."
+    )

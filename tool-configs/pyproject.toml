@@ -5,3 +5,11 @@ fail_under = 90
 [tool.vulture]
 min_confidence = 60
 paths = ["src", "tests"]
+
+[tool.deptry]
+root = ["src"]
+
+[tool.deptry.package_module_name_map]
+python-slugify = "slugify"
+PyYAML = "yaml"
+types-PyYAML = "yaml"

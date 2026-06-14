@@ -46,12 +46,11 @@ Recently changed files are active development surfaces. Check for quality decay 
 
 ### Step 5 — Entrypoints and Commands
 
-```bash
-just --list
-```
-
-If no justfile, check `package.json#scripts`, `Makefile`, CLI --help.
-List all available commands. Run any that look like tests or checks.
+Inspect declared entrypoint files only: `justfile`, `package.json#scripts`,
+`Makefile`, CLI source definitions, and CI workflow commands if they are in the
+reviewed checkout. Do not run target-repo commands. The reviewer environment
+intentionally does not expose project runners such as `just`; review CI is an
+analysis surface, not the project’s test runner.
 
 ### Step 6 — Key Configs
 
@@ -82,11 +81,11 @@ If you did not load it at startup, stop — the skill loading is mandatory.
 ### Step 8 — Quality Surface
 
 Check:
-- Is there a `just test` or `just check`? Run it. Report failures verbatim.
-- Is there a `just lint` or `just fmt`? Run it. Report violations verbatim.
+- What test/check/lint surfaces are declared in tracked files?
 - Are there test files? Read a sample. Check for mocking, assertion quality, coverage of actual behavior.
 - Are there CI workflows? Check if they test what they claim to test.
-- Check `git status` for dirty files — uncommitted debris.
+- Check whether generated or runner-owned files are being mistaken for project
+  evidence.
 
 ### Step 9 — Source Code Analysis
 

@@ -23,6 +23,7 @@ def existing_alert(*, category: str = "carried-forward", path: str = APP_FILE, s
                 "id": category,
                 "name": "CARRIED_FORWARD",
                 "description": "Existing finding that remains open",
+                "severity": "error",
             },
             "most_recent_instance": {
                 "message": {"text": "Existing invariant violation"},
@@ -30,11 +31,6 @@ def existing_alert(*, category: str = "carried-forward", path: str = APP_FILE, s
                     "path": path,
                     "start_line": 2,
                     "end_line": 4,
-                    "properties": {
-                        "label": "CARRIED_FORWARD",
-                        "tier": "tier1",
-                        "category": category,
-                    },
                 },
             },
         },
@@ -133,6 +129,29 @@ def test_to_sarif_writes_artifact_with_optional_carried_alert_sidecar(
     carried_result = second_sarif["runs"][0]["results"][0]
     assert carried_result["partialFingerprints"]["reviewFindingKey"] == (finding_fingerprint("carried-forward", APP_FILE))
     assert carried_result["locations"][0]["physicalLocation"]["region"] == {"startLine": 2}
+
+
+def test_build_sarif_carries_github_rest_alert_without_location_properties(
+    checkout: Path,
+) -> None:
+    configure_github_env()
+    carried_alert = existing_alert()
+
+    sarif = build_sarif(
+        general_candidate(findings=[]),
+        report_type="general",
+        category="ai-general-review",
+        carried_alerts=[carried_alert],
+    )
+
+    carried_result = sarif["runs"][0]["results"][0]
+    assert carried_result["ruleId"] == "carried-forward"
+    assert carried_result["level"] == "error"
+    assert carried_result["properties"] == {
+        "category": "carried-forward",
+        "label": "CARRIED_FORWARD",
+        "tier": "tier1",
+    }
 
 
 def test_build_sarif_ignores_non_target_and_resolved_carried_alerts(

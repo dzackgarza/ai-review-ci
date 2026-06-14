@@ -320,11 +320,8 @@ _deptry: _install-tools
 		"{{artifacts}}/scripts/emit-triage-directive.sh"
 		exit 1
 	fi
-	if uvx --from deptry deptry \
-		src \
-		tool-artifacts \
-		--known-first-party ai_review_ci \
-		--extend-exclude 'tool-artifacts/scripts/train_slop_model\.py'; then
+	package_module_name_map="$(uv run --no-project python "{{artifacts}}/scripts/deptry_package_module_name_map.py" "{{configs}}/pyproject.toml")"
+	if uvx --from deptry deptry . --package-module-name-map "$package_module_name_map"; then
 		:
 	else
 		ec=$?
