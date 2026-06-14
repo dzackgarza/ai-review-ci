@@ -243,7 +243,7 @@ def _append_result(
     if rule_id not in seen_rules:
         seen_rules[rule_id] = len(rules)
         rules.append(rule)
-    result.ruleIndex = seen_rules[rule_id]
+    result.rule_index = seen_rules[rule_id]
     results.append(result)
 
 

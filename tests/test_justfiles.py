@@ -78,10 +78,8 @@ def test_tsc_requires_ags_when_tsconfig_declares_ags(tmp_path: pathlib.Path) -> 
     project = tmp_path / "ags-project"
     project.mkdir()
     (project / "package.json").write_text(json.dumps({"scripts": {}}) + "\n")
-    (project / "tsconfig.json").write_text(
-        json.dumps({"compilerOptions": {"jsxImportSource": "ags/gtk4"}}) + "\n"
-    )
-    env = os.environ | {"PATH": path_with_only(tmp_path, "bash", "jq", "just")}
+    (project / "tsconfig.json").write_text(json.dumps({"compilerOptions": {"jsxImportSource": "ags/gtk4"}}) + "\n")
+    env = os.environ | {"PATH": path_with_only(tmp_path, "bash", "cat", "jq", "just")}
 
     result = run_just(ROOT / "justfiles" / "bun.just", project, "_tsc", env=env)
 
@@ -162,6 +160,23 @@ def test_sync_qc_excludes_preserves_non_owned_artifacts_and_updates_grain(
     assert "central-owned/*" in grain["grain"]["exclude"]
     assert eslint_config.read_text() == "export default [{ ignores: ['sentinel'] }];\n"
     assert rust_justfile.read_text() == "# rust sentinel\n"
+
+
+def test_rust_qc_files_consume_central_excludes(tmp_path: pathlib.Path) -> None:
+    project = tmp_path / "rust-project"
+    source_dir = project / "src"
+    excluded_source_dir = project / "vendor"
+    source_dir.mkdir(parents=True)
+    excluded_source_dir.mkdir()
+    (source_dir / "lib.rs").write_text("pub fn kept() -> u8 { 1 }\n")
+    (excluded_source_dir / "ignored.rs").write_text("pub fn ignored() -> u8 { 2 }\n")
+
+    result = run_just(ROOT / "justfiles" / "rust.just", project, "_rust-qc-files")
+
+    output = result.stdout + result.stderr
+    assert result.returncode == 0, output
+    assert "src/lib.rs" in result.stdout
+    assert "vendor/ignored.rs" not in result.stdout
 
 
 def test_python_syntax_recipe_is_isolated_from_sage_state(
@@ -275,6 +290,7 @@ def test_eslint_flat_config_imports_with_declared_tool_config_deps(
     tool_config.mkdir()
     for file_name in ("package.json", "bun.lock", "eslint.config.js"):
         shutil.copy(ROOT / "tool-configs" / file_name, tool_config / file_name)
+    (tool_config / "qc-excludes.toml").write_text('directories = ["central-owned"]\n')
 
     install = subprocess.run(
         ["bun", "install", "--frozen-lockfile"],
@@ -286,13 +302,20 @@ def test_eslint_flat_config_imports_with_declared_tool_config_deps(
     assert install.returncode == 0, install.stdout + install.stderr
 
     config_import = subprocess.run(
-        ["node", "-e", 'import("./eslint.config.js")'],
+        [
+            "node",
+            "-e",
+            'import("./eslint.config.js").then((config) => console.log(JSON.stringify(config.default[0].ignores)))',
+        ],
         cwd=tool_config,
         text=True,
         capture_output=True,
         check=False,
     )
     assert config_import.returncode == 0, config_import.stdout + config_import.stderr
+    ignores = json.loads(config_import.stdout)
+    assert "**/env.d.ts" in ignores
+    assert "**/central-owned/**" in ignores
 
 
 def test_bun_scaffold_delegates_qc_in_project_directory(

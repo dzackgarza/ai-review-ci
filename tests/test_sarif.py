@@ -103,9 +103,7 @@ def test_build_sarif_results_reference_rule_table_indexes(checkout: Path) -> Non
     )
 
     run = sarif["runs"][0]
-    rule_index_by_id = {
-        rule["id"]: index for index, rule in enumerate(run["tool"]["driver"]["rules"])
-    }
+    rule_index_by_id = {rule["id"]: index for index, rule in enumerate(run["tool"]["driver"]["rules"])}
     for result in run["results"]:
         assert result["ruleIndex"] == rule_index_by_id[result["ruleId"]]
 

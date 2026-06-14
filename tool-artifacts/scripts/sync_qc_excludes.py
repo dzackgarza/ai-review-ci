@@ -143,9 +143,6 @@ def _build_entries(cfg: ToolConfig, dirs: list[str]) -> list[str]:
     return result
 
 
-
-
-
 def write_json_config(qc_root: Path, cfg: ToolConfig, dirs: list[str]) -> None:
     path = qc_root / cfg["path"]
     with path.open("rb") as f:
@@ -190,9 +187,6 @@ def write_toml_config(qc_root: Path, cfg: ToolConfig, dirs: list[str]) -> None:
     parent[last_key] = exclude
     path.write_text(tomlkit.dumps(document))
     print(f"  Updated {cfg['path']} ({len(entries)} entries)")
-
-
-
 
 
 def main() -> None:
