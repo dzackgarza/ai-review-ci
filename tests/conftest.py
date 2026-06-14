@@ -24,12 +24,8 @@ def checkout(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     root = tmp_path / "checkout"
     (root / "src").mkdir(parents=True)
     (root / "tests").mkdir()
-    (root / APP_FILE).write_text(
-        "".join(f"line {i}\n" for i in range(1, APP_LINES + 1))
-    )
-    (root / TEST_FILE).write_text(
-        "".join(f"assert {i}\n" for i in range(1, TEST_LINES + 1))
-    )
+    (root / APP_FILE).write_text("".join(f"line {i}\n" for i in range(1, APP_LINES + 1)))
+    (root / TEST_FILE).write_text("".join(f"assert {i}\n" for i in range(1, TEST_LINES + 1)))
     monkeypatch.chdir(root)
     return root
 

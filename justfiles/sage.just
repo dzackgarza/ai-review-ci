@@ -32,7 +32,7 @@ _sage-qc-files:
 	rg --files \
 		-g '*.sage' \
 		-g '!*.sage.py' \
-		"${exclude_args[@]}" || true
+		"${exclude_args[@]}"
 
 _sage-syntax:
 	#!/usr/bin/env bash
@@ -47,12 +47,7 @@ _sage-syntax:
 		exit 1
 	fi
 
-	sage_bin="${SAGE_BIN:-sage}"
-	if ! command -v "$sage_bin" >/dev/null 2>&1; then
-		echo "ERROR: .sage files found, but Sage is unavailable. Set SAGE_BIN or put sage on PATH."
-		"{{artifacts}}/scripts/emit-triage-directive.sh"
-		exit 1
-	fi
+	: "${SAGE_BIN:?SAGE_BIN must be set to the Sage executable}"
 
 	sage_preparse_dir="$(mktemp -d "${TMPDIR:-/tmp}/qc-sage-syntax.XXXXXX")"
 	trap 'if [ -e "$sage_preparse_dir" ]; then gio trash "$sage_preparse_dir"; fi' EXIT
@@ -71,7 +66,7 @@ _sage-syntax:
 
 	(
 		cd "$sage_preparse_dir"
-		"$sage_bin" --preparse "${copied_sage_files[@]}" >/dev/null
+		"$SAGE_BIN" --preparse "${copied_sage_files[@]}" >/dev/null
 	)
 
 	for sage_file in "${sage_files[@]}"; do
@@ -86,7 +81,7 @@ _sage-syntax:
 		exit 1
 	fi
 
-	if ! "$sage_bin" -python - "${compile_args[@]}" <<'PY'
+	if ! "$SAGE_BIN" -python - "${compile_args[@]}" <<'PY'
 	import py_compile
 	import sys
 
@@ -131,12 +126,7 @@ _vulture: _sage-qc-files
 	fi
 
 	if [ "${#sage_files[@]}" -gt 0 ]; then
-		sage_bin="${SAGE_BIN:-sage}"
-		if ! command -v "$sage_bin" >/dev/null 2>&1; then
-			echo "ERROR: .sage files found, but Sage is unavailable. Set SAGE_BIN or put sage on PATH."
-			"{{artifacts}}/scripts/emit-triage-directive.sh"
-			exit 1
-		fi
+		: "${SAGE_BIN:?SAGE_BIN must be set to the Sage executable}"
 
 		sage_preparse_dir="$(mktemp -d "${TMPDIR:-/tmp}/qc-vulture-sage.XXXXXX")"
 		trap 'if [ -e "$sage_preparse_dir" ]; then gio trash "$sage_preparse_dir"; fi' EXIT
@@ -151,7 +141,7 @@ _vulture: _sage-qc-files
 		done
 		(
 			cd "$sage_preparse_dir"
-			"$sage_bin" --preparse "${copied_sage_files[@]}" >/dev/null
+			"$SAGE_BIN" --preparse "${copied_sage_files[@]}" >/dev/null
 		)
 		for generated_file in "${generated_sage_python_files[@]}"; do
 			if [ ! -f "$generated_file" ]; then

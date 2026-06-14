@@ -173,9 +173,7 @@ def test_tsc_removes_temp_output_on_success(tmp_path: pathlib.Path) -> None:
     project.mkdir()
     tmpdir = tmp_path / "tmp"
     tmpdir.mkdir()
-    (project / "package.json").write_text(
-        json.dumps({"scripts": {"typecheck": "printf typecheck-ok"}}) + "\n"
-    )
+    (project / "package.json").write_text(json.dumps({"scripts": {"typecheck": "printf typecheck-ok"}}) + "\n")
 
     result = subprocess.run(
         [

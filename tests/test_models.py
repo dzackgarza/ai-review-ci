@@ -42,25 +42,13 @@ def test_out_of_range_lines_rejected_with_true_file_length(checkout: Path) -> No
     assert f"exceed the length of '{APP_FILE}' ({APP_LINES} lines)" in message
     assert "FIX: use line numbers that exist in the file" in message
 
-    corrected = general_candidate(
-        findings=[
-            general_finding(
-                location={"path": APP_FILE, "start_line": 10, "end_line": APP_LINES}
-            )
-        ]
-    )
+    corrected = general_candidate(findings=[general_finding(location={"path": APP_FILE, "start_line": 10, "end_line": APP_LINES})])
     report = GeneralReport.model_validate(corrected)
     assert report.findings[0].location.end_line == APP_LINES
 
 
 def test_evidence_lines_out_of_range_rejected(checkout: Path) -> None:
-    bad = general_candidate(
-        findings=[
-            general_finding(
-                evidence=[{"kind": "file-read", "path": APP_FILE, "lines": [1, 999]}]
-            )
-        ]
-    )
+    bad = general_candidate(findings=[general_finding(evidence=[{"kind": "file-read", "path": APP_FILE, "lines": [1, 999]}])])
     with pytest.raises(ValidationError) as exc:
         GeneralReport.model_validate(bad)
     assert f"exceed the length of '{APP_FILE}' ({APP_LINES} lines)" in str(exc.value)
@@ -110,11 +98,7 @@ def test_infra_path_rejected_even_when_file_exists(checkout: Path) -> None:
 
 def test_low_signal_category_cannot_be_tier1(checkout: Path) -> None:
     with pytest.raises(ValidationError) as exc:
-        GeneralReport.model_validate(
-            general_candidate(
-                findings=[general_finding(category="naming", tier="tier1")]
-            )
-        )
+        GeneralReport.model_validate(general_candidate(findings=[general_finding(category="naming", tier="tier1")]))
     assert "is low-signal, must be tier2" in str(exc.value)
 
     accepted = GeneralReport.model_validate(
@@ -130,9 +114,7 @@ def test_low_signal_category_cannot_be_tier1(checkout: Path) -> None:
 
 def test_report_of_only_low_signal_findings_rejected(checkout: Path) -> None:
     with pytest.raises(ValidationError) as exc:
-        SlopReport.model_validate(
-            slop_candidate(findings=[slop_finding(category="formatting", tier="tier2")])
-        )
+        SlopReport.model_validate(slop_candidate(findings=[slop_finding(category="formatting", tier="tier2")]))
     assert "at least one finding must be substantive" in str(exc.value)
 
 
@@ -145,60 +127,30 @@ def test_forbidden_score_and_report_fields_rejected(checkout: Path) -> None:
 
 def test_infra_categories_rejected(checkout: Path) -> None:
     with pytest.raises(ValidationError) as exc:
-        GeneralReport.model_validate(
-            general_candidate(findings=[general_finding(category="ci-pipeline")])
-        )
+        GeneralReport.model_validate(general_candidate(findings=[general_finding(category="ci-pipeline")]))
     assert "forbidden category 'ci-pipeline'" in str(exc.value)
 
 
 def test_blanket_invariant_claims_rejected(checkout: Path) -> None:
     with pytest.raises(ValidationError) as exc:
-        SlopReport.model_validate(
-            slop_candidate(
-                findings=[
-                    slop_finding(
-                        violated_invariant="everything looks good in this module overall"
-                    )
-                ]
-            )
-        )
+        SlopReport.model_validate(slop_candidate(findings=[slop_finding(violated_invariant="everything looks good in this module overall")]))
     assert "contains prohibited pattern" in str(exc.value)
 
 
 def test_descending_line_ranges_rejected(checkout: Path) -> None:
     with pytest.raises(ValidationError) as loc_exc:
-        GeneralReport.model_validate(
-            general_candidate(
-                findings=[
-                    general_finding(
-                        location={"path": APP_FILE, "start_line": 5, "end_line": 3}
-                    )
-                ]
-            )
-        )
+        GeneralReport.model_validate(general_candidate(findings=[general_finding(location={"path": APP_FILE, "start_line": 5, "end_line": 3})]))
     assert "start_line must not exceed end_line" in str(loc_exc.value)
 
     with pytest.raises(ValidationError) as ev_exc:
-        GeneralReport.model_validate(
-            general_candidate(
-                findings=[
-                    general_finding(
-                        evidence=[
-                            {"kind": "file-read", "path": APP_FILE, "lines": [5, 3]}
-                        ]
-                    )
-                ]
-            )
-        )
+        GeneralReport.model_validate(general_candidate(findings=[general_finding(evidence=[{"kind": "file-read", "path": APP_FILE, "lines": [5, 3]}])]))
     assert "not an ascending" in str(ev_exc.value)
 
 
 def test_schema_version_pinned_to_one(checkout: Path) -> None:
     with pytest.raises(ValidationError):
         GeneralReport.model_validate(general_candidate(schema_version=2))
-    report = GeneralReport.model_validate(
-        general_candidate(schema_version=1, report_type="general")
-    )
+    report = GeneralReport.model_validate(general_candidate(schema_version=1, report_type="general"))
     assert report.schema_version == 1
     assert report.report_type == "general"
 
@@ -248,22 +200,12 @@ def test_general_finding_narrative_fields_preserved(checkout: Path) -> None:
 
 def test_finding_fingerprint_is_pinned_and_line_independent(checkout: Path) -> None:
     assert finding_fingerprint("test-quality", APP_FILE) == FINGERPRINT_GENERAL
-    assert finding_fingerprint("test-quality", APP_FILE) == finding_fingerprint(
-        "test-quality", APP_FILE
-    )
+    assert finding_fingerprint("test-quality", APP_FILE) == finding_fingerprint("test-quality", APP_FILE)
     assert finding_fingerprint("naming", APP_FILE) != FINGERPRINT_GENERAL
 
 
 def test_nonexistent_evidence_path_rejected(checkout: Path) -> None:
-    bad = general_candidate(
-        findings=[
-            general_finding(
-                evidence=[
-                    {"kind": "file-read", "path": "src/ghost.py", "lines": [1, 2]}
-                ]
-            )
-        ]
-    )
+    bad = general_candidate(findings=[general_finding(evidence=[{"kind": "file-read", "path": "src/ghost.py", "lines": [1, 2]}])])
     with pytest.raises(ValidationError) as exc:
         GeneralReport.model_validate(bad)
     assert "evidence[0] path 'src/ghost.py' does not exist" in str(exc.value)

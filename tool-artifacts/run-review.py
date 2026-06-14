@@ -15,6 +15,7 @@ On timeout or missing artifact, the harness re-prompts and loops.
 import argparse
 import os
 import pathlib
+import re
 import subprocess
 import sys
 import time
@@ -39,19 +40,45 @@ MAX_ATTEMPTS = 5
 OPENCODE_TIMEOUT = 600
 
 
+REPO_DOC_PATTERNS = ("*README.md", "*AGENTS.md", "*AGENTS*.md")
+SCORE_RE = re.compile(r"\*\*Score: (\d+)/100\*\*")
+REPO_SWEEP_HEADER = """
+# INSTRUCTIONS: Repository-wide sweep, not PR-diff review
+
+You are performing a FRESH, COMPREHENSIVE REPOSITORY AUDIT.
+Scan the ENTIRE repository source tree - do NOT limit analysis to recent commits or diffs.
+Analyze all files as if this were a day-zero audit of a new codebase.
+
+HOWEVER: The context above lists existing review issues on this PR (from the thread index).
+Do NOT re-raise these issues unless you have new evidence, the problem reappears in a
+materially different form, or the previous resolution is directly contradicted by the
+current code. The index is maintained by a separate gardener agent - respect it.
+"""
+
+
+def _repo_doc_candidates(repo_root: pathlib.Path) -> list[pathlib.Path]:
+    return [path for pattern in REPO_DOC_PATTERNS for path in repo_root.rglob(pattern)]
+
+
+def _is_repo_doc(repo_root: pathlib.Path, path: pathlib.Path) -> bool:
+    rel_parts = path.relative_to(repo_root).parts
+    return not any(part in IGNORE_DIRS for part in rel_parts) and path.is_file() and path.stat().st_size <= 500_000
+
+
+def _render_repo_doc(repo_root: pathlib.Path, path: pathlib.Path) -> str:
+    rel = path.relative_to(repo_root)
+    return f"### Repo doc: {rel}\n\n{path.read_text()}"
+
+
+def _join_repo_doc_sections(sections: list[str]) -> str:
+    if not sections:
+        return ""
+    return "## Repo Documentation\n\n" + "\n\n---\n\n".join(sections)
+
+
 def collect_repo_docs(repo_root: pathlib.Path) -> str:
-    sections = []
-    for pattern in ("*README.md", "*AGENTS.md", "*AGENTS*.md"):
-        for p in repo_root.rglob(pattern):
-            rel = p.relative_to(repo_root)
-            if any(part in IGNORE_DIRS for part in p.parts):
-                continue
-            if not p.is_file() or p.stat().st_size > 500_000:
-                continue
-            sections.append(f"### Repo doc: {rel}\n\n{p.read_text()}")
-    return (
-        "## Repo Documentation\n\n" + "\n\n---\n\n".join(sections) if sections else ""
-    )
+    sections = [_render_repo_doc(repo_root, path) for path in _repo_doc_candidates(repo_root) if _is_repo_doc(repo_root, path)]
+    return _join_repo_doc_sections(sections)
 
 
 def collect_shared_guides(skills_dir: pathlib.Path) -> list[str]:
@@ -155,7 +182,7 @@ def run_opencode(task_path: pathlib.Path) -> int:
     return res.returncode
 
 
-def main():
+def _parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser()
     parser.add_argument("--mode", default="review")
     parser.add_argument("--skills-dir", default="opencode/skills")
@@ -170,105 +197,117 @@ def main():
         default=None,
         help="Path to reviewer context file (existing issues on this PR)",
     )
-    args = parser.parse_args()
+    return parser.parse_args()
 
-    skills_dir, template_path = (
-        pathlib.Path(args.skills_dir),
-        pathlib.Path(args.template),
-    )
+
+def _runner_inputs(args: argparse.Namespace) -> tuple[pathlib.Path, pathlib.Path]:
+    skills_dir = pathlib.Path(args.skills_dir)
+    template_path = pathlib.Path(args.template)
     if not skills_dir.is_dir() or not template_path.is_file():
         print("FATAL: Missing dependencies", file=sys.stderr)
         sys.exit(1)
+    return skills_dir, template_path
 
+
+def _prepare_run_paths() -> tuple[pathlib.Path, pathlib.Path, pathlib.Path]:
     run_dir = pathlib.Path(".agents/review-runner").resolve()
     candidates_dir = run_dir / "candidates"
     candidates_dir.mkdir(parents=True, exist_ok=True)
-    task_path = run_dir / "task.md"
+    return run_dir, candidates_dir, run_dir / "task.md"
 
-    repo_sha = subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip()
 
-    system = (
-        load_slop_review_skills(skills_dir)
-        if args.mode == "slop"
-        else load_review_skills(skills_dir)
+def _repo_sha() -> str:
+    return subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip()
+
+
+def _review_system(mode: str, skills_dir: pathlib.Path) -> str:
+    if mode == "slop":
+        return load_slop_review_skills(skills_dir)
+    return load_review_skills(skills_dir)
+
+
+def _initial_prompt(args: argparse.Namespace, skills_dir: pathlib.Path, template_path: pathlib.Path) -> str:
+    body = substitute(template_path.read_text(), REPO_SHA=_repo_sha())
+    system = _review_system(args.mode, skills_dir)
+    return f"{REPO_SWEEP_HEADER}\n\n{system}\n\n{body}"
+
+
+def _inject_reviewer_context(prompt: str, reviewer_context: str | None) -> str:
+    if reviewer_context is None:
+        return prompt
+    ctx_path = pathlib.Path(reviewer_context)
+    if not ctx_path.is_file():
+        print(f"FATAL: --reviewer-context file not found: {ctx_path}", file=sys.stderr)
+        sys.exit(1)
+    return f"{ctx_path.read_text()}\n\n{prompt}"
+
+
+def _clear_submission_files(submitted_path: pathlib.Path) -> None:
+    submitted_path.unlink(missing_ok=True)
+    ARTIFACT_PATH.unlink(missing_ok=True)
+
+
+def _run_opencode_attempt(task_path: pathlib.Path, attempt: int) -> None:
+    print(f"--- opencode run attempt {attempt}/{MAX_ATTEMPTS} ---", file=sys.stderr)
+    try:
+        run_opencode(task_path)
+    except subprocess.TimeoutExpired:
+        print("--- opencode timed out ---", file=sys.stderr)
+    except FileNotFoundError:
+        print(
+            "FATAL: 'opencode' executable not found in PATH. This is a non-transient failure - exiting immediately.",
+            file=sys.stderr,
+        )
+        sys.exit(1)
+
+
+def _record_artifact_score() -> None:
+    comment = COMMENT_PATH.read_text()
+    match = SCORE_RE.search(comment)
+    if match is None:
+        print("FATAL: rendered comment did not contain a machine-parseable score", file=sys.stderr)
+        sys.exit(1)
+    SCORE_PATH.write_text(match.group(1))
+
+
+def _finalize_artifact_if_present() -> bool:
+    if not ARTIFACT_PATH.exists():
+        return False
+    print("--- Report artifact submitted ---", file=sys.stderr)
+    _record_artifact_score()
+    return True
+
+
+def _continuation_prompt(current_prompt: str, attempt: int, submitted_path: pathlib.Path) -> str:
+    return (
+        f"{current_prompt}\n\n## Continuation Context (Attempt {attempt})\n\n"
+        f"Your session ended without a valid report at {ARTIFACT_PATH}.\n"
+        f"Run quality-control/ci/submit-candidate (no arguments) after writing your "
+        f"report to {submitted_path}."
     )
-    template = template_path.read_text()
-    # Remove PR_NUMBER from the body entirely to de-anchor the agent
-    body = substitute(template, REPO_SHA=repo_sha)
 
-    # Prepend instruction to scan full repo (not just PR diff), but DO consider existing threads
-    header = """
-# INSTRUCTIONS: Repository-wide sweep, not PR-diff review
 
-You are performing a FRESH, COMPREHENSIVE REPOSITORY AUDIT.
-Scan the ENTIRE repository source tree — do NOT limit analysis to recent commits or diffs.
-Analyze all files as if this were a day-zero audit of a new codebase.
-
-HOWEVER: The context above lists existing review issues on this PR (from the thread index).
-Do NOT re-raise these issues unless you have new evidence, the problem reappears in a
-materially different form, or the previous resolution is directly contradicted by the
-current code. The index is maintained by a separate gardener agent — respect it.
-"""
-    current_prompt = f"{header}\n\n{system}\n\n{body}"
-
-    # Prepend reviewer context if provided (existing issues on this PR)
-    if args.reviewer_context:
-        ctx_path = pathlib.Path(args.reviewer_context)
-        if not ctx_path.is_file():
-            print(
-                f"FATAL: --reviewer-context file not found: {ctx_path}", file=sys.stderr
-            )
-            sys.exit(1)
-        ctx = ctx_path.read_text()
-        current_prompt = f"{ctx}\n\n{current_prompt}"
-
-    submitted_path = candidates_dir / SUBMITTED_CANDIDATE
-
+def _review_retry_loop(task_path: pathlib.Path, submitted_path: pathlib.Path, prompt: str) -> None:
+    current_prompt = prompt
     for attempt in range(1, MAX_ATTEMPTS + 1):
         if attempt > 1:
             time.sleep(5)
         task_path.write_text(current_prompt)
-        print(f"--- opencode run attempt {attempt}/{MAX_ATTEMPTS} ---", file=sys.stderr)
-        # Clear any prior files to prevent stale submissions
-        submitted_path.unlink(missing_ok=True)
-        ARTIFACT_PATH.unlink(missing_ok=True)
-        try:
-            run_opencode(task_path)
-        except subprocess.TimeoutExpired:
-            print("--- opencode timed out ---", file=sys.stderr)
-        except FileNotFoundError:
-            print(
-                "FATAL: 'opencode' executable not found in PATH. "
-                "This is a non-transient failure — exiting immediately.",
-                file=sys.stderr,
-            )
-            sys.exit(1)
-        except Exception as e:
-            print(f"--- opencode error: {e} ---", file=sys.stderr)
-
-        if ARTIFACT_PATH.exists():
-            print("--- Report artifact submitted ---", file=sys.stderr)
-            try:
-                comment = COMMENT_PATH.read_text()
-                # Extract score from rendered comment (machine-parseable anchor)
-                import re
-
-                m = re.search(r"\*\*Score: (\d+)/100\*\*", comment)
-                score = m.group(1) if m else "0"
-                SCORE_PATH.write_text(score)
-            except Exception as e:
-                print(f"Warning: Failed to read rendered comment: {e}", file=sys.stderr)
+        _clear_submission_files(submitted_path)
+        _run_opencode_attempt(task_path, attempt)
+        if _finalize_artifact_if_present():
             sys.exit(0)
-
-        current_prompt += (
-            f"\n\n## Continuation Context (Attempt {attempt})\n\n"
-            f"Your session ended without a valid report at {ARTIFACT_PATH}.\n"
-            f"Run quality-control/ci/submit-candidate (no arguments) after writing your "
-            f"report to {submitted_path}."
-        )
-
+        current_prompt = _continuation_prompt(current_prompt, attempt, submitted_path)
     print(f"FATAL: No report artifact after {MAX_ATTEMPTS} attempts", file=sys.stderr)
     sys.exit(1)
+
+
+def main() -> None:
+    args = _parse_args()
+    skills_dir, template_path = _runner_inputs(args)
+    _, candidates_dir, task_path = _prepare_run_paths()
+    prompt = _inject_reviewer_context(_initial_prompt(args, skills_dir, template_path), args.reviewer_context)
+    _review_retry_loop(task_path, candidates_dir / SUBMITTED_CANDIDATE, prompt)
 
 
 if __name__ == "__main__":

@@ -194,10 +194,7 @@ def render_thread_body(finding: JsonDict, review_label: str, fp: str) -> str:
     ]:
         if finding.get(key):
             lines.append(f"**{title}:** {finding[key]}")
-    ev_parts = [
-        f"`{e['path']}:{e['lines'][0]}-{e['lines'][1]}` ({e['kind']})"
-        for e in finding["evidence"]
-    ]
+    ev_parts = [f"`{e['path']}:{e['lines'][0]}-{e['lines'][1]}` ({e['kind']})" for e in finding["evidence"]]
     lines.append(f"**Evidence:** {', '.join(ev_parts)}")
     return "\n".join(lines)
 
@@ -209,19 +206,14 @@ def render_review_body(
     skipped: int,
     off_diff: list[JsonDict],
 ) -> str:
-    run_url = (
-        f"{os.environ['GITHUB_SERVER_URL']}/{os.environ['GITHUB_REPOSITORY']}"
-        f"/actions/runs/{os.environ['GITHUB_RUN_ID']}"
-    )
+    run_url = f"{os.environ['GITHUB_SERVER_URL']}/{os.environ['GITHUB_REPOSITORY']}/actions/runs/{os.environ['GITHUB_RUN_ID']}"
     tier1 = sum(1 for f in findings if f["tier"] == "tier1")
     tier2 = sum(1 for f in findings if f["tier"] == "tier2")
     lines = [
         f"## {review_label} — automated PR review",
         "",
         f"Run: {run_url}",
-        f"Findings: {len(findings)} (tier1 {tier1}, tier2 {tier2}) | "
-        f"threads posted: {posted} | duplicates skipped: {skipped} | "
-        f"off-diff (tracker only): {len(off_diff)}",
+        f"Findings: {len(findings)} (tier1 {tier1}, tier2 {tier2}) | threads posted: {posted} | duplicates skipped: {skipped} | off-diff (tracker only): {len(off_diff)}",
     ]
     if off_diff:
         lines.extend(
@@ -233,10 +225,7 @@ def render_review_body(
         )
         for f in off_diff:
             loc = f["location"]
-            lines.append(
-                f"- `{loc['path']}:{loc['start_line']}-{loc['end_line']}` — "
-                f"[{f['tier']}] {f['label']}: {f['violated_invariant']}"
-            )
+            lines.append(f"- `{loc['path']}:{loc['start_line']}-{loc['end_line']}` — [{f['tier']}] {f['label']}: {f['violated_invariant']}")
     return "\n".join(lines)
 
 
@@ -289,22 +278,15 @@ def post_threads(artifact: Path, diff: Path, repo: str, pr_number: int) -> None:
     commentable = parse_diff(diff.read_text())
     seen = existing_fingerprints(repo, pr_number)
 
-    comments, off_diff, skipped = partition_findings(
-        findings, commentable, seen, review_label
-    )
+    comments, off_diff, skipped = partition_findings(findings, commentable, seen, review_label)
 
     if not comments and not off_diff:
-        print(
-            f"All {len(findings)} finding(s) already have threads on "
-            f"PR #{pr_number}; nothing to post."
-        )
+        print(f"All {len(findings)} finding(s) already have threads on PR #{pr_number}; nothing to post.")
         return
 
     payload = {
         "event": "COMMENT",
-        "body": render_review_body(
-            review_label, findings, len(comments), skipped, off_diff
-        ),
+        "body": render_review_body(review_label, findings, len(comments), skipped, off_diff),
         "comments": comments,
     }
     _gh_json(
@@ -318,7 +300,4 @@ def post_threads(artifact: Path, diff: Path, repo: str, pr_number: int) -> None:
         ],
         body=payload,
     )
-    print(
-        f"Posted review to PR #{pr_number}: {len(comments)} thread(s), "
-        f"{skipped} duplicate(s) skipped, {len(off_diff)} off-diff."
-    )
+    print(f"Posted review to PR #{pr_number}: {len(comments)} thread(s), {skipped} duplicate(s) skipped, {len(off_diff)} off-diff.")

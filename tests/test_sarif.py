@@ -14,9 +14,7 @@ from tests.conftest import APP_FILE, general_candidate, general_finding
 JsonDict = dict[str, Any]
 
 
-def existing_alert(
-    *, category: str = "carried-forward", path: str = APP_FILE, state: str = "open"
-) -> JsonDict:
+def existing_alert(*, category: str = "carried-forward", path: str = APP_FILE, state: str = "open") -> JsonDict:
     return {
         "tool_name": "ai-review/general",
         "alert": {
@@ -44,10 +42,7 @@ def existing_alert(
 
 
 def result_fingerprints(sarif: JsonDict) -> list[str]:
-    return [
-        result["partialFingerprints"]["reviewFindingKey"]
-        for result in sarif["runs"][0]["results"]
-    ]
+    return [result["partialFingerprints"]["reviewFindingKey"] for result in sarif["runs"][0]["results"]]
 
 
 def configure_github_env() -> None:
@@ -78,10 +73,7 @@ def test_build_sarif_carries_existing_open_alerts(checkout: Path) -> None:
 
     fingerprints = result_fingerprints(sarif)
     assert finding_fingerprint("carried-forward", APP_FILE) in fingerprints
-    assert (
-        finding_fingerprint("new-review-finding", "tests/test_app.py")
-        in fingerprints
-    )
+    assert finding_fingerprint("new-review-finding", "tests/test_app.py") in fingerprints
 
 
 def test_new_finding_replaces_matching_carried_alert(checkout: Path) -> None:
@@ -139,13 +131,8 @@ def test_to_sarif_writes_artifact_with_optional_carried_alert_sidecar(
     second_sarif = json.loads(second_output.read_text())
     assert first_sarif["runs"][0]["results"] == []
     carried_result = second_sarif["runs"][0]["results"][0]
-    assert carried_result["partialFingerprints"]["reviewFindingKey"] == (
-        finding_fingerprint("carried-forward", APP_FILE)
-    )
-    assert (
-        carried_result["locations"][0]["physicalLocation"]["region"]
-        == {"startLine": 2}
-    )
+    assert carried_result["partialFingerprints"]["reviewFindingKey"] == (finding_fingerprint("carried-forward", APP_FILE))
+    assert carried_result["locations"][0]["physicalLocation"]["region"] == {"startLine": 2}
 
 
 def test_build_sarif_ignores_non_target_and_resolved_carried_alerts(

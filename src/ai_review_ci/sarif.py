@@ -21,17 +21,14 @@ import json
 import os
 import sys
 from pathlib import Path
-from typing import Any
+from typing import Any, NoReturn
 
 from ai_review_ci.models import finding_fingerprint
 
 JsonDict = dict[str, Any]
 
 SARIF_VERSION = "2.1.0"
-SARIF_SCHEMA = (
-    "https://raw.githubusercontent.com/oasis-tcs/sarif-spec/"
-    "master/Schemata/sarif-schema-2.1.0.json"
-)
+SARIF_SCHEMA = "https://raw.githubusercontent.com/oasis-tcs/sarif-spec/master/Schemata/sarif-schema-2.1.0.json"
 
 CATEGORY_PREFIX = "ai-review"
 
@@ -47,7 +44,7 @@ _OPTIONAL_PROPERTY_KEYS = (
 CARRY_FORWARD_SCHEMA_VERSION = 1
 
 
-def _die(message: str) -> None:
+def _die(message: str) -> NoReturn:
     print(f"FATAL: {message}", file=sys.stderr)
     sys.exit(1)
 
@@ -59,14 +56,14 @@ def _mapping(value: object, label: str) -> JsonDict:
 
 
 def _string(mapping: JsonDict, key: str, label: str) -> str:
-    value = mapping.get(key)
+    value: object = mapping.get(key)
     if not isinstance(value, str) or not value:
         _die(f"invalid carry-forward alert: {label}.{key} must be a non-empty string")
     return value
 
 
 def _integer(mapping: JsonDict, key: str, label: str) -> int:
-    value = mapping.get(key)
+    value: object = mapping.get(key)
     if not isinstance(value, int):
         _die(f"invalid carry-forward alert: {label}.{key} must be an integer")
     return value
@@ -93,21 +90,15 @@ def _rule_for(finding: JsonDict) -> JsonDict:
 def _rule_for_alert(alert: JsonDict) -> JsonDict:
     rule = _mapping(alert.get("rule"), "alert.rule")
     loc = _mapping(
-        _mapping(alert.get("most_recent_instance"), "alert.most_recent_instance").get(
-            "location"
-        ),
+        _mapping(alert.get("most_recent_instance"), "alert.most_recent_instance").get("location"),
         "alert.most_recent_instance.location",
     )
-    props = _mapping(
-        loc.get("properties"), "alert.most_recent_instance.location.properties"
-    )
+    props = _mapping(loc.get("properties"), "alert.most_recent_instance.location.properties")
     tier = _string(props, "tier", "alert.most_recent_instance.location.properties")
     return {
         "id": _string(rule, "id", "alert.rule"),
         "name": _string(rule, "name", "alert.rule"),
-        "shortDescription": {
-            "text": _string(rule, "description", "alert.rule")[:200]
-        },
+        "shortDescription": {"text": _string(rule, "description", "alert.rule")[:200]},
         "defaultConfiguration": {"level": _tier_to_level(tier)},
     }
 
@@ -149,9 +140,7 @@ def _sarif_result(finding: JsonDict, rule_index: int) -> JsonDict:
                 }
             }
         ],
-        "partialFingerprints": {
-            "reviewFindingKey": finding_fingerprint(finding["category"], loc["path"])
-        },
+        "partialFingerprints": {"reviewFindingKey": finding_fingerprint(finding["category"], loc["path"])},
         "properties": _result_properties(finding),
     }
 
@@ -181,20 +170,14 @@ def _sarif_result_for_alert(alert: JsonDict, rule_index: int) -> JsonDict:
     instance = _mapping(alert.get("most_recent_instance"), "alert.most_recent_instance")
     message = _mapping(instance.get("message"), "alert.most_recent_instance.message")
     loc = _mapping(instance.get("location"), "alert.most_recent_instance.location")
-    props = _mapping(
-        loc.get("properties"), "alert.most_recent_instance.location.properties"
-    )
+    props = _mapping(loc.get("properties"), "alert.most_recent_instance.location.properties")
     category = _string(rule, "id", "alert.rule")
     path = _string(loc, "path", "alert.most_recent_instance.location")
     return {
         "ruleId": category,
         "ruleIndex": rule_index,
-        "level": _tier_to_level(
-            _string(props, "tier", "alert.most_recent_instance.location.properties")
-        ),
-        "message": {
-            "text": _string(message, "text", "alert.most_recent_instance.message")
-        },
+        "level": _tier_to_level(_string(props, "tier", "alert.most_recent_instance.location.properties")),
+        "message": {"text": _string(message, "text", "alert.most_recent_instance.message")},
         "locations": [
             {
                 "physicalLocation": {
@@ -206,9 +189,7 @@ def _sarif_result_for_alert(alert: JsonDict, rule_index: int) -> JsonDict:
                 }
             }
         ],
-        "partialFingerprints": {
-            "reviewFindingKey": finding_fingerprint(category, path)
-        },
+        "partialFingerprints": {"reviewFindingKey": finding_fingerprint(category, path)},
         "properties": dict(props),
     }
 
@@ -233,9 +214,7 @@ def _append_result(
     results.append(result)
 
 
-def _carried_open_alerts(
-    carried_alerts: list[JsonDict], report_type: str
-) -> list[JsonDict]:
+def _carried_open_alerts(carried_alerts: list[JsonDict], report_type: str) -> list[JsonDict]:
     target_tool = _tool_name(report_type)
     alerts: list[JsonDict] = []
     for entry in carried_alerts:
@@ -298,10 +277,7 @@ def build_sarif(
                 "tool": {
                     "driver": {
                         "name": _tool_name(report_type),
-                        "informationUri": (
-                            f"{os.environ['GITHUB_SERVER_URL']}/"
-                            f"{os.environ['GITHUB_REPOSITORY']}"
-                        ),
+                        "informationUri": (f"{os.environ['GITHUB_SERVER_URL']}/{os.environ['GITHUB_REPOSITORY']}"),
                         "rules": rules,
                     }
                 },
@@ -326,14 +302,15 @@ def _load_carried_alerts(path: Path | None) -> list[JsonDict]:
         return []
     if not path.is_file():
         _die(f"carry-forward alerts file not found: {path}")
-    payload = json.loads(path.read_text())
+    payload = _mapping(json.loads(path.read_text()), "carry_forward_payload")
     if payload.get("schema_version") != CARRY_FORWARD_SCHEMA_VERSION:
         _die(f"unsupported carry-forward alerts schema in {path}")
-    alerts = payload.get("alerts")
-    if not isinstance(alerts, list):
+    alerts_value: object = payload.get("alerts")
+    if not isinstance(alerts_value, list):
         _die(f"invalid carry-forward alerts file: {path}")
-    for entry in alerts:
-        _mapping(entry, "carry_forward_entry")
+    alerts: list[JsonDict] = []
+    for index, entry in enumerate(alerts_value):
+        alerts.append(_mapping(entry, f"alerts[{index}]"))
     return alerts
 
 
@@ -357,7 +334,7 @@ def to_sarif(
 
     data: JsonDict = json.loads(artifact.read_text())
 
-    report_type = data.get("report_type", "")
+    report_type = _string(data, "report_type", "artifact")
     if report_type not in ("general", "slop"):
         _die(f"unknown report_type '{report_type}' in artifact")
 

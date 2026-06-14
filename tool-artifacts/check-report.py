@@ -13,14 +13,16 @@ import json
 import re
 import subprocess
 import sys
+from collections.abc import Sequence
 from pathlib import Path
-from typing import Annotated, Literal, Self
+from typing import Annotated, Literal, Protocol, Self
 
 from cyclopts import App
 from pydantic import (
     BaseModel,
     ConfigDict,
     Field,
+    ValidationError,
     field_validator,
     model_validator,
 )
@@ -78,9 +80,7 @@ def _path_exists_in_git(path: Path, sha: str) -> bool:
         capture_output=True,
     )
     if result.returncode >= 2:
-        raise RuntimeError(
-            f"git cat-file -e {sha}:{path} failed: {result.stderr.decode().strip()}"
-        )
+        raise RuntimeError(f"git cat-file -e {sha}:{path} failed: {result.stderr.decode().strip()}")
     return result.returncode == 0
 
 
@@ -89,26 +89,92 @@ def _is_infra_path(p: Path) -> bool:
     return any(s.startswith(prefix) for prefix in INFRA_PREFIXES)
 
 
+class _LocationProtocol(Protocol):
+    @property
+    def path(self) -> Path: ...
+
+
+class _EvidenceProtocol(Protocol):
+    @property
+    def path(self) -> Path: ...
+
+
+class _FindingPathProtocol(Protocol):
+    @property
+    def location(self) -> _LocationProtocol: ...
+
+    @property
+    def evidence(self) -> Sequence[_EvidenceProtocol]: ...
+
+
+def _check_review_scope_paths(review_scope: Sequence[Path], sha: str) -> None:
+    for index, path in enumerate(review_scope):
+        if not _path_exists_in_git(path, sha):
+            raise ValueError(
+                f"REJECTED: review_scope[{index}] path '{path}' does not exist "
+                f"at commit {sha[:8]}. "
+                f"FIX: only list files that exist in git at repo_sha. "
+                f"Run 'git cat-file -e {sha}:{path}' to verify."
+            )
+
+
+def _check_finding_location(path: Path, index: int, sha: str) -> None:
+    if _is_infra_path(path):
+        raise ValueError(
+            f"REJECTED: findings[{index}] location is an infrastructure "
+            f"path: {path}. "
+            f"FIX: findings must target source or test files in the PR diff, "
+            f"not CI/agent infrastructure files."
+        )
+    if not _path_exists_in_git(path, sha):
+        raise ValueError(
+            f"REJECTED: findings[{index}] location path '{path}' "
+            f"does not exist at commit {sha[:8]}. "
+            f"FIX: every finding path must exist in git at repo_sha. "
+            f"Run 'git cat-file -e {sha}:{path}' to verify."
+        )
+
+
+def _check_finding_evidence(evidence: Sequence[_EvidenceProtocol], finding_index: int, sha: str) -> None:
+    for evidence_index, item in enumerate(evidence):
+        if not _path_exists_in_git(item.path, sha):
+            raise ValueError(
+                f"REJECTED: findings[{finding_index}].evidence[{evidence_index}] path '{item.path}' "
+                f"does not exist at commit {sha[:8]}. "
+                f"FIX: every evidence path must exist in git at repo_sha. "
+                f"Run 'git cat-file -e {sha}:{item.path}' to verify."
+            )
+
+
+def _check_finding_paths(findings: Sequence[_FindingPathProtocol], sha: str) -> None:
+    for index, finding in enumerate(findings):
+        _check_finding_location(finding.location.path, index, sha)
+        _check_finding_evidence(finding.evidence, index, sha)
+
+
+def _check_report_git_paths(
+    review_scope: Sequence[Path],
+    findings: Sequence[_FindingPathProtocol],
+    sha: str,
+) -> None:
+    _check_review_scope_paths(review_scope, sha)
+    _check_finding_paths(findings, sha)
+
+
 # ---------------------------------------------------------------------------
 # Shared leaf types
 # ---------------------------------------------------------------------------
 
 
 class Location(BaseModel):
-    path: Path = Field(
-        description="File path relative to repo root. Must exist in git at repo_sha."
-    )
+    path: Path = Field(description="File path relative to repo root. Must exist in git at repo_sha.")
     start_line: int = Field(ge=1, description="Finding start line (1-indexed).")
     end_line: int = Field(ge=1, description="Finding end line (1-indexed).")
 
 
 class Evidence(BaseModel):
-    kind: str = Field(
-        description="Evidence type: file-read, diff-snippet, command-output."
-    )
-    path: Path = Field(
-        description="Evidence file path relative to repo root. Must exist in git at repo_sha."
-    )
+    kind: str = Field(description="Evidence type: file-read, diff-snippet, command-output.")
+    path: Path = Field(description="Evidence file path relative to repo root. Must exist in git at repo_sha.")
     lines: list[Annotated[int, Field(ge=1)]] = Field(
         min_length=2,
         max_length=2,
@@ -118,9 +184,7 @@ class Evidence(BaseModel):
 
 class CheckedSurface(BaseModel):
     path: Path = Field(description="File path examined during review.")
-    reason: str = Field(
-        description="Why this surface was selected: high-churn, diff-context, dependency-graph."
-    )
+    reason: str = Field(description="Why this surface was selected: high-churn, diff-context, dependency-graph.")
     lines_read: list[Annotated[int, Field(ge=1)]] = Field(
         min_length=2,
         max_length=2,
@@ -179,9 +243,7 @@ class GeneralFinding(BaseModel):
             }
         },
     )
-    location: Location = Field(
-        description="File and line range where the finding occurs."
-    )
+    location: Location = Field(description="File and line range where the finding occurs.")
     violated_invariant: str = Field(
         min_length=20,
         description="A specific, verifiable contract or behavior that is violated. "
@@ -208,9 +270,7 @@ class GeneralFinding(BaseModel):
         "Example: 'grep -rn get_diff quality-control/run-review.py'",
     )
     symptom: str = Field(description="Observable symptom of the defect.")
-    source: str = Field(
-        description="Root cause: what code or pattern produces the symptom."
-    )
+    source: str = Field(description="Root cause: what code or pattern produces the symptom.")
     consequence: str = Field(description="What breaks or degrades due to this defect.")
     remedy: str = Field(description="How to fix the defect.")
     evidence: list[Evidence] = Field(
@@ -285,22 +345,19 @@ class GeneralReport(BaseModel):
     repo_sha: str = Field(
         min_length=40,
         max_length=40,
-        description="Full git commit SHA being reviewed. Used to verify all paths "
-        "exist in git; also recorded in PR comment metadata.",
+        description="Full git commit SHA being reviewed. Used to verify all paths exist in git; also recorded in PR comment metadata.",
     )
     review_scope: list[Path] = Field(
         min_length=1,
-        description="Files examined during review, relative to repo root. "
-        "All must exist in git at repo_sha. Typically drawn from the PR diff.",
+        description="Files examined during review, relative to repo root. All must exist in git at repo_sha. Typically drawn from the PR diff.",
     )
     findings: list[GeneralFinding] = Field(
         min_length=1,
-        description="General review findings. At least one required; at least one "
-        "must be substantive (Tier 1 or non-low-signal category).",
+        description="General review findings. At least one required; at least one must be substantive (Tier 1 or non-low-signal category).",
     )
     checked_surfaces: list[CheckedSurface] = Field(
-        description="Surfaces inspected during review, whether findings were found "
-        "or not. Documents review thoroughness.",
+        min_length=1,
+        description="Surfaces inspected during review, whether findings were found or not. Documents review thoroughness.",
     )
     rejected_easy_wins: list[str] = Field(
         description="Low-signal observations the agent considered but declined to "
@@ -310,47 +367,12 @@ class GeneralReport(BaseModel):
 
     @model_validator(mode="after")
     def _check_git_paths(self) -> Self:
-        sha = self.repo_sha
-        for i, p in enumerate(self.review_scope):
-            if not _path_exists_in_git(p, sha):
-                raise ValueError(
-                    f"REJECTED: review_scope[{i}] path '{p}' does not exist "
-                    f"at commit {sha[:8]}. "
-                    f"FIX: only list files that exist in git at repo_sha. "
-                    f"Run 'git cat-file -e {sha}:{p}' to verify."
-                )
-        for i, finding in enumerate(self.findings):
-            loc_path = finding.location.path
-            if _is_infra_path(loc_path):
-                raise ValueError(
-                    f"REJECTED: findings[{i}] location is an infrastructure "
-                    f"path: {loc_path}. "
-                    f"FIX: findings must target source or test files in the PR diff, "
-                    f"not CI/agent infrastructure files."
-                )
-            if not _path_exists_in_git(loc_path, sha):
-                raise ValueError(
-                    f"REJECTED: findings[{i}] location path '{loc_path}' "
-                    f"does not exist at commit {sha[:8]}. "
-                    f"FIX: every finding path must exist in git at repo_sha. "
-                    f"Run 'git cat-file -e {sha}:{loc_path}' to verify."
-                )
-            for j, ev in enumerate(finding.evidence):
-                if not _path_exists_in_git(ev.path, sha):
-                    raise ValueError(
-                        f"REJECTED: findings[{i}].evidence[{j}] path '{ev.path}' "
-                        f"does not exist at commit {sha[:8]}. "
-                        f"FIX: every evidence path must exist in git at repo_sha. "
-                        f"Run 'git cat-file -e {sha}:{ev.path}' to verify."
-                    )
+        _check_report_git_paths(self.review_scope, self.findings, self.repo_sha)
         return self
 
     @model_validator(mode="after")
     def _require_substantive_finding(self) -> Self:
-        if not any(
-            f.tier == "tier1" or f.category.lower() not in LOW_SIGNAL_CATEGORIES
-            for f in self.findings
-        ):
+        if not any(f.tier == "tier1" or f.category.lower() not in LOW_SIGNAL_CATEGORIES for f in self.findings):
             raise ValueError(
                 "REJECTED: at least one finding must be substantive "
                 "(Tier 1 or non-low-signal category). "
@@ -413,9 +435,7 @@ class SlopFinding(BaseModel):
             }
         },
     )
-    location: Location = Field(
-        description="File and line range where the slop pattern occurs."
-    )
+    location: Location = Field(description="File and line range where the slop pattern occurs.")
     violated_invariant: str = Field(
         min_length=20,
         description="A specific engineering invariant that is violated by the slop "
@@ -450,21 +470,16 @@ class SlopFinding(BaseModel):
         "for the full pattern inventory.",
     )
     task_narrative: str = Field(
-        description="What the agent was supposed to build — capsulizes the task "
-        "context so the reader understands the assigned goal.",
+        description="What the agent was supposed to build — capsulizes the task context so the reader understands the assigned goal.",
     )
     slop_narrative: str = Field(
-        description="What the agent actually produced — the bridge-burning "
-        "substitution. Contrast with task_narrative.",
+        description="What the agent actually produced — the bridge-burning substitution. Contrast with task_narrative.",
     )
     why_it_matters: str = Field(
-        description="Concrete consequence of this slop pattern: silent data loss, "
-        "masked failure, untestable branch, non-deterministic behavior, etc.",
+        description="Concrete consequence of this slop pattern: silent data loss, masked failure, untestable branch, non-deterministic behavior, etc.",
     )
     user_surprise: str = Field(
-        description="What the user would observe that would trigger a 'why did this "
-        "happen' reaction. Epistemic: describe the observable surprise, not the "
-        "hypothetical.",
+        description="What the user would observe that would trigger a 'why did this happen' reaction. Epistemic: describe the observable surprise, not the hypothetical.",
     )
     existential_justification: str = Field(
         description="Why this finding exists. The agent's rationalization for the "
@@ -480,9 +495,7 @@ class SlopFinding(BaseModel):
     )
     evidence: list[Evidence] = Field(
         min_length=1,
-        description="Supporting evidence proving the slop pattern. At least one "
-        "item required. Should include file-read or diff-snippet showing the "
-        "offending construct.",
+        description="Supporting evidence proving the slop pattern. At least one item required. Should include file-read or diff-snippet showing the offending construct.",
     )
 
     @field_validator("category")
@@ -553,22 +566,19 @@ class SlopReport(BaseModel):
     repo_sha: str = Field(
         min_length=40,
         max_length=40,
-        description="Full git commit SHA being reviewed. Used to verify all paths "
-        "exist in git; also recorded in PR comment metadata.",
+        description="Full git commit SHA being reviewed. Used to verify all paths exist in git; also recorded in PR comment metadata.",
     )
     review_scope: list[Path] = Field(
         min_length=1,
-        description="Files examined during review, relative to repo root. "
-        "All must exist in git at repo_sha.",
+        description="Files examined during review, relative to repo root. All must exist in git at repo_sha.",
     )
     findings: list[SlopFinding] = Field(
         min_length=1,
-        description="Slop review findings. At least one required; at least one "
-        "must be substantive (Tier 1 or non-low-signal category).",
+        description="Slop review findings. At least one required; at least one must be substantive (Tier 1 or non-low-signal category).",
     )
     checked_surfaces: list[CheckedSurface] = Field(
-        description="Surfaces inspected during review, whether findings were found "
-        "or not. Documents review thoroughness.",
+        min_length=1,
+        description="Surfaces inspected during review, whether findings were found or not. Documents review thoroughness.",
     )
     rejected_easy_wins: list[str] = Field(
         description="Low-signal observations or potential slop patterns the agent "
@@ -578,47 +588,12 @@ class SlopReport(BaseModel):
 
     @model_validator(mode="after")
     def _check_git_paths(self) -> Self:
-        sha = self.repo_sha
-        for i, p in enumerate(self.review_scope):
-            if not _path_exists_in_git(p, sha):
-                raise ValueError(
-                    f"REJECTED: review_scope[{i}] path '{p}' does not exist "
-                    f"at commit {sha[:8]}. "
-                    f"FIX: only list files that exist in git at repo_sha. "
-                    f"Run 'git cat-file -e {sha}:{p}' to verify."
-                )
-        for i, finding in enumerate(self.findings):
-            loc_path = finding.location.path
-            if _is_infra_path(loc_path):
-                raise ValueError(
-                    f"REJECTED: findings[{i}] location is an infrastructure "
-                    f"path: {loc_path}. "
-                    f"FIX: findings must target source or test files in the PR diff, "
-                    f"not CI/agent infrastructure files."
-                )
-            if not _path_exists_in_git(loc_path, sha):
-                raise ValueError(
-                    f"REJECTED: findings[{i}] location path '{loc_path}' "
-                    f"does not exist at commit {sha[:8]}. "
-                    f"FIX: every finding path must exist in git at repo_sha. "
-                    f"Run 'git cat-file -e {sha}:{loc_path}' to verify."
-                )
-            for j, ev in enumerate(finding.evidence):
-                if not _path_exists_in_git(ev.path, sha):
-                    raise ValueError(
-                        f"REJECTED: findings[{i}].evidence[{j}] path '{ev.path}' "
-                        f"does not exist at commit {sha[:8]}. "
-                        f"FIX: every evidence path must exist in git at repo_sha. "
-                        f"Run 'git cat-file -e {sha}:{ev.path}' to verify."
-                    )
+        _check_report_git_paths(self.review_scope, self.findings, self.repo_sha)
         return self
 
     @model_validator(mode="after")
     def _require_substantive_finding(self) -> Self:
-        if not any(
-            f.tier == "tier1" or f.category.lower() not in LOW_SIGNAL_CATEGORIES
-            for f in self.findings
-        ):
+        if not any(f.tier == "tier1" or f.category.lower() not in LOW_SIGNAL_CATEGORIES for f in self.findings):
             raise ValueError(
                 "REJECTED: at least one finding must be substantive "
                 "(Tier 1 or non-low-signal category). "
@@ -640,6 +615,61 @@ _MODEL_BY_TYPE: dict[str, type[GeneralReport | SlopReport]] = {
     "slop": SlopReport,
 }
 
+type ReportType = Literal["general", "slop"]
+type ReportModel = GeneralReport | SlopReport
+type FindingModel = GeneralFinding | SlopFinding
+
+
+def _read_json_object(path: Path) -> dict[str, object]:
+    if not path.is_file():
+        print(f"Error: file not found: {path}", file=sys.stderr)
+        sys.exit(1)
+
+    with open(path) as f:
+        data = json.load(f)
+
+    if not isinstance(data, dict):
+        print(f"Error: expected JSON object in {path}", file=sys.stderr)
+        sys.exit(1)
+    return data
+
+
+def _model_for_report_type(
+    report_type: ReportType,
+) -> type[GeneralReport] | type[SlopReport]:
+    match report_type:
+        case "general":
+            return GeneralReport
+        case "slop":
+            return SlopReport
+
+
+def _report_type(data: dict[str, object], path: Path) -> ReportType:
+    if "report_type" not in data:
+        print(f"Error: missing required report_type in {path}", file=sys.stderr)
+        sys.exit(1)
+    report_type = data["report_type"]
+    match report_type:
+        case "general" | "slop":
+            return report_type
+        case _:
+            print(
+                f"Error: unknown report_type '{report_type}'. Use 'general' or 'slop'.",
+                file=sys.stderr,
+            )
+            sys.exit(1)
+
+
+def _load_report(path: Path) -> ReportModel:
+    data = _read_json_object(path)
+    report_type = _report_type(data, path)
+    model_cls = _model_for_report_type(report_type)
+    return model_cls.model_validate(data)
+
+
+def _report_label(report_type: ReportType) -> str:
+    return {"general": "General Review", "slop": "Slop Review"}[report_type]
+
 
 # ---------------------------------------------------------------------------
 # CLI
@@ -647,28 +677,19 @@ _MODEL_BY_TYPE: dict[str, type[GeneralReport | SlopReport]] = {
 
 
 @app.command
-def validate(path: Path, report_type: Literal["general", "slop"]):
+def validate(path: Path, report_type: ReportType) -> None:
     """Validate a candidate report JSON file.
 
     Args:
         path: Path to the report JSON file.
         report_type: Type of report — "general" or "slop".
     """
-    if not path.is_file():
-        print(f"Error: file not found: {path}", file=sys.stderr)
-        sys.exit(1)
-
-    with open(path) as f:
-        data: dict = json.load(f)
-
-    model_cls = _MODEL_BY_TYPE.get(report_type)
-    if model_cls is None:
-        print(f"Error: unknown report_type '{report_type}'.", file=sys.stderr)
-        sys.exit(1)
+    data = _read_json_object(path)
+    model_cls = _model_for_report_type(report_type)
 
     try:
-        model_cls(**data)
-    except Exception as exc:
+        model_cls.model_validate(data)
+    except ValidationError as exc:
         msg = str(exc)
         print(f"Report validation FAILED:\n  {msg}")
         sys.exit(1)
@@ -678,69 +699,47 @@ def validate(path: Path, report_type: Literal["general", "slop"]):
 
 
 @app.command
-def schema(type: Literal["general", "slop"] = None):
+def schema(type: ReportType) -> None:
     """Dump JSON Schema for a report type.
 
     Args:
         type: Which report schema to dump — "general" or "slop". Required.
     """
-    if type is None:
-        print("Error: --type is required. Use 'general' or 'slop'.", file=sys.stderr)
-        sys.exit(1)
-
-    model_cls = _MODEL_BY_TYPE.get(type)
-    if model_cls is None:
-        print(
-            f"Error: unknown type '{type}'. Use 'general' or 'slop'.", file=sys.stderr
-        )
-        sys.exit(1)
-
+    model_cls = _model_for_report_type(type)
     print(json.dumps(model_cls.model_json_schema(), indent=2))
     sys.exit(0)
 
 
 @app.command
-def metadata(path: Path):
+def metadata(path: Path) -> None:
     """Print machine-parseable metadata from a validated artifact.
 
     Args:
         path: Path to the validated artifact JSON file.
     """
-    if not path.is_file():
-        print(f"Error: file not found: {path}", file=sys.stderr)
-        sys.exit(1)
-
-    with open(path) as f:
-        data = json.load(f)
-
-    findings = data.get("findings", [])
+    report = _load_report(path)
+    findings = report.findings
     result = {
-        "repo_sha": data.get("repo_sha", ""),
-        "report_type": data.get("report_type", "unknown"),
+        "repo_sha": report.repo_sha,
+        "report_type": report.report_type,
         "finding_count": len(findings),
-        "tier1_count": sum(1 for f in findings if f.get("tier") == "tier1"),
-        "tier2_count": sum(1 for f in findings if f.get("tier") == "tier2"),
+        "tier1_count": sum(1 for finding in findings if finding.tier == "tier1"),
+        "tier2_count": sum(1 for finding in findings if finding.tier == "tier2"),
     }
     print(json.dumps(result))
     sys.exit(0)
 
 
 @app.command
-def finding_body(path: Path, index: int):
+def finding_body(path: Path, index: int) -> None:
     """Render a single finding's markdown body for use as a review thread.
 
     Args:
         path: Path to the validated artifact JSON file.
         index: 0-based index of the finding to render.
     """
-    if not path.is_file():
-        print(f"Error: file not found: {path}", file=sys.stderr)
-        sys.exit(1)
-
-    with open(path) as f:
-        data = json.load(f)
-
-    findings = data.get("findings", [])
+    report = _load_report(path)
+    findings = report.findings
     if index < 0 or index >= len(findings):
         print(
             f"Error: index {index} out of range (0-{len(findings) - 1})",
@@ -748,39 +747,26 @@ def finding_body(path: Path, index: int):
         )
         sys.exit(1)
 
-    report_type = data.get("report_type", "unknown")
-    repo_sha = data.get("repo_sha", "unknown")[:8]
     finding = findings[index]
-    body = _render_finding_thread_body(index, finding, report_type, repo_sha)
+    body = _render_finding_thread_body(
+        index,
+        finding,
+        report.report_type,
+        report.repo_sha[:8],
+    )
     print(body)
     sys.exit(0)
 
 
-@app.command
-def render(path: Path):
-    """Render a validated review artifact into a uniform PR comment.
+def _tier_counts(findings: Sequence[FindingModel]) -> tuple[int, int]:
+    tier1_count = sum(1 for finding in findings if finding.tier == "tier1")
+    tier2_count = sum(1 for finding in findings if finding.tier == "tier2")
+    return tier1_count, tier2_count
 
-    Args:
-        path: Path to the validated artifact JSON file.
-    """
-    if not path.is_file():
-        print(f"Error: file not found: {path}", file=sys.stderr)
-        sys.exit(1)
 
-    with open(path) as f:
-        data = json.load(f)
-
-    report_type = data.get("report_type", "unknown")
-    findings = data.get("findings", [])
-    checked_surfaces = data.get("checked_surfaces", [])
-    rejected_easy_wins = data.get("rejected_easy_wins", [])
-
-    score = _compute_score(findings)
-    tier1_count = sum(1 for f in findings if f.get("tier") == "tier1")
-    tier2_count = sum(1 for f in findings if f.get("tier") == "tier2")
-
-    lines = [
-        f"# Code Review: {report_type}",
+def _render_report_header(report: ReportModel, score: int, tier1_count: int, tier2_count: int) -> list[str]:
+    return [
+        f"# Code Review: {report.report_type}",
         "",
         f"**Score: {score}/100**",
         "",
@@ -790,91 +776,104 @@ def render(path: Path):
         f"- Tier 2 findings: {tier2_count}",
         f"- Score: {score}/100 (base 100, -20 per Tier 1, -5 per Tier 2, min 0)",
         "",
+        "## Findings",
+        "",
     ]
 
-    if findings:
-        lines.append("## Findings")
-        lines.append("")
-        for i, f in enumerate(findings, 1):
-            lines.append(_render_finding(i, f))
 
-    lines.append("## Checked Surfaces")
+def _render_findings(findings: Sequence[FindingModel]) -> list[str]:
+    return [_render_finding(index, finding) for index, finding in enumerate(findings, 1)]
+
+
+def _render_checked_surface_section(report: ReportModel) -> list[str]:
+    return [
+        "## Checked Surfaces",
+        "",
+        _render_checked_surfaces(report.checked_surfaces),
+        "",
+    ]
+
+
+def _render_rejected_easy_wins(items: Sequence[str]) -> list[str]:
+    if not items:
+        return []
+    lines = ["## Rejected Easy Wins", ""]
+    lines.extend(f"- {item}" for item in items)
     lines.append("")
-    lines.append(_render_checked_surfaces(checked_surfaces))
-    lines.append("")
-
-    if rejected_easy_wins:
-        lines.append("## Rejected Easy Wins")
-        lines.append("")
-        for r in rejected_easy_wins:
-            lines.append(f"- {r}")
-        lines.append("")
-
-    print("\n".join(lines))
+    return lines
 
 
-def _compute_score(findings: list[dict]) -> int:
-    tier1 = sum(1 for f in findings if f.get("tier") == "tier1")
-    tier2 = sum(1 for f in findings if f.get("tier") == "tier2")
+def _render_report_lines(report: ReportModel) -> list[str]:
+    findings: Sequence[FindingModel] = report.findings
+    score = _compute_score(findings)
+    tier1_count, tier2_count = _tier_counts(findings)
+    return [
+        *_render_report_header(report, score, tier1_count, tier2_count),
+        *_render_findings(findings),
+        *_render_checked_surface_section(report),
+        *_render_rejected_easy_wins(report.rejected_easy_wins),
+    ]
+
+
+@app.command
+def render(path: Path) -> None:
+    """Render a validated review artifact into a uniform PR comment."""
+    print("\n".join(_render_report_lines(_load_report(path))))
+
+
+def _compute_score(findings: Sequence[FindingModel]) -> int:
+    tier1 = sum(1 for finding in findings if finding.tier == "tier1")
+    tier2 = sum(1 for finding in findings if finding.tier == "tier2")
     raw = 100 - (tier1 * 20) - (tier2 * 5)
     return max(0, raw)
 
 
-def _render_finding(n: int, f: dict) -> str:
-    tier = f.get("tier", "?")
-    label = f.get("label", "?")
-    category = f.get("category", "?")
-    loc = f.get("location", {})
-    loc_path = loc.get("path", "?")
-    start = loc.get("start_line", "?")
-    end = loc.get("end_line", "?")
-    violated = f.get("violated_invariant", "")
-    proof = f.get("proof_command", "")
+def _render_finding(n: int, finding: FindingModel) -> str:
+    loc = finding.location
+    loc_path = loc.path.as_posix()
 
     lines = [
-        f"### Finding {n}: {label} ({category}, {tier})",
+        f"### Finding {n}: {finding.label} ({finding.category}, {finding.tier})",
         "",
-        f"**Location:** `{loc_path}:{start}-{end}`",
+        f"**Location:** `{loc_path}:{loc.start_line}-{loc.end_line}`",
+        f"**Violated invariant:** {finding.violated_invariant}",
+        f"**Proof command:** `{finding.proof_command}`",
+        "",
     ]
-    if violated:
-        lines.append(f"**Violated invariant:** {violated}")
-    if proof:
-        lines.append(f"**Proof command:** `{proof}`")
-    lines.append("")
 
-    # General review fields
-    if "symptom" in f:
+    if isinstance(finding, GeneralFinding):
         lines.append("| Field | Detail |")
         lines.append("|-------|--------|")
-        for field in ["symptom", "source", "consequence", "remedy"]:
-            lines.append(f"| **{field.capitalize()}** | {f.get(field, '')} |")
+        for label, detail in [
+            ("Symptom", finding.symptom),
+            ("Source", finding.source),
+            ("Consequence", finding.consequence),
+            ("Remedy", finding.remedy),
+        ]:
+            lines.append(f"| **{label}** | {detail} |")
         lines.append("")
 
-    # Slop review fields
-    if "pattern" in f:
+    if isinstance(finding, SlopFinding):
         slop_fields = [
-            ("Pattern", "pattern"),
-            ("Original task", "task_narrative"),
-            ("Slop narrative", "slop_narrative"),
-            ("Why this matters", "why_it_matters"),
-            ("User surprise", "user_surprise"),
-            ("Existential justification", "existential_justification"),
-            ("Failure mode", "failure_mode"),
+            ("Pattern", finding.pattern),
+            ("Original task", finding.task_narrative),
+            ("Slop narrative", finding.slop_narrative),
+            ("Why this matters", finding.why_it_matters),
+            ("User surprise", finding.user_surprise),
+            ("Existential justification", finding.existential_justification),
+            ("Failure mode", finding.failure_mode),
         ]
         lines.append("| Field | Detail |")
         lines.append("|-------|--------|")
-        for label_k, key in slop_fields:
-            lines.append(f"| **{label_k}** | {f.get(key, '')} |")
+        for label, detail in slop_fields:
+            lines.append(f"| **{label}** | {detail} |")
         lines.append("")
 
-    evidence = f.get("evidence", [])
-    if evidence:
-        lines.append("**Evidence:**")
-        for ev in evidence:
-            p = ev.get("path", "?")
-            lo, hi = (ev.get("lines") or ["?", "?"])[:2]
-            lines.append(f"- `{p}:{lo}-{hi}` ({ev.get('kind', '?')})")
-        lines.append("")
+    lines.append("**Evidence:**")
+    for evidence in finding.evidence:
+        lo, hi = evidence.lines
+        lines.append(f"- `{evidence.path.as_posix()}:{lo}-{hi}` ({evidence.kind})")
+    lines.append("")
 
     lines.append("---")
     lines.append("")
@@ -883,65 +882,47 @@ def _render_finding(n: int, f: dict) -> str:
 
 def _render_finding_thread_body(
     index: int,
-    finding: dict,
-    report_type: str,
+    finding: FindingModel,
+    report_type: ReportType,
     repo_sha_short: str,
 ) -> str:
     """Render a single finding as a compact markdown body for a review thread.
 
     This is the format posted as a GitHub PR review comment, not the full
-    rendered report.  The body is self-contained: tier, label, violated invariant,
+    rendered report. The body is self-contained: tier, label, violated invariant,
     proof command, evidence, and source attribution.
     """
-    tier = finding.get("tier", "?")
-    label = finding.get("label", "?")
-    loc = finding.get("location", {})
-    loc_path = loc.get("path", "?")
-    start = loc.get("start_line", "?")
-    end = loc.get("end_line", "?")
-    violated = finding.get("violated_invariant", "")
-    proof = finding.get("proof_command", "")
-
-    report_label = "General Review" if report_type == "general" else "Slop Review"
+    loc = finding.location
+    report_label = _report_label(report_type)
 
     lines = [
-        f"### [{report_label}][{tier}] {label}",
+        f"### [{report_label}][{finding.tier}] {finding.label}",
         "",
-        f"**Location:** `{loc_path}:{start}-{end}`",
+        f"**Location:** `{loc.path.as_posix()}:{loc.start_line}-{loc.end_line}`",
+        f"**Violated invariant:** {finding.violated_invariant}",
+        f"**Proof command:** `{finding.proof_command}`",
+        "",
+        "**Evidence:**",
     ]
-    if violated:
-        lines.append(f"**Violated invariant:** {violated}")
-    if proof:
-        lines.append(f"**Proof command:** `{proof}`")
+
+    for evidence in finding.evidence:
+        lo, hi = evidence.lines
+        lines.append(f"- `{evidence.path.as_posix()}:{lo}-{hi}` ({evidence.kind})")
     lines.append("")
 
-    evidence = finding.get("evidence", [])
-    if evidence:
-        lines.append("**Evidence:**")
-        for ev in evidence:
-            p = ev.get("path", "?")
-            lo, hi = (ev.get("lines") or ["?", "?"])[:2]
-            lines.append(f"- `{p}:{lo}-{hi}` ({ev.get('kind', '?')})")
+    if isinstance(finding, GeneralFinding):
+        lines.append(f"**Symptom:** {finding.symptom}")
+        lines.append("")
+        lines.append(f"**Consequence:** {finding.consequence}")
+        lines.append("")
+        lines.append(f"**Remedy:** {finding.remedy}")
         lines.append("")
 
-    # General narrative fields
-    if "symptom" in finding:
-        lines.append(f"**Symptom:** {finding['symptom']}")
+    if isinstance(finding, SlopFinding):
+        lines.append(f"**Pattern:** {finding.pattern}")
         lines.append("")
-    if "consequence" in finding:
-        lines.append(f"**Consequence:** {finding['consequence']}")
+        lines.append(f"**Why this matters:** {finding.why_it_matters}")
         lines.append("")
-    if "remedy" in finding:
-        lines.append(f"**Remedy:** {finding['remedy']}")
-        lines.append("")
-
-    # Slop narrative fields (compact)
-    if "pattern" in finding:
-        lines.append(f"**Pattern:** {finding['pattern']}")
-        lines.append("")
-        if "why_it_matters" in finding:
-            lines.append(f"**Why this matters:** {finding['why_it_matters']}")
-            lines.append("")
 
     lines.extend(
         [
@@ -954,15 +935,11 @@ def _render_finding_thread_body(
     return "\n".join(lines)
 
 
-def _render_checked_surfaces(surfaces: list[dict]) -> str:
-    if not surfaces:
-        return "_None._"
+def _render_checked_surfaces(surfaces: list[CheckedSurface]) -> str:
     rows = ["| Path | Reason | Lines | Result |", "|------|--------|-------|--------|"]
-    for s in surfaces:
-        lo, hi = (s.get("lines_read") or ["?", "?"])[:2]
-        rows.append(
-            f"| `{s['path']}` | {s.get('reason', '?')} | {lo}-{hi} | {s.get('result', '?')} |"
-        )
+    for surface in surfaces:
+        lo, hi = surface.lines_read
+        rows.append(f"| `{surface.path.as_posix()}` | {surface.reason} | {lo}-{hi} | {surface.result} |")
     return "\n".join(rows)
 
 

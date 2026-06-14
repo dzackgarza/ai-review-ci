@@ -22,7 +22,14 @@ fetch-context tool_name pr_number:
       --pr-number "{{pr_number}}"
 
 create-reviewer:
-    sudo useradd -m -s /bin/bash reviewer || true
+    if reviewer_entry="$(getent passwd reviewer)"; then \
+      IFS=: read -r name _ uid gid gecos home shell <<< "$reviewer_entry"; \
+      if [ "$name" != "reviewer" ]; then echo "expected reviewer account, got $name" >&2; exit 1; fi; \
+      if [ "$home" != "{{reviewer_home}}" ]; then echo "reviewer home mismatch: $home" >&2; exit 1; fi; \
+      if [ "$shell" != "/bin/bash" ]; then echo "reviewer shell mismatch: $shell" >&2; exit 1; fi; \
+    else \
+      sudo useradd -m -s /bin/bash reviewer; \
+    fi
     sudo rm -rf {{reviewer_home}}/repo
     sudo mkdir -p {{reviewer_home}}/repo
     sudo chown -R reviewer:reviewer {{reviewer_home}}

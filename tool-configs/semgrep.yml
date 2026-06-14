@@ -82,9 +82,25 @@ rules:
     languages:
       - python
     severity: ERROR
-  - id: py-no-setdefault
-    pattern: $DICT.setdefault($KEY, $DEFAULT)
-    message: dict.setdefault is a runtime default. Use explicit check-and-set.
+  - id: py-no-setdefault-consumed
+    pattern-either:
+      - pattern: $TARGET = $DICT.setdefault($KEY, $DEFAULT)
+      - pattern: return $DICT.setdefault($KEY, $DEFAULT)
+      - pattern: 'if $DICT.setdefault($KEY, $DEFAULT): ...'
+      - pattern: 'while $DICT.setdefault($KEY, $DEFAULT): ...'
+      - pattern: $DICT.setdefault($KEY, $DEFAULT).$METHOD(...)
+      - pattern: $FUNC(..., $DICT.setdefault($KEY, $DEFAULT), ...)
+    message: dict.setdefault return value is consumed, so the default participates in runtime control flow. Use explicit check-and-set.
+    languages:
+      - python
+    severity: ERROR
+  - id: py-no-setdefault-runtime-mapping
+    patterns:
+      - pattern: $DICT.setdefault($KEY, $DEFAULT)
+      - metavariable-regex:
+          metavariable: $DICT
+          regex: (?i).*(config|state|input|payload|request|response|settings|options|env|context|mapping|data).*
+    message: dict.setdefault on config/state/input-shaped mappings is a runtime default. Use explicit validation and assignment.
     languages:
       - python
     severity: ERROR

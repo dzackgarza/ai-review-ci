@@ -12,6 +12,31 @@ list_policies
 set_global_policy
 install_config
 doctor
+validate
+schema
+metadata
+finding_body
+
+# Pydantic invokes validators during model validation.
+class _PydanticValidatorCallbacks:
+    pass
+
+
+_PydanticValidatorCallbacks._ordered_lines
+_PydanticValidatorCallbacks._no_infra_categories
+_PydanticValidatorCallbacks._tier_category_consistency
+_PydanticValidatorCallbacks._no_empty_invariant
+_PydanticValidatorCallbacks._check_paths
+_PydanticValidatorCallbacks._check_git_paths
+_PydanticValidatorCallbacks._require_substantive_finding
+cls
+
+# argparse calls parser error overrides from parse_args failure paths.
+class _ArgparseOverrides:
+    pass
+
+
+_ArgparseOverrides.error
 
 # Category-spec abstract interface names from /home/dzack/research.
 class _SpecAbstractNames:

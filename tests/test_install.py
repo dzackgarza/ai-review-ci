@@ -20,9 +20,7 @@ def test_install_writes_trigger_workflows(tmp_path: pathlib.Path) -> None:
     assert sorted(p.name for p in wf.iterdir()) == sorted(TEMPLATES)
     for name in TEMPLATES:
         text = (wf / name).read_text()
-        assert (
-            "uses: dzackgarza/ai-review-ci/.github/workflows/_review.yml@main" in text
-        )
+        assert "uses: dzackgarza/ai-review-ci/.github/workflows/_review.yml@main" in text
     general = (wf / "review-general.yml").read_text()
     assert "report_type: general" in general
     assert "scope: repo" in general

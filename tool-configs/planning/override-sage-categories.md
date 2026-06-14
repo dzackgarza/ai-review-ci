@@ -67,18 +67,16 @@ The right model is: Sage’s category resolution machinery _knows_ what the ance
 methods are. Make the tooling ask Sage, not require every contributor to manually
 re-declare the relationship.
 
-## Option A: Suppress with `# type: ignore[misc]` (Fallback, Not Solution)
+## Decision Record: Per-Method `# type: ignore[misc]` Suppression Rejected
 
-Add `# type: ignore[misc]` to every `@override` line that mypy can’t verify.
+Per-method `# type: ignore[misc]` suppression is rejected for this problem.
+It would require about 300 suppression comments across more than 50 files while leaving
+mypy unaware of the Sage method surface needed for `self.base_ring()`,
+`self.is_finite()`, and the same category-provided methods.
 
-**Pros**: Preserves runtime `@override` checking.
-No structural change.
-
-**Cons**: ~300 comments across ~50+ files.
-Ongoing maintenance burden.
-Doesn’t solve `attr-defined` cascades (`self.base_ring()`, `self.is_finite()` etc.
-still produce mypy errors because mypy doesn’t know `self`’s method surface).
-This is noise suppression, not a fix.
+The owning implementation path is the Sage-aware mypy plugin described below, registered
+through the global mypy config. Individual suppression comments are not the policy
+mechanism for Sage category override verification.
 
 ## Option C: Mypy Plugin (The Correct Solution)
 
@@ -151,14 +149,14 @@ The plugin makes mypy enforce it at type-check time too.
 
 **Primary**: Option C — mypy plugin.
 This is the architecturally correct solution.
-It leverages Sage’s own category resolution rather than requiring manual inheritance
+It uses Sage’s own category resolution rather than requiring manual inheritance
 declarations that drift.
 Write it at `~/ai-review-ci/` as a reusable plugin, registered in the global mypy
 config.
 
-**Fallback for methods the plugin can’t resolve**: Option A — `# type: ignore[misc]` on
-individual methods where the plugin hits an edge case (unimportable category, circular
-dependency during type-check, etc.). This should be rare.
+**Unresolved methods**: A method the plugin cannot resolve remains a mypy failure.
+Fix the importability or category mapping that prevented resolution; do not replace the
+plugin obligation with per-method suppression comments.
 
 **Not acceptable**: Option B (explicit inheritance).
 Architecturally wrong for the reasons above.
