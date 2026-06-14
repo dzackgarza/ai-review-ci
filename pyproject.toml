@@ -6,6 +6,7 @@ requires-python = ">=3.14"
 dependencies = [
     "cyclopts",
     "pydantic>=2",
+    "sarif-pydantic>=0.6.2",
     "unidiff>=0.7.5",
 ]
 
