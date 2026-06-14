@@ -317,6 +317,281 @@ def test_deptry_accepts_declared_distributions_with_different_import_names(
     assert result.returncode == 0, result.stdout + result.stderr
 
 
+def test_deptry_accepts_first_party_imports_in_src_layout(
+    tmp_path: pathlib.Path,
+) -> None:
+    project = tmp_path / "first-party-project"
+    package_dir = project / "src" / "first_party_project"
+    package_dir.mkdir(parents=True)
+    (project / "pyproject.toml").write_text(
+        "\n".join(
+            [
+                "[project]",
+                'name = "first-party-project"',
+                'version = "0.1.0"',
+                'requires-python = ">=3.14"',
+                "dependencies = []",
+                "",
+            ]
+        )
+    )
+    (package_dir / "core.py").write_text("VALUE = 42\n")
+    (package_dir / "__init__.py").write_text(
+        "\n".join(
+            [
+                "from first_party_project.core import VALUE",
+                "",
+                "RESULT = VALUE",
+                "",
+            ]
+        )
+    )
+
+    result = subprocess.run(
+        [
+            "just",
+            "--justfile",
+            str(ROOT / "justfiles" / "python.just"),
+            "-d",
+            str(project),
+            "_deptry",
+        ],
+        cwd=project,
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+
+    assert result.returncode == 0, result.stdout + result.stderr
+
+
+def test_deptry_treats_pep723_script_dependencies_as_script_owned(
+    tmp_path: pathlib.Path,
+) -> None:
+    project = tmp_path / "pep723-script-project"
+    package_dir = project / "src" / "pep723_script_project"
+    script_dir = project / "tool-artifacts" / "scripts"
+    package_dir.mkdir(parents=True)
+    script_dir.mkdir(parents=True)
+    (project / "pyproject.toml").write_text(
+        "\n".join(
+            [
+                "[project]",
+                'name = "pep723-script-project"',
+                'version = "0.1.0"',
+                'requires-python = ">=3.14"',
+                "dependencies = []",
+                "",
+            ]
+        )
+    )
+    (package_dir / "__init__.py").write_text("VALUE = 42\n")
+    (script_dir / "make_slug.py").write_text(
+        "\n".join(
+            [
+                "# /// script",
+                '# dependencies = ["python-slugify>=8"]',
+                "# ///",
+                "",
+                "from slugify import slugify",
+                "",
+                'VALUE = slugify("A B")',
+                "",
+            ]
+        )
+    )
+
+    result = subprocess.run(
+        [
+            "just",
+            "--justfile",
+            str(ROOT / "justfiles" / "python.just"),
+            "-d",
+            str(project),
+            "_deptry",
+        ],
+        cwd=project,
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+
+    assert result.returncode == 0, result.stdout + result.stderr
+
+
+def test_mypy_recipe_fails_when_mypy_reports_type_errors(
+    tmp_path: pathlib.Path,
+) -> None:
+    project = tmp_path / "typed-failure-project"
+    package_dir = project / "src" / "typed_failure_project"
+    package_dir.mkdir(parents=True)
+    (project / "pyproject.toml").write_text(
+        "\n".join(
+            [
+                "[project]",
+                'name = "typed-failure-project"',
+                'version = "0.1.0"',
+                'requires-python = ">=3.14"',
+                "dependencies = []",
+                "",
+                "[build-system]",
+                'requires = ["setuptools"]',
+                'build-backend = "setuptools.build_meta"',
+                "",
+                "[tool.setuptools.packages.find]",
+                'where = ["src"]',
+                "",
+            ]
+        )
+    )
+    (package_dir / "__init__.py").write_text('VALUE: int = "not an int"\n')
+
+    result = subprocess.run(
+        [
+            "just",
+            "--justfile",
+            str(ROOT / "justfiles" / "python.just"),
+            "-d",
+            str(project),
+            "_mypy",
+        ],
+        cwd=project,
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+
+    assert result.returncode != 0, result.stdout + result.stderr
+
+
+def test_mypy_uses_declared_dependency_group_type_stubs(
+    tmp_path: pathlib.Path,
+) -> None:
+    project = tmp_path / "stub-project"
+    package_dir = project / "src" / "stub_project"
+    package_dir.mkdir(parents=True)
+    (project / "pyproject.toml").write_text(
+        "\n".join(
+            [
+                "[project]",
+                'name = "stub-project"',
+                'version = "0.1.0"',
+                'requires-python = ">=3.14"',
+                'dependencies = ["unidiff>=0.7.5"]',
+                "",
+                "[dependency-groups]",
+                'dev = ["types-unidiff>=0.7.0.20260518"]',
+                "",
+                "[build-system]",
+                'requires = ["setuptools"]',
+                'build-backend = "setuptools.build_meta"',
+                "",
+                "[tool.setuptools.packages.find]",
+                'where = ["src"]',
+                "",
+            ]
+        )
+    )
+    (package_dir / "__init__.py").write_text(
+        "\n".join(
+            [
+                "from unidiff import PatchSet",
+                "",
+                "",
+                "def parse_patch(text: str) -> int:",
+                "    return len(PatchSet(text.splitlines(keepends=True)))",
+                "",
+            ]
+        )
+    )
+
+    result = subprocess.run(
+        [
+            "just",
+            "--justfile",
+            str(ROOT / "justfiles" / "python.just"),
+            "-d",
+            str(project),
+            "_mypy",
+        ],
+        cwd=project,
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+
+    output = result.stdout + result.stderr
+    assert result.returncode == 0, output
+    assert "Library stubs not installed" not in output
+
+
+def test_mypy_uses_pep723_script_dependencies(
+    tmp_path: pathlib.Path,
+) -> None:
+    project = tmp_path / "script-typed-project"
+    package_dir = project / "src" / "script_typed_project"
+    script_dir = project / "tool-artifacts" / "scripts"
+    package_dir.mkdir(parents=True)
+    script_dir.mkdir(parents=True)
+    (project / "pyproject.toml").write_text(
+        "\n".join(
+            [
+                "[project]",
+                'name = "script-typed-project"',
+                'version = "0.1.0"',
+                'requires-python = ">=3.14"',
+                "dependencies = []",
+                "",
+                "[build-system]",
+                'requires = ["setuptools"]',
+                'build-backend = "setuptools.build_meta"',
+                "",
+                "[tool.setuptools.packages.find]",
+                'where = ["src"]',
+                "",
+            ]
+        )
+    )
+    (package_dir / "__init__.py").write_text("VALUE = 42\n")
+    (script_dir / "fetch_status.py").write_text(
+        "\n".join(
+            [
+                "# /// script",
+                '# dependencies = ["requests>=2", "types-requests>=2"]',
+                "# ///",
+                "",
+                "import requests",
+                "",
+                "",
+                "def fetch_status(url: str) -> int:",
+                "    response = requests.get(url, timeout=3)",
+                "    return response.status_code",
+                "",
+            ]
+        )
+    )
+
+    result = subprocess.run(
+        [
+            "just",
+            "--justfile",
+            str(ROOT / "justfiles" / "python.just"),
+            "-d",
+            str(project),
+            "_mypy",
+        ],
+        cwd=project,
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+
+    output = result.stdout + result.stderr
+    assert result.returncode == 0, output
+    assert "Cannot find implementation or library stub for module named \"requests\"" not in output
+    assert "Library stubs not installed for \"requests\"" not in output
+
+
 def test_rust_preflight_accepts_nested_cargo_manifest_and_routes_missing_tests(
     tmp_path: pathlib.Path,
 ) -> None:
