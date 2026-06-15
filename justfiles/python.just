@@ -337,13 +337,13 @@ _deptry: _install-tools
 		mapfile -t python_files <<<"$python_files_output"
 	fi
 	package_module_name_map="$(uv run --no-project python "{{artifacts}}/scripts/deptry_package_module_name_map.py" "{{configs}}/pyproject.toml")"
-	mapfile -t deptry_targets < <(uv run --no-project python "{{artifacts}}/scripts/python_qc_metadata.py" deptry-targets .)
-	deptry_args=("${deptry_targets[@]}" --package-module-name-map "$package_module_name_map")
+	deptry_args=(. --package-module-name-map "$package_module_name_map")
 	first_party_modules_output="$(uv run --no-project python "{{artifacts}}/scripts/python_qc_metadata.py" first-party-modules .)"
 	if [ -n "$first_party_modules_output" ]; then
 		mapfile -t first_party_modules <<<"$first_party_modules_output"
-		known_first_party="$(printf '%s,' "${first_party_modules[@]}")"
-		deptry_args+=(--known-first-party "${known_first_party%,}")
+		for first_party_module in "${first_party_modules[@]}"; do
+			deptry_args+=(--known-first-party "$first_party_module")
+		done
 	fi
 	pep723_scripts_output="$(uv run --no-project python "{{artifacts}}/scripts/python_qc_metadata.py" pep723-scripts "${python_files[@]}")"
 	if [ -n "$pep723_scripts_output" ]; then

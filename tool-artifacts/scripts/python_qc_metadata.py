@@ -167,13 +167,6 @@ def pep723_scripts(paths: list[str]) -> list[str]:
     return [path for path in paths if _has_pep723_script_metadata(Path(path))]
 
 
-def deptry_targets(project_root: Path) -> list[str]:
-    src_root = project_root / "src"
-    if src_root.exists() and any(src_root.rglob("*.py")):
-        return ["src"]
-    return ["."]
-
-
 def _print_lines(values: Iterable[str]) -> None:
     for value in values:
         print(value)
@@ -190,9 +183,6 @@ def main() -> None:
         _print_lines(dependency_group_requirements(Path(sys.argv[2])))
     elif command == "pep723-scripts":
         _print_lines(pep723_scripts(sys.argv[2:]))
-    elif command == "deptry-targets":
-        assert len(sys.argv) == 3
-        _print_lines(deptry_targets(Path(sys.argv[2])))
     else:
         raise AssertionError(f"unknown command: {command}")
 
