@@ -545,6 +545,89 @@ def test_deptry_accepts_first_party_imports_in_src_layout(
     assert result.returncode == 0, result.stdout + result.stderr
 
 
+def test_deptry_checks_non_src_python_files_in_src_layout(
+    tmp_path: pathlib.Path,
+) -> None:
+    project = tmp_path / "mixed-root-project"
+    package_dir = project / "src" / "mixed_root_project"
+    tools_dir = project / "tools"
+    package_dir.mkdir(parents=True)
+    tools_dir.mkdir()
+    (project / "pyproject.toml").write_text(
+        "\n".join(
+            [
+                "[project]",
+                'name = "mixed-root-project"',
+                'version = "0.1.0"',
+                'requires-python = ">=3.14"',
+                "dependencies = []",
+                "",
+            ]
+        )
+    )
+    (package_dir / "__init__.py").write_text("VALUE = 42\n")
+    (tools_dir / "uses_slugify.py").write_text(
+        "\n".join(
+            [
+                "from slugify import slugify",
+                "",
+                'VALUE = slugify("A B")',
+                "",
+            ]
+        )
+    )
+
+    result = run_just(ROOT / "justfiles" / "python.just", project, "_deptry")
+    output = result.stdout + result.stderr
+
+    assert result.returncode != 0, output
+    assert TRIAGE_MARKER in output
+
+
+def test_deptry_accepts_multiple_declared_first_party_modules(
+    tmp_path: pathlib.Path,
+) -> None:
+    project = tmp_path / "multi-first-party-project"
+    app_dir = project / "src" / "multi_first_party_project"
+    plugin_a_dir = project / "first_party" / "plugin_a"
+    plugin_b_dir = project / "first_party" / "plugin_b"
+    app_dir.mkdir(parents=True)
+    plugin_a_dir.mkdir(parents=True)
+    plugin_b_dir.mkdir(parents=True)
+    (project / "pyproject.toml").write_text(
+        "\n".join(
+            [
+                "[project]",
+                'name = "multi-first-party-project"',
+                'version = "0.1.0"',
+                'requires-python = ">=3.14"',
+                "dependencies = []",
+                "",
+                "[tool.hatch.build.targets.wheel]",
+                'packages = ["first_party/plugin_a", "first_party/plugin_b"]',
+                "",
+            ]
+        )
+    )
+    (app_dir / "__init__.py").write_text(
+        "\n".join(
+            [
+                "from plugin_a import VALUE_A",
+                "from plugin_b import VALUE_B",
+                "",
+                "RESULT = VALUE_A + VALUE_B",
+                "",
+            ]
+        )
+    )
+    (plugin_a_dir / "__init__.py").write_text("VALUE_A = 20\n")
+    (plugin_b_dir / "__init__.py").write_text("VALUE_B = 22\n")
+
+    result = run_just(ROOT / "justfiles" / "python.just", project, "_deptry")
+
+    assert result.returncode == 0, result.stdout + result.stderr
+
+
 def test_deptry_treats_pep723_script_dependencies_as_script_owned(
     tmp_path: pathlib.Path,
 ) -> None:
