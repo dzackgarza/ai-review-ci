@@ -1,6 +1,5 @@
 qc-type := "python"
 repo := justfile_directory()
-home := home_directory()
 global_hooks_source_dir := repo / "global-hooks"
 repo_hooks_source_dir := repo / "repo-hooks"
 scaffold_source_dir := repo / "scaffolds"
@@ -39,7 +38,11 @@ install target=".":
 install-global-hooks:
     #!/usr/bin/env bash
     set -euo pipefail
-    : "${GIT_GLOBAL_HOOKS_DIR:?GIT_GLOBAL_HOOKS_DIR must be set to the explicit global hooks directory}"
+    if [[ "${GIT_GLOBAL_HOOKS_DIR+x}" != x ]]; then
+        echo "ERROR: GIT_GLOBAL_HOOKS_DIR must be set to the global Git hooks directory."
+        exit 1
+    fi
+    global_hooks_dir="$GIT_GLOBAL_HOOKS_DIR"
 
     for hook in pre-commit pre-push; do
         source="{{ global_hooks_source_dir }}/$hook"
@@ -49,11 +52,11 @@ install-global-hooks:
         fi
     done
 
-    mkdir -p "$GIT_GLOBAL_HOOKS_DIR"
+    mkdir -p "$global_hooks_dir"
 
     for hook in pre-commit pre-push; do
         source="{{ global_hooks_source_dir }}/$hook"
-        target="$GIT_GLOBAL_HOOKS_DIR/$hook"
+        target="$global_hooks_dir/$hook"
         if [[ -e "$target" && ! -L "$target" ]]; then
             echo "Error: refusing to replace non-symlink global hook: $target"
             exit 1
@@ -61,7 +64,7 @@ install-global-hooks:
         ln -snf "$source" "$target"
     done
 
-    git config --global core.hooksPath "$GIT_GLOBAL_HOOKS_DIR"
+    git config --global core.hooksPath "$global_hooks_dir"
     git config --global core.hooksPath
 
 # Install repo-local hook symlinks into a target repository.

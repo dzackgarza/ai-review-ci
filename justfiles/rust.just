@@ -28,12 +28,20 @@ default:
 _rust-qc-files:
 	#!/usr/bin/env bash
 	set -euo pipefail
-	find . -name '*.rs' -not -path '*/node_modules/*' -not -path '*/.venv/*' -not -path '*/.pytest_cache/*' -not -path '*/.import_linter_cache/*' -not -path '*/__pycache__/*' -not -path '*/dist/*' -not -path '*/build/*' -not -path '*/coverage/*' -not -path '*/_ci-support/*' -not -path '*/codeql-db/*' -not -path '*/tool-artifacts/models/*' -not -path '*/@girs/*' -not -path '*/__stubs__/*' -not -path '*/external/*' -not -path '*/target/*' -not -path '*/*.bak/*' -not -path '*/.git/*' -not -path '*/.next/*' -not -path '*/.lake/*' -not -path '*/.worktrees/*' -not -path '*/vendor/*' -not -path '*/third_party/*' -not -path '*/venv/*'
+	exclude_args=()
+	while IFS= read -r dir; do
+		exclude_args+=(-not -path "*/$dir/*")
+	done < <(uv run {{artifacts}}/scripts/read_qc_excludes.py {{configs}}/qc-excludes.toml)
+	find . -name '*.rs' "${exclude_args[@]}"
 
 _rust-cargo-manifests:
 	#!/usr/bin/env bash
 	set -euo pipefail
-	find . -name 'Cargo.toml' -not -path '*/node_modules/*' -not -path '*/.venv/*' -not -path '*/__pycache__/*' -not -path '*/dist/*' -not -path '*/build/*' -not -path '*/coverage/*' -not -path '*/_ci-support/*' -not -path '*/codeql-db/*' -not -path '*/@girs/*' -not -path '*/__stubs__/*' -not -path '*/external/*' -not -path '*/target/*' -not -path '*/*.bak/*' -not -path '*/.git/*' -not -path '*/.next/*' -not -path '*/.lake/*' -not -path '*/.worktrees/*' -not -path '*/vendor/*' -not -path '*/third_party/*' -not -path '*/venv/*' | sort
+	exclude_args=()
+	while IFS= read -r dir; do
+		exclude_args+=(-not -path "*/$dir/*")
+	done < <(uv run {{artifacts}}/scripts/read_qc_excludes.py {{configs}}/qc-excludes.toml)
+	find . -name 'Cargo.toml' "${exclude_args[@]}" | sort
 
 _check-rust-project:
 	#!/usr/bin/env bash

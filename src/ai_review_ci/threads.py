@@ -139,9 +139,7 @@ def pick_anchor(finding: JsonDict, commentable: dict[str, set[int]]) -> int | No
     return min(lines)
 
 
-def render_thread_body(
-    finding: JsonDict, review_label: str, fp: str, possible_duplicate: bool
-) -> str:
+def _thread_body_lines(finding: JsonDict, review_label: str, fp: str) -> list[str]:
     loc = finding["location"]
     lines = [
         f"### [{review_label}][{finding['tier']}] {finding['label']}",
@@ -151,16 +149,6 @@ def render_thread_body(
         f"**Violated invariant:** {finding['violated_invariant']}",
         f"**Proof:** `{finding['proof_command']}`",
     ]
-    if possible_duplicate:
-        lines.extend(
-            [
-                "",
-                "**Possible duplicate disposition required:** a prior PR thread "
-                "has this category/path fingerprint. Compare invariant, source, "
-                "consequence, and evidence before resolving; do not suppress this "
-                "finding by similarity alone.",
-            ]
-        )
     for key, title in [
         ("symptom", "Symptom"),
         ("source", "Source"),
@@ -172,6 +160,24 @@ def render_thread_body(
             lines.append(f"**{title}:** {finding[key]}")
     ev_parts = [f"`{e['path']}:{e['lines'][0]}-{e['lines'][1]}` ({e['kind']})" for e in finding["evidence"]]
     lines.append(f"**Evidence:** {', '.join(ev_parts)}")
+    return lines
+
+
+def render_thread_body(finding: JsonDict, review_label: str, fp: str) -> str:
+    return "\n".join(_thread_body_lines(finding, review_label, fp))
+
+
+def render_duplicate_thread_body(finding: JsonDict, review_label: str, fp: str) -> str:
+    lines = _thread_body_lines(finding, review_label, fp)
+    lines.extend(
+        [
+            "",
+            "**Possible duplicate disposition required:** a prior PR thread "
+            "has this category/path fingerprint. Compare invariant, source, "
+            "consequence, and evidence before resolving; do not suppress this "
+            "finding by similarity alone.",
+        ]
+    )
     return "\n".join(lines)
 
 
@@ -220,9 +226,10 @@ def partition_findings(
     for finding in findings:
         loc = finding["location"]
         fp = finding_fingerprint(finding["category"], str(loc["path"]))
-        possible_duplicate = fp in seen
-        if possible_duplicate:
+        thread_body = render_thread_body(finding, review_label, fp)
+        if fp in seen:
             possible_duplicates += 1
+            thread_body = render_duplicate_thread_body(finding, review_label, fp)
         seen.add(fp)
         anchor = pick_anchor(finding, commentable)
         if anchor is None:
@@ -233,9 +240,7 @@ def partition_findings(
                 "path": str(loc["path"]),
                 "line": anchor,
                 "side": "RIGHT",
-                "body": render_thread_body(
-                    finding, review_label, fp, possible_duplicate
-                ),
+                "body": thread_body,
             }
         )
     return comments, off_diff, possible_duplicates
@@ -258,9 +263,7 @@ def post_threads(artifact: Path, diff: Path, repo: str, pr_number: int) -> None:
     commentable = parse_diff(diff.read_text())
     seen = existing_fingerprints(repo, pr_number)
 
-    comments, off_diff, possible_duplicates = partition_findings(
-        findings, commentable, seen, review_label
-    )
+    comments, off_diff, possible_duplicates = partition_findings(findings, commentable, seen, review_label)
 
     if not comments and not off_diff:
         print(f"All {len(findings)} finding(s) already have threads on PR #{pr_number}; nothing to post.")
@@ -268,9 +271,7 @@ def post_threads(artifact: Path, diff: Path, repo: str, pr_number: int) -> None:
 
     payload = {
         "event": "COMMENT",
-        "body": render_review_body(
-            review_label, findings, len(comments), possible_duplicates, off_diff
-        ),
+        "body": render_review_body(review_label, findings, len(comments), possible_duplicates, off_diff),
         "comments": comments,
     }
     _gh_json(
@@ -284,7 +285,4 @@ def post_threads(artifact: Path, diff: Path, repo: str, pr_number: int) -> None:
         ],
         body=payload,
     )
-    print(
-        f"Posted review to PR #{pr_number}: {len(comments)} thread(s), "
-        f"{possible_duplicates} possible duplicate(s), {len(off_diff)} off-diff."
-    )
+    print(f"Posted review to PR #{pr_number}: {len(comments)} thread(s), {possible_duplicates} possible duplicate(s), {len(off_diff)} off-diff.")

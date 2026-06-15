@@ -1,582 +1,606 @@
 """Shared Vulture whitelist for framework-driven false positives."""
 
+from typing import Final
+
 # Sage parents read this class attribute to bind their element implementation.
-Element
+Element: Final = object()
 
 # Pydantic reads this class attribute during model construction.
-model_config
+model_config: Final = object()
 
 # Cyclopts registers default commands through decorators and dispatches them indirectly.
-compile_agent
-list_policies
-set_global_policy
-install_config
-doctor
-validate
-schema
-metadata
-finding_body
+compile_agent: Final = object()
+list_policies: Final = object()
+set_global_policy: Final = object()
+install_config: Final = object()
+doctor: Final = object()
+validate: Final = object()
+schema: Final = object()
+metadata: Final = object()
+finding_body: Final = object()
 
-# Pydantic invokes validators during model validation.
+_FRAMEWORK_NAMES: Final[tuple[object, ...]] = (
+    Element,
+    model_config,
+    compile_agent,
+    list_policies,
+    set_global_policy,
+    install_config,
+    doctor,
+    validate,
+    schema,
+    metadata,
+    finding_body,
+)
+
+
 class _PydanticValidatorCallbacks:
-    pass
+    def __getattr__(self, name: str) -> object:
+        return name
 
 
-_PydanticValidatorCallbacks._ordered_lines
-_PydanticValidatorCallbacks._no_infra_categories
-_PydanticValidatorCallbacks._tier_category_consistency
-_PydanticValidatorCallbacks._no_empty_invariant
-_PydanticValidatorCallbacks._check_paths
-_PydanticValidatorCallbacks._check_git_paths
-_PydanticValidatorCallbacks._require_substantive_finding
-cls
+_pydantic: Final = _PydanticValidatorCallbacks()
 
-# argparse calls parser error overrides from parse_args failure paths.
+_PYDANTIC_VALIDATOR_NAMES: Final[tuple[object, ...]] = (
+    _pydantic._ordered_lines,
+    _pydantic._no_infra_categories,
+    _pydantic._tier_category_consistency,
+    _pydantic._no_empty_invariant,
+    _pydantic._check_paths,
+    _pydantic._check_git_paths,
+    _pydantic._require_substantive_finding,
+    _pydantic.cls,
+)
+
+
 class _ArgparseOverrides:
-    pass
+    def __getattr__(self, name: str) -> object:
+        return name
 
 
-_ArgparseOverrides.error
+_argparse: Final = _ArgparseOverrides()
+
+_ARGPARSE_NAMES: Final[tuple[object, ...]] = (_argparse.error,)
+
+
+class _SpecAbstractNames:
+    def __getattr__(self, name: str) -> object:
+        return name
+
+
+_spec: Final = _SpecAbstractNames()
 
 # Category-spec abstract interface names from /home/dzack/research.
-class _SpecAbstractNames:
-    pass
-
-
-_SpecAbstractNames.absolute_degree
-_SpecAbstractNames.absolute_discriminant
-_SpecAbstractNames.absolute_e
-_SpecAbstractNames.absolute_f
-_SpecAbstractNames.absolute_field
-_SpecAbstractNames.absolute_inertia_degree
-_SpecAbstractNames.absolute_ramification_index
-_SpecAbstractNames.absprec
-_SpecAbstractNames.additional_structure
-_SpecAbstractNames.algebra
-_SpecAbstractNames.AlgebraicallyClosedFields
-_SpecAbstractNames.Alternating
-_SpecAbstractNames.alternating_algebra
-_SpecAbstractNames.alternating_form
-_SpecAbstractNames.ArchimedeanGlobalFields
-_SpecAbstractNames.associated_bilinear_form
-_SpecAbstractNames.associated_bilinear_forms
-_SpecAbstractNames.associated_quadratic_form
-_SpecAbstractNames.associated_quadratic_forms
-_SpecAbstractNames.as_subobject_of_self
-_SpecAbstractNames.automorphisms
-_SpecAbstractNames.ball
-_SpecAbstractNames._base
-_SpecAbstractNames._base_category_class_and_axiom
-_SpecAbstractNames.base_change
-_SpecAbstractNames.base_module
-_SpecAbstractNames.bases
-_SpecAbstractNames.BKZ
-_SpecAbstractNames.boundary
-_SpecAbstractNames.breadth_first_search_iterator
-_SpecAbstractNames.brown_invariant
-_SpecAbstractNames._cardinality_from_iterator
-_SpecAbstractNames.cell_module
-_SpecAbstractNames.center
-_SpecAbstractNames.center_basis
-_SpecAbstractNames.change
-_SpecAbstractNames.change_var
-_SpecAbstractNames.characteristic_polynomial
-_SpecAbstractNames.charpoly
-_SpecAbstractNames.class_number
-_SpecAbstractNames.closure
-_SpecAbstractNames.coeffs
-_SpecAbstractNames.coimage
-_SpecAbstractNames.cokernel_basis_indices
-_SpecAbstractNames.column_space
-_SpecAbstractNames.common_polynomial
-_SpecAbstractNames.CompleteRing
-_SpecAbstractNames.CompleteRings
-_SpecAbstractNames.completion
-_SpecAbstractNames.complex_embeddings
-_SpecAbstractNames.complex_field
-_SpecAbstractNames.ComplexFields
-_SpecAbstractNames.composite
-_SpecAbstractNames.conductor
-_SpecAbstractNames.construction
-_SpecAbstractNames.contains
-_SpecAbstractNames.copy
-_SpecAbstractNames.cyclic_submodule
-_SpecAbstractNames.cyclic_vector
-_SpecAbstractNames.CyclotomicFields
-_SpecAbstractNames.cyclotomic_polynomial
-_SpecAbstractNames.Dedekind
-_SpecAbstractNames.default_basis
-_SpecAbstractNames.default_interval_prec
-_SpecAbstractNames.default_prec
-_SpecAbstractNames.defining_polynomial
-_SpecAbstractNames.depth_first_search_iterator
-_SpecAbstractNames.derivations_basis
-_SpecAbstractNames.determinant_module
-_SpecAbstractNames.different
-_SpecAbstractNames.dims
-_SpecAbstractNames.DiscretelyValued
-_SpecAbstractNames.dist
-_SpecAbstractNames.Division
-_SpecAbstractNames.dot_product
-_SpecAbstractNames.dual_basis
-_SpecAbstractNames.DualModule
-_SpecAbstractNames.echelon_basis
-_SpecAbstractNames.echelon_basis_matrix
-_SpecAbstractNames.echelon_form
-_SpecAbstractNames.echelonized_basis
-_SpecAbstractNames._element_constructor_
-_SpecAbstractNames.element_from_vector
-_SpecAbstractNames.elements_of_depth_iterator
-_SpecAbstractNames.Euclidean
-_SpecAbstractNames.exact_field
-_SpecAbstractNames.exact_ring
-_SpecAbstractNames.ext
-_SpecAbstractNames.extend_to_fraction_field
-_SpecAbstractNames.exterior_power
-_SpecAbstractNames.extra_super_categories
-_SpecAbstractNames.facade_for
-_SpecAbstractNames.factored_order
-_SpecAbstractNames.Filtered
-_SpecAbstractNames.FinitelyPresentedModulesOverPID
-_SpecAbstractNames.FiniteRings
-_SpecAbstractNames.first
-_SpecAbstractNames.form_degree
-_SpecAbstractNames.fraction_field
-_SpecAbstractNames.free_part
-_SpecAbstractNames.free_rank
-_SpecAbstractNames.free_resolution
-_SpecAbstractNames.frobenius_endomorphism
-_SpecAbstractNames.from_dict
-_SpecAbstractNames.from_function
-_SpecAbstractNames.from_images
-_SpecAbstractNames.from_invariant_factors
-_SpecAbstractNames.from_matrix
-_SpecAbstractNames.from_sage_ideal
-_SpecAbstractNames.from_vector
-_SpecAbstractNames.galois_closure
-_SpecAbstractNames.galois_group
-_SpecAbstractNames.Gcd
-_SpecAbstractNames.generator_degrees
-_SpecAbstractNames.gens_reduced
-_SpecAbstractNames.graded_component
-_SpecAbstractNames.graded_component_iterator
-_SpecAbstractNames.ground_ring
-_SpecAbstractNames.ground_ring_of_tower
-_SpecAbstractNames.has_canonical_map_to
-_SpecAbstractNames.has_pth_root
-_SpecAbstractNames.has_root_of_unity
-_SpecAbstractNames.has_standard_involution
-_SpecAbstractNames.hermite_form
-_SpecAbstractNames.hochschild_complex
-_SpecAbstractNames.ideal_as_submodule
-_SpecAbstractNames.idempotent_lift
-_SpecAbstractNames.index_in
-_SpecAbstractNames.inertia_degree
-_SpecAbstractNames.inertia_subring
-_SpecAbstractNames.inf
-_SpecAbstractNames.IntegerModRings
-_SpecAbstractNames.integer_ring
-_SpecAbstractNames.integral_closure
-_SpecAbstractNames.IntegrallyClosed
-_SpecAbstractNames.interior
-_SpecAbstractNames.interval
-_SpecAbstractNames.invariant_module
-_SpecAbstractNames.invertible_ideal_as_projective_submodule
-_SpecAbstractNames.is_automorphism
-_SpecAbstractNames.is_aut_set
-_SpecAbstractNames.is_capped_absolute
-_SpecAbstractNames.is_capped_relative
-_SpecAbstractNames.is_closed
-_SpecAbstractNames.is_compact
-_SpecAbstractNames.is_connected
-_SpecAbstractNames.is_cyclotomic
-_SpecAbstractNames.is_dense
-_SpecAbstractNames.is_empty
-_SpecAbstractNames.is_endomorphism
-_SpecAbstractNames.is_exact
-_SpecAbstractNames.is_fixed_mod
-_SpecAbstractNames.is_floating_point
-_SpecAbstractNames.is_idempotent
-_SpecAbstractNames.is_invertible
-_SpecAbstractNames.is_irreducible
-_SpecAbstractNames.is_isomorphic_to
-_SpecAbstractNames.is_isomorphism
-_SpecAbstractNames.is_lattice_prec
-_SpecAbstractNames.is_laurent_series_ring
-_SpecAbstractNames.is_maximal
-_SpecAbstractNames.is_nilpotent
-_SpecAbstractNames.IsomorphicObjects
-_SpecAbstractNames.is_open
-_SpecAbstractNames.is_over_a_ring
-_SpecAbstractNames.is_parent_of
-_SpecAbstractNames.is_polynomial_ring
-_SpecAbstractNames.is_power_series_ring
-_SpecAbstractNames.is_primary
-_SpecAbstractNames.is_principal
-_SpecAbstractNames.is_puiseux_series_ring
-_SpecAbstractNames.is_quadratic
-_SpecAbstractNames.is_rational
-_SpecAbstractNames.is_relaxed
-_SpecAbstractNames.is_square
-_SpecAbstractNames.is_submodule_of
-_SpecAbstractNames.is_trivial
-_SpecAbstractNames.iter_of_elements_coeff
-_SpecAbstractNames.l
-_SpecAbstractNames.latex_name
-_SpecAbstractNames.LaurentSeriesOver
-_SpecAbstractNames.laurent_series_ring
-_SpecAbstractNames.laurent_series_ring_as_module
-_SpecAbstractNames.LaurentSeriesRings
-_SpecAbstractNames.leading_support
-_SpecAbstractNames.lift_from_product
-_SpecAbstractNames.lift_to_precision
-_SpecAbstractNames.linear_combination
-_SpecAbstractNames.linear_combination_of_basis
-_SpecAbstractNames.linear_dependence
-_SpecAbstractNames._list_from_iterator
-_SpecAbstractNames.LLL
-_SpecAbstractNames._lmul_
-_SpecAbstractNames.LocalRing
-_SpecAbstractNames.LocalRings
-_SpecAbstractNames._make_named_class_key
-_SpecAbstractNames.map
-_SpecAbstractNames.MatrixAlgebras
-_SpecAbstractNames.matrix_ring_as_module
-_SpecAbstractNames.matrix_space
-_SpecAbstractNames.max
-_SpecAbstractNames.maximal_ideal
-_SpecAbstractNames.maximal_order
-_SpecAbstractNames.maximal_unramified_subextension
-_SpecAbstractNames.measure
-_SpecAbstractNames.metric
-_SpecAbstractNames.metric_function
-_SpecAbstractNames.middle_field
-_SpecAbstractNames.minpoly
-_SpecAbstractNames.modify_module_structure
-_SpecAbstractNames.module_generators
-_SpecAbstractNames.module_morphism
-_SpecAbstractNames.module_structure
-_SpecAbstractNames.monics
-_SpecAbstractNames.monomial
-_SpecAbstractNames.monomial_coefficients
-_SpecAbstractNames.monomials_of_degree
-_SpecAbstractNames._mul_
-_SpecAbstractNames.multiplicative_generator
-_SpecAbstractNames.multiplicative_order
-_SpecAbstractNames.multiplicity
-_SpecAbstractNames.NamedSets
-_SpecAbstractNames.natural_morphism
-_SpecAbstractNames.natural_pairing
-_SpecAbstractNames.Noetherian
-_SpecAbstractNames.NonArchimedeanGlobalFields
-_SpecAbstractNames.Nondegenerate
-_SpecAbstractNames.nth_root
-_SpecAbstractNames.object
-_SpecAbstractNames.optimized
-_SpecAbstractNames.OreQuotientModule
-_SpecAbstractNames.OverCommutativeRing
-_SpecAbstractNames.OverCompleteRing
-_SpecAbstractNames.OverLocalRing
-_SpecAbstractNames.parameter_name
-_SpecAbstractNames.partition_gen
-_SpecAbstractNames.partition_set
-_SpecAbstractNames.peirce_decomposition
-_SpecAbstractNames.places
-_SpecAbstractNames.poly
-_SpecAbstractNames.PolynomialOver
-_SpecAbstractNames.polynomial_ring_as_module
-_SpecAbstractNames.PolynomialRings
-_SpecAbstractNames.polynomial_root
-_SpecAbstractNames.post_compose
-_SpecAbstractNames.power_basis
-_SpecAbstractNames.powers
-_SpecAbstractNames.PowerSeriesOver
-_SpecAbstractNames.power_series_ring
-_SpecAbstractNames.power_series_ring_as_module
-_SpecAbstractNames.PowerSeriesRings
-_SpecAbstractNames.precision
-_SpecAbstractNames.pre_compose
-_SpecAbstractNames.pre_image
-_SpecAbstractNames.prime_above
-_SpecAbstractNames.primes_above
-_SpecAbstractNames.primitive_element
-_SpecAbstractNames.PrincipalIdeal
-_SpecAbstractNames.print_mode
-_SpecAbstractNames.ProjectiveModule
-_SpecAbstractNames.proof
-_SpecAbstractNames.pseudomorphism
-_SpecAbstractNames.PuiseuxSeriesOver
-_SpecAbstractNames.puiseux_series_ring_as_module
-_SpecAbstractNames.PuiseuxSeriesRings
-_SpecAbstractNames.QuadraticNumberFields
-_SpecAbstractNames.QuotientModulesWithOrderedGeneratingSet
-_SpecAbstractNames.quotient_of_free_modules
-_SpecAbstractNames.QuotientsOf
-_SpecAbstractNames.radical
-_SpecAbstractNames.radical_basis
-_SpecAbstractNames.radius
-_SpecAbstractNames.ramification_index
-_SpecAbstractNames.random_element
-_SpecAbstractNames.real_embeddings
-_SpecAbstractNames.real_field
-_SpecAbstractNames.RealFields
-_SpecAbstractNames.reduced_basis
-_SpecAbstractNames.ReducedRings
-_SpecAbstractNames.regulator
-_SpecAbstractNames.relations
-_SpecAbstractNames.relative_degree
-_SpecAbstractNames.relative_e
-_SpecAbstractNames.relative_f
-_SpecAbstractNames.relative_inertia_degree
-_SpecAbstractNames.relative_ramification_index
-_SpecAbstractNames.representation_matrix
-_SpecAbstractNames.RepresentationModules
-_SpecAbstractNames.residue_characteristic
-_SpecAbstractNames.residue_field
-_SpecAbstractNames.residue_ring
-_SpecAbstractNames.residue_system
-_SpecAbstractNames.retract
-_SpecAbstractNames.ring_as_rank_one_module
-_SpecAbstractNames.RingMorphism
-_SpecAbstractNames.RMod
-_SpecAbstractNames.RModAutset
-_SpecAbstractNames.RModAutsetElement
-_SpecAbstractNames.RModDualElement
-_SpecAbstractNames.RModEndset
-_SpecAbstractNames.RModEndsetElement
-_SpecAbstractNames.RModHomset
-_SpecAbstractNames.RModHomsetElement
-_SpecAbstractNames._rmul_
-_SpecAbstractNames.roots_of_unity
-_SpecAbstractNames.row_space
-_SpecAbstractNames.scientific_notation
-_SpecAbstractNames.S_class_group
-_SpecAbstractNames.section
-_SpecAbstractNames.semigroup
-_SpecAbstractNames.semisimple_quotient
-_SpecAbstractNames.set_category
-_SpecAbstractNames.set_default_basis
-_SpecAbstractNames.SetMap
-_SpecAbstractNames.shortest_vector
-_SpecAbstractNames.side
-_SpecAbstractNames.sigma
-_SpecAbstractNames.some_elements
-_SpecAbstractNames.sparse
-_SpecAbstractNames.special_orthogonal_group
-_SpecAbstractNames.sqrt
-_SpecAbstractNames.SquareParentMethods
-_SpecAbstractNames.stable_orthogonal_group
-_SpecAbstractNames.stable_special_orthogonal_group
-_SpecAbstractNames.standard_basis
-_SpecAbstractNames.status
-_SpecAbstractNames.structure_codomain
-_SpecAbstractNames.structure_domain
-_SpecAbstractNames.structure_map
-_SpecAbstractNames.subalgebra
-_SpecAbstractNames.SubcategoryMethods
-_SpecAbstractNames.subfield
-_SpecAbstractNames.subfields_of_degree
-_SpecAbstractNames.SubModules
-_SpecAbstractNames.SubmodulesWithOrderedGeneratingSet
-_SpecAbstractNames.Subquotients
-_SpecAbstractNames.SubringsOf
-_SpecAbstractNames.subsets
-_SpecAbstractNames.subsets_lattice
-_SpecAbstractNames.subspace
-_SpecAbstractNames.sum_of_monomials
-_SpecAbstractNames.S_units
-_SpecAbstractNames.sup
-_SpecAbstractNames.Super
-_SpecAbstractNames.support
-_SpecAbstractNames.suspension
-_SpecAbstractNames.Symmetric
-_SpecAbstractNames.symmetric_algebra
-_SpecAbstractNames._sympy_
-_SpecAbstractNames.teichmuller
-_SpecAbstractNames.teichmuller_system
-_SpecAbstractNames.tensor_algebra
-_SpecAbstractNames.tensor_module
-_SpecAbstractNames.TensorProductRModule
-_SpecAbstractNames.tensor_square
-_SpecAbstractNames.to_dict
-_SpecAbstractNames.to_function
-_SpecAbstractNames.to_list
-_SpecAbstractNames.Torsionfree
-_SpecAbstractNames.torsion_part
-_SpecAbstractNames.torsion_submodule
-_SpecAbstractNames.to_tuple
-_SpecAbstractNames.trace
-_SpecAbstractNames.uniformizer_pow
-_SpecAbstractNames.UniqueFactorization
-_SpecAbstractNames.unit_gens
-_SpecAbstractNames.unit_group
-_SpecAbstractNames.user_basis
-_SpecAbstractNames.uses_ambient_inner_product
-_SpecAbstractNames.valuation
-_SpecAbstractNames.ValuedRings
-_SpecAbstractNames.var
-_SpecAbstractNames.vectors
-_SpecAbstractNames.voronoi_cell
-_SpecAbstractNames.weil_polynomials
-_SpecAbstractNames.WithValuation
-_SpecAbstractNames.xgcd
-
-# --- src/lattices/ abstract interface stubs and Sage category patterns ---
-_SpecAbstractNames.arithmetic_genus
-_SpecAbstractNames.as_lattice
-_SpecAbstractNames.associated_bilinear_module
-_SpecAbstractNames.associated_bilinear_object
-_SpecAbstractNames.base_change_to
-_SpecAbstractNames.base_locus
-_SpecAbstractNames.base_variety
-_SpecAbstractNames.blowup
-_SpecAbstractNames.Blowup
-_SpecAbstractNames.branch_divisor
-_SpecAbstractNames.BranchedCover
-_SpecAbstractNames._call_
-_SpecAbstractNames.coble_lattice
-_SpecAbstractNames.CobleSurface
-_SpecAbstractNames.codimension
-_SpecAbstractNames._compute_real_spinor_norm_sign
-_SpecAbstractNames.coordinate_ring
-_SpecAbstractNames.defining_divisor
-_SpecAbstractNames.defining_ideal
-_SpecAbstractNames.DiscriminantForms
-_SpecAbstractNames.enriques_involution
-_SpecAbstractNames.EnriquesSurface
-_SpecAbstractNames.euler_characteristic
-_SpecAbstractNames.Even
-_SpecAbstractNames.EvenLattices
-_SpecAbstractNames.exceptional_divisor
-_SpecAbstractNames.exceptional_divisors
-_SpecAbstractNames.fiber
-_SpecAbstractNames._find_finite_black_box_witness
-_SpecAbstractNames.from_branch_sextic
-_SpecAbstractNames.from_divisor
-_SpecAbstractNames.from_meromorphic_function
-_SpecAbstractNames.from_nodes
-_SpecAbstractNames.from_sextic
-_SpecAbstractNames.geometric_genus
-_SpecAbstractNames.hilbert_polynomial
-_SpecAbstractNames.hodge_number
-_SpecAbstractNames.holomorphic_euler_characteristic
-_SpecAbstractNames._Hom_
-_SpecAbstractNames.inclusion_morphism
-_SpecAbstractNames.index_of_speciality
-_SpecAbstractNames.is_abelian_variety
-_SpecAbstractNames.is_affine
-_SpecAbstractNames.is_ample
-_SpecAbstractNames.is_big
-_SpecAbstractNames.is_calabi_yau
-_SpecAbstractNames.is_canonical_divisor
-_SpecAbstractNames.is_cartier_divisor
-_SpecAbstractNames.is_complete
-_SpecAbstractNames.is_complete_intersection
-_SpecAbstractNames.is_effective
-_SpecAbstractNames.is_general_type
-_SpecAbstractNames.is_indefinite
-_SpecAbstractNames.is_isometry
-_SpecAbstractNames.is_linearly_equivalent_to
-_SpecAbstractNames.is_nef
-_SpecAbstractNames.is_nodal
-_SpecAbstractNames.is_nondegenerate
-_SpecAbstractNames.is_normal
-_SpecAbstractNames.is_numerically_effective
-_SpecAbstractNames.is_odd
-_SpecAbstractNames.isotropic_elements
-_SpecAbstractNames.isotropic_planes_are_equivalent
-_SpecAbstractNames.is_pencil
-_SpecAbstractNames.is_polarization
-_SpecAbstractNames.is_proper
-_SpecAbstractNames.is_quasi_projective
-_SpecAbstractNames.is_regular
-_SpecAbstractNames.is_root
-_SpecAbstractNames.is_smooth
-_SpecAbstractNames.is_snc
-_SpecAbstractNames.is_unimodular
-_SpecAbstractNames.is_unirational
-_SpecAbstractNames.is_very_ample
-_SpecAbstractNames.is_weyl_divisor
-_SpecAbstractNames.jordan_decomposition
-_SpecAbstractNames.k3_cover
-_SpecAbstractNames.kodaira_dimension
-_SpecAbstractNames.LinearSystem
-_SpecAbstractNames.nodes
-_SpecAbstractNames.normalization
-_SpecAbstractNames.ord_D
-_SpecAbstractNames.oscar_centralizer_data
-_SpecAbstractNames.picard_group
-_SpecAbstractNames.point
-_SpecAbstractNames.points
-_SpecAbstractNames._presented_bilinear_module
-_SpecAbstractNames.pullback
-_SpecAbstractNames.pushforward
-_SpecAbstractNames.quadratic_gram_matrix
-_SpecAbstractNames.ramification_divisor
-_SpecAbstractNames.rational_span
-_SpecAbstractNames._repr_
-_SpecAbstractNames.resolution
-_SpecAbstractNames.riemann_roch_space_dimension
-_SpecAbstractNames.RootLattices
-_SpecAbstractNames._sage_module
-_SpecAbstractNames.satisfies_riemann_hurwitz
-_SpecAbstractNames.semisimple_monodromy_matrix
-_SpecAbstractNames.sextic
-_SpecAbstractNames.singular_locus
-_SpecAbstractNames.smooth_locus
-_SpecAbstractNames.specialization
-_SpecAbstractNames.summands
-_SpecAbstractNames.symbolic_form
-_SpecAbstractNames.to_coherent_sheaf
-_SpecAbstractNames.to_coordinates
-_SpecAbstractNames.to_quadratic_module
-_SpecAbstractNames.underlying_curve
-_SpecAbstractNames.Unimodular
-_SpecAbstractNames.UnimodularLattices
-_SpecAbstractNames._validate_integral
-_SpecAbstractNames._validate_lattice
-_SpecAbstractNames._validate_rational_lattice
-_SpecAbstractNames.variable_names
-_SpecAbstractNames.WithQuadraticForm
-_SpecAbstractNames.is_Q_cartier_divisor
-_SpecAbstractNames.is_étale
-
-# --- plans/category_specs/sets/ abstract interface stubs ---
-_SpecAbstractNames.Metric
-_SpecAbstractNames.union
-_SpecAbstractNames.symmetric_difference
-_SpecAbstractNames.unrank
-
-# --- tests/conftest.py pytest hooks (called by pytest framework) ---
-_SpecAbstractNames.pytest_addoption
-_SpecAbstractNames.pytest_configure
-_SpecAbstractNames.pytest_sessionstart
-_SpecAbstractNames.pytest_collection_finish
-_SpecAbstractNames.pytest_deselected
-_SpecAbstractNames.pytest_collection_modifyitems
-_SpecAbstractNames.pytest_runtest_logreport
-_SpecAbstractNames.pytest_sessionfinish
-_SpecAbstractNames.pytest_terminal_summary
-
-# --- tests/ helper functions referenced indirectly ---
-_SpecAbstractNames._dawes_example_26_barpsi
-_SpecAbstractNames._dawes_example_26_barpsi_reduced
-_SpecAbstractNames._discriminant_hom_from_matrix
-_SpecAbstractNames._native_t_en
-_SpecAbstractNames._native_k3
-
-# --- theory/spec_backups abstract interface stubs ---
-_SpecAbstractNames.orthogonal_complement_of_image
-_SpecAbstractNames.has_isomorphic_discriminant_group_to
-_SpecAbstractNames.has_isomorphic_discriminant_form_to
-_SpecAbstractNames.stabilizer_of_vector
-_SpecAbstractNames.centralizer_of_involution
-
-# --- plans/category_specs/modules/named.py abstract stubs ---
-_SpecAbstractNames.ambient_vector_space
-_SpecAbstractNames.cover
-_SpecAbstractNames.free_cover
-_SpecAbstractNames.free_relations
-_SpecAbstractNames.is_subspace
-_SpecAbstractNames.lift_map
-_SpecAbstractNames.quotient_map
+_SPEC_ABSTRACT_NAMES: Final[tuple[object, ...]] = (
+    _spec.absolute_degree,
+    _spec.absolute_discriminant,
+    _spec.absolute_e,
+    _spec.absolute_f,
+    _spec.absolute_field,
+    _spec.absolute_inertia_degree,
+    _spec.absolute_ramification_index,
+    _spec.absprec,
+    _spec.additional_structure,
+    _spec.algebra,
+    _spec.AlgebraicallyClosedFields,
+    _spec.Alternating,
+    _spec.alternating_algebra,
+    _spec.alternating_form,
+    _spec.ArchimedeanGlobalFields,
+    _spec.associated_bilinear_form,
+    _spec.associated_bilinear_forms,
+    _spec.associated_quadratic_form,
+    _spec.associated_quadratic_forms,
+    _spec.as_subobject_of_self,
+    _spec.automorphisms,
+    _spec.ball,
+    _spec._base,
+    _spec._base_category_class_and_axiom,
+    _spec.base_change,
+    _spec.base_module,
+    _spec.bases,
+    _spec.BKZ,
+    _spec.boundary,
+    _spec.breadth_first_search_iterator,
+    _spec.brown_invariant,
+    _spec._cardinality_from_iterator,
+    _spec.cell_module,
+    _spec.center,
+    _spec.center_basis,
+    _spec.change,
+    _spec.change_var,
+    _spec.characteristic_polynomial,
+    _spec.charpoly,
+    _spec.class_number,
+    _spec.closure,
+    _spec.coeffs,
+    _spec.coimage,
+    _spec.cokernel_basis_indices,
+    _spec.column_space,
+    _spec.common_polynomial,
+    _spec.CompleteRing,
+    _spec.CompleteRings,
+    _spec.completion,
+    _spec.complex_embeddings,
+    _spec.complex_field,
+    _spec.ComplexFields,
+    _spec.composite,
+    _spec.conductor,
+    _spec.construction,
+    _spec.contains,
+    _spec.copy,
+    _spec.cyclic_submodule,
+    _spec.cyclic_vector,
+    _spec.CyclotomicFields,
+    _spec.cyclotomic_polynomial,
+    _spec.Dedekind,
+    _spec.default_basis,
+    _spec.default_interval_prec,
+    _spec.default_prec,
+    _spec.defining_polynomial,
+    _spec.depth_first_search_iterator,
+    _spec.derivations_basis,
+    _spec.determinant_module,
+    _spec.different,
+    _spec.dims,
+    _spec.DiscretelyValued,
+    _spec.dist,
+    _spec.Division,
+    _spec.dot_product,
+    _spec.dual_basis,
+    _spec.DualModule,
+    _spec.echelon_basis,
+    _spec.echelon_basis_matrix,
+    _spec.echelon_form,
+    _spec.echelonized_basis,
+    _spec._element_constructor_,
+    _spec.element_from_vector,
+    _spec.elements_of_depth_iterator,
+    _spec.Euclidean,
+    _spec.exact_field,
+    _spec.exact_ring,
+    _spec.ext,
+    _spec.extend_to_fraction_field,
+    _spec.exterior_power,
+    _spec.extra_super_categories,
+    _spec.facade_for,
+    _spec.factored_order,
+    _spec.Filtered,
+    _spec.FinitelyPresentedModulesOverPID,
+    _spec.FiniteRings,
+    _spec.first,
+    _spec.form_degree,
+    _spec.fraction_field,
+    _spec.free_part,
+    _spec.free_rank,
+    _spec.free_resolution,
+    _spec.frobenius_endomorphism,
+    _spec.from_dict,
+    _spec.from_function,
+    _spec.from_images,
+    _spec.from_invariant_factors,
+    _spec.from_matrix,
+    _spec.from_sage_ideal,
+    _spec.from_vector,
+    _spec.galois_closure,
+    _spec.galois_group,
+    _spec.Gcd,
+    _spec.generator_degrees,
+    _spec.gens_reduced,
+    _spec.graded_component,
+    _spec.graded_component_iterator,
+    _spec.ground_ring,
+    _spec.ground_ring_of_tower,
+    _spec.has_canonical_map_to,
+    _spec.has_pth_root,
+    _spec.has_root_of_unity,
+    _spec.has_standard_involution,
+    _spec.hermite_form,
+    _spec.hochschild_complex,
+    _spec.ideal_as_submodule,
+    _spec.idempotent_lift,
+    _spec.index_in,
+    _spec.inertia_degree,
+    _spec.inertia_subring,
+    _spec.inf,
+    _spec.IntegerModRings,
+    _spec.integer_ring,
+    _spec.integral_closure,
+    _spec.IntegrallyClosed,
+    _spec.interior,
+    _spec.interval,
+    _spec.invariant_module,
+    _spec.invertible_ideal_as_projective_submodule,
+    _spec.is_automorphism,
+    _spec.is_aut_set,
+    _spec.is_capped_absolute,
+    _spec.is_capped_relative,
+    _spec.is_closed,
+    _spec.is_compact,
+    _spec.is_connected,
+    _spec.is_cyclotomic,
+    _spec.is_dense,
+    _spec.is_empty,
+    _spec.is_endomorphism,
+    _spec.is_exact,
+    _spec.is_fixed_mod,
+    _spec.is_floating_point,
+    _spec.is_idempotent,
+    _spec.is_invertible,
+    _spec.is_irreducible,
+    _spec.is_isomorphic_to,
+    _spec.is_isomorphism,
+    _spec.is_lattice_prec,
+    _spec.is_laurent_series_ring,
+    _spec.is_maximal,
+    _spec.is_nilpotent,
+    _spec.IsomorphicObjects,
+    _spec.is_open,
+    _spec.is_over_a_ring,
+    _spec.is_parent_of,
+    _spec.is_polynomial_ring,
+    _spec.is_power_series_ring,
+    _spec.is_primary,
+    _spec.is_principal,
+    _spec.is_puiseux_series_ring,
+    _spec.is_quadratic,
+    _spec.is_rational,
+    _spec.is_relaxed,
+    _spec.is_square,
+    _spec.is_submodule_of,
+    _spec.is_trivial,
+    _spec.iter_of_elements_coeff,
+    _spec.l,
+    _spec.latex_name,
+    _spec.LaurentSeriesOver,
+    _spec.laurent_series_ring,
+    _spec.laurent_series_ring_as_module,
+    _spec.LaurentSeriesRings,
+    _spec.leading_support,
+    _spec.lift_from_product,
+    _spec.lift_to_precision,
+    _spec.linear_combination,
+    _spec.linear_combination_of_basis,
+    _spec.linear_dependence,
+    _spec._list_from_iterator,
+    _spec.LLL,
+    _spec._lmul_,
+    _spec.LocalRing,
+    _spec.LocalRings,
+    _spec._make_named_class_key,
+    _spec.map,
+    _spec.MatrixAlgebras,
+    _spec.matrix_ring_as_module,
+    _spec.matrix_space,
+    _spec.max,
+    _spec.maximal_ideal,
+    _spec.maximal_order,
+    _spec.maximal_unramified_subextension,
+    _spec.measure,
+    _spec.metric,
+    _spec.metric_function,
+    _spec.middle_field,
+    _spec.minpoly,
+    _spec.modify_module_structure,
+    _spec.module_generators,
+    _spec.module_morphism,
+    _spec.module_structure,
+    _spec.monics,
+    _spec.monomial,
+    _spec.monomial_coefficients,
+    _spec.monomials_of_degree,
+    _spec._mul_,
+    _spec.multiplicative_generator,
+    _spec.multiplicative_order,
+    _spec.multiplicity,
+    _spec.NamedSets,
+    _spec.natural_morphism,
+    _spec.natural_pairing,
+    _spec.Noetherian,
+    _spec.NonArchimedeanGlobalFields,
+    _spec.Nondegenerate,
+    _spec.nth_root,
+    _spec.object,
+    _spec.optimized,
+    _spec.OreQuotientModule,
+    _spec.OverCommutativeRing,
+    _spec.OverCompleteRing,
+    _spec.OverLocalRing,
+    _spec.parameter_name,
+    _spec.partition_gen,
+    _spec.partition_set,
+    _spec.peirce_decomposition,
+    _spec.places,
+    _spec.poly,
+    _spec.PolynomialOver,
+    _spec.polynomial_ring_as_module,
+    _spec.PolynomialRings,
+    _spec.polynomial_root,
+    _spec.post_compose,
+    _spec.power_basis,
+    _spec.powers,
+    _spec.PowerSeriesOver,
+    _spec.power_series_ring,
+    _spec.power_series_ring_as_module,
+    _spec.PowerSeriesRings,
+    _spec.precision,
+    _spec.pre_compose,
+    _spec.pre_image,
+    _spec.prime_above,
+    _spec.primes_above,
+    _spec.primitive_element,
+    _spec.PrincipalIdeal,
+    _spec.print_mode,
+    _spec.ProjectiveModule,
+    _spec.proof,
+    _spec.pseudomorphism,
+    _spec.PuiseuxSeriesOver,
+    _spec.puiseux_series_ring_as_module,
+    _spec.PuiseuxSeriesRings,
+    _spec.QuadraticNumberFields,
+    _spec.QuotientModulesWithOrderedGeneratingSet,
+    _spec.quotient_of_free_modules,
+    _spec.QuotientsOf,
+    _spec.radical,
+    _spec.radical_basis,
+    _spec.radius,
+    _spec.ramification_index,
+    _spec.random_element,
+    _spec.real_embeddings,
+    _spec.real_field,
+    _spec.RealFields,
+    _spec.reduced_basis,
+    _spec.ReducedRings,
+    _spec.regulator,
+    _spec.relations,
+    _spec.relative_degree,
+    _spec.relative_e,
+    _spec.relative_f,
+    _spec.relative_inertia_degree,
+    _spec.relative_ramification_index,
+    _spec.representation_matrix,
+    _spec.RepresentationModules,
+    _spec.residue_characteristic,
+    _spec.residue_field,
+    _spec.residue_ring,
+    _spec.residue_system,
+    _spec.retract,
+    _spec.ring_as_rank_one_module,
+    _spec.RingMorphism,
+    _spec.RMod,
+    _spec.RModAutset,
+    _spec.RModAutsetElement,
+    _spec.RModDualElement,
+    _spec.RModEndset,
+    _spec.RModEndsetElement,
+    _spec.RModHomset,
+    _spec.RModHomsetElement,
+    _spec._rmul_,
+    _spec.roots_of_unity,
+    _spec.row_space,
+    _spec.scientific_notation,
+    _spec.S_class_group,
+    _spec.section,
+    _spec.semigroup,
+    _spec.semisimple_quotient,
+    _spec.set_category,
+    _spec.set_default_basis,
+    _spec.SetMap,
+    _spec.shortest_vector,
+    _spec.side,
+    _spec.sigma,
+    _spec.some_elements,
+    _spec.sparse,
+    _spec.special_orthogonal_group,
+    _spec.sqrt,
+    _spec.SquareParentMethods,
+    _spec.stable_orthogonal_group,
+    _spec.stable_special_orthogonal_group,
+    _spec.standard_basis,
+    _spec.status,
+    _spec.structure_codomain,
+    _spec.structure_domain,
+    _spec.structure_map,
+    _spec.subalgebra,
+    _spec.SubcategoryMethods,
+    _spec.subfield,
+    _spec.subfields_of_degree,
+    _spec.SubModules,
+    _spec.SubmodulesWithOrderedGeneratingSet,
+    _spec.Subquotients,
+    _spec.SubringsOf,
+    _spec.subsets,
+    _spec.subsets_lattice,
+    _spec.subspace,
+    _spec.sum_of_monomials,
+    _spec.S_units,
+    _spec.sup,
+    _spec.Super,
+    _spec.support,
+    _spec.suspension,
+    _spec.Symmetric,
+    _spec.symmetric_algebra,
+    _spec._sympy_,
+    _spec.teichmuller,
+    _spec.teichmuller_system,
+    _spec.tensor_algebra,
+    _spec.tensor_module,
+    _spec.TensorProductRModule,
+    _spec.tensor_square,
+    _spec.to_dict,
+    _spec.to_function,
+    _spec.to_list,
+    _spec.Torsionfree,
+    _spec.torsion_part,
+    _spec.torsion_submodule,
+    _spec.to_tuple,
+    _spec.trace,
+    _spec.uniformizer_pow,
+    _spec.UniqueFactorization,
+    _spec.unit_gens,
+    _spec.unit_group,
+    _spec.user_basis,
+    _spec.uses_ambient_inner_product,
+    _spec.valuation,
+    _spec.ValuedRings,
+    _spec.var,
+    _spec.vectors,
+    _spec.voronoi_cell,
+    _spec.weil_polynomials,
+    _spec.WithValuation,
+    _spec.xgcd,
+    # --- src/lattices/ abstract interface stubs and Sage category patterns ---
+    _spec.arithmetic_genus,
+    _spec.as_lattice,
+    _spec.associated_bilinear_module,
+    _spec.associated_bilinear_object,
+    _spec.base_change_to,
+    _spec.base_locus,
+    _spec.base_variety,
+    _spec.blowup,
+    _spec.Blowup,
+    _spec.branch_divisor,
+    _spec.BranchedCover,
+    _spec._call_,
+    _spec.coble_lattice,
+    _spec.CobleSurface,
+    _spec.codimension,
+    _spec._compute_real_spinor_norm_sign,
+    _spec.coordinate_ring,
+    _spec.defining_divisor,
+    _spec.defining_ideal,
+    _spec.DiscriminantForms,
+    _spec.enriques_involution,
+    _spec.EnriquesSurface,
+    _spec.euler_characteristic,
+    _spec.Even,
+    _spec.EvenLattices,
+    _spec.exceptional_divisor,
+    _spec.exceptional_divisors,
+    _spec.fiber,
+    _spec._find_finite_black_box_witness,
+    _spec.from_branch_sextic,
+    _spec.from_divisor,
+    _spec.from_meromorphic_function,
+    _spec.from_nodes,
+    _spec.from_sextic,
+    _spec.geometric_genus,
+    _spec.hilbert_polynomial,
+    _spec.hodge_number,
+    _spec.holomorphic_euler_characteristic,
+    _spec._Hom_,
+    _spec.inclusion_morphism,
+    _spec.index_of_speciality,
+    _spec.is_abelian_variety,
+    _spec.is_affine,
+    _spec.is_ample,
+    _spec.is_big,
+    _spec.is_calabi_yau,
+    _spec.is_canonical_divisor,
+    _spec.is_cartier_divisor,
+    _spec.is_complete,
+    _spec.is_complete_intersection,
+    _spec.is_effective,
+    _spec.is_general_type,
+    _spec.is_indefinite,
+    _spec.is_isometry,
+    _spec.is_linearly_equivalent_to,
+    _spec.is_nef,
+    _spec.is_nodal,
+    _spec.is_nondegenerate,
+    _spec.is_normal,
+    _spec.is_numerically_effective,
+    _spec.is_odd,
+    _spec.isotropic_elements,
+    _spec.isotropic_planes_are_equivalent,
+    _spec.is_pencil,
+    _spec.is_polarization,
+    _spec.is_proper,
+    _spec.is_quasi_projective,
+    _spec.is_regular,
+    _spec.is_root,
+    _spec.is_smooth,
+    _spec.is_snc,
+    _spec.is_unimodular,
+    _spec.is_unirational,
+    _spec.is_very_ample,
+    _spec.is_weyl_divisor,
+    _spec.jordan_decomposition,
+    _spec.k3_cover,
+    _spec.kodaira_dimension,
+    _spec.LinearSystem,
+    _spec.nodes,
+    _spec.normalization,
+    _spec.ord_D,
+    _spec.oscar_centralizer_data,
+    _spec.picard_group,
+    _spec.point,
+    _spec.points,
+    _spec._presented_bilinear_module,
+    _spec.pullback,
+    _spec.pushforward,
+    _spec.quadratic_gram_matrix,
+    _spec.ramification_divisor,
+    _spec.rational_span,
+    _spec._repr_,
+    _spec.resolution,
+    _spec.riemann_roch_space_dimension,
+    _spec.RootLattices,
+    _spec._sage_module,
+    _spec.satisfies_riemann_hurwitz,
+    _spec.semisimple_monodromy_matrix,
+    _spec.sextic,
+    _spec.singular_locus,
+    _spec.smooth_locus,
+    _spec.specialization,
+    _spec.summands,
+    _spec.symbolic_form,
+    _spec.to_coherent_sheaf,
+    _spec.to_coordinates,
+    _spec.to_quadratic_module,
+    _spec.underlying_curve,
+    _spec.Unimodular,
+    _spec.UnimodularLattices,
+    _spec._validate_integral,
+    _spec._validate_lattice,
+    _spec._validate_rational_lattice,
+    _spec.variable_names,
+    _spec.WithQuadraticForm,
+    _spec.is_Q_cartier_divisor,
+    _spec.is_étale,
+    # --- plans/category_specs/sets/ abstract interface stubs ---
+    _spec.Metric,
+    _spec.union,
+    _spec.symmetric_difference,
+    _spec.unrank,
+    # --- tests/conftest.py pytest hooks (called by pytest framework) ---
+    _spec.pytest_addoption,
+    _spec.pytest_configure,
+    _spec.pytest_sessionstart,
+    _spec.pytest_collection_finish,
+    _spec.pytest_deselected,
+    _spec.pytest_collection_modifyitems,
+    _spec.pytest_runtest_logreport,
+    _spec.pytest_sessionfinish,
+    _spec.pytest_terminal_summary,
+    # --- tests/ helper functions referenced indirectly ---
+    _spec._dawes_example_26_barpsi,
+    _spec._dawes_example_26_barpsi_reduced,
+    _spec._discriminant_hom_from_matrix,
+    _spec._native_t_en,
+    _spec._native_k3,
+    # --- theory/spec_backups abstract interface stubs ---
+    _spec.orthogonal_complement_of_image,
+    _spec.has_isomorphic_discriminant_group_to,
+    _spec.has_isomorphic_discriminant_form_to,
+    _spec.stabilizer_of_vector,
+    _spec.centralizer_of_involution,
+    # --- plans/category_specs/modules/named.py abstract stubs ---
+    _spec.ambient_vector_space,
+    _spec.cover,
+    _spec.free_cover,
+    _spec.free_relations,
+    _spec.is_subspace,
+    _spec.lift_map,
+    _spec.quotient_map,
+)

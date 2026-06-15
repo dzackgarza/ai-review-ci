@@ -1,11 +1,14 @@
 #!/usr/bin/env -S uv run --script
 # /// script
 # requires-python = ">=3.11"
+# dependencies = [
+#   "tomlkit>=0.13.2",
+# ]
 # ///
-"""Sync qc-excludes.toml into each tool config file.
+"""Sync qc-excludes.toml into structured tool config exclude arrays.
 
-Each tool config gets the UNION of its own static entries (preserved
-verbatim, first) and the canonical directory-exclusion list from
+Each owned JSON/TOML exclude array gets the UNION of its own static entries
+(preserved verbatim, first) and the canonical directory-exclusion list from
 qc-excludes.toml (converted to the tool's glob format, appended).
 
 Usage:
@@ -16,16 +19,17 @@ Usage:
 
 import argparse
 import json
-import re
 import sys
 from pathlib import Path
 from typing import Never
+
+import tomlkit
 
 # ── Tool config descriptors ──────────────────────────────────────────────────
 # Each entry describes how to update one config file.
 #
 #   path       : relative to QC root
-#   format     : "json", "toml", or "eslint"
+#   format     : "json" or "toml"
 #   key        : [key, ...] path to the exclude array (for json/toml)
 #   is_dir_fn  : lambda(str) → glob pattern for a TOML directory entry
 #   static     : list of entries preserved verbatim, emitted before TOML dirs
@@ -35,14 +39,6 @@ from typing import Never
 ToolConfig = dict
 
 configs: list[ToolConfig] = [
-    {
-        "path": "eslint.config.js",
-        "format": "eslint",
-        "is_dir_fn": lambda d: f"**/{d}/**",
-        "static": [
-            "**/env.d.ts",
-        ],
-    },
     {
         "path": "biome.json",
         "format": "json",
@@ -101,7 +97,7 @@ configs: list[ToolConfig] = [
         "path": "grain.toml",
         "format": "toml",
         "key": ["grain", "exclude"],
-        "is_dir_fn": lambda d: f"**/{d}/**",
+        "is_dir_fn": lambda d: f"{d}/*",
         "static": [
             "tests/*",
             "*_test.py",
@@ -159,25 +155,6 @@ def _build_entries(cfg: ToolConfig, dirs: list[str]) -> list[str]:
     return result
 
 
-def write_eslint_config(qc_root: Path, cfg: ToolConfig, dirs: list[str]) -> None:
-    path = qc_root / cfg["path"]
-    original = path.read_text()
-    entries = _build_entries(cfg, dirs)
-    lines = "\n".join(f'      "{e}",' for e in entries)
-    new_text = re.sub(
-        r"ignores:\s*\[.*?\]",
-        f"ignores: [\n{lines}\n    ]",
-        original,
-        count=1,
-        flags=re.DOTALL,
-    )
-    if new_text == original:
-        print(f"  No change: {cfg['path']}")
-        return
-    path.write_text(new_text)
-    print(f"  Updated {cfg['path']} ({len(entries)} entries)")
-
-
 def write_json_config(qc_root: Path, cfg: ToolConfig, dirs: list[str]) -> None:
     path = qc_root / cfg["path"]
     with path.open("rb") as f:
@@ -204,47 +181,30 @@ def write_json_config(qc_root: Path, cfg: ToolConfig, dirs: list[str]) -> None:
 def write_toml_config(qc_root: Path, cfg: ToolConfig, dirs: list[str]) -> None:
     path = qc_root / cfg["path"]
     entries = _build_entries(cfg, dirs)
-    text = path.read_text()
+    document = tomlkit.parse(path.read_text())
 
-    toml_body = "\n".join(f'  "{e}",' for e in entries)
-    toml_array = f"[\n{toml_body}\n]"
+    parent = document
+    for key in cfg["key"][:-1]:
+        parent = parent[key]
+    last_key = cfg["key"][-1]
 
-    new_text = re.sub(
-        r"exclude\s*=\s*\[.*?\]",
-        f"exclude = {toml_array}",
-        text,
-        count=1,
-        flags=re.DOTALL,
-    )
-    if new_text == text:
+    if list(parent[last_key]) == entries:
         print(f"  No change: {cfg['path']}")
         return
-    path.write_text(new_text)
+
+    exclude = tomlkit.array()
+    exclude.multiline(True)
+    for entry in entries:
+        exclude.append(entry)
+    parent[last_key] = exclude
+    path.write_text(tomlkit.dumps(document))
     print(f"  Updated {cfg['path']} ({len(entries)} entries)")
-
-
-def write_rust_qc_files(repo_root: Path, dirs: list[str]) -> None:
-    path = repo_root / "justfiles" / "rust.just"
-    text = path.read_text()
-    not_paths = " ".join(f"-not -path '*/{d}/*'" for d in dirs)
-    new_text = re.sub(
-        r"find \. -name '\*\.rs' -not -path.*",
-        f"find . -name '*.rs' {not_paths}",
-        text,
-        count=1,
-    )
-    if new_text == text:
-        print("  No change: justfiles/rust.just")
-        return
-    path.write_text(new_text)
-    print(f"  Updated _rust-qc-files in justfiles/rust.just ({len(dirs)} entries)")
 
 
 class _ArgumentParser(argparse.ArgumentParser):
     def error(self, message: str) -> Never:
         print(f"ERROR: {message}", file=sys.stderr)
         sys.exit(1)
-
 
 def _parse_args(argv: list[str]) -> argparse.Namespace:
     parser = _ArgumentParser(add_help=False)
@@ -263,10 +223,6 @@ def _resolve_config_path(config_paths: list[str]) -> Path:
     return Path(config_paths[0]).resolve()
 
 
-def _repo_root_for_config(config_path: Path) -> Path:
-    return config_path.parent.parent
-
-
 def _print_sync_status(qc_root: Path, dirs: list[str]) -> None:
     print(f"QC root: {qc_root}")
     print(f"Canonical excludes ({len(dirs)}): {', '.join(dirs)}")
@@ -277,7 +233,6 @@ def _print_dry_run_status() -> None:
 
 
 _CONFIG_WRITERS = {
-    "eslint": write_eslint_config,
     "json": write_json_config,
     "toml": write_toml_config,
 }
@@ -291,11 +246,10 @@ def _write_tool_config(qc_root: Path, cfg: ToolConfig, dirs: list[str]) -> None:
     writer(qc_root, cfg, dirs)
 
 
-def _write_all_configs(qc_root: Path, repo_root: Path, dirs: list[str]) -> None:
+def _write_all_configs(qc_root: Path, dirs: list[str]) -> None:
     print()
     for cfg in configs:
         _write_tool_config(qc_root, cfg, dirs)
-    write_rust_qc_files(repo_root, dirs)
     print("\nDone.")
 
 
@@ -303,13 +257,12 @@ def main() -> None:
     args = _parse_args(sys.argv[1:])
     config_path = _resolve_config_path(args.config_paths)
     qc_root = config_path.parent
-    repo_root = _repo_root_for_config(config_path)
     dirs = load_toml_dirs(config_path)
     _print_sync_status(qc_root, dirs)
     if args.dry_run:
         _print_dry_run_status()
         return
-    _write_all_configs(qc_root, repo_root, dirs)
+    _write_all_configs(qc_root, dirs)
 
 
 if __name__ == "__main__":

@@ -284,15 +284,15 @@ trigger -> _review.yml (cross-repo reusable workflow)
      /opt/ai-review/private, install static home + review definitions to
      /home/reviewer, narrow sudo rule, copy sanitized repo
   -> [diff scope] stage the PR diff into the reviewer repo
-  -> run-review.py (as reviewer): assemble prompt (context + scope +
+  -> `ai-review-ci run-review` (as reviewer): assemble prompt (context + scope +
      manifest-inlined guides + repo docs + template), loop `opencode run`
-     until a validated artifact exists
+     until `ai-review-ci validate-report` accepts a submitted artifact
        agent: analyze -> write report JSON to fixed path ->
               `/home/reviewer/bin/submit-candidate --help` for schema ->
               `/home/reviewer/bin/submit-candidate` -> fix on
               FIX-guided rejection -> repeat until exit 0
-  -> convert artifact to SARIF -> upload to code scanning
-  -> [diff scope] post resolvable review threads to the PR
+  -> `ai-review-ci to-sarif` -> upload to code scanning
+  -> [diff scope] `ai-review-ci post-threads` posts resolvable review threads to the PR
   -> [optional] health-score threshold gate
 ```
 

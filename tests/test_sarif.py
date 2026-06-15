@@ -6,9 +6,15 @@ from pathlib import Path
 from typing import Any
 
 import pytest
+from sarif_pydantic import Message, ReportingDescriptor, Result
 
 from ai_review_ci.models import finding_fingerprint
-from ai_review_ci.sarif import CARRY_FORWARD_SCHEMA_VERSION, build_sarif, to_sarif
+from ai_review_ci.sarif import (
+    CARRY_FORWARD_SCHEMA_VERSION,
+    _append_result,
+    build_sarif,
+    to_sarif,
+)
 from tests.conftest import APP_FILE, general_candidate, general_finding
 
 JsonDict = dict[str, Any]
@@ -70,6 +76,60 @@ def test_build_sarif_carries_existing_open_alerts(checkout: Path) -> None:
     fingerprints = result_fingerprints(sarif)
     assert finding_fingerprint("carried-forward", APP_FILE) in fingerprints
     assert finding_fingerprint("new-review-finding", "tests/test_app.py") in fingerprints
+
+
+def test_build_sarif_results_reference_rule_table_indexes(checkout: Path) -> None:
+    configure_github_env()
+
+    artifact = general_candidate(
+        findings=[
+            general_finding(
+                category="first-review-finding",
+                label="FIRST_FINDING",
+                location={"path": APP_FILE, "start_line": 1, "end_line": 2},
+            ),
+            general_finding(
+                category="second-review-finding",
+                label="SECOND_FINDING",
+                location={"path": "tests/test_app.py", "start_line": 3, "end_line": 4},
+            ),
+        ]
+    )
+
+    sarif = build_sarif(
+        artifact,
+        report_type="general",
+        category="ai-general-review",
+    )
+
+    run = sarif["runs"][0]
+    rule_index_by_id = {rule["id"]: index for index, rule in enumerate(run["tool"]["driver"]["rules"])}
+    for result in run["results"]:
+        assert result["ruleIndex"] == rule_index_by_id[result["ruleId"]]
+
+
+def test_append_result_updates_runtime_rule_index_field() -> None:
+    seen_rules = {"existing-rule": 0}
+    rules = [ReportingDescriptor(id="existing-rule")]
+    results: list[Result] = []
+    result = Result(
+        rule_id="new-rule",
+        rule_index=0,
+        message=Message(text="Rule index must be assigned through the model field"),
+    )
+
+    _append_result(
+        seen_rules,
+        rules,
+        results,
+        "new-rule",
+        ReportingDescriptor(id="new-rule"),
+        result,
+    )
+
+    assert result.rule_index == 1
+    assert not hasattr(result, "ruleIndex")
+    assert results == [result]
 
 
 def test_new_finding_replaces_matching_carried_alert(checkout: Path) -> None:

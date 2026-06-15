@@ -333,7 +333,7 @@ class GeneralFinding(BaseModel):
         min_length=10,
         description="Shell command or code path that proves the invariant is "
         "violated. Must be reproducible by another agent. "
-        "Example: 'grep -rn get_diff quality-control/run-review.py'",
+        "Example: 'grep -rn get_diff src/ai_review_ci/harness.py'",
     )
     symptom: str = Field(description="Observable symptom of the defect.")
     source: str = Field(description="Root cause: what code or pattern produces the symptom.")

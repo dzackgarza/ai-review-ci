@@ -111,7 +111,13 @@ _tsc:
 		bun run types
 	elif [ -f tsconfig.json ] \
 		&& jq -e '.compilerOptions.jsxImportSource == "ags/gtk4" or ((.compilerOptions.paths // {}) | has("gi://Astal?version=4.0"))' tsconfig.json >/dev/null; then
-		ags types 'Astal*' --ignore Gtk3 --ignore Astal3 --update
+		if ags types 'Astal*' --ignore Gtk3 --ignore Astal3 --update; then
+			:
+		else
+			ec=$?
+			"{{artifacts}}/scripts/emit-triage-directive.sh"
+			exit $ec
+		fi
 	fi
 	if jq -e '.scripts.typecheck // empty' package.json >/dev/null 2>&1; then
 		output="$(mktemp)"
@@ -254,10 +260,9 @@ _slop-scan:
 _codeql:
 	#!/usr/bin/env bash
 	set -euo pipefail
+	trap 'if [ -e codeql-db ]; then gio trash codeql-db; fi; if [ -e codeql-report.sarif ]; then gio trash codeql-report.sarif; fi' EXIT
 	codeql database create codeql-db --overwrite --language=typescript --source-root=. --search-path=/dev/null
 	codeql database analyze codeql-db --format=sarif-latest --output=codeql-report.sarif
-	[ -e codeql-db ] && gio trash codeql-db
-	[ -e codeql-report.sarif ] && gio trash codeql-report.sarif
 
 _lint-staged:
 	#!/usr/bin/env bash

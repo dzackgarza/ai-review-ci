@@ -104,22 +104,39 @@ _mypy: _install-tools
 	echo "============================="
 	echo "=== Running: mypy type checking ==="
 	echo "# Checks static typing after syntax validation and before lint/style normalization"
-	if ! mapfile -t python_files < <(just --justfile {{justfile()}} -d . _python-qc-files 2>/dev/null); then :; fi
+	python_files_output="$(just --justfile {{justfile()}} -d . _python-qc-files)"
+	python_files=()
+	if [ -n "$python_files_output" ]; then
+		mapfile -t python_files <<<"$python_files_output"
+	fi
 	if [ "${#python_files[@]}" -eq 0 ]; then
 		echo "ERROR: mypy: no Python files found in a Python project."
 		"{{artifacts}}/scripts/emit-triage-directive.sh"
 		exit 1
 	fi
 	effective_config="{{configs}}/mypy-global.ini"
-	if ! uvx --python 3.14 --from mypy \
-		--with-editable . \
-		--with pytest \
-		--with pydantic \
-		--with cyclopts \
-		--with ai-slop-detector \
+	with_args=(--with-editable .)
+	dependency_requirements_output="$(uv run --no-project python "{{artifacts}}/scripts/python_qc_metadata.py" dependency-group-requirements .)"
+	if [ -n "$dependency_requirements_output" ]; then
+		mapfile -t dependency_requirements <<<"$dependency_requirements_output"
+		for requirement in "${dependency_requirements[@]}"; do
+			with_args+=(--with "$requirement")
+		done
+	fi
+	pep723_scripts_output="$(uv run --no-project python "{{artifacts}}/scripts/python_qc_metadata.py" pep723-scripts "${python_files[@]}")"
+	if [ -n "$pep723_scripts_output" ]; then
+		mapfile -t pep723_scripts <<<"$pep723_scripts_output"
+		for script in "${pep723_scripts[@]}"; do
+			with_args+=(--with-requirements "$script")
+		done
+	fi
+	if uvx --python 3.14 --from mypy \
+		"${with_args[@]}" \
 		mypy \
 		--config-file "$effective_config" \
 		"${python_files[@]}"; then
+		:
+	else
 		ec=$?
 		echo "ERROR: mypy found type errors in project code."
 		"{{artifacts}}/scripts/emit-triage-directive.sh"
@@ -320,8 +337,28 @@ _deptry: _install-tools
 		"{{artifacts}}/scripts/emit-triage-directive.sh"
 		exit 1
 	fi
+	python_files_output="$(just --justfile {{justfile()}} -d . _python-qc-files)"
+	python_files=()
+	if [ -n "$python_files_output" ]; then
+		mapfile -t python_files <<<"$python_files_output"
+	fi
 	package_module_name_map="$(uv run --no-project python "{{artifacts}}/scripts/deptry_package_module_name_map.py" "{{configs}}/pyproject.toml")"
-	if uvx --from deptry deptry . --package-module-name-map "$package_module_name_map"; then
+	deptry_args=(. --package-module-name-map "$package_module_name_map")
+	first_party_modules_output="$(uv run --no-project python "{{artifacts}}/scripts/python_qc_metadata.py" first-party-modules .)"
+	if [ -n "$first_party_modules_output" ]; then
+		mapfile -t first_party_modules <<<"$first_party_modules_output"
+		for first_party_module in "${first_party_modules[@]}"; do
+			deptry_args+=(--known-first-party "$first_party_module")
+		done
+	fi
+	pep723_scripts_output="$(uv run --no-project python "{{artifacts}}/scripts/python_qc_metadata.py" pep723-scripts "${python_files[@]}")"
+	if [ -n "$pep723_scripts_output" ]; then
+		mapfile -t pep723_scripts <<<"$pep723_scripts_output"
+		for script in "${pep723_scripts[@]}"; do
+			deptry_args+=(--extend-exclude "$script")
+		done
+	fi
+	if uvx --from deptry deptry "${deptry_args[@]}"; then
 		:
 	else
 		ec=$?
