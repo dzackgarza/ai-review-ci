@@ -14,9 +14,11 @@ Usage:
 When no path is given, looks for qc-excludes.toml in ancestor directories.
 """
 
+import argparse
 import json
 import sys
 from pathlib import Path
+from typing import Never
 
 
 def find_config() -> Path:
@@ -35,58 +37,88 @@ def load_excludes(config: Path) -> list[str]:
 
     with config.open("rb") as f:
         data = tomllib.load(f)
-    directories = data["directories"]
-    assert isinstance(directories, list), "qc-excludes directories must be a list"
-    result: list[str] = []
+    directories: object = data.get("directories")
+    if not isinstance(directories, list):
+        print(
+            f"ERROR: {config} must define directories as a list of strings",
+            file=sys.stderr,
+        )
+        sys.exit(1)
+    validated: list[str] = []
     for directory in directories:
-        assert isinstance(directory, str), "qc-excludes directories must contain strings"
-        result.append(directory)
-    return result
+        if not isinstance(directory, str):
+            print(
+                f"ERROR: {config} must define directories as a list of strings",
+                file=sys.stderr,
+            )
+            sys.exit(1)
+        validated.append(directory)
+    return validated
+
+
+class _ArgumentParser(argparse.ArgumentParser):
+    def error(self, message: str) -> Never:
+        print(f"ERROR: {message}", file=sys.stderr)
+        sys.exit(1)
+
+
+def _parse_args(argv: list[str]) -> argparse.Namespace:
+    parser = _ArgumentParser(add_help=False)
+    parser.add_argument("--format", dest="fmt", default="plain")
+    parser.add_argument("config_paths", nargs="*")
+    args, unknown = parser.parse_known_args(argv)
+    if unknown:
+        print(f"ERROR: unknown flag {unknown[0]}", file=sys.stderr)
+        sys.exit(1)
+    return args
+
+
+def _resolve_config_path(config_paths: list[str]) -> Path:
+    if not config_paths:
+        return find_config()
+    return Path(config_paths[-1]).resolve()
+
+
+def _print_plain(dirs: list[str]) -> None:
+    for directory in dirs:
+        print(directory)
+
+
+def _print_json(dirs: list[str]) -> None:
+    json.dump(dirs, sys.stdout, indent=2)
+    print()
+
+
+def _print_rg_globs(dirs: list[str]) -> None:
+    for directory in dirs:
+        print(f"-g '!**/{directory}/**'")
+
+
+def _print_codeql(dirs: list[str]) -> None:
+    for directory in dirs:
+        print(f"--search-path=/dev/null --additional-packs=/dev/null  # excludes {directory}")
+
+
+_FORMAT_RENDERERS = {
+    "plain": _print_plain,
+    "json": _print_json,
+    "rg-globs": _print_rg_globs,
+    "codeql": _print_codeql,
+}
+
+
+def _render_excludes(fmt: str, dirs: list[str]) -> None:
+    renderer = _FORMAT_RENDERERS.get(fmt)
+    if renderer is None:
+        print(f"ERROR: unknown format '{fmt}'", file=sys.stderr)
+        sys.exit(1)
+    renderer(dirs)
 
 
 def main() -> None:
-    fmt = "plain"
-    config_path: Path | None = None
-
-    args = sys.argv[1:]
-    i = 0
-    while i < len(args):
-        if args[i] == "--format" and i + 1 < len(args):
-            fmt = args[i + 1]
-            i += 2
-        elif args[i].startswith("--format="):
-            fmt = args[i].split("=", 1)[1]
-            i += 1
-        elif args[i].startswith("--"):
-            print(f"ERROR: unknown flag {args[i]}", file=sys.stderr)
-            sys.exit(1)
-        else:
-            config_path = Path(args[i])
-            i += 1
-
-    if config_path is None:
-        config_path = find_config()
-    else:
-        config_path = config_path.resolve()
-
-    dirs: list[str] = load_excludes(config_path)
-
-    if fmt == "plain":
-        for d in dirs:
-            print(d)
-    elif fmt == "json":
-        json.dump(dirs, sys.stdout, indent=2)
-        print()
-    elif fmt == "rg-globs":
-        for d in dirs:
-            print(f"-g '!**/{d}/**'")
-    elif fmt == "codeql":
-        # CodeQL uses --search-path exclusions
-        for d in dirs:
-            print(f"--search-path=/dev/null --additional-packs=/dev/null  # excludes {d}")
-    else:
-        print(f"ERROR: unknown format '{fmt}'", file=sys.stderr)
-        sys.exit(1)
+    args = _parse_args(sys.argv[1:])
+    config_path = _resolve_config_path(args.config_paths)
+    _render_excludes(args.fmt, load_excludes(config_path))
 
 
 if __name__ == "__main__":

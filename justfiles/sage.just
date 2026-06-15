@@ -81,7 +81,7 @@ _sage-syntax:
 
 	(
 		cd "$sage_preparse_dir"
-		"$sage_bin" --preparse "${copied_sage_files[@]}" >/dev/null
+		"$SAGE_BIN" --preparse "${copied_sage_files[@]}" >/dev/null
 	)
 
 	for sage_file in "${sage_files[@]}"; do
@@ -96,7 +96,7 @@ _sage-syntax:
 		exit 1
 	fi
 
-	if ! "$sage_bin" -python - "${compile_args[@]}" <<'PY'
+	if ! "$SAGE_BIN" -python - "${compile_args[@]}" <<'PY'
 	import py_compile
 	import sys
 
@@ -156,7 +156,7 @@ _vulture: _sage-qc-files
 		done
 		(
 			cd "$sage_preparse_dir"
-			"$sage_bin" --preparse "${copied_sage_files[@]}" >/dev/null
+			"$SAGE_BIN" --preparse "${copied_sage_files[@]}" >/dev/null
 		)
 		for generated_file in "${generated_sage_python_files[@]}"; do
 			if [ ! -f "$generated_file" ]; then

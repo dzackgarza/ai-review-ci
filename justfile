@@ -38,7 +38,6 @@ install target=".":
 install-global-hooks:
     #!/usr/bin/env bash
     set -euo pipefail
-
     if [[ "${GIT_GLOBAL_HOOKS_DIR+x}" != x ]]; then
         echo "ERROR: GIT_GLOBAL_HOOKS_DIR must be set to the global Git hooks directory."
         exit 1

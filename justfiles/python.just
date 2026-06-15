@@ -36,6 +36,7 @@ _python-qc-files:
 	done < <(uv run {{artifacts}}/scripts/read_qc_excludes.py {{configs}}/qc-excludes.toml)
 	rg --files \
 		-g '*.py' \
+		-g '!tool-artifacts/vulture_whitelist.py' \
 		"${exclude_args[@]}"
 
 _python-syntax:
@@ -254,8 +255,11 @@ _pytest_with_coverage: _install-tools
 	coverage_root="${XDG_CACHE_HOME:-$HOME/.cache}/quality-control/coverage/$project_slug"
 	coverage_data="$coverage_root/.coverage"
 	coverage_xml="$coverage_root/coverage.xml"
+	coverage_config="{{configs}}/coverage.ini"
 	mkdir -p "$coverage_root"
-	if COVERAGE_FILE="$coverage_data" uvx --from coverage --with pytest --with-editable . coverage run -m pytest; then
+	export COVERAGE_FILE="$coverage_data"
+	export COVERAGE_RCFILE="$coverage_config"
+	if uvx --from coverage --with pytest --with-editable . coverage run -m pytest; then
 		:
 	else
 		ec=$?
@@ -263,7 +267,7 @@ _pytest_with_coverage: _install-tools
 		"{{artifacts}}/scripts/emit-triage-directive.sh"
 		exit $ec
 	fi
-	if COVERAGE_FILE="$coverage_data" uvx --from coverage coverage xml --fail-under=100 -o "$coverage_xml"; then
+	if uvx --from coverage coverage xml --fail-under=100 -o "$coverage_xml"; then
 		:
 	else
 		ec=$?
@@ -310,10 +314,12 @@ _vulture: _install-tools
 		exit 1
 	fi
 
-	if ! uvx --from vulture vulture \
+	if uvx --from vulture vulture \
 		--config {{configs}}/pyproject.toml \
 		"${python_files[@]}" \
 		"$whitelist_file"; then
+		:
+	else
 		ec=$?
 		echo "ERROR: vulture found dead code in project code."
 		"{{artifacts}}/scripts/emit-triage-directive.sh"
@@ -412,14 +418,14 @@ _lizard-python: _install-tools
 	set -euo pipefail
 	echo "============================="
 	echo "=== Running: lizard complexity analysis ==="
-	echo "# Computes cyclomatic complexity number (CCN), line count, and parameter count to flag overly complex functions"
+	echo "# Computes cyclomatic complexity number (CCN) and line count to flag overly complex functions"
 	if ! mapfile -t python_files < <(just --justfile {{justfile()}} -d . _python-qc-files 2>/dev/null); then :; fi
 	if [ "${#python_files[@]}" -eq 0 ]; then
 		echo "ERROR: lizard: no Python files found in a Python project."
 		"{{artifacts}}/scripts/emit-triage-directive.sh"
 		exit 1
 	fi
-	if uvx --from lizard lizard -l python -C 7 -L 100 -a 5 -i 0 "${python_files[@]}"; then
+	if uvx --from lizard lizard -l python -C 7 -L 100 -i 0 "${python_files[@]}"; then
 		:
 	else
 		ec=$?

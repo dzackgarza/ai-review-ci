@@ -84,13 +84,14 @@ cd ~/ai-review-ci
 
 ### Global Git hooks
 
-Global hooks are user-level Git hooks. The install recipe symlinks
-`global-hooks/pre-commit` and `global-hooks/pre-push` into
-`${GIT_GLOBAL_HOOKS_DIR:-~/.config/git/hooks}` and sets the user's global
-`core.hooksPath` to that directory:
+Global hooks are user-level Git hooks. The install recipe requires
+`GIT_GLOBAL_HOOKS_DIR` to name the explicit hooks directory, symlinks
+`global-hooks/pre-commit` and `global-hooks/pre-push` into that directory, and
+sets the user's global `core.hooksPath` to the same value:
 
 ```bash
 cd ~/ai-review-ci
+direnv allow
 just install-global-hooks
 ```
 

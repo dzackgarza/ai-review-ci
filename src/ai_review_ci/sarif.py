@@ -85,14 +85,14 @@ def _mapping_list(value: object, label: str) -> list[JsonDict]:
 
 
 def _string(mapping: JsonDict, key: str, label: str) -> str:
-    value = mapping.get(key)
+    value: object = mapping.get(key)
     if not isinstance(value, str) or not value:
         _die(f"invalid carry-forward alert: {label}.{key} must be a non-empty string")
     return value
 
 
 def _integer(mapping: JsonDict, key: str, label: str) -> int:
-    value = mapping.get(key)
+    value: object = mapping.get(key)
     if not isinstance(value, int):
         _die(f"invalid carry-forward alert: {label}.{key} must be an integer")
     return value

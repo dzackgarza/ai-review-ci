@@ -34,42 +34,84 @@ def _fail(msg: str) -> NoReturn:
     sys.exit(1)
 
 
-def _fetch_alerts(repo: str, tool_name: str, ref: str | None = None, state: str | None = None) -> list[JsonDict]:
-    """Fetch code scanning alerts for a repo, filtered by tool and optional ref.
+def _required_value(mapping: JsonDict, key: str, label: str) -> object:
+    if key not in mapping:
+        _fail(f"missing required {label}.{key}")
+    return mapping[key]
 
-    Returns an empty list when no analysis exists (404), which is the
-    expected state before the first SARIF upload.
-    """
-    params: dict[str, str] = {"per_page": "100", "tool_name": tool_name}
+
+def _mapping(value: object, label: str) -> JsonDict:
+    if not isinstance(value, dict):
+        _fail(f"missing or invalid object at {label}")
+    return value
+
+
+def _string(mapping: JsonDict, key: str, label: str) -> str:
+    value = _required_value(mapping, key, label)
+    if not isinstance(value, str) or not value:
+        _fail(f"missing or invalid string at {label}.{key}")
+    return value
+
+
+def _integer(mapping: JsonDict, key: str, label: str) -> int:
+    value = _required_value(mapping, key, label)
+    if not isinstance(value, int):
+        _fail(f"missing or invalid integer at {label}.{key}")
+    return value
+
+
+def _alerts_query_params(tool_name: str, ref: str | None, state: str | None) -> dict[str, str]:
+    params = {"per_page": "100", "tool_name": tool_name}
     if ref:
         params["ref"] = ref
     if state:
         params["state"] = state
+    return params
 
-    path = f"repos/{repo}/code-scanning/alerts"
+
+def _alerts_api_args(path: str, params: dict[str, str], page: int) -> list[str]:
+    args = ["gh", "api", "--method", "GET", path]
+    for key, value in params.items():
+        args.extend(["--field", f"{key}={value}"])
+    args.extend(["--field", f"page={page}"])
+    return args
+
+
+def _no_analysis_found(stderr: str) -> bool:
+    return "no analysis found" in stderr
+
+
+def _validated_alert_page(stdout: str, path: str) -> list[JsonDict]:
+    page_alerts = json.loads(stdout)
+    if not isinstance(page_alerts, list):
+        _fail(f"gh api GET {path} returned non-list JSON")
+    return [_mapping(alert, f"gh api GET {path} alert") for alert in page_alerts]
+
+
+def _fetch_alert_page(path: str, params: dict[str, str], page: int) -> list[JsonDict]:
+    result = subprocess.run(_alerts_api_args(path, params, page), capture_output=True, text=True)
+    if result.returncode != 0:
+        if _no_analysis_found(result.stderr):
+            return []
+        _fail(f"gh api GET {path} failed: {result.stderr.strip()}")
+    return _validated_alert_page(result.stdout, path)
+
+
+def _paginated_alerts(path: str, params: dict[str, str]) -> list[JsonDict]:
     alerts: list[JsonDict] = []
     page = 1
-
     while True:
-        args = ["gh", "api", "--method", "GET", path]
-        for k, v in params.items():
-            args.extend(["--field", f"{k}={v}"])
-        args.extend(["--field", f"page={page}"])
-
-        result = subprocess.run(args, capture_output=True, text=True)
-
-        if result.returncode != 0:
-            if "no analysis found" in result.stderr:
-                return []
-            _fail(f"gh api GET {path} failed: {result.stderr.strip()}")
-
-        page_alerts = json.loads(result.stdout)
-        if not isinstance(page_alerts, list):
-            _fail(f"gh api GET {path} returned non-list JSON")
+        page_alerts = _fetch_alert_page(path, params, page)
         alerts.extend(page_alerts)
         if len(page_alerts) < 100:
             return alerts
         page += 1
+
+
+def _fetch_alerts(repo: str, tool_name: str, ref: str | None = None, state: str | None = None) -> list[JsonDict]:
+    """Fetch code scanning alerts for a repo, filtered by tool and optional ref."""
+    path = f"repos/{repo}/code-scanning/alerts"
+    return _paginated_alerts(path, _alerts_query_params(tool_name, ref, state))
 
 
 _THREADS_QUERY = """
@@ -115,14 +157,21 @@ def _thread_page(owner: str, name: str, pr_number: int, cursor: str | None) -> J
 
 
 def _thread_digest(node: JsonDict) -> JsonDict | None:
-    comments = node["comments"]["nodes"]
+    comments_value = _mapping(_required_value(node, "comments", "review_thread"), "review_thread.comments")
+    comments = _required_value(comments_value, "nodes", "review_thread.comments")
+    if not isinstance(comments, list):
+        _fail("missing or invalid array at review_thread.comments.nodes")
     if not comments:
         return None
-    headline = comments[0]["body"].splitlines()[0] if comments[0]["body"] else ""
+    first_comment = _mapping(comments[0], "review_thread.comments.nodes[0]")
+    body = _string(first_comment, "body", "review_thread.comments.nodes[0]")
+    resolved = _required_value(node, "isResolved", "review_thread")
+    if not isinstance(resolved, bool):
+        _fail("missing or invalid boolean at review_thread.isResolved")
     return {
-        "path": node["path"],
-        "headline": headline,
-        "resolved": node["isResolved"],
+        "path": _string(node, "path", "review_thread"),
+        "headline": body.splitlines()[0],
+        "resolved": resolved,
     }
 
 
@@ -144,36 +193,29 @@ def _fetch_pr_threads(repo: str, pr_number: int) -> list[JsonDict]:
 
 
 def _alert_label(alert: JsonDict) -> str:
-    loc = alert["most_recent_instance"]["location"]
-    if "properties" in loc:
-        props = loc["properties"]
-        assert isinstance(props, dict)
-        if "label" in props:
-            label = props["label"]
-            assert isinstance(label, str) and label
-            return label
-    rule = alert["rule"]
-    name = rule["name"]
-    assert isinstance(name, str) and name
-    return name
+    """Extract finding label from GitHub's required rule metadata."""
+    rule = _mapping(_required_value(alert, "rule", "alert"), "alert.rule")
+    if "name" in rule:
+        return _string(rule, "name", "alert.rule")
+    return _string(rule, "id", "alert.rule")
 
 
 def _alert_location(alert: JsonDict) -> str:
-    loc = alert["most_recent_instance"]["location"]
-    path = loc["path"]
-    start_line = loc["start_line"]
-    assert isinstance(path, str) and path
-    assert isinstance(start_line, int)
+    instance = _mapping(
+        _required_value(alert, "most_recent_instance", "alert"),
+        "alert.most_recent_instance",
+    )
+    loc = _mapping(
+        _required_value(instance, "location", "alert.most_recent_instance"),
+        "alert.most_recent_instance.location",
+    )
+    path = _string(loc, "path", "alert.most_recent_instance.location")
+    start_line = _integer(loc, "start_line", "alert.most_recent_instance.location")
     return f"{path}:{start_line}"
 
 
 def _alert_url(alert: JsonDict) -> str:
-    if "html_url" in alert:
-        url = alert["html_url"]
-    else:
-        url = alert["url"]
-    assert isinstance(url, str) and url
-    return url
+    return _string(alert, "html_url", "alert")
 
 
 def _format_alert(alert: JsonDict) -> str:
@@ -193,13 +235,16 @@ def _dismissed_lines(alerts: list[JsonDict]) -> list[str]:
     if not alerts:
         return []
     lines = ["", "**Dismissed / rejected findings:**"]
-    for a in alerts:
-        reason = a["dismissed_reason"]
-        assert isinstance(reason, str) and reason
-        comment = a["dismissed_comment"] if "dismissed_comment" in a else None
-        assert comment is None or isinstance(comment, str)
-        extra = f" ({reason}: {comment})" if comment else f" ({reason})"
-        lines.append(_format_alert(a) + extra)
+    for alert in alerts:
+        reason = _string(alert, "dismissed_reason", "alert")
+        comment_value = _required_value(alert, "dismissed_comment", "alert")
+        if comment_value is None:
+            extra = f" ({reason})"
+        elif isinstance(comment_value, str):
+            extra = f" ({reason}: {comment_value})" if comment_value else f" ({reason})"
+        else:
+            _fail("missing or invalid string at alert.dismissed_comment")
+        lines.append(_format_alert(alert) + extra)
     return lines
 
 

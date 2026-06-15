@@ -30,6 +30,13 @@ jobs:
       security-events: write
       actions: read
       pull-requests: write
+    env:
+      REVIEW_REPORT_TYPE: ${{ inputs.report_type }}
+      REVIEW_SCOPE: ${{ inputs.scope }}
+      REVIEW_FAIL_BELOW: ${{ inputs.fail_below }}
+      REVIEW_INFRA_REF: ${{ inputs.infra_ref }}
+      REVIEW_PR_NUMBER: ${{ github.event.number || 0 }}
+      REVIEW_BASE_REF: ${{ github.base_ref }}
 
     steps:
       - uses: actions/checkout@v4
@@ -41,10 +48,39 @@ jobs:
         # path once so every later step's shell sees $INFRA.
         run: echo "INFRA=$RUNNER_TEMP/ai-review-ci" >> "$GITHUB_ENV"
 
+      - name: Validate review inputs
+        run: |
+          case "$REVIEW_REPORT_TYPE" in
+            general|slop) ;;
+            *) echo "invalid report_type: $REVIEW_REPORT_TYPE" >&2; exit 1 ;;
+          esac
+          case "$REVIEW_SCOPE" in
+            repo|diff) ;;
+            *) echo "invalid scope: $REVIEW_SCOPE" >&2; exit 1 ;;
+          esac
+          if [[ ! "$REVIEW_FAIL_BELOW" =~ ^$|^[0-9]$|^[1-9][0-9]$|^100$ ]]; then
+            echo "invalid fail_below: $REVIEW_FAIL_BELOW" >&2
+            exit 1
+          fi
+          if [[ ! "$REVIEW_PR_NUMBER" =~ ^[0-9]+$ ]]; then
+            echo "invalid pull request number: $REVIEW_PR_NUMBER" >&2
+            exit 1
+          fi
+          if [[ -z "$REVIEW_INFRA_REF" || "$REVIEW_INFRA_REF" =~ [^A-Za-z0-9._/-] ]]; then
+            echo "invalid infra_ref: $REVIEW_INFRA_REF" >&2
+            exit 1
+          fi
+          if [[ "$REVIEW_BASE_REF" =~ [^A-Za-z0-9._/-] ]]; then
+            echo "invalid base_ref: $REVIEW_BASE_REF" >&2
+            exit 1
+          fi
+          if [[ "$REVIEW_SCOPE" == "diff" && -z "$REVIEW_BASE_REF" ]]; then
+            echo "base_ref is required for diff scope" >&2
+            exit 1
+          fi
+
       - name: Clone review infrastructure
-        env:
-          INFRA_REF: ${{ inputs.infra_ref }}
-        run: git clone --depth 1 --branch "$INFRA_REF" https://github.com/dzackgarza/ai-review-ci.git "$INFRA"
+        run: git clone --depth 1 --branch "$REVIEW_INFRA_REF" https://github.com/dzackgarza/ai-review-ci.git "$INFRA"
 
       - name: Setup Python
         uses: actions/setup-python@v5
@@ -65,32 +101,23 @@ jobs:
       - name: Fetch reviewer context
         env:
           GH_TOKEN: ${{ github.token }}
-          REPORT_TYPE: ${{ inputs.report_type }}
-          PR_NUMBER: ${{ github.event.number || 0 }}
-        run: just -f "$INFRA/ci/runner.just" fetch-context "ai-review/$REPORT_TYPE" "$PR_NUMBER"
+        run: just -f "$INFRA/ci/runner.just" fetch-context "ai-review/$REVIEW_REPORT_TYPE" "$REVIEW_PR_NUMBER"
 
       - name: Prepare reviewer
         run: just -f "$INFRA/ci/runner.just" prepare
 
       - name: Stage PR diff
         if: inputs.scope == 'diff'
-        env:
-          BASE_REF: ${{ github.base_ref }}
-        run: just -f "$INFRA/ci/runner.just" stage-pr-diff "$BASE_REF"
+        run: just -f "$INFRA/ci/runner.just" stage-pr-diff "$REVIEW_BASE_REF"
 
       - name: Run review
-        env:
-          REPORT_TYPE: ${{ inputs.report_type }}
-          REVIEW_SCOPE: ${{ inputs.scope }}
-        run: just -f "$INFRA/ci/runner.just" run-review "$REPORT_TYPE" "$REVIEW_SCOPE"
+        run: just -f "$INFRA/ci/runner.just" run-review "$REVIEW_REPORT_TYPE" "$REVIEW_SCOPE"
 
       - name: Collect review output
         run: just -f "$INFRA/ci/runner.just" collect-output
 
       - name: Convert report to SARIF
-        env:
-          REPORT_TYPE: ${{ inputs.report_type }}
-        run: just -f "$INFRA/ci/runner.just" convert-sarif "ai-$REPORT_TYPE-review"
+        run: just -f "$INFRA/ci/runner.just" convert-sarif "ai-$REVIEW_REPORT_TYPE-review"
 
       - name: Upload review findings
         uses: github/codeql-action/upload-sarif@v4
@@ -102,19 +129,16 @@ jobs:
         if: inputs.scope == 'diff'
         env:
           GH_TOKEN: ${{ github.token }}
-          PR_NUMBER: ${{ github.event.number }}
-        run: just -f "$INFRA/ci/runner.just" post-threads "$PR_NUMBER"
+        run: just -f "$INFRA/ci/runner.just" post-threads "$REVIEW_PR_NUMBER"
 
       - name: Check threshold
         if: inputs.fail_below != ''
-        env:
-          FAIL_BELOW: ${{ inputs.fail_below }}
         run: |
           tier1=$(jq '[.findings[] | select(.tier == "tier1")] | length' .review-report-artifact.json)
           tier2=$(jq '[.findings[] | select(.tier == "tier2")] | length' .review-report-artifact.json)
           score=$((100 - tier1 * 20 - tier2 * 5))
           score=$(( score < 0 ? 0 : score ))
-          if [ "$score" -lt "$FAIL_BELOW" ]; then
-            echo "Health score $score is below threshold $FAIL_BELOW"
+          if [ "$score" -lt "$REVIEW_FAIL_BELOW" ]; then
+            echo "Health score $score is below threshold $REVIEW_FAIL_BELOW"
             exit 1
           fi

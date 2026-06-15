@@ -14,6 +14,10 @@ list_policies: Final = object()
 set_global_policy: Final = object()
 install_config: Final = object()
 doctor: Final = object()
+validate: Final = object()
+schema: Final = object()
+metadata: Final = object()
+finding_body: Final = object()
 
 _FRAMEWORK_NAMES: Final[tuple[object, ...]] = (
     Element,
@@ -23,7 +27,40 @@ _FRAMEWORK_NAMES: Final[tuple[object, ...]] = (
     set_global_policy,
     install_config,
     doctor,
+    validate,
+    schema,
+    metadata,
+    finding_body,
 )
+
+
+class _PydanticValidatorCallbacks:
+    def __getattr__(self, name: str) -> object:
+        return name
+
+
+_pydantic: Final = _PydanticValidatorCallbacks()
+
+_PYDANTIC_VALIDATOR_NAMES: Final[tuple[object, ...]] = (
+    _pydantic._ordered_lines,
+    _pydantic._no_infra_categories,
+    _pydantic._tier_category_consistency,
+    _pydantic._no_empty_invariant,
+    _pydantic._check_paths,
+    _pydantic._check_git_paths,
+    _pydantic._require_substantive_finding,
+    _pydantic.cls,
+)
+
+
+class _ArgparseOverrides:
+    def __getattr__(self, name: str) -> object:
+        return name
+
+
+_argparse: Final = _ArgparseOverrides()
+
+_ARGPARSE_NAMES: Final[tuple[object, ...]] = (_argparse.error,)
 
 
 class _SpecAbstractNames:

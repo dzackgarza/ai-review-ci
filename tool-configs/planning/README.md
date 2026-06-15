@@ -106,25 +106,18 @@ convention:
   subclasses need not concern themselves with it.”
   This purpose is entirely independent of scoping and is not addressed by PEP 695.
 
-For this codebase, the type parameters involved (`_CatCachedMethod`,
-`_BilinearCachedMethod`, `_FieldCachedMethod`, etc.)
-are internal wrapper function types that appear nowhere in public documentation,
-subclassing contracts, or user-facing API. Removing the `_` prefix promotes them to
-apparently-public names with no semantic benefit and actively misleads readers about
-which names belong to the public surface.
+**Policy**: `tool-configs/ruff-global.toml` disables UP049 globally.
+Internal PEP 695 wrapper type parameters keep their leading `_` prefix.
 
-The user reviewed this rule during a live fix session (2026-05-13) and explicitly
-concluded: the `_` prefix makes implicit behaviour _explicit_ — the opposite of what
-UP049 claims. The rule is wrong for this codebase.
+**Why required**: `_CatCachedMethod`, `_BilinearCachedMethod`,
+`_FieldCachedMethod`, and the same wrapper-function type parameters are internal
+implementation types. Dropping `_` marks those internal names as public API while
+changing no runtime contract, type-checking contract, subclassing contract, or user
+documentation surface.
 
-**Alternatives considered**:
-
-- Accept the rename and drop the `_` convention for PEP 695 type parameters only.
-  Rejected: introduces a two-tier naming convention (old-style TypeVar uses `_`, PEP 695
-  uses public names) with no readability benefit.
-
-- Per-function `# noqa: UP049`. Rejected: scatters suppressions and is fragile as new
-  generic wrappers are added.
+**Owner**: `tool-configs/ruff-global.toml` owns the rule through
+`ignore = ["E741", "UP049"]`. The command path is `just test` → Python QC → Ruff
+normalization. Per-function `# noqa: UP049` comments are not the policy mechanism.
 
 **Scope**: All projects.
 The readability argument for `_`-prefixed type parameters applies universally to any

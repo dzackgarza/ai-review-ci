@@ -17,9 +17,11 @@ Usage:
   uv run scripts/sync_qc_excludes.py --dry-run
 """
 
+import argparse
 import json
 import sys
 from pathlib import Path
+from typing import Never
 
 import tomlkit
 
@@ -125,13 +127,23 @@ def load_toml_dirs(config: Path) -> list[str]:
 
     with config.open("rb") as data:
         cfg = tomllib.load(data)
-    directories = cfg["directories"]
-    assert isinstance(directories, list), "qc-excludes directories must be a list"
-    result: list[str] = []
+    directories: object = cfg.get("directories")
+    if not isinstance(directories, list):
+        print(
+            f"ERROR: {config} must define directories as a list of strings",
+            file=sys.stderr,
+        )
+        sys.exit(1)
+    validated: list[str] = []
     for directory in directories:
-        assert isinstance(directory, str), "qc-excludes directories must contain strings"
-        result.append(directory)
-    return result
+        if not isinstance(directory, str):
+            print(
+                f"ERROR: {config} must define directories as a list of strings",
+                file=sys.stderr,
+            )
+            sys.exit(1)
+        validated.append(directory)
+    return validated
 
 
 def _build_entries(cfg: ToolConfig, dirs: list[str]) -> list[str]:
@@ -189,36 +201,68 @@ def write_toml_config(qc_root: Path, cfg: ToolConfig, dirs: list[str]) -> None:
     print(f"  Updated {cfg['path']} ({len(entries)} entries)")
 
 
-def main() -> None:
-    dry_run = "--dry-run" in sys.argv
-    config_path: Path | None = None
-    args = [a for a in sys.argv[1:] if a != "--dry-run"]
-    if args:
-        config_path = Path(args[0])
-    if config_path is None:
-        config_path = find_config()
-    else:
-        config_path = config_path.resolve()
+class _ArgumentParser(argparse.ArgumentParser):
+    def error(self, message: str) -> Never:
+        print(f"ERROR: {message}", file=sys.stderr)
+        sys.exit(1)
 
-    qc_root = config_path.parent
-    dirs = load_toml_dirs(config_path)
+def _parse_args(argv: list[str]) -> argparse.Namespace:
+    parser = _ArgumentParser(add_help=False)
+    parser.add_argument("--dry-run", action="store_true")
+    parser.add_argument("config_paths", nargs="*")
+    args, unknown = parser.parse_known_args(argv)
+    if unknown:
+        print(f"ERROR: unknown flag {unknown[0]}", file=sys.stderr)
+        sys.exit(1)
+    return args
 
+
+def _resolve_config_path(config_paths: list[str]) -> Path:
+    if not config_paths:
+        return find_config()
+    return Path(config_paths[0]).resolve()
+
+
+def _print_sync_status(qc_root: Path, dirs: list[str]) -> None:
     print(f"QC root: {qc_root}")
     print(f"Canonical excludes ({len(dirs)}): {', '.join(dirs)}")
 
-    if dry_run:
-        print("\nDRY RUN — no files modified.\n")
-        return
 
+def _print_dry_run_status() -> None:
+    print("\nDRY RUN — no files modified.\n")
+
+
+_CONFIG_WRITERS = {
+    "json": write_json_config,
+    "toml": write_toml_config,
+}
+
+
+def _write_tool_config(qc_root: Path, cfg: ToolConfig, dirs: list[str]) -> None:
+    writer = _CONFIG_WRITERS.get(cfg["format"])
+    if writer is None:
+        print(f"ERROR: unknown config format {cfg['format']}", file=sys.stderr)
+        sys.exit(1)
+    writer(qc_root, cfg, dirs)
+
+
+def _write_all_configs(qc_root: Path, dirs: list[str]) -> None:
     print()
     for cfg in configs:
-        fmt = cfg["format"]
-        if fmt == "json":
-            write_json_config(qc_root, cfg, dirs)
-        elif fmt == "toml":
-            write_toml_config(qc_root, cfg, dirs)
-
+        _write_tool_config(qc_root, cfg, dirs)
     print("\nDone.")
+
+
+def main() -> None:
+    args = _parse_args(sys.argv[1:])
+    config_path = _resolve_config_path(args.config_paths)
+    qc_root = config_path.parent
+    dirs = load_toml_dirs(config_path)
+    _print_sync_status(qc_root, dirs)
+    if args.dry_run:
+        _print_dry_run_status()
+        return
+    _write_all_configs(qc_root, dirs)
 
 
 if __name__ == "__main__":
