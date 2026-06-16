@@ -284,14 +284,22 @@ _ast-grep:
 	echo "# Structural code pattern analysis for bridge-burning policy violations"
 	sg_config="{{configs}}/ast-grep/sgconfig.yml"
 	if [ -f "$sg_config" ]; then
-		if /bin/ast-grep scan --config "$sg_config" .; then
+		if npx -y ast-grep scan --config "$sg_config" .; then
 			:
 		else
 			ec=$?
 			echo ""
 			echo "!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!"
-			echo "  ERROR: ast-grep found pattern violations in project code."
-			echo "  Fix the project code, not the QC tooling."
+			if [ "$ec" -eq 1 ]; then
+				echo "  ERROR: ast-grep found pattern violations in project code."
+				echo "  Fix the project code, not the QC tooling."
+			else
+				echo "  ERROR: ast-grep FAILED TO RUN (exit $ec). This is a QC TOOLING failure,"
+				echo "  NOT a project-code violation. ast-grep did not complete a scan, so no"
+				echo "  finding has been made about the project. Fix the QC tooling/environment"
+				echo "  (e.g. ast-grep missing from PATH, broken npx resolution, or an invalid"
+				echo "  ast-grep config at $sg_config). Do NOT edit project code in response to this."
+			fi
 			echo "!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!"
 			"{{artifacts}}/scripts/emit-triage-directive.sh"
 			exit $ec
