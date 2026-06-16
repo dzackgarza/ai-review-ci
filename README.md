@@ -1,21 +1,14 @@
 # ai-review-ci
 
-Centrally-managed, OpenCode-powered review CI. Target repositories carry only
-three thin trigger workflows; everything else — the reusable workflow, the
-review runner, the validator, the reviewer home template, the prompt corpus —
-lives here and is cloned inside the CI runner at execution time. Updating this
-repo updates every consumer on their next run.
+Centrally-managed, OpenCode-powered review CI. Target repositories carry only three thin trigger workflows; everything else — the reusable workflow, the review runner, the validator, the reviewer home template, the prompt corpus — lives here and is cloned inside the CI runner at execution time.
+Updating this repo updates every consumer on their next run.
 
 Two review types:
 
-- **General review** — structural code quality audit: architectural decay,
-  dead code, test quality, dependency mismanagement, semantic regressions.
-- **Slop review** — AI-generated-code audit: bridge-burning violations,
-  runtime control-flow defects, test/text antipatterns, validation-evasion
-  constructs, defaults/fallbacks/mocks/skips.
+- **General review** — structural code quality audit: architectural decay, dead code, test quality, dependency mismanagement, semantic regressions.
+- **Slop review** — AI-generated-code audit: bridge-burning violations, runtime control-flow defects, test/text antipatterns, validation-evasion constructs, defaults/fallbacks/mocks/skips.
 
-Each type runs in two scopes: **repo** (full-repository sweep) and **diff**
-(PR review focused on the diff against the base branch).
+Each type runs in two scopes: **repo** (full-repository sweep) and **diff** (PR review focused on the diff against the base branch).
 
 ## Installing into a repo
 
@@ -26,21 +19,17 @@ uvx --from git+https://github.com/dzackgarza/ai-review-ci ai-review-ci install
 
 This writes exactly three files into `.github/workflows/` and nothing else:
 
-| File                 | Triggers                                     |
-| -------------------- | -------------------------------------------- |
-| `review-general.yml` | weekly cron, push to main, manual dispatch   |
-| `review-slop.yml`    | weekly cron, push to main, manual dispatch   |
-| `review-pr.yml`      | every pull request (both types, diff-scoped) |
+| File | Triggers |
+| --- | --- |
+| `review-general.yml` | weekly cron, push to main, manual dispatch |
+| `review-slop.yml` | weekly cron, push to main, manual dispatch |
+| `review-pr.yml` | every pull request (both types, diff-scoped) |
 
-The three files are minimally-correct base configuration and become
-**repo-owned** the moment they are installed: edit crons, branches,
-thresholds, and the upstream `@ref` directly in the YAML — that is the
-whole downstream surface. The installer never overwrites them. All review
-_behavior_ lives upstream and needs no reinstall: every run clones this
-repo fresh.
+The three files are minimally-correct base configuration and become **repo-owned** the moment they are installed: edit crons, branches, thresholds, and the upstream `@ref` directly in the YAML — that is the whole downstream surface.
+The installer never overwrites them.
+All review *behavior* lives upstream and needs no reinstall: every run clones this repo fresh.
 
-What an installed trigger looks like (`review-general.yml` — pure
-configuration pointing at the upstream reusable workflow):
+What an installed trigger looks like (`review-general.yml` — pure configuration pointing at the upstream reusable workflow):
 
 ```yaml
 name: General Review
@@ -64,13 +53,10 @@ jobs:
       fail_below: ${{ vars.GENERAL_FAIL_BELOW }}
 ```
 
-The canonical templates live in
-[`src/ai_review_ci/templates/`](src/ai_review_ci/templates/).
+The canonical templates live in [`src/ai_review_ci/templates/`](src/ai_review_ci/templates/).
 
-Requirements in the target repo: GitHub code scanning enabled (free for
-public repos); optionally the Actions vars `GENERAL_FAIL_BELOW` /
-`SLOP_FAIL_BELOW` to gate runs on a health score. The PR trigger passes
-those same vars to the diff-scoped general and slop jobs.
+Requirements in the target repo: GitHub code scanning enabled (free for public repos); optionally the Actions vars `GENERAL_FAIL_BELOW` / `SLOP_FAIL_BELOW` to gate runs on a health score.
+The PR trigger passes those same vars to the diff-scoped general and slop jobs.
 
 ## Installing QC Surfaces
 
@@ -84,10 +70,8 @@ cd ~/ai-review-ci
 
 ### Global Git hooks
 
-Global hooks are user-level Git hooks. The install recipe requires
-`GIT_GLOBAL_HOOKS_DIR` to name the explicit hooks directory, symlinks
-`global-hooks/pre-commit` and `global-hooks/pre-push` into that directory, and
-sets the user's global `core.hooksPath` to the same value:
+Global hooks are user-level Git hooks.
+The install recipe requires `GIT_GLOBAL_HOOKS_DIR` to name the explicit hooks directory, symlinks `global-hooks/pre-commit` and `global-hooks/pre-push` into that directory, and sets the user's global `core.hooksPath` to the same value:
 
 ```bash
 cd ~/ai-review-ci
@@ -111,17 +95,14 @@ cd ~/ai-review-ci
 just install-repo-hooks /path/to/target/repo
 ```
 
-Use this when a repository needs local hook files without changing the user's
-global hook path.
+Use this when a repository needs local hook files without changing the user's global hook path.
 
 ### Repo-local QC delegation
 
 Target repositories should not copy QC configs, tool pins, or hook scripts.
-Their local `justfile` should delegate the public `test` and `test-ci`
-recipes to the relevant language justfile in `~/ai-review-ci`.
+Their local `justfile` should delegate the public `test` and `test-ci` recipes to the relevant language justfile in `~/ai-review-ci`.
 
-For new projects, install the tracked scaffold instead of hand-writing the
-delegation surface:
+For new projects, install the tracked scaffold instead of hand-writing the delegation surface:
 
 ```bash
 cd ~/ai-review-ci
@@ -132,12 +113,11 @@ just install-qc-scaffold rust /path/to/new/repo
 just install-qc-scaffold sage /path/to/new/repo
 ```
 
-The recipe copies files from `scaffolds/<language>/` and refuses to overwrite
-existing files. Edit the tracked scaffold here when the standard project
-surface changes; do not copy sample snippets into downstream repos by hand.
+The recipe copies files from `scaffolds/<language>/` and refuses to overwrite existing files.
+Edit the tracked scaffold here when the standard project surface changes; do not copy sample snippets into downstream repos by hand.
 
-The scaffold contents are intentionally small. They install the repo-local
-command surface; the actual QC behavior remains global.
+The scaffold contents are intentionally small.
+They install the repo-local command surface; the actual QC behavior remains global.
 
 Python:
 
@@ -179,27 +159,21 @@ test-ci:
     @just -f ~/ai-review-ci/justfiles/sage.just test-ci
 ```
 
-Project-specific checks may be added only as private recipes composed after
-the global gate. Generic linting, formatting, typechecking, coverage,
-complexity, copy-paste, slop detection, tool configs, and tool versions stay
-owned by this repository.
+Project-specific checks may be added only as private recipes composed after the global gate.
+Generic linting, formatting, typechecking, coverage, complexity, copy-paste, slop detection, tool configs, and tool versions stay owned by this repository.
 
 ## Canonical Operations
 
 ### Running repo-wide reviews
 
-- **Automatic:** every push to the default branch runs both review types;
-  weekly crons re-run them on schedule.
-- **On demand:** `gh workflow run "General Review"` or
-  `gh workflow run "Slop Review"` (or the Actions UI).
+- **Automatic:** every push to the default branch runs both review types; weekly crons re-run them on schedule.
+- **On demand:** `gh workflow run "General Review"` or `gh workflow run "Slop Review"` (or the Actions UI).
 
 ### Finding all outstanding reported issues
 
-The single ledger is **GitHub code scanning alerts**, under tool names
-`ai-review/general` and `ai-review/slop`:
+The single ledger is **GitHub code scanning alerts**, under tool names `ai-review/general` and `ai-review/slop`:
 
-- Agent/CLI, formatted (the same context document CI reviewers receive —
-  open / dismissed-with-reason / fixed, each with `path:line` and alert URL):
+- Agent/CLI, formatted (the same context document CI reviewers receive — open / dismissed-with-reason / fixed, each with `path:line` and alert URL):
 
   ```bash
   uvx --from git+https://github.com/dzackgarza/ai-review-ci ai-review-ci fetch-context --repo owner/repo
@@ -213,24 +187,19 @@ The single ledger is **GitHub code scanning alerts**, under tool names
 
 - Humans: the repo's Security tab → Code scanning.
 
-Disposition semantics: each run uploads a complete ledger snapshot for its
-tool/category. The snapshot is the union of existing open, non-dismissed
-alerts carried forward by automation and new findings from the current
-reviewer. Reviewer omission is not a disposition. Dismissed/fixed alerts feed
-future reviewer context as do-not-re-raise instructions, but only open alerts
-are carried into the next SARIF upload.
+Disposition semantics: each run uploads a complete ledger snapshot for its tool/category.
+The snapshot is the union of existing open, non-dismissed alerts carried forward by automation and new findings from the current reviewer.
+Reviewer omission is not a disposition.
+Dismissed/fixed alerts feed future reviewer context as do-not-re-raise instructions, but only open alerts are carried into the next SARIF upload.
 
 ### PR findings
 
 Diff-scoped findings surface twice, deliberately:
 
-- **Code scanning**: uploaded under the same SARIF categories as repo-wide
-  runs, so GitHub natively computes "new alerts introduced by this PR" and
-  annotates the diff. Make the check blocking via branch protection.
-- **Resolvable review threads**: one review block per run (summary +
-  metadata) with one inline, individually-resolvable comment per finding,
-  for later disposition/remediation by separate agents. Off-diff findings
-  are listed in the review body only — they are already in the ledger.
+- **Code scanning**: uploaded under the same SARIF categories as repo-wide runs, so GitHub natively computes "new alerts introduced by this PR" and annotates the diff.
+  Make the check blocking via branch protection.
+- **Resolvable review threads**: one review block per run (summary + metadata) with one inline, individually-resolvable comment per finding, for later disposition/remediation by separate agents.
+  Off-diff findings are listed in the review body only — they are already in the ledger.
 
 ## Architecture
 
@@ -251,17 +220,17 @@ target repo                          this repo (cloned at CI time)
 
 The non-CI quality-control stack is split by operational concern:
 
-| Directory         | Owns                                                                        |
-| ----------------- | --------------------------------------------------------------------------- |
-| `global-hooks/`   | User-level Git hooks installed with `just install-global-hooks`.            |
-| `repo-hooks/`     | Per-repository hook templates installed with `just install-repo-hooks`.     |
-| `scaffolds/`      | Repo-local QC delegation scaffolds copied with `just install-qc-scaffold`.  |
-| `tool-configs/`   | Static tool configuration and QC planning notes.                            |
+| Directory | Owns |
+| --- | --- |
+| `global-hooks/` | User-level Git hooks installed with `just install-global-hooks`. |
+| `repo-hooks/` | Per-repository hook templates installed with `just install-repo-hooks`. |
+| `scaffolds/` | Repo-local QC delegation scaffolds copied with `just install-qc-scaffold`. |
+| `tool-configs/` | Static tool configuration and QC planning notes. |
 | `tool-artifacts/` | Scripts, generated model artifacts, and helper code consumed by QC recipes. |
-| `justfiles/`      | Shared and language-specific QC recipe hierarchy.                           |
-| `skills/`         | Agent-facing QC operating instructions owned by this repo.                  |
-| `ci/`             | Review CI runner, reviewer home, and private validator surface.             |
-| `reviews/`        | Review prompt templates, manifests, scopes, and vendored policy text.       |
+| `justfiles/` | Shared and language-specific QC recipe hierarchy. |
+| `skills/` | Agent-facing QC operating instructions owned by this repo. |
+| `ci/` | Review CI runner, reviewer home, and private validator surface. |
+| `reviews/` | Review prompt templates, manifests, scopes, and vendored policy text. |
 
 Use the migrated quality gate directly from a target repo:
 
@@ -298,39 +267,24 @@ trigger -> _review.yml (cross-repo reusable workflow)
 
 ### The agent contract
 
-The reviewer agent's only job is intelligent analysis producing a data file
-that fits a validated schema, retrying on rejection. Everything else is
-automation. The agent never supplies infrastructure facts: provenance
-(commit, repo) is attached runner-side from the CI environment; the
-validator (root-owned, unreadable and unmodifiable by the reviewer) checks
-schema, semantic field rules, and the trivial hallucination surfaces — every
-cited path must exist in the real checkout, every line range must lie within
-the file. Reports are diagnosis-only: no remediation fields exist.
+The reviewer agent's only job is intelligent analysis producing a data file that fits a validated schema, retrying on rejection.
+Everything else is automation.
+The agent never supplies infrastructure facts: provenance (commit, repo) is attached runner-side from the CI environment; the validator (root-owned, unreadable and unmodifiable by the reviewer) checks schema, semantic field rules, and the trivial hallucination surfaces — every cited path must exist in the real checkout, every line range must lie within the file.
+Reports are diagnosis-only: no remediation fields exist.
 
 ### Security model
 
-The CI workflow runs as `runner`. The agent runs as a dedicated `reviewer`
-user with exactly one sudo rule: the private submit command. It reads a
-sanitized repo copy (no `.git`, no `.github`), cannot see this
-infrastructure, and discovers the report schema only through
-`/home/reviewer/bin/submit-candidate --help`.
+The CI workflow runs as `runner`. The agent runs as a dedicated `reviewer` user with exactly one sudo rule: the private submit command.
+It reads a sanitized repo copy (no `.git`, no `.github`), cannot see this infrastructure, and discovers the report schema only through `/home/reviewer/bin/submit-candidate --help`.
 
 ### Finding identity
 
-`sha256(category|path)` is the stable identity for both SARIF alerts
-(`partialFingerprints.reviewFindingKey`) and PR threads (an
-`ai-review-fingerprint` marker in the thread body). Labels, line numbers,
-and SHAs are excluded so the same defect class in the same file maps to one
-tracked item across runs. During SARIF conversion, existing open alerts are
-re-emitted unless the current reviewer report contains the same fingerprint,
-in which case the current report replaces the carried copy. Resolved PR
-threads and dismissed/fixed code-scanning alerts are dispositions, not
-carry-forward entries.
+`sha256(category|path)` is the stable identity for both SARIF alerts (`partialFingerprints.reviewFindingKey`) and PR threads (an `ai-review-fingerprint` marker in the thread body).
+Labels, line numbers, and SHAs are excluded so the same defect class in the same file maps to one tracked item across runs.
+During SARIF conversion, existing open alerts are re-emitted unless the current reviewer report contains the same fingerprint, in which case the current report replaces the carried copy.
+Resolved PR threads and dismissed/fixed code-scanning alerts are dispositions, not carry-forward entries.
 
 ## Developing
 
-Edit here, push to `main`, and every consumer's next run uses the new
-behavior (consumers that pinned a different `@ref` in their trigger files
-update on their chosen ref). The reusable workflow and the runner recipes
-take all paths from the CI-time clone, so downstream repos contain nothing
-but their three trigger files.
+Edit here, push to `main`, and every consumer's next run uses the new behavior (consumers that pinned a different `@ref` in their trigger files update on their chosen ref).
+The reusable workflow and the runner recipes take all paths from the CI-time clone, so downstream repos contain nothing but their three trigger files.

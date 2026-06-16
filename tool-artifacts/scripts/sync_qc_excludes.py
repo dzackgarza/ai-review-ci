@@ -206,6 +206,7 @@ class _ArgumentParser(argparse.ArgumentParser):
         print(f"ERROR: {message}", file=sys.stderr)
         sys.exit(1)
 
+
 def _parse_args(argv: list[str]) -> argparse.Namespace:
     parser = _ArgumentParser(add_help=False)
     parser.add_argument("--dry-run", action="store_true")
