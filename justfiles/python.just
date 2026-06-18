@@ -380,7 +380,7 @@ _ast-grep: _install-tools
 		exit 1
 	fi
 	findings_file=$(mktemp)
-	trap 'if [ -e "$findings_file" ]; then gio trash "$findings_file"; fi' EXIT
+	trap 'if [ -e "$findings_file" ]; then rm -f "$findings_file"; fi' EXIT
 	npx -y ast-grep scan \
 		--config {{configs}}/sgconfig.yml \
 		--report-style short \
