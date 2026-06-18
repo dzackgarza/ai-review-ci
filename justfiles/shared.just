@@ -252,6 +252,49 @@ _check-no-local-qc-override:
 	fi
 	echo "No local QC overrides detected"
 
+_ensure-qc-repo-current:
+	#!/usr/bin/env bash
+	set -euo pipefail
+	echo "============================="
+	echo "=== Running: QC repo freshness check ==="
+	qc_root="{{infra}}"
+	qc_branch="$(git -C "$qc_root" branch --show-current)"
+	if [ -z "$qc_branch" ]; then
+		echo "ERROR: QC repo is in detached HEAD mode; cannot auto-update deterministically."
+		echo "       Update ~/ai-review-ci manually and rerun."
+		echo "       Command: git -C ~/ai-review-ci pull"
+		"{{artifacts}}/scripts/emit-triage-directive.sh"
+		exit 1
+	fi
+	if ! git -C "$qc_root" fetch --quiet --prune --tags origin; then
+		echo "ERROR: QC repo auto-update check failed."
+		echo "  Cannot fetch from origin for ~/ai-review-ci."
+		echo "  UPDATE THE QC REPO FIRST before running project QC:"
+		echo "  git -C ~/ai-review-ci pull"
+		"{{artifacts}}/scripts/emit-triage-directive.sh"
+		exit 1
+	fi
+	if ! git -C "$qc_root" show-ref --verify --quiet "refs/remotes/origin/$qc_branch"; then
+		echo "ERROR: No remote-tracking branch found: origin/$qc_branch"
+		echo "  UPDATE THE QC REPO FIRST before running project QC:"
+		echo "  git -C ~/ai-review-ci pull"
+		"{{artifacts}}/scripts/emit-triage-directive.sh"
+		exit 1
+	fi
+	behind_count="$(git -C "$qc_root" rev-list --count "HEAD..origin/$qc_branch")"
+	if [ "$behind_count" -gt 0 ]; then
+		echo "Global QC is behind by $behind_count commit(s) on origin/$qc_branch."
+		echo "Attempting auto-update: git -C ~/ai-review-ci pull"
+		if ! git -C "$qc_root" pull --ff-only; then
+			echo "ERROR: Global QC auto-update failed (non-fast-forward or local changes)."
+			echo "  UPDATE THE QC REPO FIRST before rerunning project checks:"
+			echo "  git -C ~/ai-review-ci pull"
+			"{{artifacts}}/scripts/emit-triage-directive.sh"
+			exit 1
+		fi
+	fi
+	echo "Global QC repo is current with origin/$qc_branch."
+
 _semgrep:
 	#!/usr/bin/env bash
 	set -euo pipefail
@@ -381,7 +424,7 @@ _sync-qc-excludes:
 
 # ── Entry Points ──────────────────────────────────────────────────
 
-_global-qc: _check-envrc _no-bypass _check-no-local-qc-override _semgrep _ast-grep _vibecheck _slop
+_global-qc: _ensure-qc-repo-current _check-envrc _no-bypass _check-no-local-qc-override _semgrep _ast-grep _vibecheck _slop
 	#!/usr/bin/env bash
 	set -euo pipefail
 	echo "Global quality checks completed"
