@@ -432,12 +432,9 @@ _sync-qc-excludes:
 
 # ── Entry Points ──────────────────────────────────────────────────
 
-_global-qc: _ensure-qc-repo-current _check-envrc _no-bypass _check-no-local-qc-override _semgrep _ast-grep _vibecheck _slop
+# Push/CI-tier cross-language stack. `_no-bypass` is NOT here — it is a
+# commit-tier check invoked directly by each language's `test` recipe.
+_global-qc: _ensure-qc-repo-current _check-envrc _check-no-local-qc-override _semgrep _ast-grep _vibecheck _slop
 	#!/usr/bin/env bash
 	set -euo pipefail
 	echo "Global quality checks completed"
-
-_global-qc-ci: _global-qc
-	#!/usr/bin/env bash
-	set -euo pipefail
-	echo "Global CI quality checks completed"

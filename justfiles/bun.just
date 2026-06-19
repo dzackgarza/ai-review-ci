@@ -12,11 +12,14 @@
 #   _normalize (biome + eslint), _ast-grep, _jscpd, _lizard,
 #   _codeql, _slop-scan, _lint-staged
 #
-# WORKFLOW:
-#   just test      — local quality checks (linting, static analysis, complexity)
-#   just test-ci  — test + live/isolated checks (coverage, diff-cover, integration tests)
+# WORKFLOW (two-tier):
+#   just test     — COMMIT gate: correctness + normalization only (preflight,
+#                   biome/eslint auto-fix, tsc, plain bun test, bypass check).
+#   just test-ci  — PUSH/CI gate: test + the full style/slop/coverage stack
+#                   (coverage + diff-cover, knip, biome/eslint verify, ast-grep,
+#                   jscpd, lizard, slop-scan, semgrep, vibecheck, ai-slop).
 #
-# HOOKS: global hooks in `global-hooks/` block on `just test`.
+# HOOKS: pre-commit blocks on `just test`; pre-push blocks on `just test-ci`.
 #   Run `just install-global-hooks` from ~/ai-review-ci to activate them globally.
 #
 # CONFIG: this justfile resolves configs and artifacts from the ai-review-ci repo.
@@ -49,6 +52,23 @@ _normalize-common:
 	#!/usr/bin/env bash
 	set -euo pipefail
 	just -f {{justfiles}}/shared.just -d . _normalize-common
+
+_bun-test:
+	#!/usr/bin/env bash
+	set -euo pipefail
+	echo "============================="
+	echo "=== Running: bun test (commit tier — no coverage gate) ==="
+	echo "# Runs the project's own test suite; must pass. Coverage is enforced at push (test-ci)."
+	if jq -e '.scripts.test // empty' package.json >/dev/null 2>&1; then
+		bun run test
+		exit 0
+	fi
+	if [ ! -d tests ] && [ ! -d __tests__ ]; then
+		echo "ERROR: no test script and no tests directory found."
+		"{{artifacts}}/scripts/emit-triage-directive.sh"
+		exit 1
+	fi
+	bun test
 
 _coverage:
 	#!/usr/bin/env bash
@@ -349,18 +369,16 @@ _normalize: _eslint-deps
 		exit $ec
 	fi
 
-# public: all static checks run locally
-test: _check-ts-project _normalize-common _normalize _coverage _diff-cover _knip _biome _ast-grep _eslint _tsc _jscpd-bun _lizard-bun _slop-scan
+# public: COMMIT gate — correctness + normalization, plus bypass detection
+test: _check-ts-project _normalize-common _normalize _tsc _bun-test
+	#!/usr/bin/env bash
+	set -euo pipefail
+	just -f {{justfiles}}/shared.just _no-bypass
+	echo "Commit-tier quality checks completed"
+
+# public: PUSH/CI gate — test + the full style/slop/coverage stack
+test-ci: test _coverage _diff-cover _knip _biome _ast-grep _eslint _jscpd-bun _lizard-bun _slop-scan
 	#!/usr/bin/env bash
 	set -euo pipefail
 	just -f {{justfiles}}/shared.just _global-qc
-	echo "Local quality checks completed"
-
-# public: test-ci = test + live/isolated checks
-
-# Add project-specific live tests (needs docker, live server, etc.) here
-test-ci: test
-	#!/usr/bin/env bash
-	set -euo pipefail
-	just -f {{justfiles}}/shared.just _global-qc-ci
-	echo "CI checks completed"
+	echo "Push/CI quality checks completed"

@@ -71,6 +71,7 @@ cd ~/ai-review-ci
 ### Global Git hooks
 
 Global hooks are user-level Git hooks.
+The QC stack is two-tier: `pre-commit` runs `just test` (the commit gate — correctness and normalization only) and `pre-push` runs `just test-ci` (the push gate — the full style/slop/coverage stack on top of the commit gate).
 The install recipe requires `GIT_GLOBAL_HOOKS_DIR` to name the explicit hooks directory, symlinks `global-hooks/pre-commit` and `global-hooks/pre-push` into that directory, and sets the user's global `core.hooksPath` to the same value:
 
 ```bash
@@ -238,7 +239,12 @@ Use the migrated quality gate directly from a target repo:
 just -f ~/ai-review-ci/justfiles/python.just test
 ```
 
-Every language-specific `test` recipe runs shared normalization first: Markdown/JSON/YAML formatting and Semgrep autofix happen before language-specific checks and before verification gates.
+The quality gate is split into two tiers so that committing during feature work is cheap while heavier triage is deferred to push:
+
+- `just test` (commit tier, run by `pre-commit`) catches *plainly incorrect* code: project preflight, shared normalization (Markdown/JSON/YAML formatting + Semgrep autofix), language auto-fixers (ruff/biome/cargo fmt), syntax, type-checking (mypy/tsc/clippy), the project's own tests (no coverage threshold), and bypass-comment detection.
+- `just test-ci` (push tier, run by `pre-push`) depends on `test` and adds the *style/slop/coverage* stack: 100% coverage + diff-cover, deptry, import-linter, dead-code (vulture/grain/knip), jscpd, lizard, ast-grep, semgrep, vibecheck, and ai-slop.
+
+Every language-specific tier runs shared normalization first: Markdown/JSON/YAML formatting and Semgrep autofix happen before language-specific checks and before verification gates.
 
 The root `test` recipe for this repo routes through that same migrated hierarchy.
 

@@ -10,9 +10,12 @@
 # Sage-specific recipes:
 #   _sage-qc-files, _sage-syntax, _vulture (Sage-aware preparse)
 #
-# WORKFLOW:
-#   just test      — local quality checks (Sage syntax + Python QC)
-#   just test-ci  — test + live/isolated checks
+# WORKFLOW (two-tier):
+#   just test     — COMMIT gate: Sage syntax + Python correctness/normalize
+#                   (normalize, syntax, mypy, plain pytest, bypass check).
+#   just test-ci  — PUSH/CI gate: test + the full style/slop/coverage stack
+#                   (vulture, deptry, import-linter, jscpd, lizard, ast-grep,
+#                   grain, coverage + diff-cover, semgrep, vibecheck, ai-slop).
 
 infra := justfile_directory() / ".."
 configs := infra / "tool-configs"
@@ -173,18 +176,22 @@ _vulture: _sage-qc-files
 		"${generated_sage_python_files[@]}" \
 		"$whitelist_file"
 
-test: _normalize-common _sage-syntax _vulture
+# public: COMMIT gate — Sage syntax + Python correctness/normalization
+test: _normalize-common _sage-syntax
 	#!/usr/bin/env bash
 	set -euo pipefail
-	just -f {{justfiles}}/shared.just _check-envrc _check-no-local-qc-override
-	# Run the full Python QC chain via the Python justfile
 	python_qc_repo="{{justfiles}}/python.just"
-	python_qc_recipes=(_normalize _python-syntax _mypy _deptry _import-linter _ast-grep _jscpd-python _lizard-python _grain _pytest_with_coverage _diff-cover)
+	python_qc_recipes=(_normalize _python-syntax _mypy _pytest)
 	just -f "$python_qc_repo" "${python_qc_recipes[@]}"
-	just -f {{justfiles}}/shared.just _no-bypass _semgrep _ast-grep _vibecheck _slop
-	echo "Sage QC checks completed"
+	just -f {{justfiles}}/shared.just _no-bypass
+	echo "Sage commit-tier quality checks completed"
 
-test-ci: test
+# public: PUSH/CI gate — test + the full style/slop/coverage stack
+test-ci: test _vulture
 	#!/usr/bin/env bash
 	set -euo pipefail
-	echo "Sage CI checks completed"
+	python_qc_repo="{{justfiles}}/python.just"
+	python_qc_recipes=(_deptry _import-linter _ast-grep _jscpd-python _lizard-python _grain _pytest_with_coverage _diff-cover)
+	just -f "$python_qc_repo" "${python_qc_recipes[@]}"
+	just -f {{justfiles}}/shared.just _global-qc
+	echo "Sage push/CI quality checks completed"

@@ -37,7 +37,14 @@ The hierarchy is designed so that no skill below rank 3 can re-introduce mock se
 
 ### Minimal Public API
 
-**Only two public recipes exist:** `test` and `test-ci`. Everything else is private (prefixed with `_`). This prevents cherry-picking — agents cannot run just `lint` or just `typecheck` in isolation to bypass the full stack.
+**Only two public recipes exist:** `test` and `test-ci`. Everything else is private (prefixed with `_`). This prevents cherry-picking — agents cannot run just `lint` or just `typecheck` in isolation to bypass the stack.
+
+The two recipes are tiered:
+
+- **`test` (commit gate, run by `pre-commit`)** — correctness + normalization only: preflight, shared normalization + language auto-fixers, syntax, type-checking (mypy/tsc/clippy), the project's own tests with **no** coverage threshold, and bypass-comment detection.
+  Its job is to catch *plainly incorrect* code while keeping the tree normalized, without dragging full slop triage into every commit.
+- **`test-ci` (push gate, run by `pre-push`)** — depends on `test` and adds the full *style/slop/coverage* stack: 100% coverage + diff-cover, deptry, import-linter, dead-code (vulture/grain/knip), jscpd, lizard, ast-grep, semgrep, vibecheck, and ai-slop.
+  This is the complete pipeline; it must pass before pushing.
 
 ### Auto-Fix Enforcement: Always Apply All Available Fixes
 
@@ -76,10 +83,12 @@ This applies every deterministic auto-fix the toolchain supports:
 
 Late verification gates such as `semgrep`, `rustfmt --check`, `biome check`, `eslint --max-warnings 0`, and `just --list` parse checks must not be the first place deterministic style issues are discovered when a stable autoformatter exists.
 They verify that normalization succeeded.
+The auto-fixers in the tables above run in the commit-tier `test`; the heavier verification gates (`semgrep`, `biome check`, `eslint --max-warnings 0`, ai-slop, complexity, coverage) run in the push-tier `test-ci`.
 
 #### What agents MUST do
 
-- **Run `just test` (not individual checks).** The full stack with auto-fix is the only valid workflow.
+- **Run `just test` for the commit gate and `just test-ci` for the full stack (not individual checks).** Auto-fix runs in both.
+  Before pushing, `just test-ci` must pass.
   Do not run `ruff` or `biome` or `eslint` in isolation — the recipe handles all of them in the right order with the right flags.
 
 - **Never skip the auto-fix step.** If `just test` passes without changes, fine.
@@ -106,9 +115,9 @@ It is an epistemic integrity requirement: the state of the code after `just test
 
 ### Full Stack, No Exceptions
 
-`just test` runs the complete QC pipeline.
+`just test-ci` runs the complete QC pipeline; `just test` runs the commit-tier subset (correctness + normalization) that it builds on.
 There is no separate `just lint` or `just typecheck` for agents to use.
-Running only typecheck is insufficient — the full stack must pass.
+Running only typecheck is insufficient — the commit gate must pass to commit, and the full `test-ci` stack must pass before pushing.
 
 ### No-Bypass Policy
 

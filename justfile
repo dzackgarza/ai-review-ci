@@ -26,9 +26,13 @@ check: _normalize
     sh -n repo-hooks/pre-commit
     sh -n repo-hooks/pre-push
 
-# Full quality gate: routes through the global QC chain for Python projects
+# Commit gate (correctness + normalization): routes through the Python QC chain
 test:
     just -f {{repo}}/justfiles/python.just -d . test
+
+# Push/CI gate (full style/slop/coverage stack): routes through the Python QC chain
+test-ci:
+    just -f {{repo}}/justfiles/python.just -d . test-ci
 
 # Install the trigger workflows into a target repo
 install target=".":

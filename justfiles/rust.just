@@ -10,11 +10,13 @@
 # Rust-specific recipes:
 #   _clippy, _rustfmt, _cargo-test, _lizard, _codeql
 #
-# WORKFLOW:
-#   just test      — local quality checks (linting, static analysis, complexity)
-#   just test-ci  — test + live/isolated checks
+# WORKFLOW (two-tier):
+#   just test     — COMMIT gate: correctness + normalization only (preflight,
+#                   cargo fmt, clippy, rustfmt --check, cargo test, bypass check).
+#   just test-ci  — PUSH/CI gate: test + the full style/slop stack
+#                   (jscpd, lizard, codeql, semgrep, ast-grep, vibecheck, ai-slop).
 #
-# HOOKS: global hooks in `global-hooks/` block on `just test`.
+# HOOKS: pre-commit blocks on `just test`; pre-push blocks on `just test-ci`.
 #   Run `just install-global-hooks` from ~/ai-review-ci to activate them globally.
 
 infra := justfile_directory() / ".."
@@ -223,15 +225,16 @@ _lizard:
 		"${lizard_excludes[@]}" \
 		"${rust_files[@]}"
 
-# public: all static checks run locally
-test: _check-rust-project _normalize-common _normalize _clippy _rustfmt _cargo-test _jscpd _lizard _codeql
+# public: COMMIT gate — correctness + normalization, plus bypass detection
+test: _check-rust-project _normalize-common _normalize _clippy _rustfmt _cargo-test
 	#!/usr/bin/env bash
 	set -euo pipefail
-	just -f {{justfiles}}/shared.just _check-envrc _no-bypass _check-no-local-qc-override _semgrep _ast-grep _vibecheck _slop
-	echo "Local quality checks completed"
+	just -f {{justfiles}}/shared.just _no-bypass
+	echo "Commit-tier quality checks completed"
 
-# public: test-ci = test + live/isolated checks
-test-ci: test
+# public: PUSH/CI gate — test + the full style/slop stack
+test-ci: test _jscpd _lizard _codeql
 	#!/usr/bin/env bash
 	set -euo pipefail
-	echo "CI checks completed"
+	just -f {{justfiles}}/shared.just _global-qc
+	echo "Push/CI quality checks completed"

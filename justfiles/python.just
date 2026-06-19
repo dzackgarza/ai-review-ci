@@ -12,11 +12,14 @@
 #   _pytest_with_coverage, _diff-cover, _vulture, _deptry,
 #   _import-linter, _grain, _ast-grep, _jscpd, _lizard, _codeql
 #
-# WORKFLOW:
-#   just test      — local quality checks (linting, static analysis, complexity)
-#   just test-ci  — test + live/isolated checks (coverage, diff-cover, integration tests)
+# WORKFLOW (two-tier):
+#   just test     — COMMIT gate: correctness + normalization only (preflight,
+#                   normalize/auto-fix, syntax, mypy, plain pytest, bypass check).
+#   just test-ci  — PUSH/CI gate: test + the full style/slop/coverage stack
+#                   (coverage 100% + diff-cover, deptry, import-linter, vulture,
+#                   grain, jscpd, lizard, ast-grep, semgrep, vibecheck, ai-slop).
 #
-# HOOKS: global hooks in `global-hooks/` block on `just test`.
+# HOOKS: pre-commit blocks on `just test`; pre-push blocks on `just test-ci`.
 #   Run `just install-global-hooks` from ~/ai-review-ci to activate them globally.
 #
 # CONFIG: this justfile resolves configs and artifacts from the ai-review-ci repo.
@@ -230,6 +233,31 @@ _normalize: _install-tools
 		"${python_files[@]}"; then
 		ec=$?
 		echo "ERROR: ruff format found issues in project code."
+		"{{artifacts}}/scripts/emit-triage-directive.sh"
+		exit $ec
+	fi
+
+_pytest: _install-tools
+	#!/usr/bin/env bash
+	set -euo pipefail
+	echo "============================="
+	echo "=== Running: pytest (commit tier — no coverage gate) ==="
+	echo "# Runs the project's own test suite; must pass. Coverage thresholds are enforced at push (test-ci)."
+	if ! rg --files tests -g 'test_*.py' -g '*_test.py' >/dev/null 2>&1; then
+		echo "ERROR: pytest: no test files found in a Python project."
+		"{{artifacts}}/scripts/emit-test-writing-directive.sh"
+		exit 1
+	fi
+	if [ ! -f pyproject.toml ]; then
+		echo "ERROR: pytest: no pyproject.toml found — cannot install project."
+		"{{artifacts}}/scripts/emit-triage-directive.sh"
+		exit 1
+	fi
+	if uvx --from pytest --with-editable . pytest; then
+		:
+	else
+		ec=$?
+		echo "ERROR: pytest failed."
 		"{{artifacts}}/scripts/emit-triage-directive.sh"
 		exit $ec
 	fi
@@ -551,18 +579,16 @@ _codeql:
 		print(f"- ... {len(findings) - 50} more findings omitted; see SARIF report above.")
 	PY
 
-# public: all static checks run locally
-test: _check-python-project _normalize-common _normalize _python-syntax _mypy _deptry _import-linter _ast-grep _jscpd-python _lizard-python _vulture _grain _pytest_with_coverage _diff-cover
+# public: COMMIT gate — correctness + normalization, plus bypass detection
+test: _check-python-project _normalize-common _normalize _python-syntax _mypy _pytest
+	#!/usr/bin/env bash
+	set -euo pipefail
+	just -f {{justfiles}}/shared.just _no-bypass
+	echo "Commit-tier quality checks completed"
+
+# public: PUSH/CI gate — test + the full style/slop/coverage stack
+test-ci: test _pytest_with_coverage _diff-cover _deptry _import-linter _ast-grep _jscpd-python _lizard-python _vulture _grain
 	#!/usr/bin/env bash
 	set -euo pipefail
 	just -f {{justfiles}}/shared.just _global-qc
-	echo "Local quality checks completed"
-
-# public: test-ci = test + live/isolated checks
-
-# Add project-specific live tests (needs docker, live server, etc.) here
-test-ci: test
-	#!/usr/bin/env bash
-	set -euo pipefail
-	just -f {{justfiles}}/shared.just _global-qc-ci
-	echo "CI checks completed"
+	echo "Push/CI quality checks completed"
