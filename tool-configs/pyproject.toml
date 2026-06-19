@@ -5,6 +5,10 @@ fail_under = 90
 [tool.vulture]
 min_confidence = 60
 paths = ["src", "tests"]
+# Pydantic invokes validator methods by reflection, so vulture cannot see the call
+# sites and reports @model_validator/@field_validator/@validator methods as unused.
+# Ignore code attached to these decorators globally to clear that false positive.
+ignore_decorators = ["@model_validator", "@field_validator", "@validator"]
 
 [tool.deptry]
 root = ["src"]
