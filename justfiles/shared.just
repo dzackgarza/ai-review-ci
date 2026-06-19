@@ -24,6 +24,10 @@ artifacts := infra / "tool-artifacts"
 _format-structured-text:
 	#!/usr/bin/env bash
 	set -euo pipefail
+	# Strip git env vars the pre-commit hook inherits from `git commit`; left
+	# set, they redirect uvx's git-sourced tool fetch (flowmark) at the host
+	# project's .git and it fails with "Git operation failed".
+	unset GIT_DIR GIT_INDEX_FILE GIT_WORK_TREE GIT_PREFIX GIT_OBJECT_DIRECTORY GIT_ALTERNATE_OBJECT_DIRECTORIES GIT_COMMON_DIR
 	echo "============================="
 	echo "=== Running: structured text formatting ==="
 	echo "# Formats Markdown (flowmark), JSON, and YAML (prettier) before agents spend time on whitespace"
@@ -352,6 +356,10 @@ _ast-grep:
 _vibecheck:
 	#!/usr/bin/env bash
 	set -euo pipefail
+	# Strip git env vars the pre-commit hook inherits from `git commit`; left
+	# set, they redirect uvx's git-sourced tool fetch (vibecheck) at the host
+	# project's .git and it fails with "Git operation failed".
+	unset GIT_DIR GIT_INDEX_FILE GIT_WORK_TREE GIT_PREFIX GIT_OBJECT_DIRECTORY GIT_ALTERNATE_OBJECT_DIRECTORIES GIT_COMMON_DIR
 	echo "============================="
 	echo "=== Running: vibecheck anti-slop pattern detection ==="
 	echo "# Runs qinnovates/vibecheck-slop-stopper via uvx against the project root"

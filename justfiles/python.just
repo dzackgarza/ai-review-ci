@@ -464,6 +464,10 @@ _import-linter: _install-tools
 _grain:
 	#!/usr/bin/env bash
 	set -euo pipefail
+	# Strip git env vars the pre-commit hook inherits from `git commit`; left
+	# set, they redirect uvx's git-sourced tool fetch (grain) at the host
+	# project's .git and it fails with "Git operation failed".
+	unset GIT_DIR GIT_INDEX_FILE GIT_WORK_TREE GIT_PREFIX GIT_OBJECT_DIRECTORY GIT_ALTERNATE_OBJECT_DIRECTORIES GIT_COMMON_DIR
 	echo "============================="
 	echo "=== Running: grain unused code detection ==="
 	echo "# Finds unused imports and variables that can be safely removed"
