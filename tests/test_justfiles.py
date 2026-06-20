@@ -349,6 +349,102 @@ def test_bun_scaffold_delegates_qc_in_project_directory(
 
 
 @pytest.mark.parametrize(
+    ("language", "project_files", "expected_error", "wrong_root_errors"),
+    [
+        (
+            "bun",
+            {
+                "package.json": json.dumps({"scripts": {}}) + "\n",
+                "bun.lock": "",
+            },
+            "TypeScript project must have tests",
+            (
+                "TypeScript project must have a package.json file",
+                "TypeScript project must use Bun",
+            ),
+        ),
+        (
+            "python",
+            {
+                "pyproject.toml": "\n".join(
+                    [
+                        "[project]",
+                        'name = "scaffold-python-target"',
+                        'version = "0.1.0"',
+                        'requires-python = ">=3.14"',
+                        "",
+                    ]
+                ),
+            },
+            "Python project must have tests",
+            ("Python project must have a pyproject.toml file",),
+        ),
+        (
+            "rust",
+            {
+                "Cargo.toml": "\n".join(
+                    [
+                        "[package]",
+                        'name = "scaffold-rust-target"',
+                        'version = "0.1.0"',
+                        'edition = "2021"',
+                        "",
+                    ]
+                ),
+            },
+            "Rust project must have tests",
+            ("Rust project must contain at least one Cargo.toml",),
+        ),
+        (
+            "sage",
+            {"example.sage": "x = 1\n"},
+            "SAGE_BIN must be set",
+            ("no .sage files found",),
+        ),
+    ],
+)
+def test_scaffolds_delegate_qc_in_project_directory(
+    tmp_path: pathlib.Path,
+    language: str,
+    project_files: dict[str, str],
+    expected_error: str,
+    wrong_root_errors: tuple[str, ...],
+) -> None:
+    project = tmp_path / f"{language}-project"
+    project.mkdir()
+    for relative_path, contents in project_files.items():
+        target = project / relative_path
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_text(contents)
+
+    env = os.environ.copy()
+    if language == "sage":
+        env.pop("SAGE_BIN", None)
+
+    result = subprocess.run(
+        [
+            "just",
+            "--justfile",
+            str(ROOT / "scaffolds" / language / "justfile"),
+            "-d",
+            str(project),
+            "test",
+        ],
+        cwd=project,
+        env=env,
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+
+    output = result.stdout + result.stderr
+    assert result.returncode != 0, output
+    assert expected_error in output
+    for wrong_root_error in wrong_root_errors:
+        assert wrong_root_error not in output
+
+
+@pytest.mark.parametrize(
     ("justfile_name", "recipes"),
     [
         ("bun.just", ("test", "test-ci")),
