@@ -133,7 +133,7 @@ _vulture: _sage-qc-files
 	echo "============================="
 	echo "=== Running: vulture dead code detection (Sage-aware) ==="
 	echo "# Finds unused code in Python and Sage files"
-	mapfile -t python_files < <(just -f {{justfiles}}/python.just _python-qc-files)
+	mapfile -t python_files < <(just -f {{justfiles}}/python.just -d . _python-qc-files)
 	mapfile -t sage_files < <(just --justfile {{justfile()}} -d . _sage-qc-files)
 	generated_sage_python_files=()
 	whitelist_file="{{artifacts}}/vulture_whitelist.py"
@@ -182,8 +182,8 @@ test: _normalize-common _sage-syntax
 	set -euo pipefail
 	python_qc_repo="{{justfiles}}/python.just"
 	python_qc_recipes=(_normalize _python-syntax _mypy _pytest)
-	just -f "$python_qc_repo" "${python_qc_recipes[@]}"
-	just -f {{justfiles}}/shared.just _no-bypass
+	just -f "$python_qc_repo" -d . "${python_qc_recipes[@]}"
+	just -f {{justfiles}}/shared.just -d . _no-bypass
 	echo "Sage commit-tier quality checks completed"
 
 # public: PUSH/CI gate — test + the full style/slop/coverage stack
@@ -192,6 +192,6 @@ test-ci: test _vulture
 	set -euo pipefail
 	python_qc_repo="{{justfiles}}/python.just"
 	python_qc_recipes=(_deptry _import-linter _ast-grep _jscpd-python _lizard-python _grain _pytest_with_coverage _diff-cover)
-	just -f "$python_qc_repo" "${python_qc_recipes[@]}"
-	just -f {{justfiles}}/shared.just _global-qc
+	just -f "$python_qc_repo" -d . "${python_qc_recipes[@]}"
+	just -f {{justfiles}}/shared.just -d . _global-qc
 	echo "Sage push/CI quality checks completed"

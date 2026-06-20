@@ -229,12 +229,12 @@ _lizard:
 test: _check-rust-project _normalize-common _normalize _clippy _rustfmt _cargo-test
 	#!/usr/bin/env bash
 	set -euo pipefail
-	just -f {{justfiles}}/shared.just _no-bypass
+	just -f {{justfiles}}/shared.just -d . _no-bypass
 	echo "Commit-tier quality checks completed"
 
 # public: PUSH/CI gate — test + the full style/slop stack
 test-ci: test _jscpd _lizard _codeql
 	#!/usr/bin/env bash
 	set -euo pipefail
-	just -f {{justfiles}}/shared.just _global-qc
+	just -f {{justfiles}}/shared.just -d . _global-qc
 	echo "Push/CI quality checks completed"

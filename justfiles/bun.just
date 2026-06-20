@@ -373,12 +373,12 @@ _normalize: _eslint-deps
 test: _check-ts-project _normalize-common _normalize _tsc _bun-test
 	#!/usr/bin/env bash
 	set -euo pipefail
-	just -f {{justfiles}}/shared.just _no-bypass
+	just -f {{justfiles}}/shared.just -d . _no-bypass
 	echo "Commit-tier quality checks completed"
 
 # public: PUSH/CI gate — test + the full style/slop/coverage stack
 test-ci: test _coverage _diff-cover _knip _biome _ast-grep _eslint _jscpd-bun _lizard-bun _slop-scan
 	#!/usr/bin/env bash
 	set -euo pipefail
-	just -f {{justfiles}}/shared.just _global-qc
+	just -f {{justfiles}}/shared.just -d . _global-qc
 	echo "Push/CI quality checks completed"

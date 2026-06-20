@@ -387,7 +387,7 @@ def test_language_qc_delegates_nested_global_recipes_in_project_directory(
         delegated_lines = [
             line.strip()
             for line in output.splitlines()
-            if line.strip().startswith("just -f ") and "justfiles" in line
+            if "just -f " in line
         ]
         assert delegated_lines, output
         for line in delegated_lines:

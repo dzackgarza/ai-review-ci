@@ -583,12 +583,12 @@ _codeql:
 test: _check-python-project _normalize-common _normalize _python-syntax _mypy _pytest
 	#!/usr/bin/env bash
 	set -euo pipefail
-	just -f {{justfiles}}/shared.just _no-bypass
+	just -f {{justfiles}}/shared.just -d . _no-bypass
 	echo "Commit-tier quality checks completed"
 
 # public: PUSH/CI gate — test + the full style/slop/coverage stack
 test-ci: test _pytest_with_coverage _diff-cover _deptry _import-linter _ast-grep _jscpd-python _lizard-python _vulture _grain
 	#!/usr/bin/env bash
 	set -euo pipefail
-	just -f {{justfiles}}/shared.just _global-qc
+	just -f {{justfiles}}/shared.just -d . _global-qc
 	echo "Push/CI quality checks completed"
