@@ -496,11 +496,7 @@ def test_language_qc_delegates_nested_global_recipes_in_project_directory(
 
         output = result.stdout + result.stderr
         assert result.returncode == 0, output
-        delegated_lines = [
-            line.strip()
-            for line in output.splitlines()
-            if "just -f " in line
-        ]
+        delegated_lines = [line.strip() for line in output.splitlines() if "just -f " in line]
         assert delegated_lines, output
         for line in delegated_lines:
             assert " -d . " in f" {line} ", line
