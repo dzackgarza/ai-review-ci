@@ -237,6 +237,22 @@ def test_common_normalization_formats_structured_text(
     assert json_file.read_text() == '{ "b": 2, "a": 1 }\n'
 
 
+def test_semgrep_autofix_defers_unfixed_findings_to_push_tier(
+    tmp_path: pathlib.Path,
+) -> None:
+    project = tmp_path / "semgrep-project"
+    project.mkdir()
+    source = project / "app.ts"
+    source.write_text("const answer = 42;\nconsole.log(answer);\n")
+
+    commit_tier = run_just(ROOT / "justfiles" / "shared.just", project, "_semgrep-autofix")
+    push_tier = run_just(ROOT / "justfiles" / "shared.just", project, "_semgrep")
+
+    assert commit_tier.returncode == 0, commit_tier.stdout + commit_tier.stderr
+    assert source.read_text() == "const answer = 42;\nconsole.log(answer);\n"
+    assert push_tier.returncode != 0, push_tier.stdout + push_tier.stderr
+
+
 def test_envrc_check_accepts_root_envrc_and_rejects_dotenv_files(
     tmp_path: pathlib.Path,
 ) -> None:
