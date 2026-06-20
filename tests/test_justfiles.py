@@ -348,6 +348,52 @@ def test_bun_scaffold_delegates_qc_in_project_directory(
     assert "TypeScript project must have tests" in output
 
 
+@pytest.mark.parametrize(
+    ("justfile_name", "recipes"),
+    [
+        ("bun.just", ("test", "test-ci")),
+        ("python.just", ("test", "test-ci")),
+        ("rust.just", ("test", "test-ci")),
+        ("sage.just", ("test", "test-ci")),
+    ],
+)
+def test_language_qc_delegates_nested_global_recipes_in_project_directory(
+    tmp_path: pathlib.Path,
+    justfile_name: str,
+    recipes: tuple[str, ...],
+) -> None:
+    project = tmp_path / "project"
+    project.mkdir()
+
+    for recipe in recipes:
+        result = subprocess.run(
+            [
+                "just",
+                "--dry-run",
+                "--justfile",
+                str(ROOT / "justfiles" / justfile_name),
+                "-d",
+                str(project),
+                recipe,
+            ],
+            cwd=project,
+            text=True,
+            capture_output=True,
+            check=False,
+        )
+
+        output = result.stdout + result.stderr
+        assert result.returncode == 0, output
+        delegated_lines = [
+            line.strip()
+            for line in output.splitlines()
+            if line.strip().startswith("just -f ") and "justfiles" in line
+        ]
+        assert delegated_lines, output
+        for line in delegated_lines:
+            assert " -d . " in f" {line} ", line
+
+
 def test_tsc_removes_temp_output_on_success(tmp_path: pathlib.Path) -> None:
     project = tmp_path / "bun-project"
     project.mkdir()
