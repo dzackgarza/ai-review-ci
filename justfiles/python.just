@@ -2,7 +2,7 @@
 #
 # Imports cross-language QC recipes from `justfile` (shared) and adds
 # Python-specific recipes. Python projects delegate to this file:
-#   just -f ~/ai-review-ci/justfiles/python.just test
+#   just -f ~/ai-review-ci/justfiles/python.just -d . test
 #
 # Shared recipes (imported from justfile):
 #   _no-bypass, _semgrep, _vibecheck, _slop

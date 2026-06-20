@@ -469,8 +469,8 @@ Recipes: `_normalize-common` wrapper, `_python-syntax`, `_mypy`, `_normalize` (r
 
 Invocations:
 
-- `just -f ~/ai-review-ci/justfiles/python.just test`
-- `just -f ~/ai-review-ci/justfiles/python.just test-ci`
+- `just -f ~/ai-review-ci/justfiles/python.just -d . test`
+- `just -f ~/ai-review-ci/justfiles/python.just -d . test-ci`
 
 ### TypeScript: `justfile-bun`
 
@@ -482,8 +482,8 @@ Recipes: `_normalize-common` wrapper, `_normalize` (biome + eslint), `_coverage`
 
 Invocations:
 
-- `just -f ~/ai-review-ci/justfiles/bun.just test`
-- `just -f ~/ai-review-ci/justfiles/bun.just test-ci`
+- `just -f ~/ai-review-ci/justfiles/bun.just -d . test`
+- `just -f ~/ai-review-ci/justfiles/bun.just -d . test-ci`
 
 ### Rust: `justfile-rust`
 
@@ -495,8 +495,8 @@ Recipes: `_normalize-common` wrapper, `_normalize` (cargo fmt), `_clippy`, `_rus
 
 Invocations:
 
-- `just -f ~/ai-review-ci/justfiles/rust.just test`
-- `just -f ~/ai-review-ci/justfiles/rust.just test-ci`
+- `just -f ~/ai-review-ci/justfiles/rust.just -d . test`
+- `just -f ~/ai-review-ci/justfiles/rust.just -d . test-ci`
 
 ### SageMath: `justfile-sage`
 
@@ -509,8 +509,8 @@ Recipes: `_normalize-common` wrapper, `_sage-syntax`, `_vulture` (Sage-aware pre
 
 Invocations:
 
-- `just -f ~/ai-review-ci/justfiles/sage.just test`
-- `just -f ~/ai-review-ci/justfiles/sage.just test-ci`
+- `just -f ~/ai-review-ci/justfiles/sage.just -d . test`
+- `just -f ~/ai-review-ci/justfiles/sage.just -d . test-ci`
 
 ### Shared Composition Rule
 
@@ -529,10 +529,10 @@ Language-specific recipes like `_jscpd-python`, `_lizard-python`, `_jscpd-bun`, 
 ```justfile
 # my-project/justfile
 test:
-  @just -f ~/ai-review-ci/justfiles/python.just test
+  @just -f ~/ai-review-ci/justfiles/python.just -d . test
 
 test-ci:
-  @just -f ~/ai-review-ci/justfiles/python.just test-ci
+  @just -f ~/ai-review-ci/justfiles/python.just -d . test-ci
 ```
 
 **TypeScript/Bun projects:**
@@ -540,10 +540,10 @@ test-ci:
 ```justfile
 # my-project/justfile
 test:
-  @just -f ~/ai-review-ci/justfiles/bun.just test
+  @just -f ~/ai-review-ci/justfiles/bun.just -d . test
 
 test-ci:
-  @just -f ~/ai-review-ci/justfiles/bun.just test-ci
+  @just -f ~/ai-review-ci/justfiles/bun.just -d . test-ci
 ```
 
 **Rust projects:**
@@ -551,10 +551,10 @@ test-ci:
 ```justfile
 # my-project/justfile
 test:
-  @just -f ~/ai-review-ci/justfiles/rust.just test
+  @just -f ~/ai-review-ci/justfiles/rust.just -d . test
 
 test-ci:
-  @just -f ~/ai-review-ci/justfiles/rust.just test-ci
+  @just -f ~/ai-review-ci/justfiles/rust.just -d . test-ci
 ```
 
 **SageMath projects:**
@@ -562,10 +562,10 @@ test-ci:
 ```justfile
 # my-project/justfile
 test:
-  @just -f ~/ai-review-ci/justfiles/sage.just test
+  @just -f ~/ai-review-ci/justfiles/sage.just -d . test
 
 test-ci:
-  @just -f ~/ai-review-ci/justfiles/sage.just test-ci
+  @just -f ~/ai-review-ci/justfiles/sage.just -d . test-ci
 ```
 
 ## Extending for Repo-Specific Testing
@@ -730,7 +730,7 @@ Instead, wrap the global `test` and add project-specific (domain-owned) steps:
 ```justfile
 # my-project/justfile
 test:
-  @just -f ~/ai-review-ci/justfiles/python.just test
+  @just -f ~/ai-review-ci/justfiles/python.just -d . test
   @just _mutation-test
   @just _property-test
   @just _validate-models
@@ -745,7 +745,7 @@ _validate-models:
   uv run python -m pydantic src/my_project/models/
 
 test-ci: test
-  @just -f ~/ai-review-ci/justfiles/python.just test-ci
+  @just -f ~/ai-review-ci/justfiles/python.just -d . test-ci
 ```
 
 This preserves "delegate, never reimplement" while letting projects layer on the adversarial depth their domain requires.

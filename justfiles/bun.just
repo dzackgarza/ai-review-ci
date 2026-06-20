@@ -2,7 +2,7 @@
 #
 # Imports cross-language QC recipes from `justfile` (shared) and adds
 # TypeScript-specific recipes. TypeScript projects delegate to this file:
-#   just -f ~/ai-review-ci/justfiles/bun.just test
+#   just -f ~/ai-review-ci/justfiles/bun.just -d . test
 #
 # Shared recipes (imported from justfile):
 #   _no-bypass, _semgrep, _vibecheck, _slop

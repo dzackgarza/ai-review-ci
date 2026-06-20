@@ -2,7 +2,7 @@
 #
 # Imports shared and Python QC recipes and adds Sage-specific checks.
 # Sage projects delegate to this file:
-#   just -f ~/ai-review-ci/justfiles/sage.just test
+#   just -f ~/ai-review-ci/justfiles/sage.just -d . test
 #
 # Shared + Python recipes (imported transitively via justfile-python):
 #   All cross-language (justfile) and Python (justfile-python) recipes.

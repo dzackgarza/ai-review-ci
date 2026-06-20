@@ -2,7 +2,7 @@
 #
 # Imports cross-language QC recipes from `justfile` (shared) and adds
 # Rust-specific recipes. Rust projects delegate to this file:
-#   just -f ~/ai-review-ci/justfiles/rust.just test
+#   just -f ~/ai-review-ci/justfiles/rust.just -d . test
 #
 # Shared recipes (imported from justfile):
 #   _no-bypass, _semgrep, _ast-grep, _jscpd, _vibecheck, _slop

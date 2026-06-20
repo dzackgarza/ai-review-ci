@@ -124,40 +124,40 @@ Python:
 
 ```justfile
 test:
-    @just -f ~/ai-review-ci/justfiles/python.just test
+    @just -f ~/ai-review-ci/justfiles/python.just -d . test
 
 test-ci:
-    @just -f ~/ai-review-ci/justfiles/python.just test-ci
+    @just -f ~/ai-review-ci/justfiles/python.just -d . test-ci
 ```
 
 TypeScript/Bun:
 
 ```justfile
 test:
-    @just -f ~/ai-review-ci/justfiles/bun.just test
+    @just -f ~/ai-review-ci/justfiles/bun.just -d . test
 
 test-ci:
-    @just -f ~/ai-review-ci/justfiles/bun.just test-ci
+    @just -f ~/ai-review-ci/justfiles/bun.just -d . test-ci
 ```
 
 Rust:
 
 ```justfile
 test:
-    @just -f ~/ai-review-ci/justfiles/rust.just test
+    @just -f ~/ai-review-ci/justfiles/rust.just -d . test
 
 test-ci:
-    @just -f ~/ai-review-ci/justfiles/rust.just test-ci
+    @just -f ~/ai-review-ci/justfiles/rust.just -d . test-ci
 ```
 
 SageMath:
 
 ```justfile
 test:
-    @just -f ~/ai-review-ci/justfiles/sage.just test
+    @just -f ~/ai-review-ci/justfiles/sage.just -d . test
 
 test-ci:
-    @just -f ~/ai-review-ci/justfiles/sage.just test-ci
+    @just -f ~/ai-review-ci/justfiles/sage.just -d . test-ci
 ```
 
 Project-specific checks may be added only as private recipes composed after the global gate.
@@ -236,7 +236,7 @@ The non-CI quality-control stack is split by operational concern:
 Use the migrated quality gate directly from a target repo:
 
 ```bash
-just -f ~/ai-review-ci/justfiles/python.just test
+just -f ~/ai-review-ci/justfiles/python.just -d . test
 ```
 
 The quality gate is split into two tiers so that committing during feature work is cheap while heavier triage is deferred to push:
