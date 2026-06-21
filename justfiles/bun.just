@@ -140,7 +140,7 @@ _tsc:
 		fi
 	fi
 	if jq -e '.scripts.typecheck // empty' package.json >/dev/null 2>&1; then
-		output="$(mktemp)"
+		output="$(mktemp -p "{{infra}}" .tsc-output.XXXXXX)"
 		trap 'if [ -e "$output" ]; then gio trash "$output"; fi' EXIT
 		if ! bun run typecheck >"$output" 2>&1; then
 			if grep -vE '/usr/share/ags/js/|\.\./.*usr/share/ags/js/|gi://' "$output" | grep -q 'error TS'; then
@@ -154,7 +154,7 @@ _tsc:
 		fi
 		cat "$output"
 	elif [ -f tsconfig.json ]; then
-		output="$(mktemp)"
+		output="$(mktemp -p "{{infra}}" .tsc-output.XXXXXX)"
 		trap 'if [ -e "$output" ]; then gio trash "$output"; fi' EXIT
 		if [ -x node_modules/.bin/tsc ]; then
 			tsc_cmd=(node_modules/.bin/tsc --noEmit --skipLibCheck -p tsconfig.json)

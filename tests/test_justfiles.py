@@ -527,6 +527,7 @@ def test_tsc_removes_temp_output_on_success(tmp_path: pathlib.Path) -> None:
 
     assert result.returncode == 0, result.stdout + result.stderr
     assert sorted(tmpdir.iterdir()) == []
+    assert sorted(ROOT.glob(".tsc-output.*")) == []
 
 
 def test_pytest_with_coverage_fails_when_threshold_fails(
@@ -1007,6 +1008,70 @@ def test_mypy_uses_pep723_script_dependencies(
     assert result.returncode == 0, output
     assert 'Cannot find implementation or library stub for module named "requests"' not in output
     assert 'Library stubs not installed for "requests"' not in output
+
+
+def test_mypy_ignores_pep723_script_without_dependencies(
+    tmp_path: pathlib.Path,
+) -> None:
+    project = tmp_path / "empty-script-metadata-project"
+    package_dir = project / "src" / "empty_script_metadata_project"
+    script_dir = project / "tool-artifacts" / "scripts"
+    package_dir.mkdir(parents=True)
+    script_dir.mkdir(parents=True)
+    (project / "pyproject.toml").write_text(
+        "\n".join(
+            [
+                "[project]",
+                'name = "empty-script-metadata-project"',
+                'version = "0.1.0"',
+                'requires-python = ">=3.14"',
+                "dependencies = []",
+                "",
+                "[build-system]",
+                'requires = ["setuptools"]',
+                'build-backend = "setuptools.build_meta"',
+                "",
+                "[tool.setuptools.packages.find]",
+                'where = ["src"]',
+                "",
+            ]
+        )
+    )
+    (package_dir / "__init__.py").write_text("VALUE: int = 42\n")
+    (script_dir / "read_config.py").write_text(
+        "\n".join(
+            [
+                "# /// script",
+                "# ///",
+                "",
+                "from pathlib import Path",
+                "",
+                "",
+                "def read_config(path: Path) -> str:",
+                "    return path.read_text()",
+                "",
+            ]
+        )
+    )
+
+    result = subprocess.run(
+        [
+            "just",
+            "--justfile",
+            str(ROOT / "justfiles" / "python.just"),
+            "-d",
+            str(project),
+            "_mypy",
+        ],
+        cwd=project,
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+
+    output = result.stdout + result.stderr
+    assert result.returncode == 0, output
+    assert "Unexpected '\"'" not in output
 
 
 def test_rust_preflight_accepts_nested_cargo_manifest_and_routes_missing_tests(
