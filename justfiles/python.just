@@ -126,11 +126,11 @@ _mypy: _install-tools
 			with_args+=(--with "$requirement")
 		done
 	fi
-	pep723_scripts_output="$(uv run --no-project python "{{artifacts}}/scripts/python_qc_metadata.py" pep723-scripts "${python_files[@]}")"
-	if [ -n "$pep723_scripts_output" ]; then
-		mapfile -t pep723_scripts <<<"$pep723_scripts_output"
-		for script in "${pep723_scripts[@]}"; do
-			with_args+=(--with-requirements "$script")
+	pep723_requirements_output="$(uv run --no-project python "{{artifacts}}/scripts/python_qc_metadata.py" pep723-requirements "${python_files[@]}")"
+	if [ -n "$pep723_requirements_output" ]; then
+		mapfile -t pep723_requirements <<<"$pep723_requirements_output"
+		for requirement in "${pep723_requirements[@]}"; do
+			with_args+=(--with "$requirement")
 		done
 	fi
 	if uvx --python 3.14 --from mypy \

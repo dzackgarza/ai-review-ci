@@ -163,8 +163,38 @@ def _has_pep723_script_metadata(path: Path) -> bool:
     return False
 
 
+def _pep723_metadata(path: Path) -> dict[str, object] | None:
+    lines = path.read_text(encoding="utf-8").splitlines()
+    for index, line in enumerate(lines):
+        if line.strip() != "# /// script":
+            continue
+        block: list[str] = []
+        for metadata_line in lines[index + 1 :]:
+            if metadata_line.strip() == "# ///":
+                raw = "\n".join(block)
+                return cast("dict[str, object]", tomllib.loads(raw)) if raw else {}
+            if not metadata_line.startswith("#"):
+                raise AssertionError(f"{path} has a malformed PEP 723 script metadata line")
+            block.append(metadata_line[1:].removeprefix(" "))
+        raise AssertionError(f"{path} has an unterminated PEP 723 script metadata block")
+    return None
+
+
 def pep723_scripts(paths: list[str]) -> list[str]:
     return [path for path in paths if _has_pep723_script_metadata(Path(path))]
+
+
+def pep723_requirements(paths: list[str]) -> list[str]:
+    requirements: list[str] = []
+    for path in paths:
+        metadata = _pep723_metadata(Path(path))
+        if metadata is None:
+            continue
+        dependencies: object = []
+        if "dependencies" in metadata:
+            dependencies = metadata["dependencies"]
+        requirements.extend(_string_list(dependencies, f"{path} dependencies"))
+    return _ordered_unique(requirements)
 
 
 def _print_lines(values: Iterable[str]) -> None:
@@ -183,6 +213,8 @@ def main() -> None:
         _print_lines(dependency_group_requirements(Path(sys.argv[2])))
     elif command == "pep723-scripts":
         _print_lines(pep723_scripts(sys.argv[2:]))
+    elif command == "pep723-requirements":
+        _print_lines(pep723_requirements(sys.argv[2:]))
     else:
         raise AssertionError(f"unknown command: {command}")
 
