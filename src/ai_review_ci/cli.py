@@ -5,7 +5,7 @@ its logic module and registered here. Help text comes from those functions'
 docstrings.
 
 Subcommands:
-- install          — write the three trigger workflows into a target repo
+- install          — write trigger workflows and apply required branch protection
 - check-diff       — fail if a PR unified diff introduces deterministic findings
 - check-delegation — fail if a target justfile stops delegating to global QC
 - check-app-boot   — run the target repo's real-boundary app-boot gate

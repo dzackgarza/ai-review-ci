@@ -3,7 +3,7 @@ import subprocess
 
 import pytest
 
-from ai_review_ci.install import TEMPLATES, install
+from ai_review_ci.install import TEMPLATES, _write_trigger_workflows
 
 
 def _git_repo(tmp_path: pathlib.Path) -> pathlib.Path:
@@ -15,7 +15,7 @@ def _git_repo(tmp_path: pathlib.Path) -> pathlib.Path:
 
 def test_install_writes_trigger_workflows(tmp_path: pathlib.Path) -> None:
     repo = _git_repo(tmp_path)
-    install(repo)
+    _write_trigger_workflows(repo)
     wf = repo / ".github" / "workflows"
     assert sorted(p.name for p in wf.iterdir()) == sorted(TEMPLATES)
     for name in TEMPLATES:
@@ -36,16 +36,16 @@ def test_install_writes_trigger_workflows(tmp_path: pathlib.Path) -> None:
 
 def test_install_refuses_non_git_dir(tmp_path: pathlib.Path) -> None:
     with pytest.raises(SystemExit):
-        install(tmp_path)
+        _write_trigger_workflows(tmp_path)
 
 
 def test_install_refuses_overwriting_repo_owned_config(
     tmp_path: pathlib.Path,
 ) -> None:
     repo = _git_repo(tmp_path)
-    install(repo)
+    _write_trigger_workflows(repo)
     customized = repo / ".github" / "workflows" / "review-general.yml"
     customized.write_text("# locally customized\n")
     with pytest.raises(SystemExit):
-        install(repo)
+        _write_trigger_workflows(repo)
     assert customized.read_text() == "# locally customized\n"

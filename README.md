@@ -14,10 +14,10 @@ Each type runs in two scopes: **repo** (full-repository sweep) and **diff** (PR 
 
 ```bash
 cd /path/to/your/repo
-uvx --from git+https://github.com/dzackgarza/ai-review-ci ai-review-ci install
+uvx --from git+https://github.com/dzackgarza/ai-review-ci ai-review-ci install --repo owner/repo --branch main
 ```
 
-This writes exactly three files into `.github/workflows/` and nothing else:
+This installs the complete QC enforcement surface: it writes the three trigger workflows and applies branch protection requiring the installed PR gate jobs.
 
 | File | Triggers |
 | --- | --- |
@@ -28,6 +28,7 @@ This writes exactly three files into `.github/workflows/` and nothing else:
 The three files are minimally-correct base configuration and become **repo-owned** the moment they are installed: edit crons, branches, thresholds, and the upstream `@ref` directly in the YAML — that is the whole downstream surface.
 The installer never overwrites them.
 All review *behavior* lives upstream and needs no reinstall: every run clones this repo fresh.
+Branch protection is not optional setup; without it the workflows can run without enforcing the merge gate.
 
 What an installed trigger looks like (`review-general.yml` — pure configuration pointing at the upstream reusable workflow):
 
@@ -54,7 +55,7 @@ jobs:
 
 The canonical templates live in [`src/ai_review_ci/templates/`](src/ai_review_ci/templates/).
 
-Requirements in the target repo: GitHub code scanning enabled (free for public repos) and branch protection requiring the installed PR gate jobs.
+Requirements in the target repo: GitHub code scanning enabled (free for public repos), GitHub CLI auth with permission to edit branch protection, and the target branch named in `--branch`.
 LLM review jobs are signal-only process checks: they upload SARIF and post review threads, but they do not compute or fail on a health score.
 The merge gate is deterministic QC plus evidence-backed resolution of reviewer-authored PR threads.
 
@@ -216,7 +217,7 @@ Diff-scoped findings surface twice, deliberately:
 - **Resolvable review threads**: one review block per run (summary + metadata) with one inline, individually-resolvable comment per finding, for later disposition/remediation by separate agents.
   Off-diff findings are listed in the review body only — they are already in the ledger.
 - **Required deterministic gates**: the installed PR workflow calls the reusable `_gates.yml` workflow for `deterministic-diff`, `delegation-conformance`, `app-boot`, and `thread-resolution`.
-  Branch protection can be applied with `ai-review-ci protect-branch --repo owner/repo --branch main`.
+  `install` applies branch protection; `ai-review-ci protect-branch --repo owner/repo --branch main` exists to reapply or repair the required-check contract.
 
 ## Architecture
 
