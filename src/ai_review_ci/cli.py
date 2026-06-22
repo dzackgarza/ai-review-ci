@@ -6,6 +6,11 @@ docstrings.
 
 Subcommands:
 - install          — write the three trigger workflows into a target repo
+- check-diff       — fail if a PR unified diff introduces deterministic findings
+- check-delegation — fail if a target justfile stops delegating to global QC
+- check-app-boot   — run the target repo's real-boundary app-boot gate
+- check-review-threads — require evidence-backed ai-review thread resolution
+- protect-branch   — apply required branch protection contexts
 - validate-report  — validate a candidate report and write the artifact
 - report-schema    — dump the JSON Schema for a report type
 - report-metadata  — print machine-parseable metadata from an artifact
@@ -18,6 +23,7 @@ Subcommands:
 from cyclopts import App
 
 from ai_review_ci.context import fetch_context
+from ai_review_ci.gates import check_app_boot, check_delegation, check_diff, check_review_threads, protect_branch
 from ai_review_ci.harness import run_review
 from ai_review_ci.install import install
 from ai_review_ci.report import report_metadata, report_schema, validate_report
@@ -30,6 +36,11 @@ app = App(
 )
 
 app.command(install)
+app.command(check_diff)
+app.command(check_delegation)
+app.command(check_app_boot)
+app.command(check_review_threads)
+app.command(protect_branch)
 app.command(validate_report)
 app.command(report_schema)
 app.command(report_metadata)

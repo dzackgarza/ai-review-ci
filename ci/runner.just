@@ -13,6 +13,9 @@ install-tools:
     npm install -g opencode-ai
     npm install -g cc-safety-net
 
+install-gate-tools:
+    curl -LsSf https://astral.sh/uv/install.sh | env UV_INSTALL_DIR=/usr/local/bin sh
+
 fetch-context tool_name pr_number:
     uv run --project {{infra}} ai-review-ci fetch-context \
       --repo "${GITHUB_REPOSITORY}" \
@@ -80,8 +83,27 @@ prepare:
 stage-pr-diff base_ref:
     git -C {{control_repo}} diff "origin/{{base_ref}}...HEAD" > "${RUNNER_TEMP}/reviewer-diff.patch"
     test -s "${RUNNER_TEMP}/reviewer-diff.patch"
-    sudo cp "${RUNNER_TEMP}/reviewer-diff.patch" {{reviewer_repo}}/.reviewer-diff.patch
-    sudo chown reviewer:reviewer {{reviewer_repo}}/.reviewer-diff.patch
+    if [ -d "{{reviewer_repo}}" ]; then \
+      sudo cp "${RUNNER_TEMP}/reviewer-diff.patch" {{reviewer_repo}}/.reviewer-diff.patch; \
+      sudo chown reviewer:reviewer {{reviewer_repo}}/.reviewer-diff.patch; \
+    fi
+
+check-deterministic-diff:
+    uv run --project {{infra}} ai-review-ci check-diff \
+      --diff "${RUNNER_TEMP}/reviewer-diff.patch"
+
+check-delegation:
+    uv run --project {{infra}} ai-review-ci check-delegation \
+      --target "{{control_repo}}"
+
+check-app-boot:
+    uv run --project {{infra}} ai-review-ci check-app-boot \
+      --target "{{control_repo}}"
+
+check-review-threads pr_number:
+    uv run --project {{infra}} ai-review-ci check-review-threads \
+      --repo "${GITHUB_REPOSITORY}" \
+      --pr-number "{{pr_number}}"
 
 run-review report_type scope:
     sudo -u reviewer -H env \

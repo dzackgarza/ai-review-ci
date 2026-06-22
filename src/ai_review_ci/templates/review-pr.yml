@@ -4,6 +4,24 @@ name: PR Review
 on:
   pull_request:
 jobs:
+  deterministic-diff:
+    uses: dzackgarza/ai-review-ci/.github/workflows/_gates.yml@main
+    permissions:
+      contents: read
+    with:
+      gate: deterministic-diff
+  delegation-conformance:
+    uses: dzackgarza/ai-review-ci/.github/workflows/_gates.yml@main
+    permissions:
+      contents: read
+    with:
+      gate: delegation-conformance
+  app-boot:
+    uses: dzackgarza/ai-review-ci/.github/workflows/_gates.yml@main
+    permissions:
+      contents: read
+    with:
+      gate: app-boot
   general:
     uses: dzackgarza/ai-review-ci/.github/workflows/_review.yml@main
     permissions:
@@ -14,7 +32,6 @@ jobs:
     with:
       report_type: general
       scope: diff
-      fail_below: ${{ vars.GENERAL_FAIL_BELOW }}
   slop:
     uses: dzackgarza/ai-review-ci/.github/workflows/_review.yml@main
     permissions:
@@ -25,4 +42,13 @@ jobs:
     with:
       report_type: slop
       scope: diff
-      fail_below: ${{ vars.SLOP_FAIL_BELOW }}
+  thread-resolution:
+    needs:
+      - general
+      - slop
+    uses: dzackgarza/ai-review-ci/.github/workflows/_gates.yml@main
+    permissions:
+      contents: read
+      pull-requests: read
+    with:
+      gate: thread-resolution

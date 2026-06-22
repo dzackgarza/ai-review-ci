@@ -50,13 +50,13 @@ jobs:
     with:
       report_type: general
       scope: repo
-      fail_below: ${{ vars.GENERAL_FAIL_BELOW }}
 ```
 
 The canonical templates live in [`src/ai_review_ci/templates/`](src/ai_review_ci/templates/).
 
-Requirements in the target repo: GitHub code scanning enabled (free for public repos); optionally the Actions vars `GENERAL_FAIL_BELOW` / `SLOP_FAIL_BELOW` to gate runs on a health score.
-The PR trigger passes those same vars to the diff-scoped general and slop jobs.
+Requirements in the target repo: GitHub code scanning enabled (free for public repos) and branch protection requiring the installed PR gate jobs.
+LLM review jobs are signal-only process checks: they upload SARIF and post review threads, but they do not compute or fail on a health score.
+The merge gate is deterministic QC plus evidence-backed resolution of reviewer-authored PR threads.
 
 ## Installing QC Surfaces
 
@@ -110,6 +110,7 @@ cd ~/ai-review-ci
 # choose one language scaffold for the target repository
 just install-qc-scaffold python /path/to/new/repo
 just install-qc-scaffold bun /path/to/new/repo
+just install-qc-scaffold bun-app /path/to/new/repo
 just install-qc-scaffold rust /path/to/new/repo
 just install-qc-scaffold sage /path/to/new/repo
 ```
@@ -138,6 +139,19 @@ test:
 
 test-ci:
     @just -f ~/ai-review-ci/justfiles/bun.just -d . test-ci
+```
+
+TypeScript/Bun app with real-boundary boot proof:
+
+```justfile
+test:
+    @just -f ~/ai-review-ci/justfiles/bun.just -d . test
+
+test-ci:
+    @just -f ~/ai-review-ci/justfiles/bun.just -d . test-ci
+
+app-boot:
+    @bunx playwright test --config playwright.config.ts
 ```
 
 Rust:
@@ -198,9 +212,11 @@ Dismissed/fixed alerts feed future reviewer context as do-not-re-raise instructi
 Diff-scoped findings surface twice, deliberately:
 
 - **Code scanning**: uploaded under the same SARIF categories as repo-wide runs, so GitHub natively computes "new alerts introduced by this PR" and annotates the diff.
-  Make the check blocking via branch protection.
+  The review job itself is signal-only; branch protection should block on deterministic gates and thread-resolution.
 - **Resolvable review threads**: one review block per run (summary + metadata) with one inline, individually-resolvable comment per finding, for later disposition/remediation by separate agents.
   Off-diff findings are listed in the review body only — they are already in the ledger.
+- **Required deterministic gates**: the installed PR workflow calls the reusable `_gates.yml` workflow for `deterministic-diff`, `delegation-conformance`, `app-boot`, and `thread-resolution`.
+  Branch protection can be applied with `ai-review-ci protect-branch --repo owner/repo --branch main`.
 
 ## Architecture
 
@@ -268,7 +284,7 @@ trigger -> _review.yml (cross-repo reusable workflow)
               FIX-guided rejection -> repeat until exit 0
   -> `ai-review-ci to-sarif` -> upload to code scanning
   -> [diff scope] `ai-review-ci post-threads` posts resolvable review threads to the PR
-  -> [optional] health-score threshold gate
+  -> [diff scope] thread-resolution gate verifies ai-review PR threads are resolved with commit or disposition-ledger evidence
 ```
 
 ### The agent contract

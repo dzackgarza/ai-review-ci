@@ -1,0 +1,8 @@
+test:
+    @just -f ~/ai-review-ci/justfiles/bun.just -d . test
+
+test-ci:
+    @just -f ~/ai-review-ci/justfiles/bun.just -d . test-ci
+
+app-boot:
+    @bunx playwright test --config playwright.config.ts

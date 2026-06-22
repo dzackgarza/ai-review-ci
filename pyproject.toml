@@ -28,12 +28,6 @@ root_packages = ["ai_review_ci"]
 include_external_packages = true
 
 [[tool.importlinter.contracts]]
-name = "Installer is a pure file-copier: no process execution, no network"
-type = "forbidden"
-source_modules = ["ai_review_ci.install"]
-forbidden_modules = ["subprocess", "os", "urllib", "http", "socket", "requests"]
-
-[[tool.importlinter.contracts]]
 name = "Report models are pure validation: no process execution, no network"
 type = "forbidden"
 source_modules = ["ai_review_ci.models"]

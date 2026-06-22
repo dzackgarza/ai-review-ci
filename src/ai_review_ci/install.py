@@ -1,4 +1,4 @@
-"""Installer for the ai-review-ci trigger workflows.
+"""Installer for the ai-review-ci trigger workflows and required gates.
 
 All review complexity lives upstream: the reusable workflow referenced by
 these triggers clones this repository inside the CI runner at execution time.
@@ -11,24 +11,35 @@ repo owns and edits directly afterward:
 - review-pr.yml       — diff-scoped reviews on every pull request
 
 Existing files are never overwritten: once installed they are repo-owned
-configuration.
+configuration. Branch protection is a separate explicit installation step so
+local file installation cannot silently mutate GitHub repository settings.
 
-This module is a pure file-copier: no process execution, no network
-(enforced by the import-linter contract in pyproject.toml).
+Workflow installation remains file-only. Passing branch protection arguments
+applies the GitHub-side required-check contract after the files are written.
 """
 
 import pathlib
 import sys
 from importlib.resources import files
 
+from ai_review_ci.gates import protect_branch
+
 TEMPLATES = ["review-general.yml", "review-slop.yml", "review-pr.yml"]
 
 
-def install(target: pathlib.Path = pathlib.Path(".")) -> None:
+def install(
+    target: pathlib.Path = pathlib.Path("."),
+    protect: bool = False,
+    repo: str = "",
+    branch: str = "",
+) -> None:
     """Install the review trigger workflows into a repo.
 
     Args:
         target: Target repository root (default: current directory).
+        protect: Apply required branch protection contexts through GitHub.
+        repo: GitHub repository in owner/name form when protect is enabled.
+        branch: Branch name when protect is enabled.
     """
     target = target.resolve()
     if not (target / ".git").exists():
@@ -51,7 +62,15 @@ def install(target: pathlib.Path = pathlib.Path(".")) -> None:
 
     print(
         "\nDone. Commit the three files; they are now repo-owned "
-        "configuration — edit crons, branches, and thresholds directly.\n"
-        "Requirements: GitHub code scanning enabled; optional Actions vars "
-        "GENERAL_FAIL_BELOW / SLOP_FAIL_BELOW for health-score gating."
+        "configuration — edit crons, branches, and upstream refs directly.\n"
+        "Requirements: GitHub code scanning enabled and branch protection "
+        "requiring the ai-review-ci deterministic gates."
     )
+    if protect:
+        if not repo:
+            print("FATAL: --repo is required when --protect is enabled", file=sys.stderr)
+            sys.exit(1)
+        if not branch:
+            print("FATAL: --branch is required when --protect is enabled", file=sys.stderr)
+            sys.exit(1)
+        protect_branch(repo, branch)

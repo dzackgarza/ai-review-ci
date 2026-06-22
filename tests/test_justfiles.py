@@ -549,6 +549,18 @@ def test_bun_scaffold_delegates_qc_in_project_directory(
             ),
         ),
         (
+            "bun-app",
+            {
+                "package.json": json.dumps({"scripts": {}}) + "\n",
+                "bun.lock": "",
+            },
+            "TypeScript project must have tests",
+            (
+                "TypeScript project must have a package.json file",
+                "TypeScript project must use Bun",
+            ),
+        ),
+        (
             "python",
             {
                 "pyproject.toml": "\n".join(
