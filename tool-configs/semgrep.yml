@@ -228,8 +228,8 @@ rules:
       include:
         - '**/*.test.*'
         - '**/*.spec.*'
-        - '**/tests/**'
-        - '**/__tests__/**'
+        - '**/tests/**/*'
+        - '**/__tests__/**/*'
   - id: ts-no-vi-fn
     pattern: vi.fn(...)
     message: vi.fn creates a fake function in a proof path. Use real collaborators or captured real-boundary fixtures instead.
@@ -241,8 +241,8 @@ rules:
       include:
         - '**/*.test.*'
         - '**/*.spec.*'
-        - '**/tests/**'
-        - '**/__tests__/**'
+        - '**/tests/**/*'
+        - '**/__tests__/**/*'
   - id: ts-no-vi-spyon
     pattern: vi.spyOn(...)
     message: vi.spyOn observes or replaces behavior through a fake boundary. Prove the real boundary instead.
@@ -254,8 +254,8 @@ rules:
       include:
         - '**/*.test.*'
         - '**/*.spec.*'
-        - '**/tests/**'
-        - '**/__tests__/**'
+        - '**/tests/**/*'
+        - '**/__tests__/**/*'
   - id: ts-no-vi-stub-env
     pattern: vi.stubEnv(...)
     message: vi.stubEnv replaces runtime environment state with a test fixture. Use declared config and real-boundary proof instead.
@@ -267,8 +267,8 @@ rules:
       include:
         - '**/*.test.*'
         - '**/*.spec.*'
-        - '**/tests/**'
-        - '**/__tests__/**'
+        - '**/tests/**/*'
+        - '**/__tests__/**/*'
   - id: ts-no-jest-fn
     pattern: jest.fn(...)
     message: jest.fn creates a fake function in a proof path. Use real collaborators or captured real-boundary fixtures instead.
@@ -280,8 +280,8 @@ rules:
       include:
         - '**/*.test.*'
         - '**/*.spec.*'
-        - '**/tests/**'
-        - '**/__tests__/**'
+        - '**/tests/**/*'
+        - '**/__tests__/**/*'
   - id: ts-no-jest-spyon
     pattern: jest.spyOn(...)
     message: jest.spyOn observes or replaces behavior through a fake boundary. Prove the real boundary instead.
@@ -293,8 +293,8 @@ rules:
       include:
         - '**/*.test.*'
         - '**/*.spec.*'
-        - '**/tests/**'
-        - '**/__tests__/**'
+        - '**/tests/**/*'
+        - '**/__tests__/**/*'
   - id: ts-no-skip-test
     pattern-either:
       - pattern: test.skip(...)
