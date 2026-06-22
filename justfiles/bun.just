@@ -70,6 +70,16 @@ _bun-test:
 	fi
 	bun test
 
+app-boot:
+	#!/usr/bin/env bash
+	set -euo pipefail
+	if [ ! -f playwright.config.ts ]; then
+		echo "ERROR: bun-playwright projects must define playwright.config.ts at the repository root."
+		"{{artifacts}}/scripts/emit-triage-directive.sh"
+		exit 1
+	fi
+	bunx playwright test --config playwright.config.ts
+
 _coverage:
 	#!/usr/bin/env bash
 	set -euo pipefail

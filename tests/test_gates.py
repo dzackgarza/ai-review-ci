@@ -52,6 +52,26 @@ def test_delegation_rejects_local_qc_override(tmp_path: pathlib.Path) -> None:
         gates.check_delegation(project)
 
 
+def test_app_boot_rejects_direct_local_playwright_before_execution(tmp_path: pathlib.Path) -> None:
+    project = tmp_path / "project"
+    project.mkdir()
+    marker = project / "local-command-ran"
+    (project / "justfile").write_text(
+        "\n".join(
+            [
+                "app-boot:",
+                f"    @python3 -c 'from pathlib import Path; Path({str(marker)!r}).write_text(\"ran\")'",
+                "    @bunx playwright test --config playwright.config.ts",
+                "",
+            ]
+        )
+    )
+
+    with pytest.raises(SystemExit):
+        gates.check_app_boot(project)
+    assert not marker.exists()
+
+
 def test_branch_protection_payload_uses_check_contexts() -> None:
     payload = gates.branch_protection_payload()
 

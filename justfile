@@ -34,9 +34,9 @@ test:
 test-ci:
     just -f {{repo}}/justfiles/python.just -d . test-ci
 
-# Install the trigger workflows into a target repo
-install target=".":
-    uvx --from . ai-review-ci install --target {{target}}
+# Install the complete QC enforcement surface into a target repo.
+install repo branch target=".":
+    uvx --from . ai-review-ci install --target {{target}} --repo {{repo}} --branch {{branch}}
 
 # Install globally managed Git hooks for this user.
 install-global-hooks:
@@ -106,9 +106,9 @@ install-qc-scaffold language target=".":
     set -euo pipefail
 
     case "{{language}}" in
-        python|bun|rust|sage) ;;
+        python|bun|bun-playwright|rust|sage) ;;
         *)
-            echo "Error: language must be one of: python, bun, rust, sage"
+            echo "Error: language must be one of: python, bun, bun-playwright, rust, sage"
             exit 1
             ;;
     esac

@@ -126,6 +126,7 @@ query($owner: String!, $name: String!, $number: Int!, $cursor: String) {
 
 _COMMIT_EVIDENCE = re.compile(r"(?:commit|commits/|[/-])\s*[0-9a-f]{7,40}\b|\b[0-9a-f]{12,40}\b", re.IGNORECASE)
 _LEDGER_EVIDENCE = re.compile(r"disposition[- ]ledger|resolution[- ]ledger", re.IGNORECASE)
+_DIRECT_PLAYWRIGHT = re.compile(r"\b(?:bunx|npx|npm|pnpm|yarn)\s+(?:exec\s+)?playwright\b|\bplaywright\s+test\b")
 
 
 def _fail(message: str) -> NoReturn:
@@ -213,9 +214,14 @@ def check_delegation(target: Path) -> None:
 
 
 def check_app_boot(target: Path) -> None:
-    """Run the target repo's real-boundary app-boot recipe."""
+    """Run the target repo's centrally delegated bun-playwright app-boot gate."""
     target = target.resolve()
     justfile = _justfile_for(target)
+    output = _dry_run_recipe(target, justfile, "app-boot")
+    if not _delegates_to_global_qc(output):
+        _fail(f"{target} app-boot must delegate through ~/ai-review-ci with -d .")
+    if _DIRECT_PLAYWRIGHT.search(output):
+        _fail(f"{target} app-boot must not invoke Playwright directly; delegate to ~/ai-review-ci/justfiles/bun.just")
     result = subprocess.run(["just", "--justfile", str(justfile), "-d", str(target), "app-boot"])
     if result.returncode != 0:
         _fail(f"app-boot gate failed for {target}")

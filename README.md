@@ -111,7 +111,7 @@ cd ~/ai-review-ci
 # choose one language scaffold for the target repository
 just install-qc-scaffold python /path/to/new/repo
 just install-qc-scaffold bun /path/to/new/repo
-just install-qc-scaffold bun-app /path/to/new/repo
+just install-qc-scaffold bun-playwright /path/to/new/repo
 just install-qc-scaffold rust /path/to/new/repo
 just install-qc-scaffold sage /path/to/new/repo
 ```
@@ -142,7 +142,7 @@ test-ci:
     @just -f ~/ai-review-ci/justfiles/bun.just -d . test-ci
 ```
 
-TypeScript/Bun app with real-boundary boot proof:
+TypeScript/Bun project with mandatory Playwright GUI proof:
 
 ```justfile
 test:
@@ -152,8 +152,11 @@ test-ci:
     @just -f ~/ai-review-ci/justfiles/bun.just -d . test-ci
 
 app-boot:
-    @bunx playwright test --config playwright.config.ts
+    @just -f ~/ai-review-ci/justfiles/bun.just -d . app-boot
 ```
+
+`bun-playwright` repositories must keep the Playwright configuration at repository-root `playwright.config.ts`.
+The local justfile delegates the invocation to global QC; it must not call Playwright directly.
 
 Rust:
 
