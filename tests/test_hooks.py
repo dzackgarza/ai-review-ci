@@ -110,6 +110,47 @@ def test_ai_review_ci_hooks_still_run_in_downstream_repos(
     assert result.stdout.strip() == "downstream-ran"
 
 
+@pytest.mark.parametrize(
+    ("hook", "recipe"),
+    [
+        ("pre-commit", "test"),
+        ("pre-push", "test-ci"),
+    ],
+)
+def test_repo_hooks_clear_git_local_env_before_downstream_gate(
+    hook_source_repo: pathlib.Path,
+    tmp_path: pathlib.Path,
+    hook: str,
+    recipe: str,
+) -> None:
+    downstream = tmp_path / "downstream"
+    downstream.mkdir()
+    subprocess.run(["git", "init", "-q"], cwd=downstream, check=True)
+    foreign = tmp_path / "foreign"
+    foreign.mkdir()
+    subprocess.run(["git", "init", "-q"], cwd=foreign, check=True)
+    (downstream / "justfile").write_text(
+        f"{recipe}:\n"
+        f"    @git -C {foreign} rev-parse --show-toplevel\n"
+    )
+    env = os.environ | {
+        "GIT_DIR": str(downstream / ".git"),
+        "GIT_WORK_TREE": str(downstream),
+    }
+
+    result = subprocess.run(
+        [str(hook_source_repo / "repo-hooks" / hook)],
+        cwd=downstream,
+        env=env,
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert result.stdout.strip() == str(foreign)
+
+
 def path_with_only(tmp_path: pathlib.Path, *commands: str) -> str:
     bin_dir = tmp_path / "bin"
     bin_dir.mkdir()

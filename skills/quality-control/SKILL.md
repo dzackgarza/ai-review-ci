@@ -250,7 +250,13 @@ Validates:
 
 1. **`package.json` exists** — TypeScript QC requires a package manifest.
 2. **Bun is the package manager** — `bun.lock` or `bun.lockb` must exist.
-3. **No local QC tool config overrides** — `biome.json`, `eslint.config.js`, `knip.json`, `.lintstagedrc.json`, `.lintstagedrc.mjs`.
+3. **No local QC tool config overrides** — Global TypeScript QC owns `biome.json`,
+   `eslint.config.js`, and `knip.json`. Global QC also owns lint-staged invocation
+   and configuration. Downstream repositories must not define any implicit lint-staged
+   config surface: `package.json#lint-staged`, `package.yaml#lint-staged`,
+   `.lintstagedrc`, `.lintstagedrc.json`, `.lintstagedrc.yaml`, `.lintstagedrc.yml`,
+   `.lintstagedrc.js`, `.lintstagedrc.cjs`, `.lintstagedrc.mjs`,
+   `lint-staged.config.js`, `lint-staged.config.cjs`, or `lint-staged.config.mjs`.
 4. **`tsconfig.json` does not set `strict: false`** — TypeScript strict mode is required by global QC.
 5. **Tests must exist** — At least one file matching `*.test.ts`, `*.test.tsx`, `*.spec.ts`, `*.spec.tsx`, or a `tests/` directory.
 

@@ -1,6 +1,7 @@
 import json
 import os
 import pathlib
+import re
 import shlex
 import shutil
 import subprocess
@@ -255,6 +256,71 @@ def load_lint_staged_config() -> dict[str, list[str]]:
     )
     assert result.returncode == 0, result.stdout + result.stderr
     return LINT_STAGED_CONFIG.validate_json(result.stdout)
+
+
+def just_variable_words(variable: str) -> set[str]:
+    text = (ROOT / "justfiles" / "bun.just").read_text()
+    match = re.search(rf'^{re.escape(variable)} := "([^"]*)"$', text, re.MULTILINE)
+    assert match is not None, f"missing just variable: {variable}"
+    return set(match.group(1).split())
+
+
+LINT_STAGED_IMPLICIT_CONFIG_SURFACES = (
+    "package.json#lint-staged",
+    "package.yaml#lint-staged",
+    ".lintstagedrc",
+    ".lintstagedrc.json",
+    ".lintstagedrc.yaml",
+    ".lintstagedrc.yml",
+    ".lintstagedrc.js",
+    ".lintstagedrc.cjs",
+    ".lintstagedrc.mjs",
+    "lint-staged.config.js",
+    "lint-staged.config.cjs",
+    "lint-staged.config.mjs",
+)
+
+
+def test_bun_preflight_names_all_implicit_lint_staged_config_surfaces() -> None:
+    configured_surfaces = just_variable_words("lint_staged_package_config_refs")
+    configured_surfaces |= just_variable_words("lint_staged_implicit_config_files")
+
+    assert configured_surfaces == set(LINT_STAGED_IMPLICIT_CONFIG_SURFACES)
+
+
+def test_quality_control_docs_name_lint_staged_preflight_surfaces() -> None:
+    docs = (ROOT / "skills" / "quality-control" / "SKILL.md").read_text()
+
+    for surface in LINT_STAGED_IMPLICIT_CONFIG_SURFACES:
+        assert f"`{surface}`" in docs
+
+
+@pytest.mark.parametrize("surface", LINT_STAGED_IMPLICIT_CONFIG_SURFACES)
+def test_bun_preflight_rejects_implicit_lint_staged_config_surfaces(
+    tmp_path: pathlib.Path,
+    surface: str,
+) -> None:
+    project = tmp_path / "bun-project"
+    project.mkdir()
+    package_json = {"scripts": {}}
+    if surface == "package.json#lint-staged":
+        package_json["lint-staged"] = {"*.ts": "echo local"}
+    (project / "package.json").write_text(json.dumps(package_json) + "\n")
+    (project / "bun.lock").write_text("")
+    (project / "app.test.ts").write_text(
+        "import { expect, test } from 'bun:test';\n"
+        "test('ok', () => expect(1).toBe(1));\n"
+    )
+    if surface == "package.yaml#lint-staged":
+        (project / "package.yaml").write_text("lint-staged:\n  '*.ts': echo local\n")
+    elif surface != "package.json#lint-staged":
+        (project / surface).write_text("{}\n")
+
+    result = run_just(ROOT / "justfiles" / "bun.just", project, "_check-ts-project")
+
+    output = result.stdout + result.stderr
+    assert result.returncode != 0, output
+    assert f"Local QC override detected: {surface}" in output
 
 
 def test_shared_ast_grep_uses_official_cli_and_central_rules_without_parsing_markdown(
