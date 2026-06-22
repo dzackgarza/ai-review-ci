@@ -28,6 +28,9 @@ infra := justfile_directory() / ".."
 configs := infra / "tool-configs"
 artifacts := infra / "tool-artifacts"
 justfiles := infra / "justfiles"
+local_ts_qc_config_files := "biome.json eslint.config.js knip.json"
+lint_staged_package_config_refs := "package.json#lint-staged package.yaml#lint-staged"
+lint_staged_implicit_config_files := ".lintstagedrc .lintstagedrc.json .lintstagedrc.yaml .lintstagedrc.yml .lintstagedrc.js .lintstagedrc.cjs .lintstagedrc.mjs lint-staged.config.js lint-staged.config.cjs lint-staged.config.mjs"
 
 # private recipes (prefix with _ — never run individually)
 
@@ -111,7 +114,7 @@ _biome:
 _ast-grep:
 	#!/usr/bin/env bash
 	set -euo pipefail
-	bun x ast-grep scan --config {{configs}}/sgconfig.yml
+	npx -y --package @ast-grep/cli ast-grep scan --config {{configs}}/sgconfig.yml
 
 _eslint: _eslint-deps
 	#!/usr/bin/env bash
@@ -287,7 +290,7 @@ _codeql:
 _lint-staged:
 	#!/usr/bin/env bash
 	set -euo pipefail
-	bun x lint-staged --config {{configs}}/lintstagedrc.json
+	bun x lint-staged --config {{configs}}/lintstagedrc.mjs
 
 _check-ts-project:
 	#!/usr/bin/env bash
@@ -296,10 +299,25 @@ _check-ts-project:
 	echo "=== Running: TypeScript project preflight check ==="
 	echo "# Validates project structure, Bun alignment, test presence, and QC config isolation"
 	failed=0
+	report_local_qc_override() {
+		local config="$1"
+		echo "ERROR: Local QC override detected: $config — global QC owns this tool config."
+		echo "       DELETE this file. The global config for this tool already exists in"
+		echo "       ~/ai-review-ci/ and is authoritative for all projects."
+		echo "       Do NOT copy or move this file to ~/ai-review-ci/ — that violates"
+		echo "       QC isolation policy. If the global config needs to change, contact"
+		echo "       the QC owner (dzack) to update it centrally."
+		failed=1
+	}
 	# 1. package.json must exist
 	if [ ! -f "package.json" ]; then
 		echo "ERROR: TypeScript project must have a package.json file."
 		failed=1
+	elif ! jq -e 'type == "object"' package.json >/dev/null; then
+		echo "ERROR: package.json must be a valid JSON object."
+		failed=1
+	elif jq -e 'has("lint-staged")' package.json >/dev/null; then
+		report_local_qc_override "package.json#lint-staged"
 	fi
 	# 2. Must use Bun
 	if [ ! -f "bun.lock" ] && [ ! -f "bun.lockb" ]; then
@@ -308,15 +326,20 @@ _check-ts-project:
 	fi
 	# 3. Check for local QC tool config overrides.
 	#    Global QC owns these tool configs — projects must not set them locally.
-	for config in biome.json eslint.config.js knip.json .lintstagedrc.json; do
+	if [ -f "package.yaml" ]; then
+		if grep -Eq "^[\"']?lint-staged[\"']?[[:space:]]*:" package.yaml; then
+			report_local_qc_override "package.yaml#lint-staged"
+		else
+			grep_status=$?
+			if [ "$grep_status" -gt 1 ]; then
+				echo "ERROR: unable to inspect package.yaml for local lint-staged config."
+				failed=1
+			fi
+		fi
+	fi
+	for config in {{local_ts_qc_config_files}} {{lint_staged_implicit_config_files}}; do
 		if [ -f "$config" ]; then
-			echo "ERROR: Local QC override detected: $config — global QC owns this tool config."
-			echo "       DELETE this file. The global config for this tool already exists in"
-			echo "       ~/ai-review-ci/ and is authoritative for all projects."
-			echo "       Do NOT copy or move this file to ~/ai-review-ci/ — that violates"
-			echo "       QC isolation policy. If the global config needs to change, contact"
-			echo "       the QC owner (dzack) to update it centrally."
-			failed=1
+			report_local_qc_override "$config"
 		fi
 	done
 	# 4. tsconfig.json must not disable strict mode

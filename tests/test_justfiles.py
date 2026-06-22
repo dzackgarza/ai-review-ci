@@ -1,14 +1,18 @@
 import json
 import os
 import pathlib
+import re
+import shlex
 import shutil
 import subprocess
 import tomllib
 
 import pytest
+from pydantic import TypeAdapter
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 TRIAGE_MARKER = "QC FAILURE"
+LINT_STAGED_CONFIG = TypeAdapter(dict[str, list[str]])
 
 
 def run_just(
@@ -235,6 +239,237 @@ def test_common_normalization_formats_structured_text(
     assert result.returncode == 0, output
     assert markdown.read_text() == "# Title\n\n- item\n"
     assert json_file.read_text() == '{ "b": 2, "a": 1 }\n'
+
+
+def load_lint_staged_config() -> dict[str, list[str]]:
+    result = subprocess.run(
+        [
+            "node",
+            "--input-type=module",
+            "-e",
+            "import config from './tool-configs/lintstagedrc.mjs'; console.log(JSON.stringify(config));",
+        ],
+        cwd=ROOT,
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+    assert result.returncode == 0, result.stdout + result.stderr
+    return LINT_STAGED_CONFIG.validate_json(result.stdout)
+
+
+def just_variable_words(variable: str) -> set[str]:
+    text = (ROOT / "justfiles" / "bun.just").read_text()
+    match = re.search(rf'^{re.escape(variable)} := "([^"]*)"$', text, re.MULTILINE)
+    assert match is not None, f"missing just variable: {variable}"
+    return set(match.group(1).split())
+
+
+LINT_STAGED_IMPLICIT_CONFIG_SURFACES = (
+    "package.json#lint-staged",
+    "package.yaml#lint-staged",
+    ".lintstagedrc",
+    ".lintstagedrc.json",
+    ".lintstagedrc.yaml",
+    ".lintstagedrc.yml",
+    ".lintstagedrc.js",
+    ".lintstagedrc.cjs",
+    ".lintstagedrc.mjs",
+    "lint-staged.config.js",
+    "lint-staged.config.cjs",
+    "lint-staged.config.mjs",
+)
+
+
+def test_bun_preflight_names_all_implicit_lint_staged_config_surfaces() -> None:
+    configured_surfaces = just_variable_words("lint_staged_package_config_refs")
+    configured_surfaces |= just_variable_words("lint_staged_implicit_config_files")
+
+    assert configured_surfaces == set(LINT_STAGED_IMPLICIT_CONFIG_SURFACES)
+
+
+def test_quality_control_docs_name_lint_staged_preflight_surfaces() -> None:
+    docs = (ROOT / "skills" / "quality-control" / "SKILL.md").read_text()
+
+    for surface in LINT_STAGED_IMPLICIT_CONFIG_SURFACES:
+        assert f"`{surface}`" in docs
+
+
+@pytest.mark.parametrize("surface", LINT_STAGED_IMPLICIT_CONFIG_SURFACES)
+def test_bun_preflight_rejects_implicit_lint_staged_config_surfaces(
+    tmp_path: pathlib.Path,
+    surface: str,
+) -> None:
+    project = tmp_path / "bun-project"
+    project.mkdir()
+    package_json = {"scripts": {}}
+    if surface == "package.json#lint-staged":
+        package_json["lint-staged"] = {"*.ts": "echo local"}
+    (project / "package.json").write_text(json.dumps(package_json) + "\n")
+    (project / "bun.lock").write_text("")
+    (project / "app.test.ts").write_text(
+        "import { expect, test } from 'bun:test';\n"
+        "test('ok', () => expect(1).toBe(1));\n"
+    )
+    if surface == "package.yaml#lint-staged":
+        (project / "package.yaml").write_text("lint-staged:\n  '*.ts': echo local\n")
+    elif surface != "package.json#lint-staged":
+        (project / surface).write_text("{}\n")
+
+    result = run_just(ROOT / "justfiles" / "bun.just", project, "_check-ts-project")
+
+    output = result.stdout + result.stderr
+    assert result.returncode != 0, output
+    assert f"Local QC override detected: {surface}" in output
+
+
+def test_shared_ast_grep_uses_official_cli_and_central_rules_without_parsing_markdown(
+    tmp_path: pathlib.Path,
+) -> None:
+    project = tmp_path / "project"
+    project.mkdir()
+    (project / "AESTHETIC-GUIDELINES.md").write_text(
+        "\n".join(
+            [
+                "> From: https://chatgpt.com/c/example",
+                "",
+                "# transcript",
+                "",
+                "This prose file is project documentation, not TypeScript.",
+                "",
+            ]
+        )
+    )
+    source_dir = project / "src"
+    source_dir.mkdir()
+    (source_dir / "app.ts").write_text(
+        "\n".join(
+            [
+                "export async function loadPlugin() {",
+                '  const plugin = await import("./plugin");',
+                "  return plugin;",
+                "}",
+                "",
+            ]
+        )
+    )
+
+    result = run_just(ROOT / "justfiles" / "shared.just", project, "_ast-grep")
+
+    output = result.stdout + result.stderr
+    assert result.returncode != 0, output
+    assert "no-dynamic-import" in output
+    assert "SyntaxError" not in output
+
+
+def test_python_ast_grep_uses_official_cli_and_central_rules(
+    tmp_path: pathlib.Path,
+) -> None:
+    project = tmp_path / "python-project"
+    project.mkdir()
+    (project / "app.py").write_text("CONFIG_VALUE = Field(default=1)\n")
+
+    result = run_just(ROOT / "justfiles" / "python.just", project, "_ast-grep")
+
+    output = result.stdout + result.stderr
+    assert result.returncode != 0, output
+    assert "no-field-default" in output
+
+
+def test_bun_ast_grep_uses_official_cli_and_central_rules_without_parsing_markdown(
+    tmp_path: pathlib.Path,
+) -> None:
+    project = tmp_path / "bun-project"
+    project.mkdir()
+    (project / "AESTHETIC-GUIDELINES.md").write_text(
+        "\n".join(
+            [
+                "> From: https://chatgpt.com/c/example",
+                "",
+                "# transcript",
+                "",
+                "This prose file is project documentation, not TypeScript.",
+                "",
+            ]
+        )
+    )
+    source_dir = project / "src"
+    source_dir.mkdir()
+    (source_dir / "app.ts").write_text(
+        "\n".join(
+            [
+                "export async function loadPlugin() {",
+                '  const plugin = await import("./plugin");',
+                "  return plugin;",
+                "}",
+                "",
+            ]
+        )
+    )
+
+    result = run_just(ROOT / "justfiles" / "bun.just", project, "_ast-grep")
+
+    output = result.stdout + result.stderr
+    assert result.returncode != 0, output
+    assert "no-dynamic-import" in output
+    assert "SyntaxError" not in output
+
+
+def test_lint_staged_ast_grep_uses_official_cli_with_central_config(
+    tmp_path: pathlib.Path,
+) -> None:
+    commands = load_lint_staged_config()
+    staged_commands = commands["*.{ts,tsx,js,jsx,mjs,cjs,json,jsonc}"]
+    ast_grep_command = staged_commands[1]
+
+    assert staged_commands[0] == "biome check --write --no-errors-on-unmatched"
+    assert shlex.split(ast_grep_command) == [
+        "npx",
+        "-y",
+        "--package",
+        "@ast-grep/cli",
+        "ast-grep",
+        "scan",
+        "--config",
+        str(ROOT / "tool-configs" / "sgconfig.yml"),
+    ]
+
+    project = tmp_path / "lint-staged-project"
+    project.mkdir()
+    source_dir = project / "src"
+    source_dir.mkdir()
+    (source_dir / "app.ts").write_text(
+        "\n".join(
+            [
+                "export async function loadPlugin() {",
+                '  const plugin = await import("./plugin");',
+                "  return plugin;",
+                "}",
+                "",
+            ]
+        )
+    )
+
+    result = subprocess.run(
+        [*shlex.split(ast_grep_command), "."],
+        cwd=project,
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+
+    output = result.stdout + result.stderr
+    assert result.returncode != 0, output
+    assert "no-dynamic-import" in output
+
+
+def test_lint_staged_runs_biome_before_ast_grep() -> None:
+    commands = load_lint_staged_config()
+
+    assert commands["*.{ts,tsx,js,jsx,mjs,cjs,json,jsonc}"][:2] == [
+        "biome check --write --no-errors-on-unmatched",
+        f"npx -y --package @ast-grep/cli ast-grep scan --config {ROOT / 'tool-configs' / 'sgconfig.yml'}",
+    ]
 
 
 def test_semgrep_autofix_defers_unfixed_findings_to_push_tier(

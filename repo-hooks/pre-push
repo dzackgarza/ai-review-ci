@@ -1,9 +1,26 @@
 #!/usr/bin/env sh
 set -e
+clear_git_local_env() {
+  unset GIT_DIR GIT_INDEX_FILE GIT_WORK_TREE GIT_PREFIX GIT_OBJECT_DIRECTORY GIT_ALTERNATE_OBJECT_DIRECTORIES GIT_COMMON_DIR
+}
+
 repo_root="$(git rev-parse --show-toplevel)"
 hook_file="$(readlink -f "$0")"
 hook_repo="$(CDPATH= cd -- "$(dirname -- "$hook_file")/.." && pwd -P)"
-if [ "$repo_root" = "$hook_repo" ]; then
+repo_common_dir="$(git -C "$repo_root" rev-parse --git-common-dir)"
+hook_common_dir="$(clear_git_local_env; git -C "$hook_repo" rev-parse --git-common-dir)"
+case "$repo_common_dir" in
+  /*) ;;
+  *) repo_common_dir="$repo_root/$repo_common_dir" ;;
+esac
+case "$hook_common_dir" in
+  /*) ;;
+  *) hook_common_dir="$hook_repo/$hook_common_dir" ;;
+esac
+repo_common_dir="$(CDPATH= cd -- "$repo_common_dir" && pwd -P)"
+hook_common_dir="$(CDPATH= cd -- "$hook_common_dir" && pwd -P)"
+if [ "$repo_common_dir" = "$hook_common_dir" ]; then
   exit 0
 fi
+clear_git_local_env
 exec just test-ci

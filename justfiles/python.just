@@ -253,7 +253,7 @@ _pytest: _install-tools
 		"{{artifacts}}/scripts/emit-triage-directive.sh"
 		exit 1
 	fi
-	if uvx --from pytest --with-editable . pytest; then
+	if uvx --python 3.14 --from pytest --with-editable . pytest; then
 		:
 	else
 		ec=$?
@@ -287,7 +287,7 @@ _pytest_with_coverage: _install-tools
 	mkdir -p "$coverage_root"
 	export COVERAGE_FILE="$coverage_data"
 	export COVERAGE_RCFILE="$coverage_config"
-	if uvx --from coverage --with pytest --with-editable . coverage run -m pytest; then
+	if uvx --python 3.14 --from coverage --with pytest --with-editable . coverage run -m pytest; then
 		:
 	else
 		ec=$?
@@ -409,7 +409,7 @@ _ast-grep: _install-tools
 	fi
 	findings_file=$(mktemp)
 	trap 'if [ -e "$findings_file" ]; then rm -f "$findings_file"; fi' EXIT
-	npx -y ast-grep scan \
+	npx -y --package @ast-grep/cli ast-grep scan \
 		--config {{configs}}/sgconfig.yml \
 		--report-style short \
 		"${python_files[@]}" | tee "$findings_file"

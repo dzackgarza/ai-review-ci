@@ -250,7 +250,13 @@ Validates:
 
 1. **`package.json` exists** — TypeScript QC requires a package manifest.
 2. **Bun is the package manager** — `bun.lock` or `bun.lockb` must exist.
-3. **No local QC tool config overrides** — `biome.json`, `eslint.config.js`, `knip.json`, `.lintstagedrc.json`.
+3. **No local QC tool config overrides** — Global TypeScript QC owns `biome.json`,
+   `eslint.config.js`, and `knip.json`. Global QC also owns lint-staged invocation
+   and configuration. Downstream repositories must not define any implicit lint-staged
+   config surface: `package.json#lint-staged`, `package.yaml#lint-staged`,
+   `.lintstagedrc`, `.lintstagedrc.json`, `.lintstagedrc.yaml`, `.lintstagedrc.yml`,
+   `.lintstagedrc.js`, `.lintstagedrc.cjs`, `.lintstagedrc.mjs`,
+   `lint-staged.config.js`, `lint-staged.config.cjs`, or `lint-staged.config.mjs`.
 4. **`tsconfig.json` does not set `strict: false`** — TypeScript strict mode is required by global QC.
 5. **Tests must exist** — At least one file matching `*.test.ts`, `*.test.tsx`, `*.spec.ts`, `*.spec.tsx`, or a `tests/` directory.
 
@@ -408,7 +414,7 @@ See `tool-provisioning-and-environment-hygiene` (rank 3 in the authority hierarc
 | --- | --- |
 | `uvx --from ruff ruff check --fix` | `pip install ruff && ruff check` |
 | `bun x biome check` | `bun add --global @biomejs/biome && biome check` |
-| `npx -y ast-grep scan` | `npm install -g @ast-grep/cli && ast-grep scan` |
+| `npx -y --package @ast-grep/cli ast-grep scan` | `npm install -g @ast-grep/cli && ast-grep scan` |
 
 **Sole exception:** ESLint flat config requires its plugins to be locally installed in `~/ai-review-ci/tool-configs/node_modules/` because the flat config uses ES module imports that resolve relative to the config file's directory.
 This exception is documented at the recipe site in `_eslint-deps`. No other tool may use this exception.
@@ -775,7 +781,7 @@ The QC system uses these configs (all stored in `~/ai-review-ci/tool-configs/`):
 | `grain.toml` | Grain | Unused code and low-quality pattern detection |
 | `.jscpd.json` | jscpd | Copy-paste detection |
 | `sgconfig.yml` | ast-grep | Custom AST-based rules |
-| `.lintstagedrc.json` | lint-staged | Pre-commit hook staged file processing |
+| `lintstagedrc.mjs` | lint-staged | Pre-commit hook staged file processing |
 | `.slopconfig.yaml` | ai-slop-detector | AI-generated code detection |
 | `.coveragerc` | coverage.py | Coverage configuration |
 | `ast-grep/rules/` | ast-grep | Custom rule definitions |
