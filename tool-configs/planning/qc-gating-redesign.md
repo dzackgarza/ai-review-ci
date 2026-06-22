@@ -4,13 +4,19 @@ Starting point for the QC gating redesign. Tracked by the epic and sub-issues li
 Implementation has NOT started — this document is the plan a subsequent worker executes.
 
 ## Why
-A complete mechanical global-QC run against a consumer repo (`zotero-gui`) produced 1,291 findings
-whose signal is inverted: 59% from one rule that bans all `const` (`no-const-assignment`), ~12% from
-a duplicate `??` rule, **zero** on the network-boundary mock that actually shipped a dead app, and a
-clean `tsc`. Meanwhile the deterministic stack runs only in a bypassable local hook (absent from CI),
-the only CI gate is the non-deterministic LLM reviewer with an invented health score, and consumer
-`main` branches are unprotected. A noisy-but-blind gate is what drove a repo to route around global QC
-entirely — disabling the (incomplete) real detection as a side effect.
+A complete mechanical global-QC run against a consumer repo (`zotero-gui`) produced 1,291 findings whose
+signal is **misdirected** (not "mostly junk"). 59% come from one rule (`no-const-assignment`) that enforces a
+**real policy** — *no hardcoded config constants in source* (config-as-data) — but via an **over-broad
+implementation**: it fires on every `const` (~640/763 are not config constants) and ships a **laundering**
+remediation message ("use `let`", which renames the binding without extracting the constant to config).
+~12% are a **duplicate `??` rule** (the no-fallback policy is real; only the duplication is the defect).
+**Zero** findings on the network-boundary mock that actually shipped a dead app, and a clean `tsc`.
+
+So real policies are enforced imprecisely and at volume while the actual defect goes undetected — and that
+volume plausibly drove the repo to route around global QC entirely, disabling the (incomplete) real
+detection as a side effect. The remedy is signal **precision** — make the real policies fire exactly, add the
+missing detectors — **without weakening strictness**. Real policies are never deleted or demoted to ignorable
+"advisory"; the question for each noisy rule is whether its *implementation* matches its *policy*.
 
 ## Design
 
@@ -24,16 +30,20 @@ entirely — disabling the (incomplete) real detection as a side effect.
 ### Gate placement
 | Surface | Runs | Blocks? |
 |---|---|---|
-| pre-commit (local) | fast deterministic checks on changed files | local only (advisory; CI is authoritative) |
+| pre-commit (local) | fast deterministic checks on changed files | local only (CI is authoritative) |
 | pre-push (local)   | fuller deterministic stack | local only |
 | PR / CI (diff scope) | deterministic stack + delegation-drift + app-boot + LLM threads | **required, un-bypassable** |
-| ambient CI (repo scope / cron) | whole-repo backlog & trends | non-gating, visible |
+| ambient CI (repo scope / cron) | whole-repo backlog & trends | **non-gating but non-suppressible** (tracked/surfaced, never silently ignorable) |
 
 PR gates evaluate the **unified diff only**; the pre-existing repo-wide backlog never blocks an unrelated PR.
+"Non-gating" is *not* "advisory/ignorable" — anything that can be silently ignored gets suppressed (exactly
+what happened to the slop report's mock policy).
 
-### Signal fixes
-- `no-const-assignment`: narrow to module-scope `const NAME = <bare literal>`; message → extract to config (not "use let"); reconcile with `eslint.config.js` (which permits `const`).
-- Dedupe `no-nullish-coalescing` vs `ts-no-nullish-default` (identical `??` match).
+### Signal fixes (make real policies fire precisely — do NOT delete policy)
+- `no-const-assignment`: the policy (no hardcoded config constants in source) is real. Fix the *implementation*:
+  narrow to module-scope `const NAME = <hardcoded config-shaped literal>`; message → "extract to config"
+  (never "use `let`", which is laundering); reconcile with `eslint.config.js` (which permits `const`).
+- Dedupe `no-nullish-coalescing` vs `ts-no-nullish-default` (identical `??` match). The no-fallback policy stays.
 - Extend TS mock vocabulary: `vi.stubGlobal`/`vi.fn`/`vi.spyOn`/`vi.stubEnv` (+ jest), alongside `ts-no-vi-mock`.
 
 ### New gates
