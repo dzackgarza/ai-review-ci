@@ -330,7 +330,7 @@ _ast-grep:
 	echo "# Structural code pattern analysis for bridge-burning policy violations"
 	sg_config="{{configs}}/ast-grep/sgconfig.yml"
 	if [ -f "$sg_config" ]; then
-		if npx -y ast-grep scan --config "$sg_config" .; then
+		if npx -y --package @ast-grep/cli ast-grep scan --config "$sg_config" .; then
 			:
 		else
 			ec=$?

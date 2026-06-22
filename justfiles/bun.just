@@ -111,7 +111,7 @@ _biome:
 _ast-grep:
 	#!/usr/bin/env bash
 	set -euo pipefail
-	bun x ast-grep scan --config {{configs}}/sgconfig.yml
+	npx -y --package @ast-grep/cli ast-grep scan --config {{configs}}/sgconfig.yml
 
 _eslint: _eslint-deps
 	#!/usr/bin/env bash
@@ -287,7 +287,7 @@ _codeql:
 _lint-staged:
 	#!/usr/bin/env bash
 	set -euo pipefail
-	bun x lint-staged --config {{configs}}/lintstagedrc.json
+	bun x lint-staged --config {{configs}}/lintstagedrc.mjs
 
 _check-ts-project:
 	#!/usr/bin/env bash
@@ -308,7 +308,7 @@ _check-ts-project:
 	fi
 	# 3. Check for local QC tool config overrides.
 	#    Global QC owns these tool configs — projects must not set them locally.
-	for config in biome.json eslint.config.js knip.json .lintstagedrc.json; do
+	for config in biome.json eslint.config.js knip.json .lintstagedrc.json .lintstagedrc.mjs; do
 		if [ -f "$config" ]; then
 			echo "ERROR: Local QC override detected: $config — global QC owns this tool config."
 			echo "       DELETE this file. The global config for this tool already exists in"

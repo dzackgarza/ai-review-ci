@@ -409,7 +409,7 @@ _ast-grep: _install-tools
 	fi
 	findings_file=$(mktemp)
 	trap 'if [ -e "$findings_file" ]; then rm -f "$findings_file"; fi' EXIT
-	npx -y ast-grep scan \
+	npx -y --package @ast-grep/cli ast-grep scan \
 		--config {{configs}}/sgconfig.yml \
 		--report-style short \
 		"${python_files[@]}" | tee "$findings_file"
