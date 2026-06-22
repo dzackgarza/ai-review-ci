@@ -11,11 +11,6 @@ on:
         description: 'Review scope: repo or diff'
         required: true
         type: string
-      fail_below:
-        description: 'Fail the run if the health score drops below this value'
-        required: false
-        type: string
-        default: ''
       infra_ref:
         description: 'Git ref of ai-review-ci to run with'
         required: false
@@ -33,7 +28,6 @@ jobs:
     env:
       REVIEW_REPORT_TYPE: ${{ inputs.report_type }}
       REVIEW_SCOPE: ${{ inputs.scope }}
-      REVIEW_FAIL_BELOW: ${{ inputs.fail_below }}
       REVIEW_INFRA_REF: ${{ inputs.infra_ref }}
       REVIEW_PR_NUMBER: ${{ github.event.number || 0 }}
       REVIEW_BASE_REF: ${{ github.base_ref }}
@@ -58,10 +52,6 @@ jobs:
             repo|diff) ;;
             *) echo "invalid scope: $REVIEW_SCOPE" >&2; exit 1 ;;
           esac
-          if [[ ! "$REVIEW_FAIL_BELOW" =~ ^$|^[0-9]$|^[1-9][0-9]$|^100$ ]]; then
-            echo "invalid fail_below: $REVIEW_FAIL_BELOW" >&2
-            exit 1
-          fi
           if [[ ! "$REVIEW_PR_NUMBER" =~ ^[0-9]+$ ]]; then
             echo "invalid pull request number: $REVIEW_PR_NUMBER" >&2
             exit 1
@@ -130,15 +120,3 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: just -f "$INFRA/ci/runner.just" post-threads "$REVIEW_PR_NUMBER"
-
-      - name: Check threshold
-        if: inputs.fail_below != ''
-        run: |
-          tier1=$(jq '[.findings[] | select(.tier == "tier1")] | length' .review-report-artifact.json)
-          tier2=$(jq '[.findings[] | select(.tier == "tier2")] | length' .review-report-artifact.json)
-          score=$((100 - tier1 * 20 - tier2 * 5))
-          score=$(( score < 0 ? 0 : score ))
-          if [ "$score" -lt "$REVIEW_FAIL_BELOW" ]; then
-            echo "Health score $score is below threshold $REVIEW_FAIL_BELOW"
-            exit 1
-          fi

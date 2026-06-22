@@ -16,6 +16,13 @@ jobs:
     with:
       gate: delegation-conformance
       profile: '{{ profile }}'
+  app-boot:
+    uses: dzackgarza/ai-review-ci/.github/workflows/_gates.yml@main
+    permissions:
+      contents: read
+    with:
+      gate: app-boot
+      profile: '{{ profile }}'
   general:
     uses: dzackgarza/ai-review-ci/.github/workflows/_review.yml@main
     permissions:

@@ -549,6 +549,18 @@ def test_bun_scaffold_delegates_qc_in_project_directory(
             ),
         ),
         (
+            "bun-playwright",
+            {
+                "package.json": json.dumps({"scripts": {}}) + "\n",
+                "bun.lock": "",
+            },
+            "TypeScript project must have tests",
+            (
+                "TypeScript project must have a package.json file",
+                "TypeScript project must use Bun",
+            ),
+        ),
+        (
             "python",
             {
                 "pyproject.toml": "\n".join(
@@ -627,6 +639,56 @@ def test_scaffolds_delegate_qc_in_project_directory(
     assert expected_error in output
     for wrong_root_error in wrong_root_errors:
         assert wrong_root_error not in output
+
+
+def test_bun_playwright_scaffold_delegates_app_boot_to_global_qc(tmp_path: pathlib.Path) -> None:
+    project = tmp_path / "bun-playwright-project"
+    project.mkdir()
+
+    result = subprocess.run(
+        [
+            "just",
+            "--dry-run",
+            "--justfile",
+            str(ROOT / "scaffolds" / "bun-playwright" / "justfile"),
+            "-d",
+            str(project),
+            "app-boot",
+        ],
+        cwd=project,
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+
+    output = result.stdout + result.stderr
+    assert result.returncode == 0, output
+    assert "just -f ~/ai-review-ci/justfiles/bun.just -d . app-boot" in output
+    assert "bunx playwright" not in output
+
+
+def test_bun_playwright_gate_requires_standard_config(tmp_path: pathlib.Path) -> None:
+    project = tmp_path / "bun-playwright-project"
+    project.mkdir()
+
+    result = subprocess.run(
+        [
+            "just",
+            "--justfile",
+            str(ROOT / "justfiles" / "bun.just"),
+            "-d",
+            str(project),
+            "app-boot",
+        ],
+        cwd=project,
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+
+    output = result.stdout + result.stderr
+    assert result.returncode != 0, output
+    assert "playwright.config.ts" in output
 
 
 @pytest.mark.parametrize(

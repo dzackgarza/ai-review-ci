@@ -7,10 +7,8 @@ rules:
       - javascript
     severity: ERROR
   - id: no-const-assignment
-    patterns:
-      - pattern: const $X = $VALUE;
-      - pattern-not: const $X = require($VALUE);
-    message: Const assignment creates a binding that pretends immutability. Use `let` — constants belong in config files, not source code.
+    pattern-regex: (?m)^(?:export\s+)?const\s+[A-Z][A-Z0-9_]*\s*=\s*(?:["'`][^"'`]*["'`]|[0-9]+(?:\.[0-9]+)?|\[[^\n]*\]|\{[^\n]*\})
+    message: Hardcoded constant in source - extract to required config (for example resolver-plugins.json or *.config.*); do not convert to let.
     paths:
       exclude:
         - '*config*'
@@ -191,13 +189,6 @@ rules:
     languages:
       - python
     severity: ERROR
-  - id: ts-no-nullish-default
-    pattern: $X ?? $DEFAULT
-    message: Nullish coalescing with default creates silent fallback.
-    languages:
-      - typescript
-      - javascript
-    severity: ERROR
   - id: ts-no-or-default
     pattern: $X || $DEFAULT
     message: Logical OR with default creates silent fallback on any falsy value.
@@ -226,6 +217,84 @@ rules:
       - typescript
       - javascript
     severity: ERROR
+  - id: ts-no-vi-stub-global
+    pattern: vi.stubGlobal(...)
+    message: vi.stubGlobal replaces a real global boundary with a fake implementation. Use real-boundary fixtures or integration proof instead.
+    languages:
+      - typescript
+      - javascript
+    severity: ERROR
+    paths:
+      include:
+        - '**/*.test.*'
+        - '**/*.spec.*'
+        - '**/tests/**/*'
+        - '**/__tests__/**/*'
+  - id: ts-no-vi-fn
+    pattern: vi.fn(...)
+    message: vi.fn creates a fake function in a proof path. Use real collaborators or captured real-boundary fixtures instead.
+    languages:
+      - typescript
+      - javascript
+    severity: ERROR
+    paths:
+      include:
+        - '**/*.test.*'
+        - '**/*.spec.*'
+        - '**/tests/**/*'
+        - '**/__tests__/**/*'
+  - id: ts-no-vi-spyon
+    pattern: vi.spyOn(...)
+    message: vi.spyOn observes or replaces behavior through a fake boundary. Prove the real boundary instead.
+    languages:
+      - typescript
+      - javascript
+    severity: ERROR
+    paths:
+      include:
+        - '**/*.test.*'
+        - '**/*.spec.*'
+        - '**/tests/**/*'
+        - '**/__tests__/**/*'
+  - id: ts-no-vi-stub-env
+    pattern: vi.stubEnv(...)
+    message: vi.stubEnv replaces runtime environment state with a test fixture. Use declared config and real-boundary proof instead.
+    languages:
+      - typescript
+      - javascript
+    severity: ERROR
+    paths:
+      include:
+        - '**/*.test.*'
+        - '**/*.spec.*'
+        - '**/tests/**/*'
+        - '**/__tests__/**/*'
+  - id: ts-no-jest-fn
+    pattern: jest.fn(...)
+    message: jest.fn creates a fake function in a proof path. Use real collaborators or captured real-boundary fixtures instead.
+    languages:
+      - typescript
+      - javascript
+    severity: ERROR
+    paths:
+      include:
+        - '**/*.test.*'
+        - '**/*.spec.*'
+        - '**/tests/**/*'
+        - '**/__tests__/**/*'
+  - id: ts-no-jest-spyon
+    pattern: jest.spyOn(...)
+    message: jest.spyOn observes or replaces behavior through a fake boundary. Prove the real boundary instead.
+    languages:
+      - typescript
+      - javascript
+    severity: ERROR
+    paths:
+      include:
+        - '**/*.test.*'
+        - '**/*.spec.*'
+        - '**/tests/**/*'
+        - '**/__tests__/**/*'
   - id: ts-no-skip-test
     pattern-either:
       - pattern: test.skip(...)

@@ -40,3 +40,5 @@
 
 - Slop/style/coverage findings during an ordinary commit indicate a hook-tier or delegation problem.
   Do not reinstall hooks or weaken QC until the active hook path, hook contents, and delegated cwd have been verified.
+
+> Optimized tool-use workflow for agents: see [SDL.md](./SDL.md).

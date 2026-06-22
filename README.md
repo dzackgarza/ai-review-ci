@@ -14,10 +14,13 @@ Each type runs in two scopes: **repo** (full-repository sweep) and **diff** (PR 
 
 ```bash
 cd /path/to/your/repo
-uvx --from git+https://github.com/dzackgarza/ai-review-ci ai-review-ci install
+uvx --from git+https://github.com/dzackgarza/ai-review-ci ai-review-ci install --repo owner/repo --branch main --profile bun-playwright
 ```
 
-This writes exactly three files into `.github/workflows/` and nothing else:
+Pass `--profile <profile>` with one of `python`, `bun`, `bun-playwright`, `rust`, or `sage`.
+The profile is the enforced project bin: it selects the required project shape, the central justfile delegation target, the installed PR gates, and the branch-protection checks.
+
+This installs the complete QC enforcement surface: it writes the three trigger workflows and applies branch protection requiring the installed PR gate jobs for the declared profile.
 
 | File | Triggers |
 | --- | --- |
@@ -28,6 +31,7 @@ This writes exactly three files into `.github/workflows/` and nothing else:
 The three files are minimally-correct base configuration and become **repo-owned** the moment they are installed: edit crons, branches, thresholds, and the upstream `@ref` directly in the YAML — that is the whole downstream surface.
 The installer never overwrites them.
 All review *behavior* lives upstream and needs no reinstall: every run clones this repo fresh.
+Branch protection is not optional setup; without it the workflows can run without enforcing the merge gate.
 
 What an installed trigger looks like (`review-general.yml` — pure configuration pointing at the upstream reusable workflow):
 
@@ -50,13 +54,13 @@ jobs:
     with:
       report_type: general
       scope: repo
-      fail_below: ${{ vars.GENERAL_FAIL_BELOW }}
 ```
 
 The canonical templates live in [`src/ai_review_ci/templates/`](src/ai_review_ci/templates/).
 
-Requirements in the target repo: GitHub code scanning enabled (free for public repos); optionally the Actions vars `GENERAL_FAIL_BELOW` / `SLOP_FAIL_BELOW` to gate runs on a health score.
-The PR trigger passes those same vars to the diff-scoped general and slop jobs.
+Requirements in the target repo: GitHub code scanning enabled (free for public repos), GitHub CLI auth with permission to edit branch protection, the target branch named in `--branch`, and a repo shape that satisfies the declared `--profile`.
+LLM review jobs are signal-only process checks: they upload SARIF and post review threads, but they do not compute or fail on a health score.
+The merge gate is deterministic QC plus evidence-backed resolution of reviewer-authored PR threads.
 
 ## Installing QC Surfaces
 
@@ -101,20 +105,21 @@ Use this when a repository needs local hook files without changing the user's gl
 ### Repo-local QC delegation
 
 Target repositories should not copy QC configs, tool pins, or hook scripts.
-Their local `justfile` should delegate the public `test` and `test-ci` recipes to the relevant language justfile in `~/ai-review-ci`.
+Their local `justfile` should delegate the public `test` and `test-ci` recipes to the central justfile for the repository's enforced profile in `~/ai-review-ci`.
 
 For new projects, install the tracked scaffold instead of hand-writing the delegation surface:
 
 ```bash
 cd ~/ai-review-ci
-# choose one language scaffold for the target repository
+# choose one enforced project profile for the target repository
 just install-qc-scaffold python /path/to/new/repo
 just install-qc-scaffold bun /path/to/new/repo
+just install-qc-scaffold bun-playwright /path/to/new/repo
 just install-qc-scaffold rust /path/to/new/repo
 just install-qc-scaffold sage /path/to/new/repo
 ```
 
-The recipe copies files from `scaffolds/<language>/` and refuses to overwrite existing files.
+The recipe copies files from `scaffolds/<profile>/` and refuses to overwrite existing files.
 Edit the tracked scaffold here when the standard project surface changes; do not copy sample snippets into downstream repos by hand.
 
 The scaffold contents are intentionally small.
@@ -139,6 +144,22 @@ test:
 test-ci:
     @just -f ~/ai-review-ci/justfiles/bun.just -d . test-ci
 ```
+
+TypeScript/Bun project with mandatory Playwright GUI proof:
+
+```justfile
+test:
+    @just -f ~/ai-review-ci/justfiles/bun.just -d . test
+
+test-ci:
+    @just -f ~/ai-review-ci/justfiles/bun.just -d . test-ci
+
+app-boot:
+    @just -f ~/ai-review-ci/justfiles/bun.just -d . app-boot
+```
+
+`bun-playwright` repositories must keep `package.json`, `bun.lock` or `bun.lockb`, and the Playwright configuration at repository-root `playwright.config.ts`.
+The local justfile delegates the invocation to global QC; it must not call Playwright directly.
 
 Rust:
 
@@ -198,9 +219,11 @@ Dismissed/fixed alerts feed future reviewer context as do-not-re-raise instructi
 Diff-scoped findings surface twice, deliberately:
 
 - **Code scanning**: uploaded under the same SARIF categories as repo-wide runs, so GitHub natively computes "new alerts introduced by this PR" and annotates the diff.
-  Make the check blocking via branch protection.
+  The review job itself is signal-only; branch protection should block on deterministic gates and thread-resolution.
 - **Resolvable review threads**: one review block per run (summary + metadata) with one inline, individually-resolvable comment per finding, for later disposition/remediation by separate agents.
   Off-diff findings are listed in the review body only — they are already in the ledger.
+- **Required deterministic gates**: the installed PR workflow calls the reusable `_gates.yml` workflow for `deterministic-diff`, `delegation-conformance`, and `thread-resolution`; `bun-playwright` also installs `app-boot`.
+  `install` applies branch protection; `ai-review-ci protect-branch --repo owner/repo --branch main --profile <profile>` exists to reapply or repair the required-check contract.
 
 ## Architecture
 
@@ -268,7 +291,7 @@ trigger -> _review.yml (cross-repo reusable workflow)
               FIX-guided rejection -> repeat until exit 0
   -> `ai-review-ci to-sarif` -> upload to code scanning
   -> [diff scope] `ai-review-ci post-threads` posts resolvable review threads to the PR
-  -> [optional] health-score threshold gate
+  -> [diff scope] thread-resolution gate verifies ai-review PR threads are resolved with commit or disposition-ledger evidence
 ```
 
 ### The agent contract
