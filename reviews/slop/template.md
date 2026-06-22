@@ -63,6 +63,9 @@ Key rules every finding must satisfy:
   A slop finding's violated invariant names a required behavior that is provably impossible, silently swallowed, replaced by a fake, or non-deterministic.
 - `proof_command`: The exact command, grep pattern, or code path that proves the violation exists.
   Not a file path — the actual command output or code flow that demonstrates the failure.
+- `policy_code`: the vendored `POLICY.*` ID for the bridge-burning obligation being weakened.
+  Do not invent IDs and do not write remediation prose.
+  Leave `remediation_code` absent unless the canonical index requires an explicit override; deterministic rendering resolves the canonical remediation after validation.
 - All seven slop-specific narrative fields (`pattern`, `task_narrative`, `slop_narrative`, `why_it_matters`, `user_surprise`, `existential_justification`, `failure_mode`).
 - `evidence`: At least one entry with `kind`, `path`, and `lines`.
 

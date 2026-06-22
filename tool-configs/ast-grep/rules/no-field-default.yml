@@ -5,5 +5,8 @@ rule:
     - pattern: Field(default=$VAL)
     - pattern: Field($$$, default=$VAL)
     - pattern: Field($$$, default=$VAL, $$$)
-message: 'Field(default=...) provides a runtime default that bypasses config completeness. Make the config model require this value at startup instead.'
+message: POLICY.RUNTIME_DEFAULT
 severity: warning
+metadata:
+  policy_code: POLICY.RUNTIME_DEFAULT
+  remediation_code: REMEDIATE.TOTAL_CONFIG_MODEL

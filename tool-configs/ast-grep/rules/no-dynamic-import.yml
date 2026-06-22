@@ -2,5 +2,8 @@ id: no-dynamic-import
 language: typescript
 rule:
   pattern: await import($PATH)
-message: 'Dynamic import() is not allowed. Use static imports at the top of the file instead.'
+message: POLICY.CRITICAL_DEPENDENCY
 severity: error
+metadata:
+  policy_code: POLICY.CRITICAL_DEPENDENCY
+  remediation_code: REMEDIATE.FAIL_LOUD_BOUNDARY

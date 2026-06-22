@@ -6,7 +6,11 @@ vendor/common.md
 vendor/source-coverage.md
 vendor/decay-risks.md
 vendor/ci-sweep-protocol.md
-vendor/policy-index.md
+vendor/policy-index/SKILL.md
+vendor/policy-index/references/policies.md
+vendor/policy-index/references/red-flags.md
+vendor/policy-index/references/runtime-control-flow.md
+vendor/policy-index/references/test-proof-rules.md
 vendor/bespoke-software-policy.md
 vendor/test-guidelines.md
 vendor/tool-provisioning-and-environment-hygiene.md

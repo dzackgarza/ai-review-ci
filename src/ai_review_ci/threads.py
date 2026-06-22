@@ -31,6 +31,7 @@ from typing import Any, NoReturn
 from unidiff import PatchSet
 
 from ai_review_ci.models import finding_fingerprint
+from ai_review_ci.policy_index import canonical_guidance
 
 JsonDict = dict[str, Any]
 
@@ -160,6 +161,11 @@ def _thread_body_lines(finding: JsonDict, review_label: str, fp: str) -> list[st
             lines.append(f"**{title}:** {finding[key]}")
     ev_parts = [f"`{e['path']}:{e['lines'][0]}-{e['lines'][1]}` ({e['kind']})" for e in finding["evidence"]]
     lines.append(f"**Evidence:** {', '.join(ev_parts)}")
+    policy_code = finding.get("policy_code")
+    if isinstance(policy_code, str):
+        remediation_code = finding.get("remediation_code")
+        guidance = canonical_guidance(policy_code, remediation_code if isinstance(remediation_code, str) else None)
+        lines.extend(["", "#### Canonical policy guidance", guidance])
     return lines
 
 

@@ -1,15 +1,16 @@
 rules:
   - id: no-nullish-coalescing
     pattern: $X ?? $Y
-    message: Nullish coalescing (??) creates a runtime fallback. Use an explicit assertion
-      or fail loudly if the value can be null/undefined.
+    message: POLICY.RUNTIME_DEFAULT
     languages:
       - typescript
       - javascript
     severity: ERROR
+    metadata:
+      policy_code: POLICY.RUNTIME_DEFAULT
+      remediation_code: REMEDIATE.TOTAL_CONFIG_MODEL
   - id: no-const-assignment
-    message: Hardcoded config-shaped constant in source - extract to required config
-      (for example resolver-plugins.json or *.config.*).
+    message: POLICY.NO_HIDDEN_CONFIG
     paths:
       exclude:
         - '*config*'
@@ -23,39 +24,53 @@ rules:
       - pattern-either:
           - pattern-regex: (?m)^(?:export\s+)?const\s+[A-Z][A-Z0-9_]*(?:URL|URI|ENDPOINT|HOST|PORT|SERVER|DATABASE|COMMAND|CWD|PATH|DIR|DIRECTORY|TIMEOUT|RETRY|THRESHOLD|SECRET|TOKEN)[A-Z0-9_]*\s*=\s*(?:["'`][^"'`]*["'`]|[0-9]+(?:\.[0-9]+)?|\[[^\n]*\]|\{[^\n]*\})
           - pattern-regex: (?m)^(?:export\s+)?const\s+[A-Z][A-Z0-9_]*\s*=\s*["'`](?:https?://|file://)[^"'`]*["'`]
+    metadata:
+      policy_code: POLICY.NO_HIDDEN_CONFIG
+      remediation_code: REMEDIATE.TOTAL_CONFIG_MODEL
   - id: rust-no-const
     pattern: 'const $X: $T = $VALUE;'
-    message: Compile-time constant in source code. Move to config or use `let mut`.
+    message: POLICY.NO_HIDDEN_CONFIG
     paths:
       exclude:
         - '*config*'
     languages:
       - rust
     severity: ERROR
+    metadata:
+      policy_code: POLICY.NO_HIDDEN_CONFIG
+      remediation_code: REMEDIATE.TOTAL_CONFIG_MODEL
   - id: rust-no-static
     pattern: 'static $X: $T = $VALUE;'
-    message: Static variable in source code. Move to config or use `let mut`.
+    message: POLICY.NO_HIDDEN_CONFIG
     paths:
       exclude:
         - '*config*'
     languages:
       - rust
     severity: ERROR
+    metadata:
+      policy_code: POLICY.NO_HIDDEN_CONFIG
+      remediation_code: REMEDIATE.TOTAL_CONFIG_MODEL
   - id: no-double-cast
     pattern: $X as $T as $Z
-    message: Double-casting (x as T as U) bypasses TypeScript's type system entirely.
+    message: POLICY.NO_TYPE_ESCAPE
     languages:
       - typescript
     severity: ERROR
+    metadata:
+      policy_code: POLICY.NO_TYPE_ESCAPE
+      remediation_code: REMEDIATE.STRUCTURED_TYPES
   - id: no-first-element-child-hydration
     pattern: $X.firstElementChild !== null
-    message: firstElementChild check does not prove hydration success.
+    message: POLICY.NO_HELPER_PROOF
     languages:
       - typescript
     severity: ERROR
+    metadata:
+      policy_code: POLICY.NO_HELPER_PROOF
+      remediation_code: REMEDIATE.REAL_PROOF_LOOP
   - id: no-status-only-assertion
-    message: HTTP status-only assertions do not verify content validity; assert a structured
-      body or schema in the same test.
+    message: POLICY.NO_EXACT_STRING_PROOF
     languages:
       - typescript
     severity: ERROR
@@ -63,33 +78,45 @@ rules:
       - pattern-either:
           - pattern-regex: expect\([^\n]*\.status\)\.toBe\(200\);\s*\n\s*\}\);
           - pattern-regex: expect\([^\n]*\.status\(\)\)\.toBe\(200\);\s*\n\s*\}\);
+    metadata:
+      policy_code: POLICY.NO_EXACT_STRING_PROOF
+      remediation_code: REMEDIATE.REAL_PROOF_LOOP
   - id: rust-silenced-result
     pattern: let _ = $EXPR;
-    message: "let _ = silences a Result \u2014 handle errors explicitly."
+    message: POLICY.NO_ERROR_DISCARD
     languages:
       - rust
     severity: ERROR
+    metadata:
+      policy_code: POLICY.NO_ERROR_DISCARD
+      remediation_code: REMEDIATE.FAIL_LOUD_BOUNDARY
   - id: py-no-getenv-default
     pattern: os.getenv($KEY, $DEFAULT)
-    message: os.getenv with default creates a runtime fallback. Use os.environ['KEY']
-      or validate at startup.
+    message: POLICY.RUNTIME_DEFAULT
     languages:
       - python
     severity: ERROR
+    metadata:
+      policy_code: POLICY.RUNTIME_DEFAULT
+      remediation_code: REMEDIATE.TOTAL_CONFIG_MODEL
   - id: py-no-dict-get-default
     pattern: $DICT.get($KEY, $DEFAULT)
-    message: dict.get with default hides missing keys. Use subscript access or a complete
-      config model.
+    message: POLICY.RUNTIME_DEFAULT
     languages:
       - python
     severity: ERROR
+    metadata:
+      policy_code: POLICY.RUNTIME_DEFAULT
+      remediation_code: REMEDIATE.TOTAL_CONFIG_MODEL
   - id: py-no-getattr-default
     pattern: getattr($OBJ, $ATTR, $DEFAULT)
-    message: getattr with default hides missing attributes. Required attributes should
-      not be optional.
+    message: POLICY.RUNTIME_DEFAULT
     languages:
       - python
     severity: ERROR
+    metadata:
+      policy_code: POLICY.RUNTIME_DEFAULT
+      remediation_code: REMEDIATE.TOTAL_CONFIG_MODEL
   - id: py-no-setdefault-consumed
     pattern-either:
       - pattern: $TARGET = $DICT.setdefault($KEY, $DEFAULT)
@@ -98,145 +125,192 @@ rules:
       - pattern: 'while $DICT.setdefault($KEY, $DEFAULT): ...'
       - pattern: $DICT.setdefault($KEY, $DEFAULT).$METHOD(...)
       - pattern: $FUNC(..., $DICT.setdefault($KEY, $DEFAULT), ...)
-    message: dict.setdefault return value is consumed, so the default participates in
-      runtime control flow. Use explicit check-and-set.
+    message: POLICY.RUNTIME_DEFAULT
     languages:
       - python
     severity: ERROR
+    metadata:
+      policy_code: POLICY.RUNTIME_DEFAULT
+      remediation_code: REMEDIATE.TOTAL_CONFIG_MODEL
   - id: py-no-setdefault-runtime-mapping
     patterns:
       - pattern: $DICT.setdefault($KEY, $DEFAULT)
       - metavariable-regex:
           metavariable: $DICT
           regex: (?i).*(config|state|input|payload|request|response|settings|options|env|context|mapping|data).*
-    message: dict.setdefault on config/state/input-shaped mappings is a runtime default.
-      Use explicit validation and assignment.
+    message: POLICY.RUNTIME_DEFAULT
     languages:
       - python
     severity: ERROR
+    metadata:
+      policy_code: POLICY.RUNTIME_DEFAULT
+      remediation_code: REMEDIATE.TOTAL_CONFIG_MODEL
   - id: py-no-defaultdict
     pattern: defaultdict($TYPE)
-    message: defaultdict creates implicit default values on missing-key access.
+    message: POLICY.RUNTIME_DEFAULT
     languages:
       - python
     severity: ERROR
+    metadata:
+      policy_code: POLICY.RUNTIME_DEFAULT
+      remediation_code: REMEDIATE.TOTAL_CONFIG_MODEL
   - id: py-no-optional-type
     pattern-either:
       - pattern: '$VAR: Optional[$TYPE]'
       - pattern: '$VAR: $TYPE | None'
-    message: Optional types preserve undefined-value paths. Required values should be
-      total (non-optional).
+    message: POLICY.TOTAL_CORE_STATE
     languages:
       - python
     severity: ERROR
+    metadata:
+      policy_code: POLICY.TOTAL_CORE_STATE
+      remediation_code: REMEDIATE.TOTAL_CONFIG_MODEL
   - id: py-no-try-import
     pattern: "try:\n    import $MOD\nexcept ImportError:\n    ..."
-    message: try/except ImportError makes a required dependency optional.
+    message: POLICY.CRITICAL_DEPENDENCY
     languages:
       - python
     severity: ERROR
+    metadata:
+      policy_code: POLICY.CRITICAL_DEPENDENCY
+      remediation_code: REMEDIATE.FAIL_LOUD_BOUNDARY
   - id: py-no-hardcoded-env-var
     pattern-either:
       - pattern: os.environ[$KEY] = $VALUE
       - pattern: os.environ[$KEY] = $VALUE
-    message: "Hardcoded env var definition in code. Move to .envrc \u2014 environment\
-      \ variables must be defined in .envrc, not source code."
+    message: POLICY.NO_HIDDEN_CONFIG
     languages:
       - python
     severity: ERROR
+    metadata:
+      policy_code: POLICY.NO_HIDDEN_CONFIG
+      remediation_code: REMEDIATE.TOTAL_CONFIG_MODEL
   - id: ts-no-hardcoded-env-var
     pattern-either:
       - pattern: process.env.$KEY = $VALUE
       - pattern: process.env[$KEY] = $VALUE
-    message: "Hardcoded env var definition in code. Move to .envrc \u2014 environment\
-      \ variables must be defined in .envrc, not source code."
+    message: POLICY.NO_HIDDEN_CONFIG
     languages:
       - typescript
       - javascript
     severity: ERROR
+    metadata:
+      policy_code: POLICY.NO_HIDDEN_CONFIG
+      remediation_code: REMEDIATE.TOTAL_CONFIG_MODEL
   - id: rust-no-hardcoded-env-var
     pattern-either:
       - pattern: env::set_var($KEY, $VALUE)
       - pattern: std::env::set_var($KEY, $VALUE)
-    message: "Hardcoded env var definition in code. Move to .envrc \u2014 environment\
-      \ variables must be defined in .envrc, not source code."
+    message: POLICY.NO_HIDDEN_CONFIG
     languages:
       - rust
     severity: ERROR
+    metadata:
+      policy_code: POLICY.NO_HIDDEN_CONFIG
+      remediation_code: REMEDIATE.TOTAL_CONFIG_MODEL
   - id: py-no-bare-except
     pattern: "except:\n    pass"
-    message: 'Bare except: catches SystemExit and KeyboardInterrupt.'
+    message: POLICY.NO_ERROR_DISCARD
     languages:
       - python
     severity: ERROR
+    metadata:
+      policy_code: POLICY.NO_ERROR_DISCARD
+      remediation_code: REMEDIATE.FAIL_LOUD_BOUNDARY
   - id: py-no-suppress
     pattern: contextlib.suppress($EXC)
-    message: contextlib.suppress silently swallows exceptions.
+    message: POLICY.NO_ERROR_DISCARD
     languages:
       - python
     severity: ERROR
+    metadata:
+      policy_code: POLICY.NO_ERROR_DISCARD
+      remediation_code: REMEDIATE.FAIL_LOUD_BOUNDARY
   - id: py-no-mock-import
     pattern-either:
       - pattern: from unittest.mock import $X
       - pattern: import unittest.mock
-    message: unittest.mock imports bypass real boundaries. Use real fixtures.
+    message: POLICY.NO_MOCK_PROOF
     languages:
       - python
     severity: ERROR
+    metadata:
+      policy_code: POLICY.NO_MOCK_PROOF
+      remediation_code: REMEDIATE.REAL_PROOF_LOOP
   - id: py-no-magicmock
     pattern-either:
       - pattern: MagicMock(...)
       - pattern: Mock(...)
-    message: Mock/MagicMock objects bypass real behavior. Use real fixtures.
+    message: POLICY.NO_MOCK_PROOF
     languages:
       - python
     severity: ERROR
+    metadata:
+      policy_code: POLICY.NO_MOCK_PROOF
+      remediation_code: REMEDIATE.REAL_PROOF_LOOP
   - id: py-no-monkeypatch
     pattern: monkeypatch.setattr(...)
-    message: monkeypatch replaces real behavior with test seams.
+    message: POLICY.NO_MOCK_PROOF
     languages:
       - python
     severity: ERROR
+    metadata:
+      policy_code: POLICY.NO_MOCK_PROOF
+      remediation_code: REMEDIATE.REAL_PROOF_LOOP
   - id: py-no-skip-test
     pattern-either:
       - pattern: '@pytest.mark.skip'
       - pattern: '@pytest.mark.xfail'
-    message: pytest.skip/xfail bypass test execution. Fix or remove.
+    message: POLICY.NO_SKIP_MASK
     languages:
       - python
     severity: ERROR
+    metadata:
+      policy_code: POLICY.NO_SKIP_MASK
+      remediation_code: REMEDIATE.REAL_PROOF_LOOP
   - id: ts-no-or-default
     pattern: $X || $DEFAULT
-    message: Logical OR with default creates silent fallback on any falsy value.
+    message: POLICY.RUNTIME_DEFAULT
     languages:
       - typescript
       - javascript
     severity: ERROR
+    metadata:
+      policy_code: POLICY.RUNTIME_DEFAULT
+      remediation_code: REMEDIATE.TOTAL_CONFIG_MODEL
   - id: ts-no-env-default
     pattern: process.env.$KEY || $DEFAULT
-    message: process.env with default creates runtime fallback for missing env vars.
+    message: POLICY.RUNTIME_DEFAULT
     languages:
       - typescript
       - javascript
     severity: ERROR
+    metadata:
+      policy_code: POLICY.RUNTIME_DEFAULT
+      remediation_code: REMEDIATE.TOTAL_CONFIG_MODEL
   - id: ts-no-jest-mock
     pattern: jest.mock(...)
-    message: jest.mock replaces module boundaries with fake implementations.
+    message: POLICY.NO_MOCK_PROOF
     languages:
       - typescript
       - javascript
     severity: ERROR
+    metadata:
+      policy_code: POLICY.NO_MOCK_PROOF
+      remediation_code: REMEDIATE.REAL_PROOF_LOOP
   - id: ts-no-vi-mock
     pattern: vi.mock(...)
-    message: vi.mock replaces module boundaries with fake implementations.
+    message: POLICY.NO_MOCK_PROOF
     languages:
       - typescript
       - javascript
     severity: ERROR
+    metadata:
+      policy_code: POLICY.NO_MOCK_PROOF
+      remediation_code: REMEDIATE.REAL_PROOF_LOOP
   - id: ts-no-vi-stub-global
     pattern: vi.stubGlobal(...)
-    message: vi.stubGlobal replaces a real global boundary with a fake implementation.
-      Use real-boundary fixtures or integration proof instead.
+    message: POLICY.NO_MOCK_PROOF
     languages:
       - typescript
       - javascript
@@ -247,10 +321,12 @@ rules:
         - '**/*.spec.*'
         - '**/tests/**/*'
         - '**/__tests__/**/*'
+    metadata:
+      policy_code: POLICY.NO_MOCK_PROOF
+      remediation_code: REMEDIATE.REAL_PROOF_LOOP
   - id: ts-no-vi-fn
     pattern: vi.fn(...)
-    message: vi.fn creates a fake function in a proof path. Use real collaborators or
-      captured real-boundary fixtures instead.
+    message: POLICY.NO_MOCK_PROOF
     languages:
       - typescript
       - javascript
@@ -261,10 +337,12 @@ rules:
         - '**/*.spec.*'
         - '**/tests/**/*'
         - '**/__tests__/**/*'
+    metadata:
+      policy_code: POLICY.NO_MOCK_PROOF
+      remediation_code: REMEDIATE.REAL_PROOF_LOOP
   - id: ts-no-vi-spyon
     pattern: vi.spyOn(...)
-    message: vi.spyOn observes or replaces behavior through a fake boundary. Prove the
-      real boundary instead.
+    message: POLICY.NO_MOCK_PROOF
     languages:
       - typescript
       - javascript
@@ -275,10 +353,12 @@ rules:
         - '**/*.spec.*'
         - '**/tests/**/*'
         - '**/__tests__/**/*'
+    metadata:
+      policy_code: POLICY.NO_MOCK_PROOF
+      remediation_code: REMEDIATE.REAL_PROOF_LOOP
   - id: ts-no-vi-stub-env
     pattern: vi.stubEnv(...)
-    message: vi.stubEnv replaces runtime environment state with a test fixture. Use
-      declared config and real-boundary proof instead.
+    message: POLICY.NO_MOCK_PROOF
     languages:
       - typescript
       - javascript
@@ -289,10 +369,12 @@ rules:
         - '**/*.spec.*'
         - '**/tests/**/*'
         - '**/__tests__/**/*'
+    metadata:
+      policy_code: POLICY.NO_MOCK_PROOF
+      remediation_code: REMEDIATE.REAL_PROOF_LOOP
   - id: ts-no-jest-fn
     pattern: jest.fn(...)
-    message: jest.fn creates a fake function in a proof path. Use real collaborators
-      or captured real-boundary fixtures instead.
+    message: POLICY.NO_MOCK_PROOF
     languages:
       - typescript
       - javascript
@@ -303,10 +385,12 @@ rules:
         - '**/*.spec.*'
         - '**/tests/**/*'
         - '**/__tests__/**/*'
+    metadata:
+      policy_code: POLICY.NO_MOCK_PROOF
+      remediation_code: REMEDIATE.REAL_PROOF_LOOP
   - id: ts-no-jest-spyon
     pattern: jest.spyOn(...)
-    message: jest.spyOn observes or replaces behavior through a fake boundary. Prove
-      the real boundary instead.
+    message: POLICY.NO_MOCK_PROOF
     languages:
       - typescript
       - javascript
@@ -317,91 +401,128 @@ rules:
         - '**/*.spec.*'
         - '**/tests/**/*'
         - '**/__tests__/**/*'
+    metadata:
+      policy_code: POLICY.NO_MOCK_PROOF
+      remediation_code: REMEDIATE.REAL_PROOF_LOOP
   - id: ts-no-skip-test
     pattern-either:
       - pattern: test.skip(...)
       - pattern: describe.skip(...)
       - pattern: test.fixme(...)
-    message: test.skip/fixme bypass test execution.
+    message: POLICY.NO_SKIP_MASK
     languages:
       - typescript
       - javascript
     severity: ERROR
+    metadata:
+      policy_code: POLICY.NO_SKIP_MASK
+      remediation_code: REMEDIATE.REAL_PROOF_LOOP
   - id: ts-no-catch-console
     pattern-either:
       - pattern: .catch(console.error)
       - pattern: .catch(console.warn)
-    message: .catch(console.error) silently swallows async errors.
+    message: POLICY.NO_ERROR_DISCARD
     languages:
       - typescript
       - javascript
     severity: ERROR
+    metadata:
+      policy_code: POLICY.NO_ERROR_DISCARD
+      remediation_code: REMEDIATE.FAIL_LOUD_BOUNDARY
   - id: rs-no-unwrap-or
-    message: "unwrap_or provides default on failure \u2014 fail explicitly."
+    message: POLICY.RUNTIME_DEFAULT
     languages:
       - rust
     severity: ERROR
     pattern-regex: .unwrap_or($DEFAULT)
+    metadata:
+      policy_code: POLICY.RUNTIME_DEFAULT
+      remediation_code: REMEDIATE.TOTAL_CONFIG_MODEL
   - id: rs-no-unwrap-or-default
-    message: "unwrap_or_default uses Default trait \u2014 fail explicitly."
+    message: POLICY.RUNTIME_DEFAULT
     languages:
       - rust
     severity: ERROR
     pattern-regex: .unwrap_or_default()
+    metadata:
+      policy_code: POLICY.RUNTIME_DEFAULT
+      remediation_code: REMEDIATE.TOTAL_CONFIG_MODEL
   - id: rs-no-result-ok
-    message: Result.ok() discards the error. Handle it explicitly.
+    message: POLICY.NO_ERROR_DISCARD
     languages:
       - rust
     severity: ERROR
     pattern-regex: .ok()
+    metadata:
+      policy_code: POLICY.NO_ERROR_DISCARD
+      remediation_code: REMEDIATE.FAIL_LOUD_BOUNDARY
   - id: rs-no-filter-map-ok
     pattern: filter_map(Result::ok)
-    message: filter_map(Result::ok) discards errors. Handle each explicitly.
+    message: POLICY.NO_ERROR_DISCARD
     languages:
       - rust
     severity: ERROR
+    metadata:
+      policy_code: POLICY.NO_ERROR_DISCARD
+      remediation_code: REMEDIATE.FAIL_LOUD_BOUNDARY
   - id: rs-no-stringly-error
-    message: Result<T, String> are stringly-typed. Use a proper error enum.
+    message: POLICY.NO_TYPE_ESCAPE
     languages:
       - rust
     severity: ERROR
     pattern-regex: Result<[^<>]+,\s*String>
+    metadata:
+      policy_code: POLICY.NO_TYPE_ESCAPE
+      remediation_code: REMEDIATE.STRUCTURED_TYPES
   - id: rs-no-serde-default
     pattern: '#[serde(default)]'
-    message: '#[serde(default)] silently fills missing config. Make config mandatory.'
+    message: POLICY.RUNTIME_DEFAULT
     languages:
       - rust
     severity: ERROR
+    metadata:
+      policy_code: POLICY.RUNTIME_DEFAULT
+      remediation_code: REMEDIATE.TOTAL_CONFIG_MODEL
   - id: rs-no-allow-attr
     pattern-either:
       - pattern: '#[allow($ARGS)]'
       - pattern: '#![allow($ARGS)]'
-    message: '#[allow(...)] suppresses warnings. Fix the underlying issue.'
+    message: POLICY.NO_QC_SILENCING
     languages:
       - rust
     severity: ERROR
+    metadata:
+      policy_code: POLICY.NO_QC_SILENCING
+      remediation_code: REMEDIATE.REMOVE_SUPPRESSION_WITH_EXCEPTION_PROTOCOL
   - id: sh-no-command-v-runtime
-    pattern: "if command -v $TOOL >/dev/null 2>&1; then\n  $CMD\nelse\n  $FALLBACK\n\
-      fi"
-    message: "command -v fallback chain \u2014 should be config-declared."
+    pattern: "if command -v $TOOL >/dev/null 2>&1; then\n  $CMD\nelse\n  $FALLBACK\nfi"
+    message: POLICY.CRITICAL_DEPENDENCY
     languages:
       - bash
     severity: ERROR
+    metadata:
+      policy_code: POLICY.CRITICAL_DEPENDENCY
+      remediation_code: REMEDIATE.FAIL_LOUD_BOUNDARY
   - id: sh-no-or-true
     pattern: '|| true'
-    message: '|| true silences command failure.'
+    message: POLICY.NO_ERROR_DISCARD
     languages:
       - bash
     severity: ERROR
+    metadata:
+      policy_code: POLICY.NO_ERROR_DISCARD
+      remediation_code: REMEDIATE.FAIL_LOUD_BOUNDARY
   - id: sh-no-pip-install
     pattern: pip install $PACKAGE
-    message: pip install violates tool-provisioning. Use uv/uvx/bun.
+    message: POLICY.GLOBAL_QC_AUTHORITY
     languages:
       - bash
     severity: ERROR
+    metadata:
+      policy_code: POLICY.GLOBAL_QC_AUTHORITY
+      remediation_code: REMEDIATE.DELEGATE_GLOBAL_QC
   - id: ts-no-partial
-    message: Partial<T> makes all fields optional, creating undefined-value paths in
-      core state. Define an explicit type with only the optional fields instead.
+    message: POLICY.TOTAL_CORE_STATE
     languages:
       - typescript
     severity: ERROR
@@ -409,31 +530,39 @@ rules:
       - pattern: Partial<$TYPE>
       - pattern: type $T = Partial<$U>
       - pattern: '$X: Partial<$Y>'
+    metadata:
+      policy_code: POLICY.TOTAL_CORE_STATE
+      remediation_code: REMEDIATE.TOTAL_CONFIG_MODEL
   - id: rs-no-cfg-test-fake
     pattern: "#[cfg(test)]\nmod tests {\n    use super::*;\n    ...\n}"
-    message: '#[cfg(test)] test modules must not contain fake/override implementations
-      that shadow production behavior. Use dependency injection for test seams.'
+    message: POLICY.NO_MOCK_PROOF
     languages:
       - rust
     severity: ERROR
+    metadata:
+      policy_code: POLICY.NO_MOCK_PROOF
+      remediation_code: REMEDIATE.REAL_PROOF_LOOP
   - id: sh-no-stderr-suppress
     pattern-regex: 2\s*>\s*/dev/null
-    message: Stderr suppression (2>/dev/null) hides diagnostic output. Use explicit
-      error handling or logging instead.
+    message: POLICY.NO_ERROR_DISCARD
     languages:
       - bash
     severity: ERROR
+    metadata:
+      policy_code: POLICY.NO_ERROR_DISCARD
+      remediation_code: REMEDIATE.FAIL_LOUD_BOUNDARY
   - id: rs-no-match-bool
     pattern: "match $X {\n    true => $A,\n    false => $B,\n}"
-    message: match on a bool value is equivalent to an if/else expression. Use `if $X
-      { $A } else { $B }` or refactor to an enum.
+    message: POLICY.NO_BOOLEAN_MODE
     languages:
       - rust
     severity: ERROR
+    metadata:
+      policy_code: POLICY.NO_BOOLEAN_MODE
+      remediation_code: REMEDIATE.API_SPLIT_OR_VARIANT
   - id: just-no-env-var-or-default
     pattern-regex: env_var_or_default\s*\(
-    message: env_var_or_default(...) provides a runtime default for environment variables
-      in justfiles. Use env_var() which fails loudly if the variable is not set.
+    message: POLICY.RUNTIME_DEFAULT
     languages:
       - generic
     severity: ERROR
@@ -442,10 +571,12 @@ rules:
         - justfile
         - '**/justfile'
         - '**/*.just'
+    metadata:
+      policy_code: POLICY.RUNTIME_DEFAULT
+      remediation_code: REMEDIATE.TOTAL_CONFIG_MODEL
   - id: just-no-option-or-default
     pattern-regex: option_or_default\s*\(
-    message: option_or_default(...) provides a runtime default for CLI options in justfiles.
-      Use option() which fails loudly if the option is not provided.
+    message: POLICY.RUNTIME_DEFAULT
     languages:
       - generic
     severity: ERROR
@@ -454,10 +585,12 @@ rules:
         - justfile
         - '**/justfile'
         - '**/*.just'
+    metadata:
+      policy_code: POLICY.RUNTIME_DEFAULT
+      remediation_code: REMEDIATE.TOTAL_CONFIG_MODEL
   - id: just-no-or-fallback
     pattern-regex: \|\|
-    message: '|| provides a fallback/default in justfiles. Require values explicitly
-      instead of using OR fallback.'
+    message: POLICY.RUNTIME_DEFAULT
     languages:
       - generic
     severity: ERROR
@@ -466,11 +599,12 @@ rules:
         - justfile
         - '**/justfile'
         - '**/*.just'
+    metadata:
+      policy_code: POLICY.RUNTIME_DEFAULT
+      remediation_code: REMEDIATE.TOTAL_CONFIG_MODEL
   - id: just-no-command-v
     pattern-regex: command\s+-v\s+
-    message: "command -v checks whether a command exists before using it, enabling silent\
-      \ fallback when a tool is absent. In justfiles this is never legitimate \u2014\
-      \ require the tool to be present and fail loudly if it is not."
+    message: POLICY.CRITICAL_DEPENDENCY
     languages:
       - generic
     severity: ERROR
@@ -479,11 +613,15 @@ rules:
         - justfile
         - '**/justfile'
         - '**/*.just'
+    metadata:
+      policy_code: POLICY.CRITICAL_DEPENDENCY
+      remediation_code: REMEDIATE.FAIL_LOUD_BOUNDARY
   - id: py-no-deprecated-typing
-    message: Deprecated typing imports. Python >=3.9 supports native generics (dict,
-      list, type, set, tuple) and `|` syntax for Union/Optional. Abstract base classes
-      (Callable, Iterable, Mapping, Sequence) should be imported from `collections.abc`.
+    message: POLICY.NO_LEGACY_SHIM
     languages:
       - python
     severity: ERROR
     pattern-regex: ^\s*from\s+typing\s+import.*?\b(Dict|List|Tuple|Set|Type|Optional|Union|Callable|Iterable|Mapping|Sequence)\b
+    metadata:
+      policy_code: POLICY.NO_LEGACY_SHIM
+      remediation_code: REMEDIATE.REPLACE_LEGACY_PATH

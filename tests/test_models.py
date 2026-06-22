@@ -245,6 +245,20 @@ def test_general_finding_narrative_fields_preserved(checkout: Path) -> None:
     assert f.consequence == raw["consequence"]
 
 
+def test_general_report_rejects_unknown_policy_code(checkout: Path) -> None:
+    raw = general_candidate(findings=[general_finding(policy_code="POLICY.DOES_NOT_EXIST")])
+
+    with pytest.raises(ValidationError, match="unknown policy code"):
+        GeneralReport.model_validate(raw)
+
+
+def test_slop_report_rejects_remediation_without_policy(checkout: Path) -> None:
+    raw = slop_candidate(findings=[slop_finding(remediation_code="REMEDIATE.REAL_PROOF_LOOP")])
+
+    with pytest.raises(ValidationError, match="remediation_code requires policy_code"):
+        SlopReport.model_validate(raw)
+
+
 def test_finding_fingerprint_is_pinned_and_line_independent(checkout: Path) -> None:
     assert finding_fingerprint("test-quality", APP_FILE) == FINGERPRINT_GENERAL
     assert finding_fingerprint("test-quality", APP_FILE) == finding_fingerprint("test-quality", APP_FILE)

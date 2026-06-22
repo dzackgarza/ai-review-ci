@@ -1,5 +1,5 @@
 from ai_review_ci.models import finding_fingerprint
-from ai_review_ci.threads import parse_diff, partition_findings, pick_anchor
+from ai_review_ci.threads import parse_diff, partition_findings, pick_anchor, render_thread_body
 
 
 def test_parse_diff_maps_new_side_commentable_lines() -> None:
@@ -85,3 +85,34 @@ def test_partition_findings_surfaces_existing_fingerprint_for_disposition() -> N
     assert not off_diff
     assert possible_duplicates == 1
     assert "Possible duplicate disposition required" in comments[0]["body"]
+
+
+def test_render_thread_body_appends_canonical_policy_guidance() -> None:
+    finding = {
+        "tier": "tier1",
+        "label": "SLOP",
+        "category": "bridge-burning",
+        "policy_code": "POLICY.NO_MOCK_PROOF",
+        "location": {
+            "path": "src/example.py",
+            "start_line": 12,
+            "end_line": 13,
+        },
+        "violated_invariant": "Mocks cannot prove a real boundary obligation.",
+        "proof_command": "review submitted report artifact",
+        "pattern": "mocked proof path",
+        "why_it_matters": "fake collaborators preserve success-shaped output",
+        "evidence": [
+            {
+                "path": "src/example.py",
+                "lines": [12, 13],
+                "kind": "primary",
+            }
+        ],
+    }
+
+    body = render_thread_body(finding, "Slop Review", "a" * 64)
+
+    assert "#### Canonical policy guidance" in body
+    assert "Policy: `POLICY.NO_MOCK_PROOF`" in body
+    assert "Remediation: `REMEDIATE.REAL_PROOF_LOOP`" in body

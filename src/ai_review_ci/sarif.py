@@ -39,6 +39,7 @@ from sarif_pydantic import (
 )
 
 from ai_review_ci.models import finding_fingerprint
+from ai_review_ci.policy_index import canonical_guidance, load_policy_index
 
 JsonDict = dict[str, Any]
 
@@ -48,9 +49,10 @@ SARIF_SCHEMA = "https://raw.githubusercontent.com/oasis-tcs/sarif-spec/master/Sc
 CATEGORY_PREFIX = "ai-review"
 
 _OPTIONAL_PROPERTY_KEYS = (
+    ("policy_code", "policy_code"),
+    ("remediation_code", "remediation_code"),
     ("symptom", "symptom"),
     ("consequence", "consequence"),
-    ("remedy", "remedy"),
     ("proof_command", "proof_command"),
     ("pattern", "slop_pattern"),
     ("why_it_matters", "why_it_matters"),
@@ -116,6 +118,19 @@ def _level_to_tier(level: str) -> str:
 
 def _rule_for(finding: JsonDict) -> ReportingDescriptor:
     """SARIF rule entry seeded from the first finding of its category."""
+    policy_code = finding.get("policy_code")
+    if isinstance(policy_code, str):
+        policy = load_policy_index().policy(policy_code)
+        return ReportingDescriptor(
+            id=finding["category"],
+            name=finding["label"],
+            shortDescription=Message(text=f"{policy.code}: {policy.name}"[:200]),
+            defaultConfiguration=ReportingConfiguration(level=_tier_to_level(finding["tier"])),
+            properties={
+                "policy_code": policy.code,
+                "remediation_code": policy.remediation_code,
+            },
+        )
     return ReportingDescriptor(
         id=finding["category"],
         name=finding["label"],
@@ -144,7 +159,15 @@ def _result_properties(finding: JsonDict) -> JsonDict:
         "tier": finding["tier"],
         "category": finding["category"],
     }
+    policy_code = finding.get("policy_code")
+    if isinstance(policy_code, str):
+        policy = load_policy_index().policy(policy_code)
+        properties["policy_code"] = policy.code
+        remediation_code = finding.get("remediation_code")
+        properties["remediation_code"] = remediation_code if isinstance(remediation_code, str) else policy.remediation_code
     for key, prop_name in _OPTIONAL_PROPERTY_KEYS:
+        if prop_name in properties:
+            continue
         if key in finding:
             properties[prop_name] = finding[key]
     return properties
@@ -152,11 +175,16 @@ def _result_properties(finding: JsonDict) -> JsonDict:
 
 def _sarif_result(finding: JsonDict, rule_index: int) -> Result:
     loc = finding["location"]
+    message_text = finding["violated_invariant"]
+    policy_code = finding.get("policy_code")
+    if isinstance(policy_code, str):
+        remediation_code = finding.get("remediation_code")
+        message_text = f"{message_text}\n\n{canonical_guidance(policy_code, remediation_code if isinstance(remediation_code, str) else None)}"
     return Result(
         ruleId=finding["category"],
         ruleIndex=rule_index,
         level=_tier_to_level(finding["tier"]),
-        message=Message(text=finding["violated_invariant"]),
+        message=Message(text=message_text),
         locations=[
             Location(
                 physicalLocation=PhysicalLocation(
