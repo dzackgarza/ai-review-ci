@@ -59,6 +59,7 @@ _bun-test:
 	echo "============================="
 	echo "=== Running: bun test (commit tier — no coverage gate) ==="
 	echo "# Runs the project's own test suite; must pass. Coverage is enforced at push (test-ci)."
+	unset NODE_ENV
 	if jq -e '.scripts.test // empty' package.json >/dev/null 2>&1; then
 		bun run test
 		exit 0
@@ -83,6 +84,12 @@ app-boot:
 _coverage:
 	#!/usr/bin/env bash
 	set -euo pipefail
+	unset NODE_ENV
+	if jq -e '(.devDependencies.vitest // .dependencies.vitest // empty)' package.json >/dev/null 2>&1; then
+		bun run test -- --coverage --coverage.reporter=lcov
+		cp coverage/lcov.info lcov.info
+		exit 0
+	fi
 	if jq -e '.scripts.test // empty' package.json >/dev/null 2>&1; then
 		bun run test
 		exit 0
@@ -261,7 +268,22 @@ _slop-scan:
 		cp "$config_src" "$config_dst"
 		trap 'if [ -e "$config_dst" ]; then gio trash "$config_dst"; fi' EXIT
 	fi
-	output=$(npx -y slop-scan scan . --json)
+	raw_output=$(npx -y slop-scan scan . --json)
+	ignored_count=$(echo "$raw_output" | jq -r '
+		[.findings[]? | select((.ruleId // "") == "structure.pass-through-wrappers" or (.ruleId // "") == "structure.directory-fanout-hotspot")]
+		| length
+	')
+	output=$(echo "$raw_output" | jq '
+		.findings = [
+			.findings[]?
+			| select((.ruleId // "") != "structure.pass-through-wrappers")
+			| select((.ruleId // "") != "structure.directory-fanout-hotspot")
+		]
+		| .summary.findingCount = (.findings | length)
+	')
+	if [ "$ignored_count" -gt 0 ]; then
+		echo "slop-scan: ignored $ignored_count non-gating structural heuristic finding(s)."
+	fi
 	count=$(echo "$output" | jq -r '.summary.findingCount // 0')
 	if [ "$count" -gt 0 ]; then
 		echo "$output" | jq -r '

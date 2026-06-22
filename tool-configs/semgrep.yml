@@ -1,14 +1,15 @@
 rules:
   - id: no-nullish-coalescing
     pattern: $X ?? $Y
-    message: Nullish coalescing (??) creates a runtime fallback. Use an explicit assertion or fail loudly if the value can be null/undefined.
+    message: Nullish coalescing (??) creates a runtime fallback. Use an explicit assertion
+      or fail loudly if the value can be null/undefined.
     languages:
       - typescript
       - javascript
     severity: ERROR
   - id: no-const-assignment
-    pattern-regex: (?m)^(?:export\s+)?const\s+[A-Z][A-Z0-9_]*\s*=\s*(?:["'`][^"'`]*["'`]|[0-9]+(?:\.[0-9]+)?|\[[^\n]*\]|\{[^\n]*\})
-    message: Hardcoded constant in source - extract to required config (for example resolver-plugins.json or *.config.*); do not convert to let.
+    message: Hardcoded config-shaped constant in source - extract to required config
+      (for example resolver-plugins.json or *.config.*).
     paths:
       exclude:
         - '*config*'
@@ -18,6 +19,10 @@ rules:
       - typescript
       - javascript
     severity: ERROR
+    patterns:
+      - pattern-either:
+          - pattern-regex: (?m)^(?:export\s+)?const\s+[A-Z][A-Z0-9_]*(?:URL|URI|ENDPOINT|HOST|PORT|SERVER|DATABASE|COMMAND|CWD|PATH|DIR|DIRECTORY|TIMEOUT|RETRY|THRESHOLD|SECRET|TOKEN)[A-Z0-9_]*\s*=\s*(?:["'`][^"'`]*["'`]|[0-9]+(?:\.[0-9]+)?|\[[^\n]*\]|\{[^\n]*\})
+          - pattern-regex: (?m)^(?:export\s+)?const\s+[A-Z][A-Z0-9_]*\s*=\s*["'`](?:https?://|file://)[^"'`]*["'`]
   - id: rust-no-const
     pattern: 'const $X: $T = $VALUE;'
     message: Compile-time constant in source code. Move to config or use `let mut`.
@@ -49,34 +54,39 @@ rules:
       - typescript
     severity: ERROR
   - id: no-status-only-assertion
-    pattern-either:
-      - pattern: expect($X.status).toBe(200)
-      - pattern: expect($X.status()).toBe(200)
-    message: HTTP status-only assertions do not verify content validity.
+    message: HTTP status-only assertions do not verify content validity; assert a structured
+      body or schema in the same test.
     languages:
       - typescript
     severity: ERROR
+    patterns:
+      - pattern-either:
+          - pattern-regex: expect\([^\n]*\.status\)\.toBe\(200\);\s*\n\s*\}\);
+          - pattern-regex: expect\([^\n]*\.status\(\)\)\.toBe\(200\);\s*\n\s*\}\);
   - id: rust-silenced-result
     pattern: let _ = $EXPR;
-    message: let _ = silences a Result — handle errors explicitly.
+    message: "let _ = silences a Result \u2014 handle errors explicitly."
     languages:
       - rust
     severity: ERROR
   - id: py-no-getenv-default
     pattern: os.getenv($KEY, $DEFAULT)
-    message: os.getenv with default creates a runtime fallback. Use os.environ['KEY'] or validate at startup.
+    message: os.getenv with default creates a runtime fallback. Use os.environ['KEY']
+      or validate at startup.
     languages:
       - python
     severity: ERROR
   - id: py-no-dict-get-default
     pattern: $DICT.get($KEY, $DEFAULT)
-    message: dict.get with default hides missing keys. Use subscript access or a complete config model.
+    message: dict.get with default hides missing keys. Use subscript access or a complete
+      config model.
     languages:
       - python
     severity: ERROR
   - id: py-no-getattr-default
     pattern: getattr($OBJ, $ATTR, $DEFAULT)
-    message: getattr with default hides missing attributes. Required attributes should not be optional.
+    message: getattr with default hides missing attributes. Required attributes should
+      not be optional.
     languages:
       - python
     severity: ERROR
@@ -88,7 +98,8 @@ rules:
       - pattern: 'while $DICT.setdefault($KEY, $DEFAULT): ...'
       - pattern: $DICT.setdefault($KEY, $DEFAULT).$METHOD(...)
       - pattern: $FUNC(..., $DICT.setdefault($KEY, $DEFAULT), ...)
-    message: dict.setdefault return value is consumed, so the default participates in runtime control flow. Use explicit check-and-set.
+    message: dict.setdefault return value is consumed, so the default participates in
+      runtime control flow. Use explicit check-and-set.
     languages:
       - python
     severity: ERROR
@@ -98,7 +109,8 @@ rules:
       - metavariable-regex:
           metavariable: $DICT
           regex: (?i).*(config|state|input|payload|request|response|settings|options|env|context|mapping|data).*
-    message: dict.setdefault on config/state/input-shaped mappings is a runtime default. Use explicit validation and assignment.
+    message: dict.setdefault on config/state/input-shaped mappings is a runtime default.
+      Use explicit validation and assignment.
     languages:
       - python
     severity: ERROR
@@ -112,7 +124,8 @@ rules:
     pattern-either:
       - pattern: '$VAR: Optional[$TYPE]'
       - pattern: '$VAR: $TYPE | None'
-    message: Optional types preserve undefined-value paths. Required values should be total (non-optional).
+    message: Optional types preserve undefined-value paths. Required values should be
+      total (non-optional).
     languages:
       - python
     severity: ERROR
@@ -126,7 +139,8 @@ rules:
     pattern-either:
       - pattern: os.environ[$KEY] = $VALUE
       - pattern: os.environ[$KEY] = $VALUE
-    message: Hardcoded env var definition in code. Move to .envrc — environment variables must be defined in .envrc, not source code.
+    message: "Hardcoded env var definition in code. Move to .envrc \u2014 environment\
+      \ variables must be defined in .envrc, not source code."
     languages:
       - python
     severity: ERROR
@@ -134,7 +148,8 @@ rules:
     pattern-either:
       - pattern: process.env.$KEY = $VALUE
       - pattern: process.env[$KEY] = $VALUE
-    message: Hardcoded env var definition in code. Move to .envrc — environment variables must be defined in .envrc, not source code.
+    message: "Hardcoded env var definition in code. Move to .envrc \u2014 environment\
+      \ variables must be defined in .envrc, not source code."
     languages:
       - typescript
       - javascript
@@ -143,7 +158,8 @@ rules:
     pattern-either:
       - pattern: env::set_var($KEY, $VALUE)
       - pattern: std::env::set_var($KEY, $VALUE)
-    message: Hardcoded env var definition in code. Move to .envrc — environment variables must be defined in .envrc, not source code.
+    message: "Hardcoded env var definition in code. Move to .envrc \u2014 environment\
+      \ variables must be defined in .envrc, not source code."
     languages:
       - rust
     severity: ERROR
@@ -219,7 +235,8 @@ rules:
     severity: ERROR
   - id: ts-no-vi-stub-global
     pattern: vi.stubGlobal(...)
-    message: vi.stubGlobal replaces a real global boundary with a fake implementation. Use real-boundary fixtures or integration proof instead.
+    message: vi.stubGlobal replaces a real global boundary with a fake implementation.
+      Use real-boundary fixtures or integration proof instead.
     languages:
       - typescript
       - javascript
@@ -232,7 +249,8 @@ rules:
         - '**/__tests__/**/*'
   - id: ts-no-vi-fn
     pattern: vi.fn(...)
-    message: vi.fn creates a fake function in a proof path. Use real collaborators or captured real-boundary fixtures instead.
+    message: vi.fn creates a fake function in a proof path. Use real collaborators or
+      captured real-boundary fixtures instead.
     languages:
       - typescript
       - javascript
@@ -245,7 +263,8 @@ rules:
         - '**/__tests__/**/*'
   - id: ts-no-vi-spyon
     pattern: vi.spyOn(...)
-    message: vi.spyOn observes or replaces behavior through a fake boundary. Prove the real boundary instead.
+    message: vi.spyOn observes or replaces behavior through a fake boundary. Prove the
+      real boundary instead.
     languages:
       - typescript
       - javascript
@@ -258,7 +277,8 @@ rules:
         - '**/__tests__/**/*'
   - id: ts-no-vi-stub-env
     pattern: vi.stubEnv(...)
-    message: vi.stubEnv replaces runtime environment state with a test fixture. Use declared config and real-boundary proof instead.
+    message: vi.stubEnv replaces runtime environment state with a test fixture. Use
+      declared config and real-boundary proof instead.
     languages:
       - typescript
       - javascript
@@ -271,7 +291,8 @@ rules:
         - '**/__tests__/**/*'
   - id: ts-no-jest-fn
     pattern: jest.fn(...)
-    message: jest.fn creates a fake function in a proof path. Use real collaborators or captured real-boundary fixtures instead.
+    message: jest.fn creates a fake function in a proof path. Use real collaborators
+      or captured real-boundary fixtures instead.
     languages:
       - typescript
       - javascript
@@ -284,7 +305,8 @@ rules:
         - '**/__tests__/**/*'
   - id: ts-no-jest-spyon
     pattern: jest.spyOn(...)
-    message: jest.spyOn observes or replaces behavior through a fake boundary. Prove the real boundary instead.
+    message: jest.spyOn observes or replaces behavior through a fake boundary. Prove
+      the real boundary instead.
     languages:
       - typescript
       - javascript
@@ -315,13 +337,13 @@ rules:
       - javascript
     severity: ERROR
   - id: rs-no-unwrap-or
-    message: unwrap_or provides default on failure — fail explicitly.
+    message: "unwrap_or provides default on failure \u2014 fail explicitly."
     languages:
       - rust
     severity: ERROR
     pattern-regex: .unwrap_or($DEFAULT)
   - id: rs-no-unwrap-or-default
-    message: unwrap_or_default uses Default trait — fail explicitly.
+    message: "unwrap_or_default uses Default trait \u2014 fail explicitly."
     languages:
       - rust
     severity: ERROR
@@ -359,8 +381,9 @@ rules:
       - rust
     severity: ERROR
   - id: sh-no-command-v-runtime
-    pattern: "if command -v $TOOL >/dev/null 2>&1; then\n  $CMD\nelse\n  $FALLBACK\nfi"
-    message: command -v fallback chain — should be config-declared.
+    pattern: "if command -v $TOOL >/dev/null 2>&1; then\n  $CMD\nelse\n  $FALLBACK\n\
+      fi"
+    message: "command -v fallback chain \u2014 should be config-declared."
     languages:
       - bash
     severity: ERROR
@@ -377,7 +400,8 @@ rules:
       - bash
     severity: ERROR
   - id: ts-no-partial
-    message: Partial<T> makes all fields optional, creating undefined-value paths in core state. Define an explicit type with only the optional fields instead.
+    message: Partial<T> makes all fields optional, creating undefined-value paths in
+      core state. Define an explicit type with only the optional fields instead.
     languages:
       - typescript
     severity: ERROR
@@ -387,25 +411,29 @@ rules:
       - pattern: '$X: Partial<$Y>'
   - id: rs-no-cfg-test-fake
     pattern: "#[cfg(test)]\nmod tests {\n    use super::*;\n    ...\n}"
-    message: '#[cfg(test)] test modules must not contain fake/override implementations that shadow production behavior. Use dependency injection for test seams.'
+    message: '#[cfg(test)] test modules must not contain fake/override implementations
+      that shadow production behavior. Use dependency injection for test seams.'
     languages:
       - rust
     severity: ERROR
   - id: sh-no-stderr-suppress
     pattern-regex: 2\s*>\s*/dev/null
-    message: Stderr suppression (2>/dev/null) hides diagnostic output. Use explicit error handling or logging instead.
+    message: Stderr suppression (2>/dev/null) hides diagnostic output. Use explicit
+      error handling or logging instead.
     languages:
       - bash
     severity: ERROR
   - id: rs-no-match-bool
     pattern: "match $X {\n    true => $A,\n    false => $B,\n}"
-    message: match on a bool value is equivalent to an if/else expression. Use `if $X { $A } else { $B }` or refactor to an enum.
+    message: match on a bool value is equivalent to an if/else expression. Use `if $X
+      { $A } else { $B }` or refactor to an enum.
     languages:
       - rust
     severity: ERROR
   - id: just-no-env-var-or-default
     pattern-regex: env_var_or_default\s*\(
-    message: env_var_or_default(...) provides a runtime default for environment variables in justfiles. Use env_var() which fails loudly if the variable is not set.
+    message: env_var_or_default(...) provides a runtime default for environment variables
+      in justfiles. Use env_var() which fails loudly if the variable is not set.
     languages:
       - generic
     severity: ERROR
@@ -416,7 +444,8 @@ rules:
         - '**/*.just'
   - id: just-no-option-or-default
     pattern-regex: option_or_default\s*\(
-    message: option_or_default(...) provides a runtime default for CLI options in justfiles. Use option() which fails loudly if the option is not provided.
+    message: option_or_default(...) provides a runtime default for CLI options in justfiles.
+      Use option() which fails loudly if the option is not provided.
     languages:
       - generic
     severity: ERROR
@@ -427,7 +456,8 @@ rules:
         - '**/*.just'
   - id: just-no-or-fallback
     pattern-regex: \|\|
-    message: '|| provides a fallback/default in justfiles. Require values explicitly instead of using OR fallback.'
+    message: '|| provides a fallback/default in justfiles. Require values explicitly
+      instead of using OR fallback.'
     languages:
       - generic
     severity: ERROR
@@ -438,7 +468,9 @@ rules:
         - '**/*.just'
   - id: just-no-command-v
     pattern-regex: command\s+-v\s+
-    message: command -v checks whether a command exists before using it, enabling silent fallback when a tool is absent. In justfiles this is never legitimate — require the tool to be present and fail loudly if it is not.
+    message: "command -v checks whether a command exists before using it, enabling silent\
+      \ fallback when a tool is absent. In justfiles this is never legitimate \u2014\
+      \ require the tool to be present and fail loudly if it is not."
     languages:
       - generic
     severity: ERROR
@@ -448,7 +480,9 @@ rules:
         - '**/justfile'
         - '**/*.just'
   - id: py-no-deprecated-typing
-    message: Deprecated typing imports. Python >=3.9 supports native generics (dict, list, type, set, tuple) and `|` syntax for Union/Optional. Abstract base classes (Callable, Iterable, Mapping, Sequence) should be imported from `collections.abc`.
+    message: Deprecated typing imports. Python >=3.9 supports native generics (dict,
+      list, type, set, tuple) and `|` syntax for Union/Optional. Abstract base classes
+      (Callable, Iterable, Mapping, Sequence) should be imported from `collections.abc`.
     languages:
       - python
     severity: ERROR

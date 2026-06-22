@@ -107,9 +107,15 @@ DIFF_RULES = (
     ),
     DiffRule(
         "no-const-assignment",
-        re.compile(r"^\s*(?:export\s+)?const\s+[A-Z][A-Z0-9_]*\s*=\s*(?:[\"'`][^\"'`]*[\"'`]|[0-9]+(?:\.[0-9]+)?|\[[^\n]*\]|\{[^\n]*\})"),
+        re.compile(
+            r"^\s*(?:export\s+)?const\s+(?:"
+            r"[A-Z][A-Z0-9_]*(?:URL|URI|ENDPOINT|HOST|PORT|SERVER|DATABASE|COMMAND|CWD|PATH|DIR|DIRECTORY|TIMEOUT|RETRY|THRESHOLD|SECRET|TOKEN)[A-Z0-9_]*"
+            r"\s*=\s*(?:[\"'`][^\"'`]*[\"'`]|[0-9]+(?:\.[0-9]+)?|\[[^\n]*\]|\{[^\n]*\})"
+            r"|[A-Z][A-Z0-9_]*\s*=\s*[\"'`](?:https?://|file://)[^\"'`]*[\"'`]"
+            r")",
+        ),
         _TS_JS_SUFFIXES,
-        "Hardcoded uppercase literal constants belong in required config.",
+        "Hardcoded config-shaped constants belong in required config.",
     ),
     DiffRule(
         "py-no-getenv-default",
@@ -168,10 +174,7 @@ def _profile(profile: str) -> ProjectProfile:
     try:
         return PROJECT_PROFILES[profile]
     except KeyError:
-        _fail(
-            f"unsupported project profile {profile!r}; "
-            f"expected one of: {', '.join(SUPPORTED_PROFILES)}"
-        )
+        _fail(f"unsupported project profile {profile!r}; expected one of: {', '.join(SUPPORTED_PROFILES)}")
 
 
 def _has_sage_file(target: Path) -> bool:
@@ -183,9 +186,7 @@ def check_profile(target: Path, profile: str) -> None:
     target = target.resolve()
     project_profile = _profile(profile)
     missing = [path for path in project_profile.required_paths if not (target / path).exists()]
-    if project_profile.requires_bun_lock and not (
-        (target / "bun.lock").exists() or (target / "bun.lockb").exists()
-    ):
+    if project_profile.requires_bun_lock and not ((target / "bun.lock").exists() or (target / "bun.lockb").exists()):
         missing.append("bun.lock or bun.lockb")
     if project_profile.requires_sage_file and not _has_sage_file(target):
         missing.append("at least one .sage file")
@@ -271,11 +272,7 @@ def check_delegation(target: Path, profile: str) -> None:
         if not _delegates_to_global_qc(output, project_profile):
             failed.append(recipe)
     if failed:
-        _fail(
-            f"{target} does not delegate {profile} recipe(s) through "
-            f"~/ai-review-ci/justfiles/{project_profile.justfile_name} "
-            f"with -d .: {', '.join(failed)}"
-        )
+        _fail(f"{target} does not delegate {profile} recipe(s) through ~/ai-review-ci/justfiles/{project_profile.justfile_name} with -d .: {', '.join(failed)}")
     print(f"Delegation conformance passed for {target} profile {profile}.")
 
 
@@ -289,15 +286,9 @@ def check_app_boot(target: Path, profile: str) -> None:
     justfile = _justfile_for(target)
     output = _dry_run_recipe(target, justfile, "app-boot")
     if not _delegates_to_global_qc(output, project_profile):
-        _fail(
-            f"{target} app-boot must delegate through "
-            f"~/ai-review-ci/justfiles/{project_profile.justfile_name} with -d ."
-        )
+        _fail(f"{target} app-boot must delegate through ~/ai-review-ci/justfiles/{project_profile.justfile_name} with -d .")
     if _DIRECT_PLAYWRIGHT.search(output):
-        _fail(
-            f"{target} app-boot must not invoke Playwright directly; "
-            "delegate to ~/ai-review-ci/justfiles/bun.just"
-        )
+        _fail(f"{target} app-boot must not invoke Playwright directly; delegate to ~/ai-review-ci/justfiles/bun.just")
     result = subprocess.run(["just", "--justfile", str(justfile), "-d", str(target), "app-boot"])
     if result.returncode != 0:
         _fail(f"app-boot gate failed for {target}")

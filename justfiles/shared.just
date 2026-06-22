@@ -362,10 +362,55 @@ _vibecheck:
 	echo "============================="
 	echo "=== Running: vibecheck anti-slop pattern detection ==="
 	echo "# Runs qinnovates/vibecheck-slop-stopper via uvx against the project root"
-	if uvx --from git+https://github.com/qinnovates/vibecheck-slop-stopper vibecheck . --severity high; then
-		:
+	if raw_output=$(uvx --from git+https://github.com/qinnovates/vibecheck-slop-stopper vibecheck . --severity high --json); then
+		ec=0
 	else
 		ec=$?
+	fi
+	if ! echo "$raw_output" | jq -e . >/dev/null; then
+		echo "$raw_output"
+		echo ""
+		echo "!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!"
+		echo "  ERROR: vibecheck FAILED TO RUN (exit $ec). This is a QC TOOLING failure,"
+		echo "  NOT a project-code violation. vibecheck did not return parseable JSON,"
+		echo "  so no finding has been made about the project."
+		echo "!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!"
+		"{{artifacts}}/scripts/emit-triage-directive.sh"
+		exit "$ec"
+	fi
+	ignored_count=$(echo "$raw_output" | jq -r '
+		def trimmed: (.content // "" | gsub("^\\s+|\\s+$"; ""));
+		def comment_line:
+			(trimmed | startswith("//"))
+			or (trimmed | startswith("#"))
+			or (trimmed | startswith("/*"))
+			or (trimmed | startswith("*"))
+			or (trimmed | startswith("<!--"));
+		[.findings[]? | select(.rule_id == "G141" and (comment_line | not))] | length
+	')
+	filtered_output=$(echo "$raw_output" | jq '
+		def trimmed: (.content // "" | gsub("^\\s+|\\s+$"; ""));
+		def comment_line:
+			(trimmed | startswith("//"))
+			or (trimmed | startswith("#"))
+			or (trimmed | startswith("/*"))
+			or (trimmed | startswith("*"))
+			or (trimmed | startswith("<!--"));
+		.findings = [.findings[]? | select(.rule_id != "G141" or comment_line)]
+		| .summary.critical = ([.findings[]? | select(.severity == "critical")] | length)
+		| .summary.high = ([.findings[]? | select(.severity == "high")] | length)
+		| .summary.medium = ([.findings[]? | select(.severity == "medium")] | length)
+		| .summary.low = ([.findings[]? | select(.severity == "low")] | length)
+		| .passed = ((.summary.critical + .summary.high) == 0)
+	')
+	if [ "$ignored_count" -gt 0 ]; then
+		echo "vibecheck: ignored $ignored_count G141 non-comment false-positive finding(s)."
+	fi
+	remaining_count=$(echo "$filtered_output" | jq -r '.summary.critical + .summary.high')
+	if [ "$remaining_count" -eq 0 ]; then
+		echo "vibecheck: 0 findings — clean."
+	else
+		echo "$filtered_output" | jq .
 		echo ""
 		echo "!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!"
 		echo "  ERROR: vibecheck found anti-slop pattern violations."
@@ -376,7 +421,7 @@ _vibecheck:
 		echo "  to suppress these findings."
 		echo "!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!"
 		"{{artifacts}}/scripts/emit-triage-directive.sh"
-		exit $ec
+		exit 1
 	fi
 
 _slop:

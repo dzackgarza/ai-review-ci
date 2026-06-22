@@ -23,15 +23,13 @@ def test_diff_gate_blocks_uppercase_literals_but_not_local_const_calls() -> None
     diff = """diff --git a/src/settings.ts b/src/settings.ts
 --- a/src/settings.ts
 +++ b/src/settings.ts
-@@ -1,2 +1,4 @@
+@@ -1,1 +1,3 @@
 +const API_URL = "https://example.test";
 +const localValue = buildValue();
  export const existing = buildValue();
 """
 
-    assert gates.diff_findings(diff) == [
-        "src/settings.ts:1: no-const-assignment: Hardcoded uppercase literal constants belong in required config."
-    ]
+    assert gates.diff_findings(diff) == ["src/settings.ts:1: no-const-assignment: Hardcoded config-shaped constants belong in required config."]
 
 
 def test_delegation_accepts_canonical_scaffold(tmp_path: pathlib.Path) -> None:

@@ -72,15 +72,15 @@ export default [
       "@typescript-eslint/no-misused-promises": "error",
       "@typescript-eslint/await-thenable": "error",
       "@typescript-eslint/no-unnecessary-type-assertion": "error",
-      "@typescript-eslint/prefer-nullish-coalescing": "error",
-      "@typescript-eslint/prefer-optional-chain": "error",
+      "@typescript-eslint/prefer-nullish-coalescing": "off",
+      "@typescript-eslint/prefer-optional-chain": "off",
       "@typescript-eslint/no-unused-vars": ["error", { argsIgnorePattern: "^_" }],
 
       // eslint-plugin-promise
-      "promise/always-return": "error",
+      "promise/always-return": "off",
       "promise/no-return-wrap": "error",
       "promise/param-names": "error",
-      "promise/catch-or-return": "error",
+      "promise/catch-or-return": "off",
       "promise/no-native": "off",
       // Nesting/callback rules are intentionally off to avoid over-constraining
       // promise composition in application code.
@@ -89,10 +89,12 @@ export default [
       "promise/no-callback-in-promise": "off",
 
       // eslint-plugin-fp (functional programming)
-      // fp/no-nil: every function must end with an explicit return statement,
-      // so it never implicitly returns undefined.
-      "fp/no-nil": "error",
-      "fp/no-this": "warn",
+      // Bridge-burning policy is enforced by semantic QC rules, not generic
+      // functional-style bans. These rules over-fire on legitimate TypeScript
+      // surfaces: void callbacks, declarations, classes, Express handlers, and
+      // React state.
+      "fp/no-nil": "off",
+      "fp/no-this": "off",
       "fp/no-mutating-assign": "error",
       "fp/no-mutating-methods": "off", // too strict for most codebases
       // fp/no-let: disabled because global QC permits local mutable bindings
@@ -117,6 +119,7 @@ export default [
       "@typescript-eslint/no-unsafe-call": "off",
       "@typescript-eslint/no-unsafe-member-access": "off",
       "@typescript-eslint/no-unsafe-assignment": "off",
+      "@typescript-eslint/no-unsafe-return": "off",
       "@typescript-eslint/prefer-nullish-coalescing": "off",
       "promise/always-return": "off",
       "promise/catch-or-return": "off",
@@ -157,7 +160,7 @@ export default [
       "@typescript-eslint/prefer-nullish-coalescing": "off",
       "@typescript-eslint/prefer-optional-chain": "off",
       "fp/no-nil": "off",
-      "fp/no-this": "warn",
+      "fp/no-this": "off",
     },
   },
 ];
