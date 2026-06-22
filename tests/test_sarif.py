@@ -108,6 +108,37 @@ def test_build_sarif_results_reference_rule_table_indexes(checkout: Path) -> Non
         assert result["ruleIndex"] == rule_index_by_id[result["ruleId"]]
 
 
+def test_build_sarif_resolves_policy_guidance_from_vendored_index(checkout: Path) -> None:
+    configure_github_env()
+
+    artifact = general_candidate(
+        findings=[
+            general_finding(
+                category="hidden-config",
+                label="HIDDEN_CONFIG",
+                policy_code="POLICY.NO_HIDDEN_CONFIG",
+            )
+        ]
+    )
+
+    sarif = build_sarif(
+        artifact,
+        report_type="general",
+        category="ai-general-review",
+    )
+
+    result = sarif["runs"][0]["results"][0]
+    rule = sarif["runs"][0]["tool"]["driver"]["rules"][0]
+    assert result["properties"]["policy_code"] == "POLICY.NO_HIDDEN_CONFIG"
+    assert result["properties"]["remediation_code"] == "REMEDIATE.TOTAL_CONFIG_MODEL"
+    assert "Policy: `POLICY.NO_HIDDEN_CONFIG`" in result["message"]["text"]
+    assert "Remediation: `REMEDIATE.TOTAL_CONFIG_MODEL`" in result["message"]["text"]
+    assert rule["properties"] == {
+        "policy_code": "POLICY.NO_HIDDEN_CONFIG",
+        "remediation_code": "REMEDIATE.TOTAL_CONFIG_MODEL",
+    }
+
+
 def test_append_result_updates_runtime_rule_index_field() -> None:
     seen_rules = {"existing-rule": 0}
     rules = [ReportingDescriptor(id="existing-rule")]

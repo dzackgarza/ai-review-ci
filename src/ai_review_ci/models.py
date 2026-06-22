@@ -28,6 +28,8 @@ from pydantic import (
     model_validator,
 )
 
+from ai_review_ci.policy_index import PolicyIndexError, load_policy_index
+
 LOW_SIGNAL_CATEGORIES = frozenset(
     {
         "code-style",
@@ -219,6 +221,18 @@ def require_substantive_finding(findings: Sequence[ReportFinding], *, fix_tail: 
         )
 
 
+def validate_policy_reference(policy_code: str | None, remediation_code: str | None) -> None:
+    """Validate optional policy/remediation IDs against the vendored index."""
+    if policy_code is None:
+        if remediation_code is not None:
+            raise ValueError("REJECTED: remediation_code requires policy_code. FIX: cite the POLICY.* code that owns the remediation.")
+        return
+    try:
+        load_policy_index().remediation_for_policy(policy_code, remediation_code)
+    except PolicyIndexError as exc:
+        raise ValueError(f"REJECTED: invalid policy/remediation reference. FIX: cite existing vendored POLICY.* and REMEDIATE.* IDs. {exc}") from exc
+
+
 # ---------------------------------------------------------------------------
 # Shared leaf types
 # ---------------------------------------------------------------------------
@@ -309,6 +323,14 @@ class GeneralFinding(BaseModel):
         "Examples: semantic-regression, test-quality, null-safety, "
         "missing-error-handling, logic-error, ci-pipeline, workflow.",
     )
+    policy_code: str | None = Field(
+        default=None,
+        description="Optional vendored POLICY.* code when the finding is policy-bearing.",
+    )
+    remediation_code: str | None = Field(
+        default=None,
+        description="Optional vendored REMEDIATE.* code. If omitted, the policy's canonical related remediation is used.",
+    )
     location: Location = Field(description="File and line range where the finding occurs.")
     violated_invariant: str = Field(
         min_length=20,
@@ -346,6 +368,11 @@ class GeneralFinding(BaseModel):
     @model_validator(mode="after")
     def _tier_category_consistency(self) -> Self:
         require_tier2_for_low_signal(self.tier, self.category, fix_examples=_GENERAL_TIER_EXAMPLES)
+        return self
+
+    @model_validator(mode="after")
+    def _policy_reference(self) -> Self:
+        validate_policy_reference(self.policy_code, self.remediation_code)
         return self
 
     @field_validator("violated_invariant")
@@ -450,6 +477,14 @@ class SlopFinding(BaseModel):
         "validation-evasion, defaults-and-fallbacks, proof-laundering, workflow, "
         "ci-pipeline, config.",
     )
+    policy_code: str | None = Field(
+        default=None,
+        description="Vendored POLICY.* code for the bridge-burning obligation this finding weakens.",
+    )
+    remediation_code: str | None = Field(
+        default=None,
+        description="Optional vendored REMEDIATE.* code. If omitted, the policy's canonical related remediation is used.",
+    )
     location: Location = Field(description="File and line range where the slop pattern occurs.")
     violated_invariant: str = Field(
         min_length=20,
@@ -516,6 +551,11 @@ class SlopFinding(BaseModel):
     @model_validator(mode="after")
     def _tier_category_consistency(self) -> Self:
         require_tier2_for_low_signal(self.tier, self.category, fix_examples=_SLOP_TIER_EXAMPLES)
+        return self
+
+    @model_validator(mode="after")
+    def _policy_reference(self) -> Self:
+        validate_policy_reference(self.policy_code, self.remediation_code)
         return self
 
     @field_validator("violated_invariant")

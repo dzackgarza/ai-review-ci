@@ -24,6 +24,27 @@
 - Prove caller-root fixes with a red test before editing the scaffold or justfile.
   Use a real temporary target repository whose target-specific preflight failure differs from the failure produced in `~/ai-review-ci/justfiles`.
 
+## Testing Central QC Changes
+
+- Do not run central QC recipes against `~/ai-review-ci` as proof of behavior.
+  This repository owns the checkers, rules, and justfiles; self-scanning the checker
+  implementation is not the boundary those recipes are meant to prove.
+
+- Proper proof for central QC behavior uses repo-owned canonical fixtures.
+  Add or update "bad" target-code fixtures that intentionally violate the policy under
+  test, then run the relevant justfile recipes against those fixture repositories or
+  fixture worktrees.
+
+- The fixture suite must prove the downstream caller contract:
+  the recipe receives a caller repository with `-d .`, scans that caller's target files,
+  reports the expected finding, and does not diagnose `~/ai-review-ci` implementation
+  files as the subject under review.
+
+- Treat self-QC findings as invalid proof until the target boundary is established.
+  For example, a rule that bans `try` statements may itself contain code or text about
+  `try`; diagnosing that self-reference starts a false triage loop, not a real product
+  failure.
+
 ## Semgrep Findings
 
 - Separate Semgrep rule provenance from finding ownership.

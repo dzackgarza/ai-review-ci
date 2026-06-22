@@ -6,6 +6,7 @@ requires-python = ">=3.14"
 dependencies = [
     "cyclopts",
     "pydantic>=2",
+    "PyYAML",
     "sarif-pydantic>=0.6.2",
     "unidiff>=0.7.5",
 ]
@@ -16,6 +17,7 @@ ai-review-ci = "ai_review_ci.cli:main"
 [dependency-groups]
 dev = [
     "pytest",
+    "types-PyYAML",
     "types-unidiff>=0.7.0.20260518",
 ]
 

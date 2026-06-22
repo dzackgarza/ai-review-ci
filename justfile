@@ -3,6 +3,8 @@ repo := justfile_directory()
 global_hooks_source_dir := repo / "global-hooks"
 repo_hooks_source_dir := repo / "repo-hooks"
 scaffold_source_dir := repo / "scaffolds"
+policy_index_source := "/home/dzack/gitclones/ai"
+policy_index_ref := "0c1d9cbd79818286fe686795995f99ddb5789652"
 
 # Normalize infrastructure files before parse checks inspect them
 _normalize:
@@ -25,6 +27,13 @@ check: _normalize
     sh -n global-hooks/pre-push
     sh -n repo-hooks/pre-commit
     sh -n repo-hooks/pre-push
+
+# Sync vendored policy/remediation index from the pinned dzackgarza/ai ref.
+sync-policy-index:
+    python3 tool-artifacts/scripts/sync-policy-index.py \
+      --source-root {{policy_index_source}} \
+      --vendor-root reviews/vendor/policy-index \
+      --ref {{policy_index_ref}}
 
 # Commit gate (correctness + normalization): routes through the Python QC chain
 test:

@@ -38,6 +38,9 @@ Key rules every finding must satisfy:
 - `proof_command`: The exact command, grep pattern, or code path that proves the violation exists.
   A file path alone is not proof — show the command output, the code flow, or the diagnostic that demonstrates the failure.
 - `symptom`, `source`, `consequence`: diagnosis only — what is observably wrong, what produces it, what breaks because of it.
+- `policy_code`: include the matching vendored `POLICY.*` ID when the finding is policy-bearing.
+  Do not invent IDs.
+  Leave `remediation_code` absent unless a canonical `REMEDIATE.*` ID is explicitly required by the schema; deterministic rendering resolves the canonical remediation after validation.
 - `evidence`: At least one entry with `kind`, `path`, and `lines` showing the exploration.
 
 **Tier rules:**

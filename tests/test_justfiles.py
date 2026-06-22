@@ -5,6 +5,7 @@ import shlex
 import shutil
 import subprocess
 import tomllib
+from typing import Any
 
 import pytest
 from pydantic import TypeAdapter
@@ -412,14 +413,150 @@ def test_semgrep_autofix_defers_unfixed_findings_to_push_tier(
     project = tmp_path / "semgrep-project"
     project.mkdir()
     source = project / "app.ts"
-    source.write_text("const answer = 42;\nconsole.log(answer);\n")
+    source.write_text('const API_URL = "https://example.test";\nconsole.log(API_URL);\n')
 
     commit_tier = run_just(ROOT / "justfiles" / "shared.just", project, "_semgrep-autofix")
     push_tier = run_just(ROOT / "justfiles" / "shared.just", project, "_semgrep")
 
     assert commit_tier.returncode == 0, commit_tier.stdout + commit_tier.stderr
-    assert source.read_text() == "const answer = 42;\nconsole.log(answer);\n"
+    assert source.read_text() == 'const API_URL = "https://example.test";\nconsole.log(API_URL);\n'
     assert push_tier.returncode != 0, push_tier.stdout + push_tier.stderr
+
+
+def write_fake_npx_slop_scan(tmp_path: pathlib.Path, payload: dict[str, Any]) -> pathlib.Path:
+    bin_dir = tmp_path / "fake-bin"
+    bin_dir.mkdir()
+    npx = bin_dir / "npx"
+    npx.write_text(
+        f"#!/usr/bin/env bash\ncat <<'JSON'\n{json.dumps(payload)}\nJSON\n",
+    )
+    npx.chmod(0o755)
+    return bin_dir
+
+
+def write_fake_uvx_vibecheck(
+    tmp_path: pathlib.Path,
+    payload: dict[str, Any],
+    *,
+    exit_code: int,
+) -> pathlib.Path:
+    bin_dir = tmp_path / "fake-bin"
+    bin_dir.mkdir()
+    uvx = bin_dir / "uvx"
+    uvx.write_text(
+        f"#!/usr/bin/env bash\ncat <<'JSON'\n{json.dumps(payload)}\nJSON\nexit {exit_code}\n",
+    )
+    uvx.chmod(0o755)
+    return bin_dir
+
+
+def vibecheck_payload(*findings: dict[str, Any]) -> dict[str, Any]:
+    severity_counts = {severity: sum(1 for finding in findings if finding["severity"] == severity) for severity in ("critical", "high", "medium", "low")}
+    return {
+        "version": "0.1.0",
+        "passed": severity_counts["critical"] + severity_counts["high"] == 0,
+        "summary": {"rules_run": 49, **severity_counts},
+        "findings": list(findings),
+        "errors": [],
+    }
+
+
+def test_vibecheck_ignores_g141_non_comment_matches(tmp_path: pathlib.Path) -> None:
+    project = tmp_path / "vibe-project"
+    project.mkdir()
+    payload = vibecheck_payload(
+        {
+            "rule_id": "G141",
+            "name": "Research citations in code comments",
+            "severity": "high",
+            "category": "ai-slop",
+            "file": str(project / "src" / "utils" / "doi.ts"),
+            "line": 1,
+            "content": "export function doiUrl(doi: string): string {",
+            "notes": "(Source: ...) or (PMC12345) in code comments = hallucinated authority",
+            "two_pass": False,
+            "co_occurrence": False,
+        },
+    )
+    env = os.environ | {"PATH": f"{write_fake_uvx_vibecheck(tmp_path, payload, exit_code=1)}:{os.environ['PATH']}"}
+
+    result = run_just(ROOT / "justfiles" / "shared.just", project, "_vibecheck", env=env)
+
+    output = result.stdout + result.stderr
+    assert result.returncode == 0, output
+    assert "ignored 1 G141 non-comment false-positive finding(s)" in output
+    assert "vibecheck: 0 findings" in output
+
+
+def test_vibecheck_still_blocks_g141_comment_matches(tmp_path: pathlib.Path) -> None:
+    project = tmp_path / "vibe-project"
+    project.mkdir()
+    payload = vibecheck_payload(
+        {
+            "rule_id": "G141",
+            "name": "Research citations in code comments",
+            "severity": "high",
+            "category": "ai-slop",
+            "file": str(project / "src" / "app.ts"),
+            "line": 10,
+            "content": "// (Source: imagined paper)",
+            "notes": "(Source: ...) or (PMC12345) in code comments = hallucinated authority",
+            "two_pass": False,
+            "co_occurrence": False,
+        },
+    )
+    env = os.environ | {"PATH": f"{write_fake_uvx_vibecheck(tmp_path, payload, exit_code=1)}:{os.environ['PATH']}"}
+
+    result = run_just(ROOT / "justfiles" / "shared.just", project, "_vibecheck", env=env)
+
+    output = result.stdout + result.stderr
+    assert result.returncode != 0, output
+    assert "Research citations in code comments" in output
+    assert TRIAGE_MARKER in output
+
+
+def test_slop_scan_ignores_non_gating_structural_heuristics(tmp_path: pathlib.Path) -> None:
+    project = tmp_path / "slop-project"
+    project.mkdir()
+    (project / "app.ts").write_text("export const value = 1;\n")
+    shutil.copy(ROOT / "tool-configs" / "slop-scan.config.json", project / "slop-scan.config.json")
+    payload = {
+        "summary": {"findingCount": 2},
+        "findings": [
+            {"ruleId": "structure.pass-through-wrappers", "severity": "strong", "path": "app.ts", "location": {"line": 1}},
+            {"ruleId": "structure.directory-fanout-hotspot", "severity": "medium", "path": "src", "location": {"line": 1}},
+        ],
+    }
+    env = os.environ | {"PATH": f"{write_fake_npx_slop_scan(tmp_path, payload)}:{os.environ['PATH']}"}
+
+    result = run_just(ROOT / "justfiles" / "bun.just", project, "_slop-scan", env=env)
+
+    output = result.stdout + result.stderr
+    assert result.returncode == 0, output
+    assert "ignored 2 non-gating structural heuristic finding(s)" in output
+
+
+def test_slop_scan_still_blocks_concrete_slop_findings(tmp_path: pathlib.Path) -> None:
+    project = tmp_path / "slop-project"
+    project.mkdir()
+    (project / "app.ts").write_text("export const value = 1;\n")
+    shutil.copy(ROOT / "tool-configs" / "slop-scan.config.json", project / "slop-scan.config.json")
+    payload = {
+        "summary": {"findingCount": 2},
+        "findings": [
+            {"ruleId": "structure.pass-through-wrappers", "severity": "strong", "path": "app.ts", "location": {"line": 1}},
+            {"ruleId": "errors.swallowed", "severity": "strong", "path": "app.ts", "location": {"line": 2}},
+        ],
+    }
+    env = os.environ | {"PATH": f"{write_fake_npx_slop_scan(tmp_path, payload)}:{os.environ['PATH']}"}
+
+    result = run_just(ROOT / "justfiles" / "bun.just", project, "_slop-scan", env=env)
+
+    output = result.stdout + result.stderr
+    assert result.returncode != 0, output
+    assert "ignored 1 non-gating structural heuristic finding(s)" in output
+    assert "errors.swallowed" in output
+    assert "structure.pass-through-wrappers" not in output
 
 
 def test_envrc_check_accepts_root_envrc_and_rejects_dotenv_files(
