@@ -37,24 +37,40 @@ def test_diff_gate_blocks_uppercase_literals_but_not_local_const_calls() -> None
 def test_delegation_accepts_canonical_scaffold(tmp_path: pathlib.Path) -> None:
     project = tmp_path / "project"
     project.mkdir()
+    (project / "package.json").write_text('{"scripts": {}}\n')
+    (project / "bun.lock").write_text("")
     justfile = project / "justfile"
     justfile.write_text((pathlib.Path(__file__).parents[1] / "scaffolds" / "bun" / "justfile").read_text())
 
-    gates.check_delegation(project)
+    gates.check_delegation(project, "bun")
 
 
 def test_delegation_rejects_local_qc_override(tmp_path: pathlib.Path) -> None:
     project = tmp_path / "project"
     project.mkdir()
     (project / "justfile").write_text("test:\n    @true\n\ntest-ci:\n    @true\n")
+    (project / "package.json").write_text('{"scripts": {}}\n')
+    (project / "bun.lock").write_text("")
 
     with pytest.raises(SystemExit):
-        gates.check_delegation(project)
+        gates.check_delegation(project, "bun")
+
+
+def test_delegation_rejects_profile_shape_mismatch(tmp_path: pathlib.Path) -> None:
+    project = tmp_path / "project"
+    project.mkdir()
+    (project / "justfile").write_text((pathlib.Path(__file__).parents[1] / "scaffolds" / "bun" / "justfile").read_text())
+
+    with pytest.raises(SystemExit):
+        gates.check_delegation(project, "bun")
 
 
 def test_app_boot_rejects_direct_local_playwright_before_execution(tmp_path: pathlib.Path) -> None:
     project = tmp_path / "project"
     project.mkdir()
+    (project / "package.json").write_text('{"scripts": {}}\n')
+    (project / "bun.lock").write_text("")
+    (project / "playwright.config.ts").write_text("export default {};\n")
     marker = project / "local-command-ran"
     (project / "justfile").write_text(
         "\n".join(
@@ -68,22 +84,27 @@ def test_app_boot_rejects_direct_local_playwright_before_execution(tmp_path: pat
     )
 
     with pytest.raises(SystemExit):
-        gates.check_app_boot(project)
+        gates.check_app_boot(project, "bun-playwright")
     assert not marker.exists()
 
 
-def test_branch_protection_payload_uses_check_contexts() -> None:
-    payload = gates.branch_protection_payload()
+def test_branch_protection_payload_uses_profile_check_contexts() -> None:
+    payload = gates.branch_protection_payload("bun")
 
     assert payload["required_status_checks"]["contexts"] == []
     assert payload["required_status_checks"]["checks"] == [
         {"context": "deterministic-diff / deterministic-diff", "app_id": -1},
         {"context": "delegation-conformance / delegation-conformance", "app_id": -1},
-        {"context": "app-boot / app-boot", "app_id": -1},
         {"context": "general / review", "app_id": -1},
         {"context": "slop / review", "app_id": -1},
         {"context": "thread-resolution / thread-resolution", "app_id": -1},
     ]
+
+
+def test_branch_protection_payload_requires_app_boot_for_bun_playwright() -> None:
+    checks = gates.branch_protection_payload("bun-playwright")["required_status_checks"]["checks"]
+
+    assert {"context": "app-boot / app-boot", "app_id": -1} in checks
 
 
 def test_thread_resolution_evidence_accepts_commit_or_ledger() -> None:

@@ -14,15 +14,6 @@ from ai_review_ci.threads import FINGERPRINT_MARKER
 
 JsonDict = dict[str, Any]
 
-REQUIRED_CHECK_CONTEXTS = (
-    "deterministic-diff / deterministic-diff",
-    "delegation-conformance / delegation-conformance",
-    "app-boot / app-boot",
-    "general / review",
-    "slop / review",
-    "thread-resolution / thread-resolution",
-)
-
 _TS_JS_SUFFIXES = (".ts", ".tsx", ".js", ".jsx", ".mjs", ".cjs")
 _PY_SUFFIXES = (".py",)
 _RUST_SUFFIXES = (".rs",)
@@ -36,6 +27,45 @@ class DiffRule:
     pattern: re.Pattern[str]
     suffixes: tuple[str, ...]
     message: str
+
+
+@dataclass(frozen=True)
+class ProjectProfile:
+    name: str
+    justfile_name: str
+    required_paths: tuple[str, ...]
+    requires_bun_lock: bool = False
+    requires_sage_file: bool = False
+    requires_app_boot: bool = False
+
+
+PROJECT_PROFILES = {
+    "python": ProjectProfile("python", "python.just", ("pyproject.toml",)),
+    "bun": ProjectProfile("bun", "bun.just", ("package.json",), requires_bun_lock=True),
+    "bun-playwright": ProjectProfile(
+        "bun-playwright",
+        "bun.just",
+        ("package.json", "playwright.config.ts"),
+        requires_bun_lock=True,
+        requires_app_boot=True,
+    ),
+    "rust": ProjectProfile("rust", "rust.just", ("Cargo.toml",)),
+    "sage": ProjectProfile("sage", "sage.just", (), requires_sage_file=True),
+}
+
+BASE_REQUIRED_CHECK_CONTEXTS = (
+    "deterministic-diff / deterministic-diff",
+    "delegation-conformance / delegation-conformance",
+    "general / review",
+    "slop / review",
+    "thread-resolution / thread-resolution",
+)
+
+APP_BOOT_CHECK_CONTEXT = "app-boot / app-boot"
+
+SUPPORTED_PROFILES = tuple(PROJECT_PROFILES)
+
+REQUIRED_CHECK_CONTEXTS = BASE_REQUIRED_CHECK_CONTEXTS
 
 
 DIFF_RULES = (
@@ -134,6 +164,36 @@ def _fail(message: str) -> NoReturn:
     sys.exit(1)
 
 
+def _profile(profile: str) -> ProjectProfile:
+    try:
+        return PROJECT_PROFILES[profile]
+    except KeyError:
+        _fail(
+            f"unsupported project profile {profile!r}; "
+            f"expected one of: {', '.join(SUPPORTED_PROFILES)}"
+        )
+
+
+def _has_sage_file(target: Path) -> bool:
+    return any(path.suffix == ".sage" and ".git" not in path.parts for path in target.rglob("*.sage"))
+
+
+def check_profile(target: Path, profile: str) -> None:
+    """Fail if the target repository does not match its curated project profile."""
+    target = target.resolve()
+    project_profile = _profile(profile)
+    missing = [path for path in project_profile.required_paths if not (target / path).exists()]
+    if project_profile.requires_bun_lock and not (
+        (target / "bun.lock").exists() or (target / "bun.lockb").exists()
+    ):
+        missing.append("bun.lock or bun.lockb")
+    if project_profile.requires_sage_file and not _has_sage_file(target):
+        missing.append("at least one .sage file")
+    if missing:
+        _fail(f"{target} does not satisfy {profile} profile; missing: {', '.join(missing)}")
+    print(f"Project profile {profile} passed for {target}.")
+
+
 def _is_config_path(path: str) -> bool:
     name = Path(path).name
     return "config" in path or name.endswith(".d.ts")
@@ -195,33 +255,49 @@ def _dry_run_recipe(target: Path, justfile: Path, recipe: str) -> str:
     return result.stdout + result.stderr
 
 
-def _delegates_to_global_qc(output: str) -> bool:
-    return "ai-review-ci/justfiles/" in output and " -d . " in f" {output} "
+def _delegates_to_global_qc(output: str, project_profile: ProjectProfile) -> bool:
+    return f"ai-review-ci/justfiles/{project_profile.justfile_name}" in output and " -d . " in f" {output} "
 
 
-def check_delegation(target: Path) -> None:
+def check_delegation(target: Path, profile: str) -> None:
     """Fail if target test/test-ci recipes do not delegate to global QC."""
     target = target.resolve()
+    project_profile = _profile(profile)
+    check_profile(target, profile)
     justfile = _justfile_for(target)
     failed: list[str] = []
     for recipe in ("test", "test-ci"):
         output = _dry_run_recipe(target, justfile, recipe)
-        if not _delegates_to_global_qc(output):
+        if not _delegates_to_global_qc(output, project_profile):
             failed.append(recipe)
     if failed:
-        _fail(f"{target} does not delegate recipe(s) through ~/ai-review-ci with -d .: {', '.join(failed)}")
-    print(f"Delegation conformance passed for {target}.")
+        _fail(
+            f"{target} does not delegate {profile} recipe(s) through "
+            f"~/ai-review-ci/justfiles/{project_profile.justfile_name} "
+            f"with -d .: {', '.join(failed)}"
+        )
+    print(f"Delegation conformance passed for {target} profile {profile}.")
 
 
-def check_app_boot(target: Path) -> None:
+def check_app_boot(target: Path, profile: str) -> None:
     """Run the target repo's centrally delegated bun-playwright app-boot gate."""
     target = target.resolve()
+    project_profile = _profile(profile)
+    if not project_profile.requires_app_boot:
+        _fail(f"profile {profile} does not define an app-boot gate")
+    check_profile(target, profile)
     justfile = _justfile_for(target)
     output = _dry_run_recipe(target, justfile, "app-boot")
-    if not _delegates_to_global_qc(output):
-        _fail(f"{target} app-boot must delegate through ~/ai-review-ci with -d .")
+    if not _delegates_to_global_qc(output, project_profile):
+        _fail(
+            f"{target} app-boot must delegate through "
+            f"~/ai-review-ci/justfiles/{project_profile.justfile_name} with -d ."
+        )
     if _DIRECT_PLAYWRIGHT.search(output):
-        _fail(f"{target} app-boot must not invoke Playwright directly; delegate to ~/ai-review-ci/justfiles/bun.just")
+        _fail(
+            f"{target} app-boot must not invoke Playwright directly; "
+            "delegate to ~/ai-review-ci/justfiles/bun.just"
+        )
     result = subprocess.run(["just", "--justfile", str(justfile), "-d", str(target), "app-boot"])
     if result.returncode != 0:
         _fail(f"app-boot gate failed for {target}")
@@ -305,13 +381,22 @@ def check_review_threads(repo: str, pr_number: int) -> None:
     print(f"Review thread gate passed for {repo} PR #{pr_number}.")
 
 
-def branch_protection_payload() -> JsonDict:
+def required_check_contexts(profile: str) -> tuple[str, ...]:
+    """Required branch-protection check contexts for a curated project profile."""
+    project_profile = _profile(profile)
+    if project_profile.requires_app_boot:
+        return BASE_REQUIRED_CHECK_CONTEXTS[:2] + (APP_BOOT_CHECK_CONTEXT,) + BASE_REQUIRED_CHECK_CONTEXTS[2:]
+    return BASE_REQUIRED_CHECK_CONTEXTS
+
+
+def branch_protection_payload(profile: str) -> JsonDict:
     """GitHub branch protection payload for the required global QC checks."""
+    contexts = required_check_contexts(profile)
     return {
         "required_status_checks": {
             "strict": True,
             "contexts": [],
-            "checks": [{"context": context, "app_id": -1} for context in REQUIRED_CHECK_CONTEXTS],
+            "checks": [{"context": context, "app_id": -1} for context in contexts],
         },
         "enforce_admins": True,
         "required_pull_request_reviews": None,
@@ -320,7 +405,7 @@ def branch_protection_payload() -> JsonDict:
     }
 
 
-def protect_branch(repo: str, branch: str) -> None:
+def protect_branch(repo: str, branch: str, profile: str) -> None:
     """Apply required global-QC branch protection checks to a GitHub branch."""
     _gh_json(
         [
@@ -331,6 +416,6 @@ def protect_branch(repo: str, branch: str) -> None:
             "--input",
             "-",
         ],
-        body=branch_protection_payload(),
+        body=branch_protection_payload(profile),
     )
-    print(f"Applied branch protection for {repo}@{branch}: {', '.join(REQUIRED_CHECK_CONTEXTS)}")
+    print(f"Applied branch protection for {repo}@{branch}: {', '.join(required_check_contexts(profile))}")

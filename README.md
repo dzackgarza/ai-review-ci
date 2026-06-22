@@ -14,10 +14,13 @@ Each type runs in two scopes: **repo** (full-repository sweep) and **diff** (PR 
 
 ```bash
 cd /path/to/your/repo
-uvx --from git+https://github.com/dzackgarza/ai-review-ci ai-review-ci install --repo owner/repo --branch main
+uvx --from git+https://github.com/dzackgarza/ai-review-ci ai-review-ci install --repo owner/repo --branch main --profile bun-playwright
 ```
 
-This installs the complete QC enforcement surface: it writes the three trigger workflows and applies branch protection requiring the installed PR gate jobs.
+Pass `--profile <profile>` with one of `python`, `bun`, `bun-playwright`, `rust`, or `sage`.
+The profile is the enforced project bin: it selects the required project shape, the central justfile delegation target, the installed PR gates, and the branch-protection checks.
+
+This installs the complete QC enforcement surface: it writes the three trigger workflows and applies branch protection requiring the installed PR gate jobs for the declared profile.
 
 | File | Triggers |
 | --- | --- |
@@ -55,7 +58,7 @@ jobs:
 
 The canonical templates live in [`src/ai_review_ci/templates/`](src/ai_review_ci/templates/).
 
-Requirements in the target repo: GitHub code scanning enabled (free for public repos), GitHub CLI auth with permission to edit branch protection, and the target branch named in `--branch`.
+Requirements in the target repo: GitHub code scanning enabled (free for public repos), GitHub CLI auth with permission to edit branch protection, the target branch named in `--branch`, and a repo shape that satisfies the declared `--profile`.
 LLM review jobs are signal-only process checks: they upload SARIF and post review threads, but they do not compute or fail on a health score.
 The merge gate is deterministic QC plus evidence-backed resolution of reviewer-authored PR threads.
 
@@ -102,13 +105,13 @@ Use this when a repository needs local hook files without changing the user's gl
 ### Repo-local QC delegation
 
 Target repositories should not copy QC configs, tool pins, or hook scripts.
-Their local `justfile` should delegate the public `test` and `test-ci` recipes to the relevant language justfile in `~/ai-review-ci`.
+Their local `justfile` should delegate the public `test` and `test-ci` recipes to the central justfile for the repository's enforced profile in `~/ai-review-ci`.
 
 For new projects, install the tracked scaffold instead of hand-writing the delegation surface:
 
 ```bash
 cd ~/ai-review-ci
-# choose one language scaffold for the target repository
+# choose one enforced project profile for the target repository
 just install-qc-scaffold python /path/to/new/repo
 just install-qc-scaffold bun /path/to/new/repo
 just install-qc-scaffold bun-playwright /path/to/new/repo
@@ -116,7 +119,7 @@ just install-qc-scaffold rust /path/to/new/repo
 just install-qc-scaffold sage /path/to/new/repo
 ```
 
-The recipe copies files from `scaffolds/<language>/` and refuses to overwrite existing files.
+The recipe copies files from `scaffolds/<profile>/` and refuses to overwrite existing files.
 Edit the tracked scaffold here when the standard project surface changes; do not copy sample snippets into downstream repos by hand.
 
 The scaffold contents are intentionally small.
@@ -155,7 +158,7 @@ app-boot:
     @just -f ~/ai-review-ci/justfiles/bun.just -d . app-boot
 ```
 
-`bun-playwright` repositories must keep the Playwright configuration at repository-root `playwright.config.ts`.
+`bun-playwright` repositories must keep `package.json`, `bun.lock` or `bun.lockb`, and the Playwright configuration at repository-root `playwright.config.ts`.
 The local justfile delegates the invocation to global QC; it must not call Playwright directly.
 
 Rust:
@@ -219,8 +222,8 @@ Diff-scoped findings surface twice, deliberately:
   The review job itself is signal-only; branch protection should block on deterministic gates and thread-resolution.
 - **Resolvable review threads**: one review block per run (summary + metadata) with one inline, individually-resolvable comment per finding, for later disposition/remediation by separate agents.
   Off-diff findings are listed in the review body only — they are already in the ledger.
-- **Required deterministic gates**: the installed PR workflow calls the reusable `_gates.yml` workflow for `deterministic-diff`, `delegation-conformance`, `app-boot`, and `thread-resolution`.
-  `install` applies branch protection; `ai-review-ci protect-branch --repo owner/repo --branch main` exists to reapply or repair the required-check contract.
+- **Required deterministic gates**: the installed PR workflow calls the reusable `_gates.yml` workflow for `deterministic-diff`, `delegation-conformance`, and `thread-resolution`; `bun-playwright` also installs `app-boot`.
+  `install` applies branch protection; `ai-review-ci protect-branch --repo owner/repo --branch main --profile <profile>` exists to reapply or repair the required-check contract.
 
 ## Architecture
 

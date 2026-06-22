@@ -6,6 +6,7 @@ docstrings.
 
 Subcommands:
 - install          — write trigger workflows and apply required branch protection
+- check-profile    — fail if a target repo does not match its curated profile
 - check-diff       — fail if a PR unified diff introduces deterministic findings
 - check-delegation — fail if a target justfile stops delegating to global QC
 - check-app-boot   — run the target repo's delegated bun-playwright gate
@@ -23,7 +24,14 @@ Subcommands:
 from cyclopts import App
 
 from ai_review_ci.context import fetch_context
-from ai_review_ci.gates import check_app_boot, check_delegation, check_diff, check_review_threads, protect_branch
+from ai_review_ci.gates import (
+    check_app_boot,
+    check_delegation,
+    check_diff,
+    check_profile,
+    check_review_threads,
+    protect_branch,
+)
 from ai_review_ci.harness import run_review
 from ai_review_ci.install import install
 from ai_review_ci.report import report_metadata, report_schema, validate_report
@@ -36,6 +44,7 @@ app = App(
 )
 
 app.command(install)
+app.command(check_profile)
 app.command(check_diff)
 app.command(check_delegation)
 app.command(check_app_boot)

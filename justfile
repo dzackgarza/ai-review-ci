@@ -11,7 +11,7 @@ _normalize:
 # Parse-check every infrastructure source: workflow YAML, runner justfile, shell wrappers
 check: _normalize
     python3 -c "import ast, pathlib; [ast.parse(p.read_text()) for p in pathlib.Path('src').rglob('*.py')]; [ast.parse(p.read_text()) for p in pathlib.Path('tests').rglob('*.py')]"
-    python3 -c "import yaml, pathlib; yaml.safe_load(pathlib.Path('.github/workflows/_review.yml').read_text())"
+    python3 -c "import yaml, pathlib; [yaml.safe_load(p.read_text()) for p in pathlib.Path('.github/workflows').glob('*.yml')]; [yaml.safe_load(p.read_text()) for p in pathlib.Path('src/ai_review_ci/templates').glob('*.yml')]"
     just -f ci/runner.just --list >/dev/null
     just -f justfiles/shared.just --list >/dev/null
     just -f justfiles/python.just --list >/dev/null
@@ -35,8 +35,8 @@ test-ci:
     just -f {{repo}}/justfiles/python.just -d . test-ci
 
 # Install the complete QC enforcement surface into a target repo.
-install repo branch target=".":
-    uvx --from . ai-review-ci install --target {{target}} --repo {{repo}} --branch {{branch}}
+install repo branch profile target=".":
+    uvx --from . ai-review-ci install --target {{target}} --repo {{repo}} --branch {{branch}} --profile {{profile}}
 
 # Install globally managed Git hooks for this user.
 install-global-hooks:
@@ -101,19 +101,19 @@ install-repo-hooks target=".":
     echo "$hooks_dir"
 
 # Copy a repo-local QC delegation scaffold into a target repository.
-install-qc-scaffold language target=".":
+install-qc-scaffold profile target=".":
     #!/usr/bin/env bash
     set -euo pipefail
 
-    case "{{language}}" in
+    case "{{profile}}" in
         python|bun|bun-playwright|rust|sage) ;;
         *)
-            echo "Error: language must be one of: python, bun, bun-playwright, rust, sage"
+            echo "Error: profile must be one of: python, bun, bun-playwright, rust, sage"
             exit 1
             ;;
     esac
 
-    source_dir="{{ scaffold_source_dir }}/{{language}}"
+    source_dir="{{ scaffold_source_dir }}/{{profile}}"
     target_repo="{{target}}"
 
     if [[ ! -d "$source_dir" ]]; then

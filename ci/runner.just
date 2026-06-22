@@ -16,6 +16,45 @@ install-tools:
 install-gate-tools:
     curl -LsSf https://astral.sh/uv/install.sh | env UV_INSTALL_DIR=/usr/local/bin sh
 
+setup-profile profile:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    uv run --project {{infra}} ai-review-ci check-profile \
+      --target "{{control_repo}}" \
+      --profile "{{profile}}"
+    case "{{profile}}" in
+      python)
+        uv sync --project "{{control_repo}}"
+        ;;
+      bun)
+        cd "{{control_repo}}"
+        bun install --frozen-lockfile
+        ;;
+      bun-playwright)
+        cd "{{control_repo}}"
+        bun install --frozen-lockfile
+        bunx playwright install --with-deps
+        ;;
+      rust)
+        cd "{{control_repo}}"
+        cargo fetch
+        ;;
+      sage)
+        if [ "${SAGE_BIN+x}" != x ]; then
+          echo "ERROR: SAGE_BIN must be set for sage profile." >&2
+          exit 1
+        fi
+        if [ ! -x "$SAGE_BIN" ]; then
+          echo "ERROR: configured SAGE_BIN is not executable: $SAGE_BIN" >&2
+          exit 1
+        fi
+        ;;
+      *)
+        echo "ERROR: unsupported project profile: {{profile}}" >&2
+        exit 1
+        ;;
+    esac
+
 fetch-context tool_name pr_number:
     uv run --project {{infra}} ai-review-ci fetch-context \
       --repo "${GITHUB_REPOSITORY}" \
@@ -92,13 +131,15 @@ check-deterministic-diff:
     uv run --project {{infra}} ai-review-ci check-diff \
       --diff "${RUNNER_TEMP}/reviewer-diff.patch"
 
-check-delegation:
+check-delegation profile:
     uv run --project {{infra}} ai-review-ci check-delegation \
-      --target "{{control_repo}}"
+      --target "{{control_repo}}" \
+      --profile "{{profile}}"
 
-check-app-boot:
+check-app-boot profile:
     uv run --project {{infra}} ai-review-ci check-app-boot \
-      --target "{{control_repo}}"
+      --target "{{control_repo}}" \
+      --profile "{{profile}}"
 
 check-review-threads pr_number:
     uv run --project {{infra}} ai-review-ci check-review-threads \
