@@ -2,7 +2,7 @@
 
 ## Doctrine
 
-The durable doctrine for global QC and review behavior lives in [docs/Global-QC-and-Review-Doctrine.md](docs/Global-QC-and-Review-Doctrine.md).
+The durable doctrine for global QC and review behavior lives in the [Global QC and Review Doctrine](https://github.com/dzackgarza/ai-review-ci/wiki/Global-QC-and-Review-Doctrine) wiki page.
 Use it when changing gates, scaffolds, review runners, reviewer state, or downstream enforcement contracts.
 
 Centrally-managed, OpenCode-powered review CI. Target repositories carry only three thin trigger workflows; everything else — the reusable workflow, the review runner, the validator, the reviewer home template, the prompt corpus — lives here and is cloned inside the CI runner at execution time.
