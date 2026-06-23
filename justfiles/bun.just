@@ -80,7 +80,13 @@ app-boot:
 		"{{artifacts}}/scripts/emit-triage-directive.sh"
 		exit 1
 	fi
-	bunx playwright test --config playwright.config.ts
+	configs=(playwright.config.ts)
+	if [ -f playwright.actual.config.ts ]; then
+		configs+=(playwright.actual.config.ts)
+	fi
+	for config in "${configs[@]}"; do
+		bunx playwright test --config "$config"
+	done
 
 _app-boot-if-configured:
 	#!/usr/bin/env bash

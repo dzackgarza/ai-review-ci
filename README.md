@@ -156,7 +156,8 @@ app-boot:
     @just -f ~/ai-review-ci/justfiles/bun.just -d . app-boot
 ```
 
-`bun-playwright` repositories must keep `package.json`, `bun.lock` or `bun.lockb`, and the Playwright configuration at repository-root `playwright.config.ts`. The local justfile delegates the invocation to global QC; it must not call Playwright directly.
+`bun-playwright` repositories must keep `package.json`, `bun.lock` or `bun.lockb`, and the primary Playwright configuration at repository-root `playwright.config.ts`. Repositories that need an additional actual-entrypoint proof can add `playwright.actual.config.ts`; the global app-boot gate runs it after the primary config when present.
+The local justfile delegates the invocation to global QC; it must not call Playwright directly.
 
 Rust:
 
