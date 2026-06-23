@@ -110,6 +110,52 @@ def test_ai_review_ci_hooks_still_run_in_downstream_repos(
     assert result.stdout.strip() == "downstream-ran"
 
 
+@pytest.mark.parametrize(
+    ("hook_dir", "hook", "recipe"),
+    [
+        ("global-hooks", "pre-commit", "test"),
+        ("global-hooks", "pre-push", "test-ci"),
+        ("repo-hooks", "pre-commit", "test"),
+        ("repo-hooks", "pre-push", "test-ci"),
+    ],
+)
+def test_ai_review_ci_hooks_load_target_direnv_before_running_gate(
+    hook_source_repo: pathlib.Path,
+    tmp_path: pathlib.Path,
+    hook_dir: str,
+    hook: str,
+    recipe: str,
+) -> None:
+    downstream = tmp_path / "downstream"
+    downstream.mkdir()
+    subprocess.run(["git", "init", "-q"], cwd=downstream, check=True)
+
+    bin_dir = tmp_path / "bin"
+    bin_dir.mkdir()
+    direnv_log = tmp_path / "direnv-argv"
+    just_log = tmp_path / "just-argv"
+    write_fake_direnv(bin_dir / "direnv", direnv_log)
+    write_fake_just(bin_dir / "just", just_log)
+    for command in ("sh", "git", "readlink", "dirname"):
+        target = shutil.which(command)
+        assert target is not None, f"required command missing for test setup: {command}"
+        (bin_dir / command).symlink_to(target)
+
+    env = os.environ | {"PATH": str(bin_dir)}
+    result = subprocess.run(
+        [str(hook_source_repo / hook_dir / hook)],
+        cwd=downstream,
+        env=env,
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert direnv_log.read_text() == f"exec . just {recipe}\n"
+    assert just_log.read_text() == f"{recipe}\n"
+
+
 def path_with_only(tmp_path: pathlib.Path, *commands: str) -> str:
     bin_dir = tmp_path / "bin"
     bin_dir.mkdir()
@@ -118,3 +164,15 @@ def path_with_only(tmp_path: pathlib.Path, *commands: str) -> str:
         assert target is not None, f"required command missing for test setup: {command}"
         (bin_dir / command).symlink_to(target)
     return str(bin_dir)
+
+
+def write_fake_direnv(path: pathlib.Path, log_path: pathlib.Path) -> None:
+    path.write_text(
+        f'#!/usr/bin/env sh\nset -e\nprintf \'%s\\n\' "$*" > {log_path}\nif [ "$1" != "exec" ] || [ "$2" != "." ]; then\n  exit 64\nfi\nshift 2\nexec "$@"\n',
+    )
+    path.chmod(0o755)
+
+
+def write_fake_just(path: pathlib.Path, log_path: pathlib.Path) -> None:
+    path.write_text(f"#!/usr/bin/env sh\nset -e\nprintf '%s\\n' \"$*\" > {log_path}\n")
+    path.chmod(0o755)

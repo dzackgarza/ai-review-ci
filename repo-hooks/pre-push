@@ -18,4 +18,4 @@ hook_common_dir="$(CDPATH= cd -- "$hook_common_dir" && pwd -P)"
 if [ "$repo_common_dir" = "$hook_common_dir" ]; then
   exit 0
 fi
-exec just test-ci
+exec direnv exec . just test-ci
