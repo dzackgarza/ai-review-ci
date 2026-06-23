@@ -15,9 +15,10 @@
 # WORKFLOW (two-tier):
 #   just test     — COMMIT gate: correctness + normalization only (preflight,
 #                   biome/eslint auto-fix, tsc, plain bun test, bypass check).
-#   just test-ci  — PUSH/CI gate: test + the full style/slop/coverage stack
-#                   (coverage + diff-cover, knip, biome/eslint verify, ast-grep,
-#                   jscpd, lizard, slop-scan, semgrep, vibecheck, ai-slop).
+#   just test-ci  — PUSH/CI gate: test + app-boot for Playwright projects + the
+#                   full style/slop/coverage stack (coverage + diff-cover, knip,
+#                   biome/eslint verify, ast-grep, jscpd, lizard, slop-scan,
+#                   semgrep, vibecheck, ai-slop).
 #
 # HOOKS: pre-commit blocks on `just test`; pre-push blocks on `just test-ci`.
 #   Run `just install-global-hooks` from ~/ai-review-ci to activate them globally.
@@ -80,6 +81,15 @@ app-boot:
 		exit 1
 	fi
 	bunx playwright test --config playwright.config.ts
+
+_app-boot-if-configured:
+	#!/usr/bin/env bash
+	set -euo pipefail
+	if [ -f playwright.config.ts ]; then
+		just --justfile {{justfile()}} -d . app-boot
+	else
+		echo "Bun project has no playwright.config.ts; app-boot gate is not applicable."
+	fi
 
 _coverage:
 	#!/usr/bin/env bash
@@ -408,8 +418,8 @@ test: _check-ts-project _normalize-common _normalize _tsc _bun-test
 	just -f {{justfiles}}/shared.just -d . _no-bypass
 	echo "Commit-tier quality checks completed"
 
-# public: PUSH/CI gate — test + the full style/slop/coverage stack
-test-ci: test _coverage _diff-cover _knip _biome _ast-grep _eslint _jscpd-bun _lizard-bun _slop-scan
+# public: PUSH/CI gate — test + app-boot when configured + the full style/slop/coverage stack
+test-ci: test _app-boot-if-configured _coverage _diff-cover _knip _biome _ast-grep _eslint _jscpd-bun _lizard-bun _slop-scan
 	#!/usr/bin/env bash
 	set -euo pipefail
 	just -f {{justfiles}}/shared.just -d . _global-qc
