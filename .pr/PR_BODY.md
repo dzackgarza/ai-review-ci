@@ -43,7 +43,9 @@ Preserved behavior:
 
 ## Execution Structure
 
-Start by fixing the workflow-allocation doctrine that controls later reviewer/QC edits: #103 defines risk tiers, #104 defines parallel-writer ownership, #105 defines convergent review windows, and #108 plus #109 define the durable ledger and source-budget state that long workstreams must carry. Land #106 and #107 by projecting those workflow rules into reviewer/QC/planning surfaces rather than inventing a second policy stack. Close #102 only after the doctrine converges and at least one real downstream repo or fixture boundary proves the changed review/QC behavior.
+Start by fixing the workflow-allocation doctrine that controls later reviewer/QC edits: #103 defines risk tiers, #104 defines parallel-writer ownership, #105 defines convergent review windows, and #108 plus #109 define the durable ledger and source-budget state that long workstreams must carry.
+Land #106 and #107 by projecting those workflow rules into reviewer/QC/planning surfaces rather than inventing a second policy stack.
+Close #102 only after the doctrine converges and at least one real downstream repo or fixture boundary proves the changed review/QC behavior.
 
 ## Milestone Tree
 
@@ -102,4 +104,5 @@ Start by fixing the workflow-allocation doctrine that controls later reviewer/QC
 
 ## Review-Readiness Gate
 
-This PR stays draft until every in-scope issue-linked checklist item has linked diffs and evidence, ownership-transfer questions are resolved or explicitly transferred, at least one downstream or fixture boundary proves the changed workflow behavior, and the required repo checks are green. Once review begins, unresolved review residue is tracked in `.pr/REVIEW_LOG.md` rather than backfilled into the milestone checklist.
+This PR stays draft until every in-scope issue-linked checklist item has linked diffs and evidence, ownership-transfer questions are resolved or explicitly transferred, at least one downstream or fixture boundary proves the changed workflow behavior, and the required repo checks are green.
+Once review begins, unresolved review residue is tracked in `.pr/REVIEW_LOG.md` rather than backfilled into the milestone checklist.
