@@ -29,6 +29,7 @@ The remedy is signal **precision** — make the real policies fire exactly, add 
 | pre-push (local) | fuller deterministic stack | local only |
 | PR / CI (diff scope) | deterministic stack + delegation-drift + app-boot + LLM threads | **required, un-bypassable** |
 | ambient CI (repo scope / cron) | whole-repo backlog & trends | **non-gating but non-suppressible** (tracked/surfaced, never silently ignorable) |
+
 PR gates evaluate the **unified diff only**; the pre-existing repo-wide backlog never blocks an unrelated PR. "Non-gating" is *not* "advisory/ignorable" — anything that can be silently ignored gets suppressed (exactly what happened to the slop report's mock policy).
 
 ### Signal fixes (make real policies fire precisely — do NOT delete policy)
