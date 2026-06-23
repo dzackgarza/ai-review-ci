@@ -423,6 +423,62 @@ def test_semgrep_autofix_defers_unfixed_findings_to_push_tier(
     assert push_tier.returncode != 0, push_tier.stdout + push_tier.stderr
 
 
+def test_semgrep_blocks_typescript_value_defaults(tmp_path: pathlib.Path) -> None:
+    project = tmp_path / "semgrep-value-default-project"
+    project.mkdir()
+    (project / "app.ts").write_text(
+        "\n".join(
+            [
+                "export function pickLabel(maybeLabel: string | null): string {",
+                "  return maybeLabel || 'fallback';",
+                "}",
+                "",
+            ]
+        )
+    )
+
+    result = run_just(ROOT / "justfiles" / "shared.just", project, "_semgrep")
+
+    output = result.stdout + result.stderr
+    assert result.returncode != 0, output
+    assert "ts-no-or-default" in output
+
+
+def test_semgrep_allows_fail_loud_typescript_guards(tmp_path: pathlib.Path) -> None:
+    project = tmp_path / "semgrep-guard-project"
+    project.mkdir()
+    (project / "guards.ts").write_text(
+        "\n".join(
+            [
+                "export function requireString(value: string | null): string {",
+                '  if (!value || value.trim() === "") {',
+                '    throw new Error("missing value");',
+                "  }",
+                "  return value;",
+                "}",
+                "",
+                "export function keepNonEmpty(values: Array<string | null>): string[] {",
+                "  let result: string[] = [];",
+                "  for (let i = 0; i < values.length; i += 1) {",
+                "    let cleaned = values[i]?.trim();",
+                '    if (!cleaned || cleaned === "") {',
+                "      continue;",
+                "    }",
+                "    result.push(cleaned);",
+                "  }",
+                "  return result;",
+                "}",
+                "",
+            ]
+        )
+    )
+
+    result = run_just(ROOT / "justfiles" / "shared.just", project, "_semgrep")
+
+    output = result.stdout + result.stderr
+    assert result.returncode == 0, output
+
+
 def write_fake_npx_slop_scan(tmp_path: pathlib.Path, payload: dict[str, Any]) -> pathlib.Path:
     bin_dir = tmp_path / "fake-bin"
     bin_dir.mkdir()
@@ -603,6 +659,79 @@ def test_envrc_check_accepts_root_envrc_and_rejects_dotenv_files(
     )
 
     assert rejected.returncode != 0, rejected.stdout + rejected.stderr
+
+
+def test_python_scaffold_bare_just_test_reaches_downstream_preflight_without_working_directory_env(
+    tmp_path: pathlib.Path,
+) -> None:
+    project = tmp_path / "python-scaffold-project"
+    project.mkdir()
+    shutil.copy(ROOT / "scaffolds" / "python" / "justfile", project / "justfile")
+    (project / "pyproject.toml").write_text(
+        "\n".join(
+            [
+                "[project]",
+                'name = "scaffold-python-target"',
+                'version = "0.1.0"',
+                'requires-python = ">=3.14"',
+                "",
+            ]
+        )
+    )
+    (project / ".envrc").write_text("source_up\n")
+    env = os.environ | {"DIRENV_CONFIGURED_CORRECTLY": "1"}
+
+    result = subprocess.run(
+        ["just", "test"],
+        cwd=project,
+        env=env,
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+
+    output = result.stdout + result.stderr
+    assert result.returncode != 0, output
+    assert "Python project must have tests" in output
+    assert "the following required arguments were not provided" not in output
+
+
+def test_python_scaffold_bare_just_test_breaks_when_just_working_directory_is_exported(
+    tmp_path: pathlib.Path,
+) -> None:
+    project = tmp_path / "python-scaffold-project"
+    project.mkdir()
+    shutil.copy(ROOT / "scaffolds" / "python" / "justfile", project / "justfile")
+    (project / "pyproject.toml").write_text(
+        "\n".join(
+            [
+                "[project]",
+                'name = "scaffold-python-target"',
+                'version = "0.1.0"',
+                'requires-python = ">=3.14"',
+                "",
+            ]
+        )
+    )
+    (project / ".envrc").write_text('source_up\nexport JUST_WORKING_DIRECTORY="$(pwd -P)"\n')
+    env = os.environ | {
+        "DIRENV_CONFIGURED_CORRECTLY": "1",
+        "JUST_WORKING_DIRECTORY": str(project),
+    }
+
+    result = subprocess.run(
+        ["just", "test"],
+        cwd=project,
+        env=env,
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+
+    output = result.stdout + result.stderr
+    assert result.returncode != 0, output
+    assert "the following required arguments were not provided" in output
+    assert "--justfile <JUSTFILE>" in output
 
 
 def test_eslint_flat_config_imports_with_declared_tool_config_deps(
