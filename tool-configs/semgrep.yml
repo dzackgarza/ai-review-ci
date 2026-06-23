@@ -269,7 +269,6 @@ rules:
       policy_code: POLICY.NO_SKIP_MASK
       remediation_code: REMEDIATE.REAL_PROOF_LOOP
   - id: ts-no-or-default
-    pattern: $X || $DEFAULT
     message: POLICY.RUNTIME_DEFAULT
     languages:
       - typescript
@@ -278,6 +277,12 @@ rules:
     metadata:
       policy_code: POLICY.RUNTIME_DEFAULT
       remediation_code: REMEDIATE.TOTAL_CONFIG_MODEL
+    patterns:
+      - pattern: $X || $DEFAULT
+      - pattern-not-inside: "if ($COND) {\n  ...\n}"
+      - pattern-not-inside: "while ($COND) {\n  ...\n}"
+      - pattern-not-inside: "for (...; $COND; ...) {\n  ...\n}"
+      - pattern-not-inside: "do {\n  ...\n} while ($COND)"
   - id: ts-no-env-default
     pattern: process.env.$KEY || $DEFAULT
     message: POLICY.RUNTIME_DEFAULT
