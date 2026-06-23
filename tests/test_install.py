@@ -3,7 +3,7 @@ import subprocess
 
 import pytest
 
-from ai_review_ci.install import TEMPLATES, _write_trigger_workflows
+from ai_review_ci.install import TEMPLATES, _write_manifest, _write_trigger_workflows
 
 
 def _git_repo(tmp_path: pathlib.Path) -> pathlib.Path:
@@ -28,6 +28,7 @@ def test_install_writes_trigger_workflows(tmp_path: pathlib.Path) -> None:
     assert "scope: diff" in pr
     assert "gate: deterministic-diff" in pr
     assert "gate: delegation-conformance" in pr
+    assert "gate: qc-doctor" in pr
     assert "gate: app-boot" not in pr
     assert "gate: thread-resolution" in pr
     assert "profile: 'bun'" in pr
@@ -42,6 +43,18 @@ def test_install_writes_bun_playwright_app_boot_gate(tmp_path: pathlib.Path) -> 
     pr = (repo / ".github" / "workflows" / "review-pr.yml").read_text()
     assert "gate: app-boot" in pr
     assert "profile: 'bun-playwright'" in pr
+
+
+def test_install_writes_manifest_contract(tmp_path: pathlib.Path) -> None:
+    repo = _git_repo(tmp_path)
+
+    _write_manifest(repo, "python", "main", "main", "main")
+
+    manifest = (repo / ".ai-review-ci.toml").read_text()
+    assert 'profile = "python"' in manifest
+    assert 'installed_ref = "main"' in manifest
+    assert 'release_channel = "main"' in manifest
+    assert 'local_delegation = "global-justfile"' in manifest
 
 
 def test_install_refuses_non_git_dir(tmp_path: pathlib.Path) -> None:

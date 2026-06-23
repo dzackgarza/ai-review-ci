@@ -136,6 +136,11 @@ check-delegation profile:
       --target "{{control_repo}}" \
       --profile "{{profile}}"
 
+check-qc-doctor:
+    uv run --project {{infra}} ai-review-ci doctor \
+      --target "{{control_repo}}" \
+      --json > "{{control_repo}}/.ai-review-ci-doctor.json"
+
 check-app-boot profile:
     uv run --project {{infra}} ai-review-ci check-app-boot \
       --target "{{control_repo}}" \

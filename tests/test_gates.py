@@ -93,6 +93,7 @@ def test_branch_protection_payload_uses_profile_check_contexts() -> None:
     assert payload["required_status_checks"]["checks"] == [
         {"context": "deterministic-diff / deterministic-diff", "app_id": -1},
         {"context": "delegation-conformance / delegation-conformance", "app_id": -1},
+        {"context": "qc-doctor / qc-doctor", "app_id": -1},
         {"context": "general / review", "app_id": -1},
         {"context": "slop / review", "app_id": -1},
         {"context": "thread-resolution / thread-resolution", "app_id": -1},

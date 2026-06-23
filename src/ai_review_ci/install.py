@@ -23,25 +23,25 @@ from importlib.resources import files
 from ai_review_ci.gates import SUPPORTED_PROFILES, protect_branch
 
 TEMPLATES = ("review-general.yml", "review-slop.yml", "review-pr.yml")
+DEFAULT_INFRA_REF = "main"
 
 
 def _validate_profile(profile: str) -> None:
     if profile not in SUPPORTED_PROFILES:
         print(
-            f"FATAL: unsupported project profile {profile!r}; "
-            f"expected one of: {', '.join(SUPPORTED_PROFILES)}",
+            f"FATAL: unsupported project profile {profile!r}; expected one of: {', '.join(SUPPORTED_PROFILES)}",
             file=sys.stderr,
         )
         sys.exit(1)
 
 
-def _template_text(name: str, profile: str) -> str:
+def _template_text(name: str, profile: str, ref: str = DEFAULT_INFRA_REF) -> str:
     source_name = "review-pr-bun-playwright.yml" if name == "review-pr.yml" and profile == "bun-playwright" else name
     text = (files("ai_review_ci") / "templates" / source_name).read_text()
-    return text.replace("{{ profile }}", profile)
+    return text.replace("{{ profile }}", profile).replace("{{ ref }}", ref)
 
 
-def _write_trigger_workflows(target: pathlib.Path, profile: str) -> None:
+def _write_trigger_workflows(target: pathlib.Path, profile: str, ref: str = DEFAULT_INFRA_REF) -> None:
     """Write the repo-owned trigger workflow files."""
     _validate_profile(profile)
     target = target.resolve()
@@ -60,8 +60,32 @@ def _write_trigger_workflows(target: pathlib.Path, profile: str) -> None:
 
     wf_dir.mkdir(parents=True, exist_ok=True)
     for name in TEMPLATES:
-        (wf_dir / name).write_text(_template_text(name, profile))
+        (wf_dir / name).write_text(_template_text(name, profile, ref))
         print(f"installed .github/workflows/{name}")
+
+
+def _write_manifest(target: pathlib.Path, profile: str, branch: str, ref: str, release_channel: str) -> None:
+    from ai_review_ci.doctor import LOCAL_DELEGATION_MODE, WORKFLOW_TEMPLATE_VERSION, manifest_text
+
+    manifest = target / ".ai-review-ci.toml"
+    if manifest.exists():
+        print(
+            f"FATAL: {manifest} already exists — this manifest is repo-owned configuration; edit it directly, or remove it first to re-initialize.",
+            file=sys.stderr,
+        )
+        sys.exit(1)
+    manifest.write_text(
+        manifest_text(
+            profile=profile,
+            installed_ref=ref,
+            release_channel=release_channel,
+            workflow_template_version=WORKFLOW_TEMPLATE_VERSION,
+            local_delegation=LOCAL_DELEGATION_MODE,
+            default_branch=branch,
+            exceptions=(),
+        )
+    )
+    print(f"installed {manifest.name}")
 
 
 def install(
@@ -70,6 +94,8 @@ def install(
     repo: str,
     branch: str,
     profile: str,
+    ref: str = DEFAULT_INFRA_REF,
+    release_channel: str = DEFAULT_INFRA_REF,
 ) -> None:
     """Install the review trigger workflows and required branch protection.
 
@@ -78,8 +104,12 @@ def install(
         repo: GitHub repository in owner/name form.
         branch: Branch name protected by the required QC gates.
         profile: Curated project profile to enforce.
+        ref: ai-review-ci git ref used by installed workflows.
+        release_channel: Human-readable ai-review-ci release channel recorded in the manifest.
     """
-    _write_trigger_workflows(target, profile)
+    target = target.resolve()
+    _write_trigger_workflows(target, profile, ref)
+    _write_manifest(target, profile, branch, ref, release_channel)
     protect_branch(repo, branch, profile)
 
     print(
