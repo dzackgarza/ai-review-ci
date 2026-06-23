@@ -17,8 +17,7 @@ cd /path/to/your/repo
 uvx --from git+https://github.com/dzackgarza/ai-review-ci ai-review-ci install --repo owner/repo --branch main --profile bun-playwright
 ```
 
-Pass `--profile <profile>` with one of `python`, `bun`, `bun-playwright`, `rust`, or `sage`.
-The profile is the enforced project bin: it selects the required project shape, the central justfile delegation target, the installed PR gates, and the branch-protection checks.
+Pass `--profile <profile>` with one of `python`, `bun`, `bun-playwright`, `rust`, or `sage`. The profile is the enforced project bin: it selects the required project shape, the central justfile delegation target, the installed PR gates, and the branch-protection checks.
 
 This installs the complete QC enforcement surface: it writes the three trigger workflows and applies branch protection requiring the installed PR gate jobs for the declared profile.
 
@@ -58,8 +57,7 @@ jobs:
 
 The canonical templates live in [`src/ai_review_ci/templates/`](src/ai_review_ci/templates/).
 
-Requirements in the target repo: GitHub code scanning enabled (free for public repos), GitHub CLI auth with permission to edit branch protection, the target branch named in `--branch`, and a repo shape that satisfies the declared `--profile`.
-LLM review jobs are signal-only process checks: they upload SARIF and post review threads, but they do not compute or fail on a health score.
+Requirements in the target repo: GitHub code scanning enabled (free for public repos), GitHub CLI auth with permission to edit branch protection, the target branch named in `--branch`, and a repo shape that satisfies the declared `--profile`. LLM review jobs are signal-only process checks: they upload SARIF and post review threads, but they do not compute or fail on a health score.
 The merge gate is deterministic QC plus evidence-backed resolution of reviewer-authored PR threads.
 
 ## Installing QC Surfaces
@@ -222,8 +220,7 @@ Diff-scoped findings surface twice, deliberately:
   The review job itself is signal-only; branch protection should block on deterministic gates and thread-resolution.
 - **Resolvable review threads**: one review block per run (summary + metadata) with one inline, individually-resolvable comment per finding, for later disposition/remediation by separate agents.
   Off-diff findings are listed in the review body only — they are already in the ledger.
-- **Required deterministic gates**: the installed PR workflow calls the reusable `_gates.yml` workflow for `deterministic-diff`, `delegation-conformance`, and `thread-resolution`; `bun-playwright` also installs `app-boot`.
-  `install` applies branch protection; `ai-review-ci protect-branch --repo owner/repo --branch main --profile <profile>` exists to reapply or repair the required-check contract.
+- **Required deterministic gates**: the installed PR workflow calls the reusable `_gates.yml` workflow for `deterministic-diff`, `delegation-conformance`, and `thread-resolution`; `bun-playwright` also installs `app-boot`. `install` applies branch protection; `ai-review-ci protect-branch --repo owner/repo --branch main --profile <profile>` exists to reapply or repair the required-check contract.
 
 ## Architecture
 

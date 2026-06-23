@@ -28,8 +28,7 @@ TEMPLATES = ("review-general.yml", "review-slop.yml", "review-pr.yml")
 def _validate_profile(profile: str) -> None:
     if profile not in SUPPORTED_PROFILES:
         print(
-            f"FATAL: unsupported project profile {profile!r}; "
-            f"expected one of: {', '.join(SUPPORTED_PROFILES)}",
+            f"FATAL: unsupported project profile {profile!r}; expected one of: {', '.join(SUPPORTED_PROFILES)}",
             file=sys.stderr,
         )
         sys.exit(1)
