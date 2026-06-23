@@ -31,7 +31,7 @@ import tomlkit
 #   path       : relative to QC root
 #   format     : "json" or "toml"
 #   key        : [key, ...] path to the exclude array (for json/toml)
-#   is_dir_fn  : lambda(str) → glob pattern for a TOML directory entry
+#   is_dir_fn  : lambda(str) -> glob pattern for a TOML directory entry
 #   static     : list of entries preserved verbatim, emitted before TOML dirs
 #
 # The generated list is always: static + [is_dir_fn(d) for d in toml_dirs]

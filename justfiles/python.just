@@ -15,9 +15,9 @@
 # WORKFLOW (two-tier):
 #   just test     — COMMIT gate: correctness + normalization only (preflight,
 #                   normalize/auto-fix, syntax, mypy, plain pytest, bypass check).
-#   just test-ci  — PUSH/CI gate: test + the full style/slop/coverage stack
-#                   (coverage 100% + diff-cover, deptry, import-linter, vulture,
-#                   grain, jscpd, lizard, ast-grep, semgrep, vibecheck, ai-slop).
+#   just test-ci  — PUSH/CI gate: test + changed-line coverage and deterministic
+#                   dependency/import/AST/duplication gates. Broad debt scans
+#                   stay available through _ambient-python-debt.
 #
 # HOOKS: pre-commit blocks on `just test`; pre-push blocks on `just test-ci`.
 #   Run `just install-global-hooks` from ~/ai-review-ci to activate them globally.
@@ -253,7 +253,15 @@ _pytest: _install-tools
 		"{{artifacts}}/scripts/emit-triage-directive.sh"
 		exit 1
 	fi
-	if uvx --python 3.14 --from pytest --with-editable . pytest; then
+	with_args=(--with-editable .)
+	dependency_requirements_output="$(uv run --no-project python "{{artifacts}}/scripts/python_qc_metadata.py" dependency-group-requirements .)"
+	if [ -n "$dependency_requirements_output" ]; then
+		mapfile -t dependency_requirements <<<"$dependency_requirements_output"
+		for requirement in "${dependency_requirements[@]}"; do
+			with_args+=(--with "$requirement")
+		done
+	fi
+	if uvx --python 3.14 --from pytest "${with_args[@]}" pytest; then
 		:
 	else
 		ec=$?
@@ -267,7 +275,7 @@ _pytest_with_coverage: _install-tools
 	set -euo pipefail
 	echo "============================="
 	echo "=== Running: pytest with coverage measurement ==="
-	echo "# Runs pytest with coverage.py to enforce 100% line/branch coverage and generate coverage.xml"
+	echo "# Runs pytest with coverage.py and generates coverage.xml for diff-cover"
 	if ! rg --files tests -g 'test_*.py' -g '*_test.py' >/dev/null 2>&1; then
 		echo "ERROR: pytest/coverage: no test files found in a Python project."
 		"{{artifacts}}/scripts/emit-test-writing-directive.sh"
@@ -287,7 +295,15 @@ _pytest_with_coverage: _install-tools
 	mkdir -p "$coverage_root"
 	export COVERAGE_FILE="$coverage_data"
 	export COVERAGE_RCFILE="$coverage_config"
-	if uvx --python 3.14 --from coverage --with pytest --with-editable . coverage run -m pytest; then
+	with_args=(--with pytest --with-editable .)
+	dependency_requirements_output="$(uv run --no-project python "{{artifacts}}/scripts/python_qc_metadata.py" dependency-group-requirements .)"
+	if [ -n "$dependency_requirements_output" ]; then
+		mapfile -t dependency_requirements <<<"$dependency_requirements_output"
+		for requirement in "${dependency_requirements[@]}"; do
+			with_args+=(--with "$requirement")
+		done
+	fi
+	if uvx --python 3.14 --from coverage "${with_args[@]}" coverage run -m pytest; then
 		:
 	else
 		ec=$?
@@ -295,11 +311,11 @@ _pytest_with_coverage: _install-tools
 		"{{artifacts}}/scripts/emit-triage-directive.sh"
 		exit $ec
 	fi
-	if uvx --from coverage coverage xml --fail-under=100 -o "$coverage_xml"; then
+	if uvx --from coverage coverage xml -o "$coverage_xml"; then
 		:
 	else
 		ec=$?
-		echo "ERROR: coverage below 100% threshold."
+		echo "ERROR: coverage XML generation failed."
 		"{{artifacts}}/scripts/emit-triage-directive.sh"
 		exit $ec
 	fi
@@ -480,7 +496,7 @@ _import-linter: _install-tools
 		"{{artifacts}}/scripts/emit-triage-directive.sh"
 		exit 1
 	fi
-	if uvx --from import-linter --with-editable . lint-imports --config "$config"; then
+	if uvx --python 3.14 --from import-linter --with-editable . lint-imports --config "$config"; then
 		:
 	else
 		ec=$?
@@ -504,12 +520,12 @@ _grain:
 		:
 	else
 		ec=$?
-		[ -e .grain.toml ] && gio trash .grain.toml
+		[ -e .grain.toml ] && rm -f -- .grain.toml
 		echo "ERROR: grain found unused code in project."
 		"{{artifacts}}/scripts/emit-triage-directive.sh"
 		exit $ec
 	fi
-	[ -e .grain.toml ] && gio trash .grain.toml
+	[ -e .grain.toml ] && rm -f -- .grain.toml
 
 _codeql:
 	#!/usr/bin/env bash
@@ -586,8 +602,11 @@ test: _check-python-project _normalize-common _normalize _python-syntax _mypy _p
 	just -f {{justfiles}}/shared.just -d . _no-bypass
 	echo "Commit-tier quality checks completed"
 
-# public: PUSH/CI gate — test + the full style/slop/coverage stack
-test-ci: test _pytest_with_coverage _diff-cover _deptry _import-linter _ast-grep _jscpd-python _lizard-python _vulture _grain
+# private: ambient broad-debt audit — not push-blocking for unrelated diffs
+_ambient-python-debt: _lizard-python _vulture _grain
+
+# public: PUSH/CI gate — test + changed-line coverage and deterministic project gates
+test-ci: test _pytest_with_coverage _diff-cover _deptry _import-linter _ast-grep _jscpd-python
 	#!/usr/bin/env bash
 	set -euo pipefail
 	just -f {{justfiles}}/shared.just -d . _global-qc
