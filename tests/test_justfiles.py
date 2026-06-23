@@ -828,6 +828,85 @@ def test_bun_playwright_gate_requires_standard_config(tmp_path: pathlib.Path) ->
     assert "playwright.config.ts" in output
 
 
+def test_bun_push_gate_runs_app_boot_when_playwright_config_exists(tmp_path: pathlib.Path) -> None:
+    project = tmp_path / "bun-playwright-project"
+    project.mkdir()
+    (project / "playwright.config.ts").write_text("export default {};\n")
+    calls = tmp_path / "bunx-calls.txt"
+    bin_dir = tmp_path / "bin"
+    bin_dir.mkdir()
+    bunx = bin_dir / "bunx"
+    bunx.write_text(f'#!/usr/bin/env bash\necho "$*" >> {shlex.quote(str(calls))}\n')
+    bunx.chmod(0o755)
+    tools_root = tmp_path / "tools"
+    tools_root.mkdir()
+    env = os.environ | {"PATH": f"{bin_dir}:{path_with_only(tools_root, 'bash', 'just')}"}
+
+    result = run_just(ROOT / "justfiles" / "bun.just", project, "_app-boot-if-configured", env=env)
+
+    output = result.stdout + result.stderr
+    assert result.returncode == 0, output
+    assert calls.read_text() == "playwright test --config playwright.config.ts\n"
+
+
+def test_bun_push_gate_runs_actual_app_boot_when_config_exists(tmp_path: pathlib.Path) -> None:
+    project = tmp_path / "bun-playwright-project"
+    project.mkdir()
+    (project / "playwright.config.ts").write_text("export default {};\n")
+    (project / "playwright.actual.config.ts").write_text("export default {};\n")
+    calls = tmp_path / "bunx-calls.txt"
+    bin_dir = tmp_path / "bin"
+    bin_dir.mkdir()
+    bunx = bin_dir / "bunx"
+    bunx.write_text(f'#!/usr/bin/env bash\necho "$*" >> {shlex.quote(str(calls))}\n')
+    bunx.chmod(0o755)
+    tools_root = tmp_path / "tools"
+    tools_root.mkdir()
+    env = os.environ | {"PATH": f"{bin_dir}:{path_with_only(tools_root, 'bash', 'just')}"}
+
+    result = run_just(ROOT / "justfiles" / "bun.just", project, "_app-boot-if-configured", env=env)
+
+    output = result.stdout + result.stderr
+    assert result.returncode == 0, output
+    assert calls.read_text().splitlines() == [
+        "playwright test --config playwright.config.ts",
+        "playwright test --config playwright.actual.config.ts",
+    ]
+
+
+def test_bun_push_gate_does_not_require_app_boot_without_playwright_config(tmp_path: pathlib.Path) -> None:
+    project = tmp_path / "bun-project"
+    project.mkdir()
+    env = os.environ | {"PATH": path_with_only(tmp_path, "bash", "just")}
+
+    result = run_just(ROOT / "justfiles" / "bun.just", project, "_app-boot-if-configured", env=env)
+
+    output = result.stdout + result.stderr
+    assert result.returncode == 0, output
+    assert "app-boot gate is not applicable" in output
+
+
+def test_bun_test_ci_composes_app_boot_gate() -> None:
+    result = subprocess.run(
+        [
+            "just",
+            "--dry-run",
+            "--justfile",
+            str(ROOT / "justfiles" / "bun.just"),
+            "test-ci",
+        ],
+        cwd=ROOT,
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+
+    output = result.stdout + result.stderr
+    assert result.returncode == 0, output
+    assert "just --justfile" in output
+    assert "app-boot" in output
+
+
 @pytest.mark.parametrize(
     ("justfile_name", "recipes"),
     [

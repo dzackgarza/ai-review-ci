@@ -20,4 +20,4 @@ if [ "$repo_common_dir" = "$hook_common_dir" ]; then
 fi
 unset GIT_DIR GIT_INDEX_FILE GIT_WORK_TREE GIT_PREFIX GIT_OBJECT_DIRECTORY GIT_ALTERNATE_OBJECT_DIRECTORIES GIT_COMMON_DIR
 
-exec just test
+exec direnv exec . just test
