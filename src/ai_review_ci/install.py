@@ -23,7 +23,9 @@ from importlib.resources import files
 from ai_review_ci.gates import SUPPORTED_PROFILES, protect_branch
 
 TEMPLATES = ("review-general.yml", "review-slop.yml", "review-pr.yml")
+SCAFFOLD_FILES = ("justfile",)
 DEFAULT_INFRA_REF = "main"
+SUCCESSFUL_DOCTOR_STATUSES = ("current", "intentional_exception")
 
 
 def _validate_profile(profile: str) -> None:
@@ -35,19 +37,45 @@ def _validate_profile(profile: str) -> None:
         sys.exit(1)
 
 
+def _git_repo_root(target: pathlib.Path) -> pathlib.Path:
+    target = target.resolve()
+    if not (target / ".git").exists():
+        print(f"FATAL: {target} is not a git repository root", file=sys.stderr)
+        sys.exit(1)
+    return target
+
+
 def _template_text(name: str, profile: str, ref: str = DEFAULT_INFRA_REF) -> str:
     source_name = "review-pr-bun-playwright.yml" if name == "review-pr.yml" and profile == "bun-playwright" else name
     text = (files("ai_review_ci") / "templates" / source_name).read_text()
     return text.replace("{{ profile }}", profile).replace("{{ ref }}", ref)
 
 
+def _scaffold_text(profile: str, name: str) -> str:
+    _validate_profile(profile)
+    return (files("ai_review_ci") / "scaffolds" / profile / name).read_text()
+
+
+def _write_scaffold(target: pathlib.Path, profile: str) -> None:
+    """Write the profile-local QC delegation scaffold."""
+    _validate_profile(profile)
+    target = _git_repo_root(target)
+    existing = [name for name in SCAFFOLD_FILES if (target / name).exists()]
+    if existing:
+        print(
+            f"FATAL: refusing to overwrite existing scaffold target(s) in {target}: {', '.join(existing)}",
+            file=sys.stderr,
+        )
+        sys.exit(1)
+    for name in SCAFFOLD_FILES:
+        (target / name).write_text(_scaffold_text(profile, name))
+        print(f"installed {name}")
+
+
 def _write_trigger_workflows(target: pathlib.Path, profile: str, ref: str = DEFAULT_INFRA_REF) -> None:
     """Write the repo-owned trigger workflow files."""
     _validate_profile(profile)
-    target = target.resolve()
-    if not (target / ".git").exists():
-        print(f"FATAL: {target} is not a git repository root", file=sys.stderr)
-        sys.exit(1)
+    target = _git_repo_root(target)
 
     wf_dir = target / ".github" / "workflows"
     existing = [n for n in TEMPLATES if (wf_dir / n).exists()]
@@ -88,6 +116,22 @@ def _write_manifest(target: pathlib.Path, profile: str, branch: str, ref: str, r
     print(f"installed {manifest.name}")
 
 
+def _prove_installation(target: pathlib.Path) -> None:
+    """Run doctor as the final install proof."""
+    from ai_review_ci.doctor import doctor_report
+
+    report = doctor_report(target)
+    if report.global_status not in SUCCESSFUL_DOCTOR_STATUSES:
+        print(
+            f"FATAL: ai-review-ci doctor final proof failed with status {report.global_status}",
+            file=sys.stderr,
+        )
+        for finding in report.findings:
+            print(f"- {finding.surface}: {finding.evidence}", file=sys.stderr)
+        sys.exit(1)
+    print(f"doctor final proof: {report.global_status}")
+
+
 def install(
     target: pathlib.Path = pathlib.Path("."),
     *,
@@ -108,12 +152,14 @@ def install(
         release_channel: Human-readable ai-review-ci release channel recorded in the manifest.
     """
     target = target.resolve()
+    _write_scaffold(target, profile)
     _write_trigger_workflows(target, profile, ref)
     _write_manifest(target, profile, branch, ref, release_channel)
     protect_branch(repo, branch, profile)
+    _prove_installation(target)
 
     print(
-        "\nDone. Commit the three files; they are now repo-owned "
+        "\nDone. Commit the installed files; they are now repo-owned "
         "configuration — edit crons, branches, and upstream refs directly.\n"
         "Requirements: GitHub code scanning enabled and branch protection "
         f"requiring the ai-review-ci deterministic gates for {profile}."

@@ -137,9 +137,22 @@ check-delegation profile:
       --profile "{{profile}}"
 
 check-qc-doctor:
-    uv run --project {{infra}} ai-review-ci doctor \
+    #!/usr/bin/env bash
+    set -euo pipefail
+
+    doctor_payload="{{control_repo}}/.ai-review-ci-doctor.json"
+    if uv run --project {{infra}} ai-review-ci doctor \
       --target "{{control_repo}}" \
-      --json > "{{control_repo}}/.ai-review-ci-doctor.json"
+      --json > "$doctor_payload"; then
+        doctor_status=0
+    else
+        doctor_status=$?
+    fi
+
+    printf '```ai-review-ci-doctor-json\n'
+    cat "$doctor_payload"
+    printf '\n```\n'
+    exit "$doctor_status"
 
 check-app-boot profile:
     uv run --project {{infra}} ai-review-ci check-app-boot \
