@@ -1,4 +1,3 @@
-import os
 import pathlib
 import subprocess
 import sys
@@ -17,32 +16,11 @@ def _git_repo(tmp_path: pathlib.Path) -> pathlib.Path:
     return repo
 
 
-def _write_gh_cli_fixture(tmp_path: pathlib.Path) -> pathlib.Path:
-    bin_dir = tmp_path / "bin"
-    bin_dir.mkdir()
-    gh = bin_dir / "gh"
-    gh.write_text(
-        "\n".join(
-            [
-                "#!/usr/bin/env python3",
-                "import json",
-                "import sys",
-                "",
-                "if sys.argv[1:4] == ['api', '--method', 'PUT']:",
-                "    json.load(sys.stdin)",
-                "    print('{}')",
-                "else:",
-                "    raise SystemExit(f'unsupported gh invocation: {sys.argv[1:]}')",
-                "",
-            ]
-        )
-    )
-    gh.chmod(0o755)
-    return bin_dir
-
-
-def _run_cli_install(tmp_path: pathlib.Path, repo: pathlib.Path) -> subprocess.CompletedProcess[str]:
-    env = os.environ | {"PATH": f"{_write_gh_cli_fixture(tmp_path)}:{os.environ['PATH']}"}
+def _run_cli_install(
+    repo: pathlib.Path,
+    *,
+    github_repo: str = "dzackgarza/ai-review-ci-install-target-does-not-exist",
+) -> subprocess.CompletedProcess[str]:
     return subprocess.run(
         [
             sys.executable,
@@ -52,7 +30,7 @@ def _run_cli_install(tmp_path: pathlib.Path, repo: pathlib.Path) -> subprocess.C
             "--target",
             str(repo),
             "--repo",
-            "owner/repo",
+            github_repo,
             "--branch",
             "main",
             "--profile",
@@ -61,7 +39,6 @@ def _run_cli_install(tmp_path: pathlib.Path, repo: pathlib.Path) -> subprocess.C
         text=True,
         capture_output=True,
         check=False,
-        env=env,
     )
 
 
@@ -117,25 +94,48 @@ def test_install_writes_profile_scaffold(tmp_path: pathlib.Path) -> None:
     assert (repo / "justfile").read_text() == (ROOT / "scaffolds" / "rust" / "justfile").read_text()
 
 
-def test_cli_install_writes_scaffold_and_finalizes_with_doctor(tmp_path: pathlib.Path) -> None:
+def test_install_local_files_finalize_with_doctor(tmp_path: pathlib.Path) -> None:
     repo = _git_repo(tmp_path)
     (repo / "pyproject.toml").write_text('[project]\nname = "target"\nversion = "0.1.0"\n')
 
-    result = _run_cli_install(tmp_path, repo)
+    _write_scaffold(repo, "python")
+    _write_trigger_workflows(repo, "python")
+    _write_manifest(repo, "python", "main", "main", "main")
+    _prove_installation(repo)
 
-    assert result.returncode == 0, result.stdout + result.stderr
     assert (repo / "justfile").read_text() == (ROOT / "scaffolds" / "python" / "justfile").read_text()
-    assert "doctor final proof: current" in result.stdout
 
 
-def test_cli_install_fails_when_final_doctor_rejects_target(tmp_path: pathlib.Path) -> None:
+def test_cli_install_uses_real_gh_and_fails_before_final_doctor_for_unavailable_branch_target(
+    tmp_path: pathlib.Path,
+) -> None:
     repo = _git_repo(tmp_path)
+    (repo / "pyproject.toml").write_text('[project]\nname = "target"\nversion = "0.1.0"\n')
 
-    result = _run_cli_install(tmp_path, repo)
+    result = _run_cli_install(repo)
 
     assert result.returncode == 1
-    assert "FATAL: ai-review-ci doctor final proof failed with status misconfigured" in result.stderr
+    assert "FATAL: gh api --method PUT failed:" in result.stderr
+    assert (repo / "justfile").read_text() == (ROOT / "scaffolds" / "python" / "justfile").read_text()
+    assert (repo / ".github" / "workflows" / "review-pr.yml").exists()
+    assert (repo / ".ai-review-ci.toml").exists()
+    assert "doctor final proof" not in result.stdout
     assert "\nDone." not in result.stdout
+
+
+def test_install_final_doctor_rejects_target_without_profile_shape(
+    tmp_path: pathlib.Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    repo = _git_repo(tmp_path)
+    _write_scaffold(repo, "python")
+    _write_trigger_workflows(repo, "python")
+    _write_manifest(repo, "python", "main", "main", "main")
+
+    with pytest.raises(SystemExit):
+        _prove_installation(repo)
+
+    assert "FATAL: ai-review-ci doctor final proof failed with status misconfigured" in capsys.readouterr().err
 
 
 def test_install_final_doctor_rejects_broken_local_delegation(tmp_path: pathlib.Path) -> None:

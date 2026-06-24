@@ -89,6 +89,7 @@ Inspect a target repo with:
 ```bash
 uvx --from git+https://github.com/dzackgarza/ai-review-ci ai-review-ci version
 uvx --from git+https://github.com/dzackgarza/ai-review-ci ai-review-ci doctor --target /path/to/repo --json
+uvx --from git+https://github.com/dzackgarza/ai-review-ci ai-review-ci doctor-schema
 ```
 
 The doctor reports the tool and schema version, target root, origin remote, HEAD, declaration hash, declared and effective profile, required and observed workflow refs, required and observed justfile delegation, branch-protection requirements and observations, profile proof requirements, findings, remediation commands, invalidation inputs, installation state, and dashboard `global_status`. Consumers should use `global_status` rather than re-infer status from workflow filenames.

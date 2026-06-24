@@ -142,6 +142,27 @@ def test_doctor_cli_exits_zero_only_for_current_target(tmp_path: pathlib.Path) -
     assert payload["global_status"] == "current"
 
 
+def test_doctor_schema_cli_exports_producer_owned_contract() -> None:
+    result = subprocess.run(
+        [sys.executable, "-m", "ai_review_ci.cli", "doctor-schema"],
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+
+    schema = json.loads(result.stdout)
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert schema["title"] == "DoctorReport"
+    assert schema["properties"]["global_status"]["enum"] == [
+        "current",
+        "stale",
+        "misconfigured",
+        "unverifiable",
+        "intentional_exception",
+    ]
+    assert schema["additionalProperties"] is False
+
+
 def test_doctor_classifies_outdated_workflow_refs_as_stale(tmp_path: pathlib.Path) -> None:
     project = create_target(tmp_path, "python")
     (project / ".ai-review-ci.toml").write_text(

@@ -210,6 +210,11 @@ def doctor(target: Path, *, json: Annotated[int, Parameter(name="--json", count=
         sys.exit(1)
 
 
+def doctor_schema() -> None:
+    """Print the JSON Schema for the machine-readable doctor payload."""
+    print(jsonlib.dumps(DoctorReport.model_json_schema(), indent=2))
+
+
 def version_command() -> None:
     """Print the installed ai-review-ci package version."""
     print(version("ai-review-ci"))
