@@ -85,6 +85,12 @@ _coverage:
 	#!/usr/bin/env bash
 	set -euo pipefail
 	unset NODE_ENV
+	# Playwright (e2e-covered) projects prove coverage through the app-boot e2e run in
+	# test-ci, not a unit lcov. Unit-lcov diff-cover does not apply to them.
+	if [ -f playwright.config.ts ]; then
+		echo "Playwright project: coverage is proven by the app-boot e2e run; unit lcov is not applicable."
+		exit 0
+	fi
 	if jq -e '(.devDependencies.vitest // .dependencies.vitest // empty)' package.json >/dev/null 2>&1; then
 		bun run test -- --coverage --coverage.reporter=lcov
 		cp coverage/lcov.info lcov.info
@@ -104,6 +110,10 @@ _coverage:
 _diff-cover: _coverage
 	#!/usr/bin/env bash
 	set -euo pipefail
+	if [ -f playwright.config.ts ]; then
+		echo "Playwright project: diff-cover skipped; coverage is proven via the app-boot e2e run."
+		exit 0
+	fi
 	if [ ! -f lcov.info ]; then
 		echo "ERROR: diff-cover: lcov.info not produced — coverage step did not produce output."
 		"{{artifacts}}/scripts/emit-triage-directive.sh"
