@@ -182,6 +182,11 @@ _no-bypass:
 		if [ ! -f "$file" ]; then
 			continue
 		fi
+		# Documentation/prose files cannot bypass QC; their bypass-token strings are
+		# inert text (e.g. guidance that forbids @ts-ignore). Skip them.
+		case "$file" in
+			*.md|*.markdown|*.mdx) continue ;;
+		esac
 		if ! staged_diff=$(git diff --cached -U0 -- "$file" 2>/dev/null); then
 			continue
 		fi
