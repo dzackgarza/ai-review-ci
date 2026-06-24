@@ -136,10 +136,10 @@ _check-envrc:
 		"{{artifacts}}/scripts/emit-triage-directive.sh"
 		exit 1
 	fi
-	# 3. No .env files — they are env var definitions outside .envrc
-	if find . -maxdepth 3 -name '.env*' -not -name '.envrc' -type f -not -path '*/.git/*' -not -path '*/node_modules/*' 2>/dev/null | grep -q .; then
+	# 3. No .env files except *.example templates — real env var definitions belong in .envrc
+	if find . -maxdepth 3 -name '.env*' -not -name '.envrc' -not -name '*.example' -type f -not -path '*/.git/*' -not -path '*/node_modules/*' 2>/dev/null | grep -q .; then
 		echo "ERROR: Found .env files — these are env var definitions that belong in .envrc."
-		find . -maxdepth 3 -name '.env*' -not -name '.envrc' -type f -not -path '*/.git/*' -not -path '*/node_modules/*' 2>/dev/null
+		find . -maxdepth 3 -name '.env*' -not -name '.envrc' -not -name '*.example' -type f -not -path '*/.git/*' -not -path '*/node_modules/*' 2>/dev/null
 		echo "       Move these variables to .envrc and delete the .env files."
 		"{{artifacts}}/scripts/emit-triage-directive.sh"
 		exit 1
