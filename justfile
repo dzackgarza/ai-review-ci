@@ -47,6 +47,11 @@ test:
 test-ci:
     just -f {{repo}}/justfiles/qc-tooling.just -d . test-ci
 
+# Ambient gate: full-repo deferred-debt audit, run on a schedule (ambient.yml),
+# never in the PR/push gate. Delegates to the qc-tooling profile.
+ambient:
+    just -f {{repo}}/justfiles/qc-tooling.just -d . ambient
+
 # Install the complete QC enforcement surface into a target repo.
 install repo branch profile target=".":
     uvx --from . ai-review-ci install --target {{target}} --repo {{repo}} --branch {{branch}} --profile {{profile}}

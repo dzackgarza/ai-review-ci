@@ -38,7 +38,7 @@ Preserved behavior:
 
 ## Execution Structure
 
-#52 establishes local gate tiers. #53 separates PR diff gates from ambient repo audits. #54 separates agent-driven review from deterministic CI. #55 defines non-blocking debt tracking without quarantine. #56 closes only when these pieces produce one coherent signal model.
+Issue #52 establishes local gate tiers. #53 separates PR diff gates from ambient repo audits. #54 separates agent-driven review from deterministic CI. #55 defines non-blocking debt tracking without quarantine. #56 closes only when these pieces produce one coherent signal model.
 
 ## Milestone Tree
 
