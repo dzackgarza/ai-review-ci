@@ -1,0 +1,91 @@
+"""Behavioral tests for the custom semgrep rules in ``tool-configs/semgrep.yml``.
+
+These run the *real* rule definitions (parsed out of the shipped config, not a
+copy) against annotated fixtures, so a rule edit that changes what fires is
+caught here rather than only in a downstream repo's gate.
+
+Annotation convention (semgrep's own): a ``// ruleid: <id>`` comment marks the
+following line as an expected match; ``// ok: <id>`` marks it as an expected
+non-match. The test asserts the rules flag exactly the ``ruleid`` lines and
+none of the ``ok`` lines.
+"""
+
+import json
+import pathlib
+import re
+import subprocess
+import tempfile
+
+import yaml
+
+ROOT = pathlib.Path(__file__).resolve().parents[1]
+SEMGREP_CONFIG = ROOT / "tool-configs" / "semgrep.yml"
+FIXTURES = pathlib.Path(__file__).resolve().parent / "fixtures" / "semgrep"
+
+# The fail-soft-default rules whose precision #120 is about. Position, not the
+# bare ``||`` / ``??`` operator, must be the signal.
+RUNTIME_DEFAULT_RULES = ("ts-no-or-default", "no-nullish-coalescing")
+
+_ANNOTATION = re.compile(r"//\s*(ruleid|ok):\s*([\w-]+)")
+
+
+def _rules_subset(ids: tuple[str, ...]) -> list[dict[str, object]]:
+    rules = [r for r in yaml.safe_load(SEMGREP_CONFIG.read_text())["rules"] if r["id"] in ids]
+    assert {r["id"] for r in rules} == set(ids), f"missing rules in {SEMGREP_CONFIG}: {set(ids) - {r['id'] for r in rules}}"
+    return rules
+
+
+def _expected(files: list[pathlib.Path]) -> tuple[set[tuple[str, int]], set[tuple[str, int]]]:
+    """(expected-match, expected-clean) line sets, keyed by (filename, line).
+
+    Each annotation refers to the line immediately below the comment.
+    """
+    flag: set[tuple[str, int]] = set()
+    clean: set[tuple[str, int]] = set()
+    for path in files:
+        for i, line in enumerate(path.read_text().splitlines()):
+            match = _ANNOTATION.search(line)
+            if match:
+                (flag if match.group(1) == "ruleid" else clean).add((path.name, i + 2))
+    return flag, clean
+
+
+def _semgrep_matches(rules: list[dict[str, object]], files: list[pathlib.Path]) -> set[tuple[str, int]]:
+    with tempfile.NamedTemporaryFile("w", suffix=".yml", delete=False) as tmp:
+        yaml.safe_dump({"rules": rules}, tmp)
+        config = tmp.name
+    proc = subprocess.run(
+        [
+            "uvx",
+            "--from",
+            "semgrep",
+            "semgrep",
+            "scan",
+            f"--config={config}",
+            "--scan-unknown-extensions",
+            "--json",
+            *(str(f) for f in files),
+        ],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert proc.stdout, f"semgrep produced no output (rc={proc.returncode}):\n{proc.stderr}"
+    results = json.loads(proc.stdout)["results"]
+    return {(pathlib.Path(r["path"]).name, r["start"]["line"]) for r in results}
+
+
+def test_runtime_default_rules_flag_only_value_default_positions() -> None:
+    """#120: ``||`` / ``??`` flag fail-soft defaults, not boolean connectives."""
+    fixtures = sorted(FIXTURES.glob("runtime_default.ts*"))
+    assert fixtures, f"no fixtures found in {FIXTURES}"
+
+    expected_flag, expected_clean = _expected(fixtures)
+    assert expected_flag and expected_clean, "fixtures must annotate both ruleid and ok cases"
+
+    matched = _semgrep_matches(_rules_subset(RUNTIME_DEFAULT_RULES), fixtures)
+
+    false_negatives = sorted(expected_flag - matched)
+    false_positives = sorted(matched - expected_flag)
+    assert not false_negatives, f"value-default position(s) not flagged: {false_negatives}"
+    assert not false_positives, f"boolean-connective position(s) wrongly flagged: {false_positives}"
