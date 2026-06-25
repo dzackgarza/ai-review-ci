@@ -220,7 +220,7 @@ def test_trigger_inputs_are_declared_by_reusable_workflow(template: str, profile
             continue
         checked_a_reusable_call = True
         declared = _workflow_call_inputs(target)
-        passed = set((job.get("with") or {}))
+        passed = set(job.get("with") or {})
         undeclared = passed - declared
         assert not undeclared, (
             f"{template} (profile={profile}) job {job_name!r} passes input(s) "

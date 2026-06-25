@@ -1,64 +1,71 @@
 ## Intended Result
 
-Stabilize delegated QC rule precision so downstream repositories can satisfy global QC without false positives, stale caller-root assumptions, or generic suppression escape hatches.
+Reduce owned parsing, validation, and glue code inside ai-review-ci where standard library facilities, typed models, or narrower schema-owned boundaries can carry the obligation more clearly.
 
-The milestone preserves strict policy enforcement while making rule precision mechanically testable through the actual delegated-rule paths.
+The milestone should remove avoidable custom surface without deleting forensic evidence of real requirements or weakening the QC contract.
 
 ## Scope
 
 Included:
 
-- Recast the just 1.46 `JUST_WORKING_DIRECTORY` issue as a regression/verification target for delegated caller-root behavior.
-- Restrict `ts-no-or-default` / `no-nullish-coalescing` so they block value defaults but admit boolean-connective positions (folds in #120).
-- Decide the double-cast boundary form: there is **no** sanctioned form — block every double cast and route to architectural remediation.
-- Keep downstream caller-root proof in real target repositories or fixtures, not ai-review-ci self-scans.
+- Inventory and centralize GitHub API response parsing into typed models or one schema-owned parser.
+- Replace repeated TOML shape validation with typed config models or one schema-owned parser.
+- Replace `_ordered_unique` only if it is still plain ordered deduplication.
+- Retire `merge_ini.py` if caller inventory proves it unused, or document and test the retained boundary if it is still needed.
 
 Excluded:
 
-- Weakening `POLICY.RUNTIME_DEFAULT` or `POLICY.NO_TYPE_ESCAPE`.
-- Adding broad suppressions, checker disables, or local downstream overrides.
-- Treating the stale current-repo absence of `JUST_WORKING_DIRECTORY` as proof that downstream regressions are impossible.
+- Broad style refactors not tied to owned-surface reduction.
+- Deleting glue before transferring or invalidating its original burden.
+- Source-text-only tests that prove a symbol changed without proving behavior.
 
 Preserved behavior:
 
-- Global QC remains authoritative; downstream repos delegate rather than reimplement.
-- Correct fail-loud and typed-boundary code remains admissible when proved through the real rule path.
+- Existing review-runner and QC behavior remains semantically equivalent unless a child issue explicitly changes it.
+- Config/API validation fails loudly at owned boundaries.
 
 ## GitHub Tracking
 
-- Milestone: [Delegated QC rule precision](https://github.com/dzackgarza/ai-review-ci/milestone/4)
+- Milestone: [Owned surface reduction](https://github.com/dzackgarza/ai-review-ci/milestone/5)
 - Development links:
-  - Closes #43
-  - Closes #17
-  - Closes #45
-  - Closes #46
-  - Closes #120
+  - Closes #44
+  - Closes #47
+  - Closes #48
+  - Closes #49
+  - Closes #50
 
 ## Execution Structure
 
-#17 is handled as a caller-root regression fixture, not as a current-repo grep finding. #45/#120 and #46 are independent rule-precision changes. #43 closes when the delegated rule tests prove all three without weakening global policy.
+Every child issue starts with current caller/inventory evidence. #47 and #48 create typed/schema boundaries. #49 is a small standard-idiom replacement only if semantics are still plain ordered dedupe. #50 either deletes unused INI merge glue with proof or keeps it with a documented boundary and coverage. #44 closes only when the owned-surface reductions are integrated and evidenced.
 
 ## Milestone Tree
 
-- [x] **M1 - Delegated QC compatibility and deterministic rule precision** ([#43](https://github.com/dzackgarza/ai-review-ci/issues/43))
-  - Complete when: delegated rule behavior is precise enough that correct downstream code can pass while policy violations still fail through the actual QC path.
-  - Evidence: the three children below, each with a fixture-backed test through the real rule / just path.
+- [x] **M1 - Owned surface reduction in review-runner internals** ([#44](https://github.com/dzackgarza/ai-review-ci/issues/44))
+  - Complete when: avoidable owned parsing/config/glue surfaces are replaced, retired, or explicitly justified with boundary tests.
+  - Evidence: #47 (GitHub-API parsing centralized into typed models, 14/14 `test_context.py`), #49 (ordered-unique → `dict.fromkeys`), #50 (dead `merge_ini.py` retired), #48 (disposed — already schema-owned; conversion would add surface).
 
-- [x] **F1 - Delegated caller-root regression proof** ([#17](https://github.com/dzackgarza/ai-review-ci/issues/17))
-  - Behavior: a bare `just <recipe>` in a scaffold consumer parses and routes under just >= 1.46 without exporting `JUST_WORKING_DIRECTORY`, which that version binds to `-d/--working-directory` (then requiring `--justfile`).
-  - Acceptance: bare entrypoint routes for every scaffold; no scaffold reintroduces the export; the collision is reproduced when the var is set.
-  - Evidence: `7dfd99d`, `97a4558`, `243fe16` — `test_python_scaffold_bare_just_test_reaches_downstream_preflight_without_working_directory_env`, `..._breaks_when_just_working_directory_is_exported`, `test_scaffold_bare_just_entrypoint_survives_working_directory_binding` (×5 scaffolds), `test_scaffold_does_not_export_working_directory_routing_hint`.
+- [x] **W1 - Typed GitHub API response parsing** ([#47](https://github.com/dzackgarza/ai-review-ci/issues/47))
+  - Behavior: the per-field code-scanning-alert and review-thread extraction in `context.py` (the bespoke `_string`/`_integer`/`_mapping`/`_alert_*` helpers) is replaced by one validated boundary in `src/ai_review_ci/github_api.py` (`CodeScanningAlert`, `ReviewThread`), parsed via a fail-loud `_parse`. Raw alert dicts are still forwarded verbatim to the SARIF carry-forward payload.
+  - Acceptance: malformed and accepted shapes are tested at the consumer boundary.
+  - Verification: the existing `tests/test_context.py` is the unchanged oracle — accept cases, reject cases (empty `rule.id`, string `start_line`, non-string dismissed comment), and the empty-comment-thread-without-path edge. **14/14 pass.** `context.py`/`github_api.py` import only stdlib + pydantic (not `models.py`), so they run on Python 3.13 where pydantic builds — verified there in isolation; pydantic-core validation semantics are identical on 3.14.
 
-- [x] **W1 - Runtime-default rule precision** ([#45](https://github.com/dzackgarza/ai-review-ci/issues/45), folds in [#120](https://github.com/dzackgarza/ai-review-ci/issues/120))
-  - Behavior: `ts-no-or-default` and `no-nullish-coalescing` flag only value-default positions (right operand is a literal stub), not boolean connectives in guards/predicates/JSX.
-  - Acceptance: blocking value defaults and admitting boolean guards both proven — through the native rule path and the real `_semgrep` recipe.
-  - Evidence: `f3fc8b2` — `tests/test_semgrep_rules.py::test_runtime_default_rules_flag_only_value_default_positions` (annotated fixtures: 7 defaults flagged, 0 boolean-connective FPs vs 8 before) plus `test_semgrep_blocks_typescript_value_defaults` / `test_semgrep_allows_fail_loud_typescript_guards` through the gate.
+- [x] **W2 - Typed TOML/config parsing — disposition: no conversion warranted** ([#48](https://github.com/dzackgarza/ai-review-ci/issues/48))
+  - Inventory of "repeated manual TOML shape validation":
+    - `tool-artifacts/scripts/python_qc_metadata.py` — `_optional_table` / `_required_list` / `_string_list`: already one small, fail-loud, schema-owned parser, exercised by `tests/test_python_qc_metadata.py`.
+    - `tool-artifacts/scripts/read_qc_excludes.py` — `load_excludes`: a single list-of-strings validator, fail-loud, covered by `tests/test_justfiles.py::test_sync_qc_excludes_*`.
+    - `src/ai_review_ci/policy_index.py` / `doctor.py` — thin single-load TOML (`VENDOR.toml`, manifest) consumed by name; not repeated shape validation.
+  - Disposition: the standalone QC scripts run via `uv run --script` (PEP 723) with **no pydantic dependency**. Converting them to pydantic models would add a per-run dependency to restate `list[str]`-shaped validation — that *increases* owned/operational surface, the opposite of the milestone goal ("replace … **where it reduces owned surface**"). The existing per-script validators already are the schema-owned parser the issue asks for. No conversion is made; closed as already-satisfied. (Mirrors the #46 call: don't add a mechanism that doesn't pay for itself.)
 
-- [x] **W2 - Double-cast boundary form: none** ([#46](https://github.com/dzackgarza/ai-review-ci/issues/46))
-  - Decision: there is **no** sanctioned double-cast form. A justification comment or `boundaryCast` escape is reward-hackable (confabulate a reason) and forces QC to adjudicate reasons. Every double cast — `as unknown as`, `as any as`, parenthesized, comment-"justified" — stays blocked and routes to `REMEDIATE.STRUCTURED_TYPES`.
-  - Acceptance: arbitrary erasure blocked; a justification comment is not an escape hatch; single casts do not fire.
-  - Evidence: `97a4558` — `no-double-cast` rule documents the decision; `tests/test_semgrep_rules.py::test_no_double_cast_blocks_every_erasure_with_no_escape_hatch`.
+- [x] **W3 - Ordered-unique standard idiom** ([#49](https://github.com/dzackgarza/ai-review-ci/issues/49))
+  - Behavior: bespoke ordered-unique accumulation in `python_qc_metadata.py` (confirmed plain ordered dedup) replaced with `list(dict.fromkeys(...))`, inlined at all three call sites; helper removed.
+  - Acceptance: order preservation + duplicate removal covered through the real public functions.
+  - Evidence: `239bf4e` — `tests/test_python_qc_metadata.py` (first-party modules, dependency-group requirements, PEP 723 requirements). Run locally (stdlib-only script).
+
+- [x] **W4 - INI merge wrapper disposition** ([#50](https://github.com/dzackgarza/ai-review-ci/issues/50))
+  - Behavior: `merge_ini.py` retired — caller inventory across justfiles, workflows, scripts, docs, and the package found no invocation.
+  - Acceptance: deletion backed by an empty caller inventory.
+  - Evidence: `239bf4e` — `grep -rn merge_ini` returns only the (now-removed) file and this contract; file deleted.
 
 ## Automated Gates
 
-The rule-precision children are proven through the real rule / just paths with fixtures. Full-suite proof is the CI boundary (the local container runs CPython 3.14.0rc2, which the pinned pydantic-core cannot import; the package needs 3.14 deferred annotations, so 3.13 cannot substitute). Tests that do not import the package were run locally against semgrep 1.168.0 and just 1.54.0.
+This PR remains draft until every checklist item has commit/evidence anchors, current caller inventories are recorded for deletion/replacement decisions, boundary tests prove behavior, review residue is resolved or moved to a separate debt issue, and GitHub checks pass.

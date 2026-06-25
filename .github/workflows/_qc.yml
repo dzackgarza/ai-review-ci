@@ -62,12 +62,15 @@ jobs:
         uses: astral-sh/setup-uv@v6
 
       - name: Install just
-        run: |
-          mkdir -p "$RUNNER_TEMP/bin"
-          VERSION=$(curl -sL https://api.github.com/repos/casey/just/releases/latest | jq -r '.tag_name')
-          curl -sL "https://github.com/casey/just/releases/download/${VERSION}/just-${VERSION}-x86_64-unknown-linux-musl.tar.gz" \
-            | tar -xzf - -C "$RUNNER_TEMP/bin" just
-          echo "$RUNNER_TEMP/bin" >> "$GITHUB_PATH"
+        # Use the maintained action rather than a hand-rolled `curl
+        # releases/latest | tar` pipeline: the bare API call is unauthenticated,
+        # so under GitHub's rate limit it returns no tag_name, the download URL
+        # becomes malformed, and `tar` fails on the non-gzip error page. The
+        # action resolves the version through GITHUB_TOKEN (no anonymous rate
+        # limit) and fails loud on a bad download.
+        uses: extractions/setup-just@v3
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
 
       - name: Install ripgrep
         # The QC file-discovery recipes (_python-qc-files etc.) shell out to `rg`.
