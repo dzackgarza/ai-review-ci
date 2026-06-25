@@ -1797,3 +1797,81 @@ def test_rust_normalization_formats_nested_manifest_project(
     output = result.stdout + result.stderr
     assert result.returncode == 0, output
     assert (source_dir / "lib.rs").read_text() == "pub fn value() -> u8 {\n    42\n}\n"
+
+
+# Regression for #17: just >= 1.46 binds JUST_WORKING_DIRECTORY to
+# -d/--working-directory, which then requires --justfile — so any consumer that
+# exported JUST_WORKING_DIRECTORY (the old delegated-gate routing hint) could no
+# longer run a bare `just test`. The scaffolds resolve this by routing with an
+# explicit `-d .` and never exporting JUST_WORKING_DIRECTORY, so the bare
+# entrypoint keeps working. These tests lock both halves of that contract.
+
+SCAFFOLD_DELEGATES = {
+    "python": "python.just",
+    "rust": "rust.just",
+    "bun": "bun.just",
+    "bun-playwright": "bun.just",
+    "sage": "sage.just",
+}
+
+
+@pytest.mark.parametrize("language", sorted(SCAFFOLD_DELEGATES))
+@pytest.mark.parametrize("recipe", ["test", "test-ci"])
+def test_scaffold_bare_just_entrypoint_survives_working_directory_binding(
+    tmp_path: pathlib.Path,
+    language: str,
+    recipe: str,
+) -> None:
+    """A bare `just <recipe>` in a scaffold consumer parses and routes under
+    just >= 1.46 without a JUST_WORKING_DIRECTORY export (#17)."""
+    project = tmp_path / f"{language}-project"
+    project.mkdir()
+    (project / "justfile").write_text((ROOT / "scaffolds" / language / "justfile").read_text())
+
+    clean_env = {k: v for k, v in os.environ.items() if k != "JUST_WORKING_DIRECTORY"}
+    result = subprocess.run(
+        ["just", "--dry-run", recipe],
+        cwd=project,
+        env=clean_env,
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+    output = result.stdout + result.stderr
+    # The bug manifested as a just arg-parse failure ("required ... --justfile")
+    # before any recipe ran; a clean parse + route is the fix.
+    assert result.returncode == 0, output
+    assert f"-f ~/ai-review-ci/justfiles/{SCAFFOLD_DELEGATES[language]}" in output
+    assert "-d ." in output
+    assert recipe in output
+
+
+@pytest.mark.parametrize("language", sorted(SCAFFOLD_DELEGATES))
+def test_scaffold_does_not_export_working_directory_routing_hint(language: str) -> None:
+    """No scaffold may reintroduce a JUST_WORKING_DIRECTORY export: under just
+    >= 1.46 that env var alone breaks bare `just` argument parsing (#17)."""
+    scaffold = (ROOT / "scaffolds" / language / "justfile").read_text()
+    assert "JUST_WORKING_DIRECTORY" not in scaffold
+
+
+def test_working_directory_binding_breaks_bare_just_when_env_var_is_set(
+    tmp_path: pathlib.Path,
+) -> None:
+    """Document the just >= 1.46 collision the scaffolds avoid: with
+    JUST_WORKING_DIRECTORY set, a bare `just` invocation fails at argument
+    parsing. This is why the routing hint must never be exported (#17)."""
+    project = tmp_path / "python-project"
+    project.mkdir()
+    (project / "justfile").write_text((ROOT / "scaffolds" / "python" / "justfile").read_text())
+
+    result = subprocess.run(
+        ["just", "--dry-run", "test"],
+        cwd=project,
+        env={**os.environ, "JUST_WORKING_DIRECTORY": str(project)},
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+    output = result.stdout + result.stderr
+    assert result.returncode != 0, output
+    assert "--justfile" in output

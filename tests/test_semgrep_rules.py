@@ -75,17 +75,27 @@ def _semgrep_matches(rules: list[dict[str, object]], files: list[pathlib.Path]) 
     return {(pathlib.Path(r["path"]).name, r["start"]["line"]) for r in results}
 
 
-def test_runtime_default_rules_flag_only_value_default_positions() -> None:
-    """#120: ``||`` / ``??`` flag fail-soft defaults, not boolean connectives."""
-    fixtures = sorted(FIXTURES.glob("runtime_default.ts*"))
-    assert fixtures, f"no fixtures found in {FIXTURES}"
+def _assert_rules_match_annotations(rule_ids: tuple[str, ...], glob: str) -> None:
+    fixtures = sorted(FIXTURES.glob(glob))
+    assert fixtures, f"no fixtures match {glob} in {FIXTURES}"
 
     expected_flag, expected_clean = _expected(fixtures)
-    assert expected_flag and expected_clean, "fixtures must annotate both ruleid and ok cases"
+    assert expected_flag and expected_clean, f"{glob}: fixtures must annotate both ruleid and ok cases"
 
-    matched = _semgrep_matches(_rules_subset(RUNTIME_DEFAULT_RULES), fixtures)
+    matched = _semgrep_matches(_rules_subset(rule_ids), fixtures)
 
     false_negatives = sorted(expected_flag - matched)
     false_positives = sorted(matched - expected_flag)
-    assert not false_negatives, f"value-default position(s) not flagged: {false_negatives}"
-    assert not false_positives, f"boolean-connective position(s) wrongly flagged: {false_positives}"
+    assert not false_negatives, f"expected-flag line(s) not flagged: {false_negatives}"
+    assert not false_positives, f"expected-clean line(s) wrongly flagged: {false_positives}"
+
+
+def test_runtime_default_rules_flag_only_value_default_positions() -> None:
+    """#120: ``||`` / ``??`` flag fail-soft defaults, not boolean connectives."""
+    _assert_rules_match_annotations(RUNTIME_DEFAULT_RULES, "runtime_default.ts*")
+
+
+def test_no_double_cast_blocks_every_erasure_with_no_escape_hatch() -> None:
+    """#46: all double casts are blocked; a justification comment is not an
+    escape hatch (it would be reward-hackable). Single casts do not fire."""
+    _assert_rules_match_annotations(("no-double-cast",), "no_double_cast.ts")
