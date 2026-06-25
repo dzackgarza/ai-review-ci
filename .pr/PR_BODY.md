@@ -44,24 +44,24 @@ Every child issue starts with current caller/inventory evidence. #47 and #48 cre
   - Complete when: avoidable owned parsing/config/glue surfaces are replaced, retired, or explicitly justified with boundary tests.
 
 - [ ] **W1 - Typed GitHub API response parsing** ([#47](https://github.com/dzackgarza/ai-review-ci/issues/47))
-  - Behavior: repeated GitHub API dict extraction is replaced or centralized through typed models where it reduces owned surface.
+  - Behavior: repeated GitHub API dict extraction in `context.py` / `threads.py` is replaced or centralized through typed models where it reduces owned surface.
   - Acceptance: malformed and accepted response shapes are tested at the consumer boundary.
-  - Evidence: pending parser/model diffs and boundary tests.
+  - Status: NOT STARTED. This is package code that imports `models.py`; pydantic `BaseModel` cannot build on the local 3.14rc2 interpreter, so the boundary tests can only be authored against CI. Held for a CI-verifiable pass to avoid shipping an unrunnable core-parser refactor.
 
 - [ ] **W2 - Typed TOML/config parsing** ([#48](https://github.com/dzackgarza/ai-review-ci/issues/48))
   - Behavior: repeated manual TOML shape validation is replaced by typed config models or one schema-owned parser.
   - Acceptance: valid config, missing required keys, and wrong-type values fail through the real script/parser boundary.
-  - Evidence: pending parser/model diffs and boundary tests.
+  - Status: NOT STARTED. Standalone-script validation (`read_qc_excludes.py`, the `_optional_table`/`_string_list` helpers) is locally verifiable; the package-side parsers (`doctor.py`, `policy_index.py`) are BaseModel-bound and CI-only. Held alongside W1.
 
-- [ ] **W3 - Ordered-unique standard idiom** ([#49](https://github.com/dzackgarza/ai-review-ci/issues/49))
-  - Behavior: replace bespoke ordered-unique accumulation only if current semantics are still plain ordered deduplication.
-  - Acceptance: order preservation and duplicate removal are covered by focused tests or existing script-level proof.
-  - Evidence: pending inventory, diff, and tests.
+- [x] **W3 - Ordered-unique standard idiom** ([#49](https://github.com/dzackgarza/ai-review-ci/issues/49))
+  - Behavior: bespoke ordered-unique accumulation in `python_qc_metadata.py` (confirmed plain ordered dedup) replaced with `list(dict.fromkeys(...))`, inlined at all three call sites; helper removed.
+  - Acceptance: order preservation + duplicate removal covered through the real public functions.
+  - Evidence: `239bf4e` — `tests/test_python_qc_metadata.py` (first-party modules, dependency-group requirements, PEP 723 requirements). Run locally (stdlib-only script).
 
-- [ ] **W4 - INI merge wrapper disposition** ([#50](https://github.com/dzackgarza/ai-review-ci/issues/50))
-  - Behavior: retire `merge_ini.py` if caller inventory remains empty; otherwise justify the retained boundary and test it.
-  - Acceptance: deletion is backed by caller inventory, or retention has a specific constraint and coverage.
-  - Evidence: pending caller search output, deletion/retention diff, and verification.
+- [x] **W4 - INI merge wrapper disposition** ([#50](https://github.com/dzackgarza/ai-review-ci/issues/50))
+  - Behavior: `merge_ini.py` retired — caller inventory across justfiles, workflows, scripts, docs, and the package found no invocation.
+  - Acceptance: deletion backed by an empty caller inventory.
+  - Evidence: `239bf4e` — `grep -rn merge_ini` returns only the (now-removed) file and this contract; file deleted.
 
 ## Automated Gates
 
