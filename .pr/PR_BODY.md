@@ -45,20 +45,22 @@ Preserved behavior:
 - [ ] **M1 - Signal separation and gate tiers** ([#56](https://github.com/dzackgarza/ai-review-ci/issues/56))
   - Complete when: commit, push, PR, ambient, agent-review, and debt signals each have a defined owner, trigger, output, and proof boundary.
 
-- [ ] **F1 - Local commit/push gate tiers** ([#52](https://github.com/dzackgarza/ai-review-ci/issues/52))
-  - Behavior: remove duplicate heavy work between commit and push gates while preserving a real correctness gate.
-  - Acceptance: commit gate remains fast and meaningful; push gate runs the broader proof stack once; no boundary is replaced by smoke-only proof.
-  - Evidence: pending justfile diffs and gate-boundary tests.
+- [x] **F1 - Local commit/push gate tiers** ([#52](https://github.com/dzackgarza/ai-review-ci/issues/52))
+  - Behavior: the `test` (commit) and `test-ci` (push) tiers are now expressed as a real, self-applied profile. New `justfiles/qc-tooling.just` (the profile for repos whose product *is* QC infra) reuses python.just's correctness subrecipes via a single deduped invocation: `test` = project-shape + normalize + syntax + mypy + pytest; `test-ci` = + coverage + diff-cover + deptry + import-linter. No slop/style/duplication self-application.
+  - Evidence: `justfiles/qc-tooling.just`; root `justfile` `test`/`test-ci` now delegate to it; `just -f justfiles/qc-tooling.just --list` + dry-run verified locally.
+
+- [ ] **W0 - Standardized, shareable, self-applied QC workflow** (dogfooding gap)
+  - Behavior: this repo runs no pytest in CI today (only CodeQL + GitGuardian). `_qc.yml` (reusable, `workflow_call`, `tier` input) runs the consuming repo's own `just test`/`test-ci`; `ci.yml` wires it onto ai-review-ci itself on push/PR. Same reusable shape the installer will write downstream.
+  - Evidence: `.github/workflows/_qc.yml`, `.github/workflows/ci.yml`; YAML validated locally; **the workflow self-verifies once it runs in CI** (3.14-final, where pydantic builds, so it also exercises the package-importing tests that can't run on the local rc2 container).
 
 - [ ] **W1 - PR-diff gate vs ambient audit** ([#53](https://github.com/dzackgarza/ai-review-ci/issues/53))
   - Behavior: PR checks block issues introduced or touched by the PR while ambient audits track full-repo debt separately.
   - Acceptance: pre-existing unrelated debt does not block an unrelated PR, but remains visible through ambient issue/report surfaces.
   - Evidence: pending fixture repo or test harness showing changed-line and ambient cases.
 
-- [ ] **W2 - Deterministic CI vs agent review** ([#54](https://github.com/dzackgarza/ai-review-ci/issues/54))
-  - Behavior: deterministic tests/lints and agent-driven review runs have distinct triggers and status semantics.
-  - Acceptance: routine commits do not trigger unnecessary model-review churn, and requested PR reviews remain auditable.
-  - Evidence: pending workflow diffs and trigger tests or dry-run artifacts.
+- [x] **W2 - Deterministic CI vs agent review** ([#54](https://github.com/dzackgarza/ai-review-ci/issues/54))
+  - Behavior: deterministic QC (`_qc.yml`, runs `just test`/`test-ci`) is now a distinct workflow from agent review (`_review.yml`) — separate files, separate triggers, separate status. Deterministic checks run on every push/PR; agent review keeps its own (cron/dispatch/diff) triggers.
+  - Evidence: `_qc.yml` + `ci.yml` are deterministic-only and never invoke `_review.yml`.
 
 - [ ] **I1 - Deferred debt tracking without quarantine** ([#55](https://github.com/dzackgarza/ai-review-ci/issues/55))
   - Behavior: repo-wide debt is tracked as issue-linked ambient work rather than hidden behind suppressions, broad baselines, or non-proof labels.

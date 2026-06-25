@@ -1,4 +1,4 @@
-qc-type := "python"
+qc-type := "qc-tooling"
 repo := justfile_directory()
 global_hooks_source_dir := repo / "global-hooks"
 repo_hooks_source_dir := repo / "repo-hooks"
@@ -17,6 +17,7 @@ check: _normalize
     just -f ci/runner.just --list >/dev/null
     just -f justfiles/shared.just --list >/dev/null
     just -f justfiles/python.just --list >/dev/null
+    just -f justfiles/qc-tooling.just --list >/dev/null
     just -f justfiles/bun.just --list >/dev/null
     just -f justfiles/rust.just --list >/dev/null
     just -f justfiles/sage.just --list >/dev/null
@@ -35,13 +36,16 @@ sync-policy-index:
       --vendor-root reviews/vendor/policy-index \
       --ref {{policy_index_ref}}
 
-# Commit gate (correctness + normalization): routes through the Python QC chain
+# Commit gate: this repo is QC tooling, so it runs the qc-tooling profile
+# (correctness + normalization, without the product-only slop/style gates it
+# ships for downstream). Same standardized recipe shape as every other repo.
 test:
-    just -f {{repo}}/justfiles/python.just -d . test
+    just -f {{repo}}/justfiles/qc-tooling.just -d . test
 
-# Push/CI gate (full style/slop/coverage stack): routes through the Python QC chain
+# Push/CI gate: qc-tooling profile + changed-line coverage / dependency / import
+# boundary checks. Still no self-applied slop/style stack.
 test-ci:
-    just -f {{repo}}/justfiles/python.just -d . test-ci
+    just -f {{repo}}/justfiles/qc-tooling.just -d . test-ci
 
 # Install the complete QC enforcement surface into a target repo.
 install repo branch profile target=".":

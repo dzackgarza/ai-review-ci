@@ -1,0 +1,26 @@
+name: CI
+
+# ai-review-ci dogfoods its own standardized QC: the same reusable _qc.yml that
+# downstream repos install. It runs this repo's `just test` / `just test-ci`,
+# which delegate to the qc-tooling profile (correctness without the product-only
+# slop/style gates ai-review-ci ships for others).
+
+on:
+  push:
+    branches: [main]
+  pull_request: {}
+
+jobs:
+  commit-tier:
+    uses: ./.github/workflows/_qc.yml
+    permissions:
+      contents: read
+    with:
+      tier: test
+
+  push-tier:
+    uses: ./.github/workflows/_qc.yml
+    permissions:
+      contents: read
+    with:
+      tier: test-ci
