@@ -11,7 +11,8 @@ Subcommands:
 - check-delegation — fail if a target justfile stops delegating to global QC
 - check-app-boot   — run the target repo's delegated bun-playwright gate
 - check-review-threads — require evidence-backed ai-review thread resolution
-- protect-branch   — apply required branch protection contexts
+- protect-branch   — apply required branch protection contexts (downstream profile)
+- self-protect     — apply ai-review-ci's own contract to its default branch
 - doctor-schema    — dump the JSON Schema for the doctor payload
 - validate-report  — validate a candidate report and write the artifact
 - report-schema    — dump the JSON Schema for a report type
@@ -33,6 +34,7 @@ from ai_review_ci.gates import (
     check_profile,
     check_review_threads,
     protect_branch,
+    self_protect_branch,
 )
 from ai_review_ci.harness import run_review
 from ai_review_ci.install import install
@@ -55,6 +57,7 @@ app.command(check_delegation)
 app.command(check_app_boot)
 app.command(check_review_threads)
 app.command(protect_branch)
+app.command(self_protect_branch, name="self-protect")
 app.command(validate_report)
 app.command(report_schema)
 app.command(report_metadata)

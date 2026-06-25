@@ -7,7 +7,12 @@ from typing import Any
 
 import pytest
 
-from ai_review_ci.doctor import doctor_report, manifest_text
+from ai_review_ci.doctor import (
+    BranchProtectionObservation,
+    _merge_gating_findings,
+    doctor_report,
+    manifest_text,
+)
 from ai_review_ci.install import _write_trigger_workflows
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
@@ -306,3 +311,62 @@ def test_active_manifest_exception_maps_matching_findings_to_intentional_excepti
     assert status == "intentional_exception"
     assert payload["installation_state"] == "noncompliant"
     assert payload["exceptions"][0]["id"] == "app-boot-bootstrap"
+
+
+def _branch_protection(
+    *,
+    observed_state: str,
+    conversation_resolution_required: bool,
+    admins_enforced: bool,
+) -> BranchProtectionObservation:
+    return BranchProtectionObservation(
+        required_contexts=("qc-doctor / qc-doctor",),
+        observed_contexts=("qc-doctor / qc-doctor",),
+        observed_state=observed_state,
+        conversation_resolution_required=conversation_resolution_required,
+        admins_enforced=admins_enforced,
+        evidence="test",
+    )
+
+
+def test_merge_gating_findings_flags_missing_conversation_resolution() -> None:
+    findings = _merge_gating_findings(
+        _branch_protection(observed_state="compliant", conversation_resolution_required=False, admins_enforced=True),
+        "main",
+        "python",
+    )
+    assert len(findings) == 1
+    assert findings[0].surface == "branch_protection"
+    assert findings[0].severity == "error"
+    assert "conversation resolution" in findings[0].evidence
+
+
+def test_merge_gating_findings_flags_unenforced_admins() -> None:
+    findings = _merge_gating_findings(
+        _branch_protection(observed_state="compliant", conversation_resolution_required=True, admins_enforced=False),
+        "main",
+        "python",
+    )
+    assert [f.evidence for f in findings] and all("admins" in f.evidence for f in findings)
+
+
+def test_merge_gating_findings_clean_when_both_enabled() -> None:
+    findings = _merge_gating_findings(
+        _branch_protection(observed_state="compliant", conversation_resolution_required=True, admins_enforced=True),
+        "main",
+        "python",
+    )
+    assert findings == []
+
+
+def test_merge_gating_findings_skipped_when_protection_absent() -> None:
+    # Flags are unobservable without protection, so missing/unverifiable states
+    # must not synthesize conversation-resolution findings (that's the contexts
+    # finding's job).
+    for state in ("missing", "unverifiable", "not_applicable"):
+        findings = _merge_gating_findings(
+            _branch_protection(observed_state=state, conversation_resolution_required=False, admins_enforced=False),
+            "main",
+            "python",
+        )
+        assert findings == [], state
