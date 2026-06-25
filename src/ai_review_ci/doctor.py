@@ -126,6 +126,11 @@ class BranchProtectionObservation(BaseModel):
     required_contexts: tuple[str, ...]
     observed_contexts: tuple[str, ...]
     observed_state: BranchProtectionState
+    # Merge-gating settings, observable only when protection exists. The
+    # uniform QC contract requires both: unresolved review threads must block
+    # merge, and admins must not be able to bypass that.
+    conversation_resolution_required: bool = False
+    admins_enforced: bool = False
     evidence: str
 
 
@@ -445,20 +450,37 @@ def _branch_protection(target: Path, manifest: ManifestDeclaration, profile: Pro
         )
     data: JsonDict = jsonlib.loads(result.stdout)
     observed = tuple(_observed_contexts(data))
+    conversation_resolution = _protection_enabled(data, "required_conversation_resolution")
+    admins_enforced = _protection_enabled(data, "enforce_admins")
     missing = tuple(context for context in required if context not in observed)
     if missing:
         return BranchProtectionObservation(
             required_contexts=required,
             observed_contexts=observed,
             observed_state="missing_contexts",
+            conversation_resolution_required=conversation_resolution,
+            admins_enforced=admins_enforced,
             evidence=f"missing required contexts: {', '.join(missing)}",
         )
     return BranchProtectionObservation(
         required_contexts=required,
         observed_contexts=observed,
         observed_state="compliant",
+        conversation_resolution_required=conversation_resolution,
+        admins_enforced=admins_enforced,
         evidence=f"GitHub branch protection for {repo}@{branch} contains required contexts",
     )
+
+
+def _protection_enabled(data: JsonDict, key: str) -> bool:
+    """Whether a branch-protection boolean setting is enabled.
+
+    GitHub returns these as ``{"enabled": true}`` objects (absent when unset).
+    """
+    value = data.get(key)
+    if not isinstance(value, dict):
+        return False
+    return bool(value.get("enabled", False))
 
 
 def _observed_contexts(data: JsonDict) -> list[str]:
@@ -564,6 +586,7 @@ def _findings(
                 remediation_commands=(f"ai-review-ci protect-branch --repo owner/repo --branch {manifest.default_branch} --profile {manifest.profile}",),
             )
         )
+    findings.extend(_merge_gating_findings(branch_protection, manifest.default_branch, manifest.profile))
     if branch_protection.observed_state == "unverifiable":
         findings.append(
             DoctorFinding(
@@ -571,6 +594,39 @@ def _findings(
                 surface="branch_protection",
                 evidence=branch_protection.evidence,
                 remediation_commands=("run doctor with GitHub branch protection API access",),
+            )
+        )
+    return findings
+
+
+def _merge_gating_findings(
+    branch_protection: BranchProtectionObservation,
+    default_branch: str,
+    profile: ProfileName,
+) -> list[DoctorFinding]:
+    """Findings for required merge-gating settings (conversation resolution,
+    admin enforcement). Observable only when protection exists, so this is a
+    no-op for missing/unverifiable/not-applicable states."""
+    if branch_protection.observed_state not in ("compliant", "missing_contexts"):
+        return []
+    protect_cmd = f"ai-review-ci protect-branch --repo owner/repo --branch {default_branch} --profile {profile}"
+    findings: list[DoctorFinding] = []
+    if not branch_protection.conversation_resolution_required:
+        findings.append(
+            DoctorFinding(
+                severity="error",
+                surface="branch_protection",
+                evidence=f"branch protection does not require conversation resolution before merging on {default_branch}",
+                remediation_commands=(protect_cmd,),
+            )
+        )
+    if not branch_protection.admins_enforced:
+        findings.append(
+            DoctorFinding(
+                severity="error",
+                surface="branch_protection",
+                evidence=f"branch protection is not enforced for admins on {default_branch} (the conversation-resolution gate can be bypassed)",
+                remediation_commands=(protect_cmd,),
             )
         )
     return findings

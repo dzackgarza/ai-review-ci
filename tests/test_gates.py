@@ -106,6 +106,15 @@ def test_branch_protection_payload_requires_app_boot_for_bun_playwright() -> Non
     assert {"context": "app-boot / app-boot", "app_id": -1} in checks
 
 
+def test_branch_protection_payload_enforces_conversation_resolution_for_every_profile() -> None:
+    # Regression lock: the uniform contract must never silently stop blocking
+    # merges with unresolved review threads, and must never become admin-bypassable.
+    for profile in gates.SUPPORTED_PROFILES:
+        payload = gates.branch_protection_payload(profile)
+        assert payload["required_conversation_resolution"] is True, profile
+        assert payload["enforce_admins"] is True, profile
+
+
 def test_thread_resolution_evidence_accepts_commit_or_ledger() -> None:
     commit_node = {
         "comments": {
