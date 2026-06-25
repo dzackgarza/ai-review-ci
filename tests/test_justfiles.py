@@ -1854,24 +1854,6 @@ def test_scaffold_does_not_export_working_directory_routing_hint(language: str) 
     assert "JUST_WORKING_DIRECTORY" not in scaffold
 
 
-def test_working_directory_binding_breaks_bare_just_when_env_var_is_set(
-    tmp_path: pathlib.Path,
-) -> None:
-    """Document the just >= 1.46 collision the scaffolds avoid: with
-    JUST_WORKING_DIRECTORY set, a bare `just` invocation fails at argument
-    parsing. This is why the routing hint must never be exported (#17)."""
-    project = tmp_path / "python-project"
-    project.mkdir()
-    (project / "justfile").write_text((ROOT / "scaffolds" / "python" / "justfile").read_text())
-
-    result = subprocess.run(
-        ["just", "--dry-run", "test"],
-        cwd=project,
-        env={**os.environ, "JUST_WORKING_DIRECTORY": str(project)},
-        text=True,
-        capture_output=True,
-        check=False,
-    )
-    output = result.stdout + result.stderr
-    assert result.returncode != 0, output
-    assert "--justfile" in output
+# The collision itself (JUST_WORKING_DIRECTORY set -> bare `just` fails at
+# arg-parse) is covered with the real delegated chain by
+# test_python_scaffold_bare_just_test_breaks_when_just_working_directory_is_exported.
