@@ -1,0 +1,10 @@
+# `-d .` pins the delegated justfile's working directory to the project root.
+# just defaults a `-f <abs-path>` invocation's cwd to the justfile's own dir,
+# and rust.just's recipes resolve project paths relative to cwd (find ., rg,
+# and `-d .` sub-invocations). Without `-d .` the QC chain scans ~/ai-review-ci
+# instead of the project, so the preflight reports "no Cargo.toml / no tests".
+test:
+    @just -d . -f ~/ai-review-ci/justfiles/rust.just test
+
+test-ci:
+    @just -d . -f ~/ai-review-ci/justfiles/rust.just test-ci

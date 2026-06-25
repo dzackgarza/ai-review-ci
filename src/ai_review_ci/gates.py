@@ -56,6 +56,7 @@ PROJECT_PROFILES = {
 BASE_REQUIRED_CHECK_CONTEXTS = (
     "deterministic-diff / deterministic-diff",
     "delegation-conformance / delegation-conformance",
+    "qc-doctor / qc-doctor",
     "general / review",
     "slop / review",
     "thread-resolution / thread-resolution",

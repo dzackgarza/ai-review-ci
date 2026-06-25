@@ -1,30 +1,38 @@
 name: PR Review
-'on':
+on:
   pull_request: {}
 jobs:
   deterministic-diff:
-    uses: dzackgarza/ai-review-ci/.github/workflows/_gates.yml@main
+    uses: dzackgarza/ai-review-ci/.github/workflows/_gates.yml@{{ ref }}
     permissions:
       contents: read
     with:
       gate: deterministic-diff
       profile: '{{ profile }}'
   delegation-conformance:
-    uses: dzackgarza/ai-review-ci/.github/workflows/_gates.yml@main
+    uses: dzackgarza/ai-review-ci/.github/workflows/_gates.yml@{{ ref }}
     permissions:
       contents: read
     with:
       gate: delegation-conformance
       profile: '{{ profile }}'
+  qc-doctor:
+    uses: dzackgarza/ai-review-ci/.github/workflows/_gates.yml@{{ ref }}
+    permissions:
+      contents: read
+      actions: read
+    with:
+      gate: qc-doctor
+      profile: '{{ profile }}'
   app-boot:
-    uses: dzackgarza/ai-review-ci/.github/workflows/_gates.yml@main
+    uses: dzackgarza/ai-review-ci/.github/workflows/_gates.yml@{{ ref }}
     permissions:
       contents: read
     with:
       gate: app-boot
       profile: '{{ profile }}'
   general:
-    uses: dzackgarza/ai-review-ci/.github/workflows/_review.yml@main
+    uses: dzackgarza/ai-review-ci/.github/workflows/_review.yml@{{ ref }}
     permissions:
       contents: read
       security-events: write
@@ -34,7 +42,7 @@ jobs:
       report_type: general
       scope: diff
   slop:
-    uses: dzackgarza/ai-review-ci/.github/workflows/_review.yml@main
+    uses: dzackgarza/ai-review-ci/.github/workflows/_review.yml@{{ ref }}
     permissions:
       contents: read
       security-events: write
@@ -47,7 +55,7 @@ jobs:
     needs:
       - general
       - slop
-    uses: dzackgarza/ai-review-ci/.github/workflows/_gates.yml@main
+    uses: dzackgarza/ai-review-ci/.github/workflows/_gates.yml@{{ ref }}
     permissions:
       contents: read
       pull-requests: read

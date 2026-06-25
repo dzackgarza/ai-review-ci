@@ -324,12 +324,10 @@ class GeneralFinding(BaseModel):
         "missing-error-handling, logic-error, ci-pipeline, workflow.",
     )
     policy_code: str | None = Field(
-        default=None,
-        description="Optional vendored POLICY.* code when the finding is policy-bearing.",
+        description="Explicit POLICY.* code for policy-bearing findings; use null when the finding is not policy-bearing.",
     )
     remediation_code: str | None = Field(
-        default=None,
-        description="Optional vendored REMEDIATE.* code. If omitted, the policy's canonical related remediation is used.",
+        description="Explicit REMEDIATE.* code, or null to use the policy's canonical related remediation.",
     )
     location: Location = Field(description="File and line range where the finding occurs.")
     violated_invariant: str = Field(
@@ -478,12 +476,10 @@ class SlopFinding(BaseModel):
         "ci-pipeline, config.",
     )
     policy_code: str | None = Field(
-        default=None,
-        description="Vendored POLICY.* code for the bridge-burning obligation this finding weakens.",
+        description="Explicit POLICY.* code for the bridge-burning obligation this finding weakens; use null when no policy applies.",
     )
     remediation_code: str | None = Field(
-        default=None,
-        description="Optional vendored REMEDIATE.* code. If omitted, the policy's canonical related remediation is used.",
+        description="Explicit REMEDIATE.* code, or null to use the policy's canonical related remediation.",
     )
     location: Location = Field(description="File and line range where the slop pattern occurs.")
     violated_invariant: str = Field(
