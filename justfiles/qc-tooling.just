@@ -49,3 +49,15 @@ test-ci:
     just -f {{justfiles}}/python.just -d . {{_commit-recipes}} {{_ci-recipes}}
     just -f {{justfiles}}/shared.just -d . _no-bypass
     echo "QC-tooling push/CI checks completed"
+
+# Scheduled, NOT in the PR/push gate: pre-existing repo-wide debt stays visible
+# and reviewable without blocking unrelated PRs (#53), and is the non-blocking
+# debt surface (#55) — no baseline/quarantine file silences anything; findings
+# are reviewed and tracked as issues.
+#
+# public: AMBIENT audit — full-repo deferred-debt scan (complexity, dead code, duplication)
+ambient:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    just -f {{justfiles}}/python.just -d . _ambient-python-debt
+    echo "QC-tooling ambient debt audit completed"

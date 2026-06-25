@@ -10,7 +10,7 @@ on:
   workflow_call:
     inputs:
       tier:
-        description: 'QC tier: test (commit gate) or test-ci (push/CI gate)'
+        description: 'QC tier: test (commit gate), test-ci (push/CI gate), or ambient (scheduled full-repo debt audit)'
         required: true
         type: string
       infra_ref:
@@ -39,7 +39,7 @@ jobs:
       - name: Validate inputs
         run: |
           case "$QC_TIER" in
-            test|test-ci) ;;
+            test|test-ci|ambient) ;;
             *) echo "invalid tier: $QC_TIER" >&2; exit 1 ;;
           esac
           if [[ -z "$QC_INFRA_REF" || "$QC_INFRA_REF" =~ [^A-Za-z0-9._/-] ]]; then

@@ -1,0 +1,21 @@
+name: Ambient audit
+
+# Signal Separation (#53, #55): the PR/push gate (ci.yml) blocks on the diff;
+# this scheduled run owns the full-repo deferred-debt audit (complexity, dead
+# code, duplication). It does NOT run on pull_request, so pre-existing repo-wide
+# debt never blocks an unrelated PR — it stays visible and reviewable here, and
+# is tracked as issues. No baseline/quarantine file silences anything.
+
+on:
+  schedule:
+    # Weekly, Monday 07:00 UTC.
+    - cron: '0 7 * * 1'
+  workflow_dispatch: {}
+
+jobs:
+  ambient-audit:
+    uses: ./.github/workflows/_qc.yml
+    permissions:
+      contents: read
+    with:
+      tier: ambient
