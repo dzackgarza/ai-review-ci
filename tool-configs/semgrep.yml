@@ -1,11 +1,32 @@
 rules:
   - id: no-nullish-coalescing
-    pattern: $X ?? $Y
+    # POLICY.RUNTIME_DEFAULT targets fail-soft *defaults*: a missing/malformed
+    # value silently backfilled with a stub. Match `??` only in default-value
+    # position (right operand is a literal stub), not where `??`/`||` is used
+    # as a boolean connective in a guard or predicate (#120). Position, not the
+    # bare operator, is the signal — matching every `??` produced 80 findings on
+    # one small repo, mostly boolean logic, inviting reward-hacking removal of
+    # the operator instead of removing the fallback.
     message: POLICY.RUNTIME_DEFAULT
     languages:
       - typescript
       - javascript
     severity: ERROR
+    patterns:
+      - pattern-either:
+          - pattern: $X ?? "..."
+          - pattern: $X ?? '...'
+          - pattern: $X ?? `...`
+          - pattern: $X ?? {...}
+          - pattern: $X ?? [...]
+          - pattern: $X ?? null
+          - pattern: $X ?? true
+          - pattern: $X ?? false
+          - patterns:
+              - pattern: $X ?? $N
+              - metavariable-regex:
+                  metavariable: $N
+                  regex: '^-?[0-9]'
     metadata:
       policy_code: POLICY.RUNTIME_DEFAULT
       remediation_code: REMEDIATE.TOTAL_CONFIG_MODEL
@@ -175,9 +196,7 @@ rules:
       policy_code: POLICY.CRITICAL_DEPENDENCY
       remediation_code: REMEDIATE.FAIL_LOUD_BOUNDARY
   - id: py-no-hardcoded-env-var
-    pattern-either:
-      - pattern: os.environ[$KEY] = $VALUE
-      - pattern: os.environ[$KEY] = $VALUE
+    pattern: os.environ[$KEY] = $VALUE
     message: POLICY.NO_HIDDEN_CONFIG
     languages:
       - python
@@ -269,20 +288,31 @@ rules:
       policy_code: POLICY.NO_SKIP_MASK
       remediation_code: REMEDIATE.REAL_PROOF_LOOP
   - id: ts-no-or-default
+    # See no-nullish-coalescing: flag `||` only in default-value position
+    # (right operand is a literal stub), not as a boolean connective (#120).
     message: POLICY.RUNTIME_DEFAULT
     languages:
       - typescript
       - javascript
     severity: ERROR
+    patterns:
+      - pattern-either:
+          - pattern: $X || "..."
+          - pattern: $X || '...'
+          - pattern: $X || `...`
+          - pattern: $X || {...}
+          - pattern: $X || [...]
+          - pattern: $X || null
+          - pattern: $X || true
+          - pattern: $X || false
+          - patterns:
+              - pattern: $X || $N
+              - metavariable-regex:
+                  metavariable: $N
+                  regex: '^-?[0-9]'
     metadata:
       policy_code: POLICY.RUNTIME_DEFAULT
       remediation_code: REMEDIATE.TOTAL_CONFIG_MODEL
-    patterns:
-      - pattern: $X || $DEFAULT
-      - pattern-not-inside: "if ($COND) {\n  ...\n}"
-      - pattern-not-inside: "while ($COND) {\n  ...\n}"
-      - pattern-not-inside: "for (...; $COND; ...) {\n  ...\n}"
-      - pattern-not-inside: "do {\n  ...\n} while ($COND)"
   - id: ts-no-env-default
     pattern: process.env.$KEY || $DEFAULT
     message: POLICY.RUNTIME_DEFAULT
