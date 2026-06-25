@@ -27,6 +27,10 @@ jobs:
     env:
       QC_TIER: ${{ inputs.tier }}
       QC_INFRA_REF: ${{ inputs.infra_ref }}
+      # _diff-cover compares changed lines against this ref. A CI checkout is a
+      # detached merge ref with no local `main`, so point at the remote-tracking
+      # base branch (the PR base on PRs, the default branch on pushes).
+      DIFF_COVER_BASE: origin/${{ github.base_ref || github.event.repository.default_branch }}
     steps:
       - uses: actions/checkout@v4
         with:
