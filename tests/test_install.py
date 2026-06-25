@@ -3,10 +3,40 @@ import subprocess
 import sys
 
 import pytest
+import yaml
 
-from ai_review_ci.install import TEMPLATES, _prove_installation, _write_manifest, _write_scaffold, _write_trigger_workflows
+from ai_review_ci.gates import SUPPORTED_PROFILES
+from ai_review_ci.install import (
+    TEMPLATES,
+    _prove_installation,
+    _template_text,
+    _write_manifest,
+    _write_scaffold,
+    _write_trigger_workflows,
+)
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
+
+# A job referencing a reusable workflow in this repo names it as
+# `dzackgarza/ai-review-ci/.github/workflows/<file>@<ref>`.
+_REUSABLE_PREFIX = "dzackgarza/ai-review-ci/.github/workflows/"
+_WORKFLOWS_DIR = ROOT / ".github" / "workflows"
+
+
+def _workflow_call_inputs(workflow_file: str) -> set[str]:
+    """Declared `workflow_call` input names of a reusable workflow file."""
+    data = yaml.safe_load((_WORKFLOWS_DIR / workflow_file).read_text())
+    # PyYAML parses the bare `on:` key as the boolean True (YAML 1.1).
+    on_block = data.get("on", data.get(True)) or {}
+    return set((on_block.get("workflow_call") or {}).get("inputs") or {})
+
+
+def _reusable_target(job: dict[str, object]) -> str | None:
+    """The reusable-workflow filename a job calls, or None if not in-repo."""
+    uses = job.get("uses")
+    if not isinstance(uses, str) or not uses.startswith(_REUSABLE_PREFIX):
+        return None
+    return uses[len(_REUSABLE_PREFIX) :].split("@", 1)[0]
 
 
 def _git_repo(tmp_path: pathlib.Path) -> pathlib.Path:
@@ -164,6 +194,41 @@ def test_install_refuses_overwriting_repo_owned_config(
     with pytest.raises(SystemExit):
         _write_trigger_workflows(repo, "bun")
     assert customized.read_text() == "# locally customized\n"
+
+
+@pytest.mark.parametrize("profile", SUPPORTED_PROFILES)
+@pytest.mark.parametrize("template", TEMPLATES)
+def test_trigger_inputs_are_declared_by_reusable_workflow(template: str, profile: str) -> None:
+    """Every input an installed trigger passes must be declared by the
+    reusable workflow it calls.
+
+    Regression guard for #123: the installed triggers passed a `fail_below`
+    input that `_review.yml` never declared, so GitHub rejected the run at
+    startup (`startup_failure`) and the review silently never ran. An
+    undeclared input is a workflow-file error for *any* input, so this checks
+    the whole `with:` contract against the reusable workflow's declared inputs
+    — across every profile-rendered trigger — rather than blocklisting one
+    known-bad key.
+    """
+    rendered = _template_text(template, profile, "main")
+    workflow = yaml.safe_load(rendered)
+
+    checked_a_reusable_call = False
+    for job_name, job in workflow["jobs"].items():
+        target = _reusable_target(job)
+        if target is None:
+            continue
+        checked_a_reusable_call = True
+        declared = _workflow_call_inputs(target)
+        passed = set((job.get("with") or {}))
+        undeclared = passed - declared
+        assert not undeclared, (
+            f"{template} (profile={profile}) job {job_name!r} passes input(s) "
+            f"{sorted(undeclared)} to {target}, which declares only {sorted(declared)}. "
+            f"GitHub fails such a run at startup before any review step runs."
+        )
+
+    assert checked_a_reusable_call, f"{template} (profile={profile}) calls no in-repo reusable workflow"
 
 
 def test_install_refuses_overwriting_repo_owned_scaffold(tmp_path: pathlib.Path) -> None:
