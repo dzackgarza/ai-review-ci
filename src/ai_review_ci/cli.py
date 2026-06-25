@@ -12,6 +12,7 @@ Subcommands:
 - check-app-boot   — run the target repo's delegated bun-playwright gate
 - check-review-threads — require evidence-backed ai-review thread resolution
 - protect-branch   — apply required branch protection contexts
+- doctor-schema    — dump the JSON Schema for the doctor payload
 - validate-report  — validate a candidate report and write the artifact
 - report-schema    — dump the JSON Schema for a report type
 - report-metadata  — print machine-parseable metadata from an artifact
@@ -24,6 +25,7 @@ Subcommands:
 from cyclopts import App
 
 from ai_review_ci.context import fetch_context
+from ai_review_ci.doctor import doctor, doctor_schema, version_command
 from ai_review_ci.gates import (
     check_app_boot,
     check_delegation,
@@ -44,6 +46,9 @@ app = App(
 )
 
 app.command(install)
+app.command(version_command, name="version")
+app.command(doctor)
+app.command(doctor_schema)
 app.command(check_profile)
 app.command(check_diff)
 app.command(check_delegation)
@@ -62,3 +67,7 @@ app.command(run_review)
 def main() -> None:
     """Entry point for the ai-review-ci console script."""
     app()
+
+
+if __name__ == "__main__":
+    main()

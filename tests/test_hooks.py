@@ -6,15 +6,32 @@ import subprocess
 import pytest
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
+GIT_HOOK_ENV_KEYS = (
+    "GIT_DIR",
+    "GIT_INDEX_FILE",
+    "GIT_WORK_TREE",
+    "GIT_PREFIX",
+    "GIT_OBJECT_DIRECTORY",
+    "GIT_ALTERNATE_OBJECT_DIRECTORIES",
+    "GIT_COMMON_DIR",
+)
+
+
+def git_test_env(**updates: str) -> dict[str, str]:
+    env = os.environ.copy()
+    for key in GIT_HOOK_ENV_KEYS:
+        env.pop(key, None)
+    env.update(updates)
+    return env
 
 
 @pytest.fixture
 def hook_source_repo(tmp_path: pathlib.Path) -> pathlib.Path:
     repo = tmp_path / "ai-review-ci"
     repo.mkdir()
-    subprocess.run(["git", "init", "-q"], cwd=repo, check=True)
+    subprocess.run(["git", "init", "-q"], cwd=repo, env=git_test_env(), check=True)
     (repo / "justfile").write_text("test:\n    @true\n\ntest-ci:\n    @true\n")
-    subprocess.run(["git", "add", "justfile"], cwd=repo, check=True)
+    subprocess.run(["git", "add", "justfile"], cwd=repo, env=git_test_env(), check=True)
     subprocess.run(
         [
             "git",
@@ -28,6 +45,7 @@ def hook_source_repo(tmp_path: pathlib.Path) -> pathlib.Path:
             "init",
         ],
         cwd=repo,
+        env=git_test_env(),
         check=True,
     )
     for hook_dir in ("global-hooks", "repo-hooks"):
@@ -59,11 +77,12 @@ def test_ai_review_ci_hooks_skip_linked_ai_review_ci_worktrees(
     worktree = tmp_path / "ai-review-ci-worktree"
     subprocess.run(
         ["git", "-C", str(hook_source_repo), "worktree", "add", "-q", str(worktree)],
+        env=git_test_env(),
         check=True,
     )
     (worktree / "justfile").write_text(f"{recipe}:\n    @echo should-not-run\n")
 
-    env = os.environ | {"PATH": path_with_only(tmp_path, "sh", "git", "readlink", "dirname")}
+    env = git_test_env(PATH=path_with_only(tmp_path, "sh", "git", "readlink", "dirname"))
     result = subprocess.run(
         [str(hook_source_repo / hook_dir / hook)],
         cwd=worktree,
@@ -95,12 +114,13 @@ def test_ai_review_ci_hooks_still_run_in_downstream_repos(
 ) -> None:
     downstream = tmp_path / "downstream"
     downstream.mkdir()
-    subprocess.run(["git", "init", "-q"], cwd=downstream, check=True)
+    subprocess.run(["git", "init", "-q"], cwd=downstream, env=git_test_env(), check=True)
     (downstream / "justfile").write_text(f"{recipe}:\n    @echo downstream-ran\n")
 
     result = subprocess.run(
         [str(hook_source_repo / hook_dir / hook)],
         cwd=downstream,
+        env=git_test_env(),
         text=True,
         capture_output=True,
         check=False,

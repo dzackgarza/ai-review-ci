@@ -1,6 +1,7 @@
 import json
 import os
 import pathlib
+import re
 import shlex
 import shutil
 import subprocess
@@ -49,11 +50,82 @@ def path_with_only(tmp_path: pathlib.Path, *commands: str) -> str:
     return str(bin_dir)
 
 
+def run_git(workdir: pathlib.Path, *args: str) -> subprocess.CompletedProcess[str]:
+    env = os.environ.copy()
+    for key in (
+        "GIT_DIR",
+        "GIT_INDEX_FILE",
+        "GIT_WORK_TREE",
+        "GIT_PREFIX",
+        "GIT_OBJECT_DIRECTORY",
+        "GIT_ALTERNATE_OBJECT_DIRECTORIES",
+        "GIT_COMMON_DIR",
+    ):
+        env.pop(key, None)
+    return subprocess.run(
+        ["git", "-C", str(workdir), *args],
+        text=True,
+        capture_output=True,
+        check=False,
+        env=env,
+    )
+
+
+def init_git_repo(project: pathlib.Path) -> None:
+    assert run_git(project, "init").returncode == 0
+    assert run_git(project, "config", "user.email", "test@example.invalid").returncode == 0
+    assert run_git(project, "config", "user.name", "Test User").returncode == 0
+
+
+def commit_without_hooks(project: pathlib.Path, message: str) -> None:
+    result = run_git(project, "-c", "core.hooksPath=/dev/null", "commit", "-m", message)
+    assert result.returncode == 0, result.stdout + result.stderr
+
+
 def project_with_sage_file(tmp_path: pathlib.Path) -> pathlib.Path:
     project = tmp_path / "sage-project"
     project.mkdir()
     (project / "example.sage").write_text("x = 1\n")
     return project
+
+
+def test_no_bypass_ignores_preexisting_markers_when_staging_other_changes(tmp_path: pathlib.Path) -> None:
+    project = tmp_path / "git-project"
+    project.mkdir()
+    source = project / "app.py"
+    coverage_marker = "# pragma: no cov" + "er"
+    source.write_text(f"def legacy() -> None:\n    pass  {coverage_marker}\n")
+    init_git_repo(project)
+    assert run_git(project, "add", "app.py").returncode == 0
+    commit_without_hooks(project, "baseline")
+    source.write_text(f"def legacy() -> None:\n    pass  {coverage_marker}\n\nVALUE = 1\n")
+    assert run_git(project, "add", "app.py").returncode == 0
+
+    result = run_just(ROOT / "justfiles" / "shared.just", project, "_no-bypass")
+
+    output = result.stdout + result.stderr
+    assert result.returncode == 0, output
+    assert "No bypass comments detected" in output
+
+
+def test_no_bypass_blocks_newly_staged_markers(tmp_path: pathlib.Path) -> None:
+    project = tmp_path / "git-project"
+    project.mkdir()
+    source = project / "app.py"
+    coverage_marker = "# pragma: no cov" + "er"
+    source.write_text("def clean() -> None:\n    pass\n")
+    init_git_repo(project)
+    assert run_git(project, "add", "app.py").returncode == 0
+    commit_without_hooks(project, "baseline")
+    source.write_text(f"def clean() -> None:\n    pass  {coverage_marker}\n")
+    assert run_git(project, "add", "app.py").returncode == 0
+
+    result = run_just(ROOT / "justfiles" / "shared.just", project, "_no-bypass")
+
+    output = result.stdout + result.stderr
+    assert result.returncode != 0, output
+    assert "coverage bypass marker" in output
+    assert TRIAGE_MARKER in output
 
 
 @pytest.mark.parametrize("recipe", ["_sage-syntax", "_vulture"])
@@ -488,6 +560,35 @@ def test_vibecheck_ignores_g141_non_comment_matches(tmp_path: pathlib.Path) -> N
     assert "vibecheck: 0 findings" in output
 
 
+def test_vibecheck_ignores_g22_non_empty_except_handlers(tmp_path: pathlib.Path) -> None:
+    project = tmp_path / "vibe-project"
+    project.mkdir()
+    source = project / "app.py"
+    source.write_text("try:\n    raise KeyError\nexcept KeyError:\n    raise ValueError('handled')\n")
+    payload = vibecheck_payload(
+        {
+            "rule_id": "G22",
+            "name": "Empty except block",
+            "severity": "high",
+            "category": "ai-slop",
+            "file": str(source),
+            "line": 3,
+            "content": "except KeyError:",
+            "notes": "Empty except blocks hide failures",
+            "two_pass": False,
+            "co_occurrence": False,
+        },
+    )
+    env = os.environ | {"PATH": f"{write_fake_uvx_vibecheck(tmp_path, payload, exit_code=1)}:{os.environ['PATH']}"}
+
+    result = run_just(ROOT / "justfiles" / "shared.just", project, "_vibecheck", env=env)
+
+    output = result.stdout + result.stderr
+    assert result.returncode == 0, output
+    assert "ignored 1 G22 non-empty except-handler false-positive finding(s)" in output
+    assert "vibecheck: 0 findings" in output
+
+
 def test_vibecheck_still_blocks_g141_comment_matches(tmp_path: pathlib.Path) -> None:
     project = tmp_path / "vibe-project"
     project.mkdir()
@@ -898,7 +999,56 @@ def test_tsc_removes_temp_output_on_success(tmp_path: pathlib.Path) -> None:
     assert sorted(ROOT.glob(".tsc-output.*")) == []
 
 
-def test_pytest_with_coverage_fails_when_threshold_fails(
+def test_pytest_installs_dependency_group_requirements(
+    tmp_path: pathlib.Path,
+) -> None:
+    project = tmp_path / "python-project"
+    package_dir = project / "src" / "dependency_group_project"
+    tests_dir = project / "tests"
+    package_dir.mkdir(parents=True)
+    tests_dir.mkdir()
+    (project / "pyproject.toml").write_text(
+        "\n".join(
+            [
+                "[project]",
+                'name = "dependency-group-project"',
+                'version = "0.1.0"',
+                'requires-python = ">=3.14"',
+                "",
+                "[dependency-groups]",
+                'dev = ["PyYAML"]',
+                "",
+                "[build-system]",
+                'requires = ["setuptools"]',
+                'build-backend = "setuptools.build_meta"',
+                "",
+                "[tool.setuptools.packages.find]",
+                'where = ["src"]',
+                "",
+            ]
+        )
+    )
+    (package_dir / "__init__.py").write_text("VALUE = 1\n")
+    (tests_dir / "test_dependency_group.py").write_text(
+        "\n".join(
+            [
+                "import yaml",
+                "",
+                "",
+                "def test_dependency_group_requirement_is_available() -> None:",
+                '    assert yaml.safe_load("value: 1") == {"value": 1}',
+                "",
+            ]
+        )
+    )
+
+    result = run_just(ROOT / "justfiles" / "python.just", project, "_pytest")
+
+    output = result.stdout + result.stderr
+    assert result.returncode == 0, output
+
+
+def test_pytest_with_coverage_generates_xml_without_total_threshold(
     tmp_path: pathlib.Path,
 ) -> None:
     project = tmp_path / "python-project"
@@ -950,22 +1100,20 @@ def test_pytest_with_coverage_fails_when_threshold_fails(
         )
     )
 
-    result = subprocess.run(
-        [
-            "just",
-            "--justfile",
-            str(ROOT / "justfiles" / "python.just"),
-            "-d",
-            str(project),
-            "_pytest_with_coverage",
-        ],
-        cwd=project,
-        text=True,
-        capture_output=True,
-        check=False,
+    cache_home = tmp_path / "cache"
+    result = run_just(
+        ROOT / "justfiles" / "python.just",
+        project,
+        "_pytest_with_coverage",
+        env=os.environ | {"XDG_CACHE_HOME": str(cache_home)},
     )
 
-    assert result.returncode != 0, result.stdout + result.stderr
+    output = result.stdout + result.stderr
+    project_slug = re.sub(r"[^A-Za-z0-9._-]", "_", str(project.resolve()))
+    coverage_xml = cache_home / "quality-control" / "coverage" / project_slug / "coverage.xml"
+    assert result.returncode == 0, output
+    assert coverage_xml.exists()
+    assert "Coverage XML report:" in output
 
 
 def test_deptry_accepts_declared_distributions_with_different_import_names(
