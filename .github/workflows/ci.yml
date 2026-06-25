@@ -1,9 +1,11 @@
 name: CI
 
 # ai-review-ci dogfoods its own standardized QC: the same reusable _qc.yml that
-# downstream repos install. It runs this repo's `just test` / `just test-ci`,
-# which delegate to the qc-tooling profile (correctness without the product-only
-# slop/style gates ai-review-ci ships for others).
+# downstream repos install. A push/PR is the *push* boundary, so CI runs the
+# PUSH/CI tier (`just test-ci`) — the authoritative remote mirror of the
+# pre-push hook. The COMMIT tier (`just test`) is the local pre-commit hook's
+# fast gate and is not a CI concern (nothing is committed in CI, and test-ci is
+# a superset of test). The full-repo ambient debt audit is separate (ambient.yml).
 
 on:
   push:
@@ -11,14 +13,7 @@ on:
   pull_request: {}
 
 jobs:
-  commit-tier:
-    uses: ./.github/workflows/_qc.yml
-    permissions:
-      contents: read
-    with:
-      tier: test
-
-  push-tier:
+  test-ci:
     uses: ./.github/workflows/_qc.yml
     permissions:
       contents: read

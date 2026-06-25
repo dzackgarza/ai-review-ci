@@ -44,7 +44,12 @@ Preserved behavior:
 
 - [x] **M1 - Signal separation and gate tiers** ([#56](https://github.com/dzackgarza/ai-review-ci/issues/56))
   - Complete when: commit, push, PR, ambient, agent-review, and debt signals each have a defined owner, trigger, output, and proof boundary.
-  - Signal model: **commit** = `just test` (fast correctness); **push/PR** = `just test-ci` via `ci.yml` (deterministic, diff-aware); **ambient** = `just ambient` via scheduled `ambient.yml` (full-repo debt, non-blocking); **agent-review** = `_review.yml` (separate triggers/status); **debt** = surfaced by the ambient run + issue tracker, no baseline/quarantine. Each tier has a distinct trigger, owner, and proof boundary, self-applied on this repo and shareable downstream.
+  - Signal model — each tier has a distinct trigger, owner, and proof boundary, self-applied here and shareable downstream:
+    - **commit** = `just test` — owned by the local **pre-commit hook** (fast correctness). Not a CI job.
+    - **push/CI** = `just test-ci` — owned by the **pre-push hook** locally and **`ci.yml`** remotely (a push/PR is the push boundary). Deterministic, diff-aware (`_diff-cover`).
+    - **ambient** = `just ambient` — owned by scheduled **`ambient.yml`** (full-repo debt, non-blocking).
+    - **agent-review** = `_review.yml` (separate triggers/status).
+    - **debt** = surfaced by the ambient run + issue tracker; no baseline/quarantine.
 
 - [x] **F1 - Local commit/push gate tiers** ([#52](https://github.com/dzackgarza/ai-review-ci/issues/52))
   - Behavior: the `test` (commit) and `test-ci` (push) tiers are now expressed as a real, self-applied profile. New `justfiles/qc-tooling.just` (the profile for repos whose product *is* QC infra) reuses python.just's correctness subrecipes via a single deduped invocation: `test` = project-shape + normalize + syntax + mypy + pytest; `test-ci` = + coverage + diff-cover + deptry + import-linter. No slop/style/duplication self-application.
@@ -52,7 +57,8 @@ Preserved behavior:
 
 - [x] **W0 - Standardized, shareable, self-applied QC workflow** (dogfooding gap)
   - Behavior: this repo ran no pytest in CI (only CodeQL + GitGuardian). `_qc.yml` (reusable, `workflow_call`, `tier` input) runs the consuming repo's own `just test`/`test-ci`/`ambient`; `ci.yml` wires it onto ai-review-ci itself on push/PR. Same reusable shape the installer will write downstream.
-  - Evidence: `commit-tier / qc` and `push-tier / qc` are **green on PR #99** (full 168-test suite on CI's Python 3.14.6 — which also retroactively validates the package-importing tests unrunnable on the local rc2 container). Four dogfooding-surfaced gaps fixed en route: dropped the downstream preflight, installed ripgrep + bun, and gave `_diff-cover` a valid `origin/<base>` compare-branch.
+  - Trigger boundary: a push/PR is the *push* boundary, so CI runs the PUSH/CI tier (`just test-ci`) only — the remote mirror of the pre-push hook. The COMMIT tier (`just test`) stays the local pre-commit hook's gate (nothing is committed in CI, and `test-ci` is a superset of `test`).
+  - Evidence: the `test-ci / qc` gate is **green on PR #99** (full 168-test suite on CI's Python 3.14.6 — which also retroactively validates the package-importing tests unrunnable on the local rc2 container). Four dogfooding-surfaced gaps fixed en route: dropped the downstream preflight, installed ripgrep + bun, and gave `_diff-cover` a valid `origin/<base>` compare-branch.
 
 - [x] **W1 - PR-diff gate vs ambient audit** ([#53](https://github.com/dzackgarza/ai-review-ci/issues/53))
   - Behavior: the PR/push gate (`ci.yml` → `test`/`test-ci`) is deterministic and diff-aware (`_diff-cover` scores only changed lines against the PR base); the full-repo deferred-debt audit (complexity, dead code, duplication) runs in a separate **scheduled** `ambient.yml`, never on `pull_request`.
