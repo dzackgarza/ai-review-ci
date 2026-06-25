@@ -115,6 +115,14 @@ def test_branch_protection_payload_enforces_conversation_resolution_for_every_pr
         assert payload["enforce_admins"] is True, profile
 
 
+def test_self_protection_payload_gates_on_qc_tooling_check_and_enforces_settings() -> None:
+    payload = gates.self_protection_payload()
+    assert payload["required_status_checks"]["checks"] == [{"context": "test-ci / qc", "app_id": -1}]
+    # ai-review-ci's own branch must enforce the same merge-gating contract it ships.
+    assert payload["required_conversation_resolution"] is True
+    assert payload["enforce_admins"] is True
+
+
 def test_thread_resolution_evidence_accepts_commit_or_ledger() -> None:
     commit_node = {
         "comments": {

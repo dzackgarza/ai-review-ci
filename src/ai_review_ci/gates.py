@@ -381,9 +381,17 @@ def required_check_contexts(profile: str) -> tuple[str, ...]:
     return BASE_REQUIRED_CHECK_CONTEXTS
 
 
-def branch_protection_payload(profile: str) -> JsonDict:
-    """GitHub branch protection payload for the required global QC checks."""
-    contexts = required_check_contexts(profile)
+# Required check context for an ai-review-ci-style "qc-tooling" repo: the
+# self-CI gate from ci.yml (job `test-ci` → reusable _qc.yml job `qc`). Used
+# when ai-review-ci applies the contract to its own default branch, whose CI is
+# the deterministic qc-tooling tier rather than the downstream review gates.
+QC_TOOLING_CHECK_CONTEXTS = ("test-ci / qc",)
+
+
+def _protection_payload(contexts: tuple[str, ...]) -> JsonDict:
+    """GitHub branch protection payload: required status checks plus the
+    merge-gating contract every protected branch must enforce —
+    conversation resolution required, no admin bypass."""
     return {
         "required_status_checks": {
             "strict": True,
@@ -397,17 +405,37 @@ def branch_protection_payload(profile: str) -> JsonDict:
     }
 
 
+def branch_protection_payload(profile: str) -> JsonDict:
+    """Branch protection payload for a downstream repo on the given profile."""
+    return _protection_payload(required_check_contexts(profile))
+
+
+def self_protection_payload() -> JsonDict:
+    """Branch protection payload for ai-review-ci's own default branch — the
+    same merge-gating contract it ships, gated on its own CI check."""
+    return _protection_payload(QC_TOOLING_CHECK_CONTEXTS)
+
+
+def _apply_protection(repo: str, branch: str, payload: JsonDict) -> None:
+    _gh_json(
+        ["api", "--method", "PUT", f"repos/{repo}/branches/{branch}/protection", "--input", "-"],
+        body=payload,
+    )
+
+
 def protect_branch(repo: str, branch: str, profile: str) -> None:
     """Apply required global-QC branch protection checks to a GitHub branch."""
-    _gh_json(
-        [
-            "api",
-            "--method",
-            "PUT",
-            f"repos/{repo}/branches/{branch}/protection",
-            "--input",
-            "-",
-        ],
-        body=branch_protection_payload(profile),
-    )
+    _apply_protection(repo, branch, branch_protection_payload(profile))
     print(f"Applied branch protection for {repo}@{branch}: {', '.join(required_check_contexts(profile))}")
+
+
+def self_protect_branch(repo: str, branch: str = "main") -> None:
+    """Apply ai-review-ci's own contract to its default branch.
+
+    Same as the downstream contract (conversation resolution + admin
+    enforcement) but gated on the qc-tooling self-CI check rather than the
+    downstream review gates. Run once the self-CI workflow (ci.yml) is live on
+    the default branch, so the required `test-ci / qc` context actually reports.
+    """
+    _apply_protection(repo, branch, self_protection_payload())
+    print(f"Applied self branch protection for {repo}@{branch}: {', '.join(QC_TOOLING_CHECK_CONTEXTS)}")
