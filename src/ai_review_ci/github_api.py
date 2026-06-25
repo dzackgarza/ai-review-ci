@@ -16,6 +16,8 @@ carry-forward payload still forwards the *raw* alert dict verbatim
 (``context._carry_forward_payload``), so no unmodeled field is dropped.
 """
 
+from typing import Self
+
 from pydantic import BaseModel, ConfigDict, Field, StrictBool, StrictInt, model_validator
 
 
@@ -71,7 +73,7 @@ class ReviewThread(_ApiModel):
     comments: _ReviewThreadComments
 
     @model_validator(mode="after")
-    def _path_required_when_commented(self) -> "ReviewThread":
+    def _path_required_when_commented(self) -> Self:
         if self.comments.nodes and not self.path:
             raise ValueError("review thread with comments must have a non-empty path")
         return self

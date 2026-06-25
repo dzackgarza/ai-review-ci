@@ -22,7 +22,7 @@ import subprocess
 import sys
 from collections.abc import Callable
 from pathlib import Path
-from typing import Any, NoReturn, TypeVar
+from typing import Any, NoReturn
 
 from pydantic import ValidationError
 
@@ -31,8 +31,6 @@ from ai_review_ci.github_api import CodeScanningAlert, ReviewThread
 JsonDict = dict[str, Any]
 
 DEFAULT_TOOL_NAMES = "ai-review/general,ai-review/slop"
-
-_ModelT = TypeVar("_ModelT", CodeScanningAlert, ReviewThread)
 
 
 def _fail(msg: str) -> NoReturn:
@@ -46,7 +44,7 @@ def _mapping(value: object, label: str) -> JsonDict:
     return value
 
 
-def _parse(model: type[_ModelT], value: object, label: str) -> _ModelT:
+def _parse[_ModelT: (CodeScanningAlert, ReviewThread)](model: type[_ModelT], value: object, label: str) -> _ModelT:
     """Validate a GitHub API object into a typed model, failing loudly.
 
     Converts pydantic's ValidationError into the module's fail-loud boundary

@@ -11,12 +11,13 @@ runs directly here.
 
 import importlib.util
 import pathlib
+import types
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 _SCRIPT = ROOT / "tool-artifacts" / "scripts" / "python_qc_metadata.py"
 
 
-def _load_module() -> object:
+def _load_module() -> types.ModuleType:
     spec = importlib.util.spec_from_file_location("python_qc_metadata", _SCRIPT)
     assert spec is not None and spec.loader is not None
     module = importlib.util.module_from_spec(spec)
@@ -69,8 +70,8 @@ def test_dependency_group_requirements_dedupes_preserving_order(tmp_path: pathli
 def test_pep723_requirements_dedupes_preserving_order(tmp_path: pathlib.Path) -> None:
     one = tmp_path / "one.py"
     two = tmp_path / "two.py"
-    one.write_text("# /// script\n# dependencies = [\"rich\", \"httpx\"]\n# ///\n")
-    two.write_text("# /// script\n# dependencies = [\"httpx\", \"typer\"]\n# ///\n")
+    one.write_text('# /// script\n# dependencies = ["rich", "httpx"]\n# ///\n')
+    two.write_text('# /// script\n# dependencies = ["httpx", "typer"]\n# ///\n')
 
     result = _MOD.pep723_requirements([str(one), str(two)])
 
