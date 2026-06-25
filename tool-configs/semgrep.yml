@@ -73,6 +73,12 @@ rules:
       policy_code: POLICY.NO_HIDDEN_CONFIG
       remediation_code: REMEDIATE.TOTAL_CONFIG_MODEL
   - id: no-double-cast
+    # #46: there is intentionally NO sanctioned double-cast form. A justification
+    # comment or a `boundaryCast`-style escape would be reward-hackable by
+    # confabulating a plausible reason, and then QC is stuck adjudicating whether
+    # each reason is "valid". Every double cast (`as unknown as`, `as any as`,
+    # parenthesized, comment-"justified") stays blocked and routes to
+    # REMEDIATE.STRUCTURED_TYPES — fix the type at the owned boundary, do not erase.
     pattern: $X as $T as $Z
     message: POLICY.NO_TYPE_ESCAPE
     languages:
