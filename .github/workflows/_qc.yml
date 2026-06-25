@@ -1,0 +1,84 @@
+name: QC (reusable)
+
+# Uniform deterministic-QC workflow: it does nothing tool-specific itself — it
+# just runs the consuming repo's own standardized `just test` / `just test-ci`,
+# which delegate to the upstream profile justfile in ai-review-ci. ai-review-ci
+# consumes this on itself (via the qc-tooling profile); downstream repos consume
+# it through the installed trigger. Same shape everywhere.
+
+on:
+  workflow_call:
+    inputs:
+      tier:
+        description: 'QC tier: test (commit gate), test-ci (push/CI gate), or ambient (scheduled full-repo debt audit)'
+        required: true
+        type: string
+      infra_ref:
+        description: 'Git ref of ai-review-ci whose justfiles back the delegated recipes'
+        required: false
+        type: string
+        default: main
+
+jobs:
+  qc:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    env:
+      QC_TIER: ${{ inputs.tier }}
+      QC_INFRA_REF: ${{ inputs.infra_ref }}
+      # _diff-cover compares changed lines against this ref. A CI checkout is a
+      # detached merge ref with no local `main`, so point at the remote-tracking
+      # base branch (the PR base on PRs, the default branch on pushes).
+      DIFF_COVER_BASE: origin/${{ github.base_ref || github.event.repository.default_branch }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Validate inputs
+        run: |
+          case "$QC_TIER" in
+            test|test-ci|ambient) ;;
+            *) echo "invalid tier: $QC_TIER" >&2; exit 1 ;;
+          esac
+          if [[ -z "$QC_INFRA_REF" || "$QC_INFRA_REF" =~ [^A-Za-z0-9._/-] ]]; then
+            echo "invalid infra_ref: $QC_INFRA_REF" >&2
+            exit 1
+          fi
+
+      - name: Clone QC infrastructure
+        # Scaffold justfiles delegate to ~/ai-review-ci/justfiles/<profile>.just.
+        # ai-review-ci's own justfile uses its checkout, so this clone is a
+        # no-op for the self case but keeps the workflow uniform for downstream.
+        run: git clone --depth 1 --branch "$QC_INFRA_REF" https://github.com/dzackgarza/ai-review-ci.git "$HOME/ai-review-ci"
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.14'
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v6
+
+      - name: Install just
+        run: |
+          mkdir -p "$RUNNER_TEMP/bin"
+          VERSION=$(curl -sL https://api.github.com/repos/casey/just/releases/latest | jq -r '.tag_name')
+          curl -sL "https://github.com/casey/just/releases/download/${VERSION}/just-${VERSION}-x86_64-unknown-linux-musl.tar.gz" \
+            | tar -xzf - -C "$RUNNER_TEMP/bin" just
+          echo "$RUNNER_TEMP/bin" >> "$GITHUB_PATH"
+
+      - name: Install ripgrep
+        # The QC file-discovery recipes (_python-qc-files etc.) shell out to `rg`.
+        # Dev machines have it on PATH; a bare runner does not, so install it
+        # explicitly — same contract for downstream consumers of this workflow.
+        run: sudo apt-get update && sudo apt-get install -y ripgrep
+
+      - name: Install bun
+        # Some QC profiles (and ai-review-ci's own suite) drive JS tooling
+        # configs through bun; node ships on the runner, bun does not.
+        uses: oven-sh/setup-bun@v2
+
+      - name: Run QC tier
+        run: just "$QC_TIER"
