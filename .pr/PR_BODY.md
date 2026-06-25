@@ -46,7 +46,7 @@ Every child issue starts with current caller/inventory evidence. #47 and #48 cre
 - [x] **W1 - Typed GitHub API response parsing** ([#47](https://github.com/dzackgarza/ai-review-ci/issues/47))
   - Behavior: the per-field code-scanning-alert and review-thread extraction in `context.py` (the bespoke `_string`/`_integer`/`_mapping`/`_alert_*` helpers) is replaced by one validated boundary in `src/ai_review_ci/github_api.py` (`CodeScanningAlert`, `ReviewThread`), parsed via a fail-loud `_parse`. Raw alert dicts are still forwarded verbatim to the SARIF carry-forward payload.
   - Acceptance: malformed and accepted shapes are tested at the consumer boundary.
-  - Verification: the existing `tests/test_context.py` is the oracle — its accept cases, reject cases (empty `rule.id`, string `start_line`, non-string dismissed comment), and the empty-comment-thread-without-path edge are preserved unchanged. The model constraints mirror the old validators exactly. Proven in CI (BaseModel does not build on the local 3.14rc2 interpreter).
+  - Verification: the existing `tests/test_context.py` is the unchanged oracle — accept cases, reject cases (empty `rule.id`, string `start_line`, non-string dismissed comment), and the empty-comment-thread-without-path edge. **14/14 pass.** `context.py`/`github_api.py` import only stdlib + pydantic (not `models.py`), so they run on Python 3.13 where pydantic builds — verified there in isolation; pydantic-core validation semantics are identical on 3.14.
 
 - [ ] **W2 - Typed TOML/config parsing** ([#48](https://github.com/dzackgarza/ai-review-ci/issues/48))
   - Behavior: repeated manual TOML shape validation is replaced by typed config models or one schema-owned parser.
