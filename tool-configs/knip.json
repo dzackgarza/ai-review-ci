@@ -1,6 +1,25 @@
 {
-  "entry": ["src/index.ts", "src/**/*.ts", "app.tsx", "lib/**/*.ts", "src/**/*.css", "app.css", "index.css"],
-  "project": ["src/**/*.ts", "src/**/*.tsx", "lib/**/*.ts", "lib/**/*.tsx", "widget/**/*.tsx", "services/**/*.ts", "app.tsx", "src/**/*.css", "app.css", "index.css"],
+  "entry": [
+    "src/index.ts",
+    "src/**/*.ts",
+    "app.tsx",
+    "lib/**/*.ts",
+    "src/**/*.css",
+    "app.css",
+    "index.css"
+  ],
+  "project": [
+    "src/**/*.ts",
+    "src/**/*.tsx",
+    "lib/**/*.ts",
+    "lib/**/*.tsx",
+    "widget/**/*.tsx",
+    "services/**/*.ts",
+    "app.tsx",
+    "src/**/*.css",
+    "app.css",
+    "index.css"
+  ],
   "ignore": [
     "**/*.test.ts",
     "**/*.spec.ts",
@@ -31,7 +50,17 @@
     "**/third_party/**",
     "**/venv/**"
   ],
-  "ignoreDependencies": ["gi", "@girs", "@logtape/logtape", "@ags/shared", "ags"],
-  "ignoreBinaries": ["ags", "xdg-open"],
+  "ignoreDependencies": [
+    "gi",
+    "@girs",
+    "@logtape/logtape",
+    "@ags/shared",
+    "ags"
+  ],
+  "ignoreBinaries": [
+    "ags",
+    "xdg-open",
+    "direnv"
+  ],
   "ignoreExportsUsedInFile": true
 }
