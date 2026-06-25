@@ -71,5 +71,10 @@ jobs:
         # explicitly — same contract for downstream consumers of this workflow.
         run: sudo apt-get update && sudo apt-get install -y ripgrep
 
+      - name: Install bun
+        # Some QC profiles (and ai-review-ci's own suite) drive JS tooling
+        # configs through bun; node ships on the runner, bun does not.
+        uses: oven-sh/setup-bun@v2
+
       - name: Run QC tier
         run: just "$QC_TIER"
