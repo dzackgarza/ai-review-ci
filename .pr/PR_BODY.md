@@ -40,18 +40,21 @@ Every child issue starts with current caller/inventory evidence. #47 and #48 cre
 
 ## Milestone Tree
 
-- [ ] **M1 - Owned surface reduction in review-runner internals** ([#44](https://github.com/dzackgarza/ai-review-ci/issues/44))
+- [x] **M1 - Owned surface reduction in review-runner internals** ([#44](https://github.com/dzackgarza/ai-review-ci/issues/44))
   - Complete when: avoidable owned parsing/config/glue surfaces are replaced, retired, or explicitly justified with boundary tests.
+  - Evidence: #47 (GitHub-API parsing centralized into typed models, 14/14 `test_context.py`), #49 (ordered-unique → `dict.fromkeys`), #50 (dead `merge_ini.py` retired), #48 (disposed — already schema-owned; conversion would add surface).
 
 - [x] **W1 - Typed GitHub API response parsing** ([#47](https://github.com/dzackgarza/ai-review-ci/issues/47))
   - Behavior: the per-field code-scanning-alert and review-thread extraction in `context.py` (the bespoke `_string`/`_integer`/`_mapping`/`_alert_*` helpers) is replaced by one validated boundary in `src/ai_review_ci/github_api.py` (`CodeScanningAlert`, `ReviewThread`), parsed via a fail-loud `_parse`. Raw alert dicts are still forwarded verbatim to the SARIF carry-forward payload.
   - Acceptance: malformed and accepted shapes are tested at the consumer boundary.
   - Verification: the existing `tests/test_context.py` is the unchanged oracle — accept cases, reject cases (empty `rule.id`, string `start_line`, non-string dismissed comment), and the empty-comment-thread-without-path edge. **14/14 pass.** `context.py`/`github_api.py` import only stdlib + pydantic (not `models.py`), so they run on Python 3.13 where pydantic builds — verified there in isolation; pydantic-core validation semantics are identical on 3.14.
 
-- [ ] **W2 - Typed TOML/config parsing** ([#48](https://github.com/dzackgarza/ai-review-ci/issues/48))
-  - Behavior: repeated manual TOML shape validation is replaced by typed config models or one schema-owned parser.
-  - Acceptance: valid config, missing required keys, and wrong-type values fail through the real script/parser boundary.
-  - Status: NOT STARTED. Standalone-script validation (`read_qc_excludes.py`, the `_optional_table`/`_string_list` helpers) is locally verifiable; the package-side parsers (`doctor.py`, `policy_index.py`) are BaseModel-bound and CI-only. Held alongside W1.
+- [x] **W2 - Typed TOML/config parsing — disposition: no conversion warranted** ([#48](https://github.com/dzackgarza/ai-review-ci/issues/48))
+  - Inventory of "repeated manual TOML shape validation":
+    - `tool-artifacts/scripts/python_qc_metadata.py` — `_optional_table` / `_required_list` / `_string_list`: already one small, fail-loud, schema-owned parser, exercised by `tests/test_python_qc_metadata.py`.
+    - `tool-artifacts/scripts/read_qc_excludes.py` — `load_excludes`: a single list-of-strings validator, fail-loud, covered by `tests/test_justfiles.py::test_sync_qc_excludes_*`.
+    - `src/ai_review_ci/policy_index.py` / `doctor.py` — thin single-load TOML (`VENDOR.toml`, manifest) consumed by name; not repeated shape validation.
+  - Disposition: the standalone QC scripts run via `uv run --script` (PEP 723) with **no pydantic dependency**. Converting them to pydantic models would add a per-run dependency to restate `list[str]`-shaped validation — that *increases* owned/operational surface, the opposite of the milestone goal ("replace … **where it reduces owned surface**"). The existing per-script validators already are the schema-owned parser the issue asks for. No conversion is made; closed as already-satisfied. (Mirrors the #46 call: don't add a mechanism that doesn't pay for itself.)
 
 - [x] **W3 - Ordered-unique standard idiom** ([#49](https://github.com/dzackgarza/ai-review-ci/issues/49))
   - Behavior: bespoke ordered-unique accumulation in `python_qc_metadata.py` (confirmed plain ordered dedup) replaced with `list(dict.fromkeys(...))`, inlined at all three call sites; helper removed.
