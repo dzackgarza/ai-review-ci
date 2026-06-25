@@ -7,16 +7,6 @@ from pathlib import Path
 from typing import cast
 
 
-def _ordered_unique(values: Iterable[str]) -> list[str]:
-    seen: set[str] = set()
-    unique: list[str] = []
-    for value in values:
-        if value not in seen:
-            seen.add(value)
-            unique.append(value)
-    return unique
-
-
 def _load_pyproject(project_root: Path) -> dict[str, object]:
     pyproject_path = project_root / "pyproject.toml"
     raw_config = tomllib.loads(pyproject_path.read_text(encoding="utf-8"))
@@ -112,7 +102,7 @@ def first_party_modules(project_root: Path) -> list[str]:
         modules.extend(_source_modules(package_root))
     modules.extend(_hatch_wheel_packages(pyproject))
     modules.extend(_setuptools_py_modules(pyproject))
-    return _ordered_unique(modules)
+    return list(dict.fromkeys(modules))
 
 
 def dependency_group_requirements(project_root: Path) -> list[str]:
@@ -148,7 +138,7 @@ def dependency_group_requirements(project_root: Path) -> list[str]:
     requirements: list[str] = []
     for group_name in sorted(dependency_groups):
         requirements.extend(collect(group_name, ()))
-    return _ordered_unique(requirements)
+    return list(dict.fromkeys(requirements))
 
 
 def _has_pep723_script_metadata(path: Path) -> bool:
@@ -194,7 +184,7 @@ def pep723_requirements(paths: list[str]) -> list[str]:
         if "dependencies" in metadata:
             dependencies = metadata["dependencies"]
         requirements.extend(_string_list(dependencies, f"{path} dependencies"))
-    return _ordered_unique(requirements)
+    return list(dict.fromkeys(requirements))
 
 
 def _print_lines(values: Iterable[str]) -> None:
