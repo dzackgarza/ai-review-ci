@@ -25,7 +25,13 @@ justfiles := infra / "justfiles"
 
 # Correctness subrecipes run in one python.just invocation so the shared
 # `_install-tools` dependency resolves once.
-_commit-recipes := "_check-python-project _normalize _python-syntax _mypy _pytest"
+#
+# NB: python.just's `_check-python-project` preflight is deliberately omitted —
+# it enforces *downstream-consumer* shape (no local QC tool configs, a specific
+# test layout) that is inverted for the QC owner: ai-review-ci legitimately owns
+# the tool configs it ships. Correctness is still proven by mypy + pytest (which
+# fail if types are wrong or tests are absent/failing).
+_commit-recipes := "_normalize _python-syntax _mypy _pytest"
 _ci-recipes := "_pytest_with_coverage _diff-cover _deptry _import-linter"
 
 # public: COMMIT gate — correctness + normalization only (no slop/style gates)
