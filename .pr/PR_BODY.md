@@ -43,10 +43,10 @@ Every child issue starts with current caller/inventory evidence. #47 and #48 cre
 - [ ] **M1 - Owned surface reduction in review-runner internals** ([#44](https://github.com/dzackgarza/ai-review-ci/issues/44))
   - Complete when: avoidable owned parsing/config/glue surfaces are replaced, retired, or explicitly justified with boundary tests.
 
-- [ ] **W1 - Typed GitHub API response parsing** ([#47](https://github.com/dzackgarza/ai-review-ci/issues/47))
-  - Behavior: repeated GitHub API dict extraction in `context.py` / `threads.py` is replaced or centralized through typed models where it reduces owned surface.
-  - Acceptance: malformed and accepted response shapes are tested at the consumer boundary.
-  - Status: NOT STARTED. This is package code that imports `models.py`; pydantic `BaseModel` cannot build on the local 3.14rc2 interpreter, so the boundary tests can only be authored against CI. Held for a CI-verifiable pass to avoid shipping an unrunnable core-parser refactor.
+- [x] **W1 - Typed GitHub API response parsing** ([#47](https://github.com/dzackgarza/ai-review-ci/issues/47))
+  - Behavior: the per-field code-scanning-alert and review-thread extraction in `context.py` (the bespoke `_string`/`_integer`/`_mapping`/`_alert_*` helpers) is replaced by one validated boundary in `src/ai_review_ci/github_api.py` (`CodeScanningAlert`, `ReviewThread`), parsed via a fail-loud `_parse`. Raw alert dicts are still forwarded verbatim to the SARIF carry-forward payload.
+  - Acceptance: malformed and accepted shapes are tested at the consumer boundary.
+  - Verification: the existing `tests/test_context.py` is the oracle — its accept cases, reject cases (empty `rule.id`, string `start_line`, non-string dismissed comment), and the empty-comment-thread-without-path edge are preserved unchanged. The model constraints mirror the old validators exactly. Proven in CI (BaseModel does not build on the local 3.14rc2 interpreter).
 
 - [ ] **W2 - Typed TOML/config parsing** ([#48](https://github.com/dzackgarza/ai-review-ci/issues/48))
   - Behavior: repeated manual TOML shape validation is replaced by typed config models or one schema-owned parser.
