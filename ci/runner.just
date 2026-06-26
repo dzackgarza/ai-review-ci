@@ -105,6 +105,8 @@ copy-reviewer-repo:
     sudo rsync -a --delete \
       --exclude '.git' \
       --exclude '.github' \
+      --exclude '.agents' \
+      --exclude '.hermes' \
       --exclude '.review-report-artifact.json' \
       --exclude '.review-report.sarif' \
       {{control_repo}}/ {{reviewer_repo}}/
