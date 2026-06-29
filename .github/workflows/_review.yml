@@ -78,12 +78,10 @@ jobs:
           python-version: '3.14'
 
       - name: Install just
-        run: |
-          mkdir -p "$RUNNER_TEMP/bin"
-          VERSION=$(curl -sL https://api.github.com/repos/casey/just/releases/latest | jq -r '.tag_name')
-          curl -sL "https://github.com/casey/just/releases/download/${VERSION}/just-${VERSION}-x86_64-unknown-linux-musl.tar.gz" \
-            | tar -xzf - -C "$RUNNER_TEMP/bin" just
-          echo "$RUNNER_TEMP/bin" >> "$GITHUB_PATH"
+        # Authenticated install via the maintained action. Mirrors _qc.yml.
+        uses: extractions/setup-just@v4
+        with:
+          github-token: ${{ github.token }}
 
       - name: Install tools
         run: just -f "$INFRA/ci/runner.just" install-tools
