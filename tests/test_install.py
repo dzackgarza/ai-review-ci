@@ -1,6 +1,7 @@
 import pathlib
 import subprocess
 import sys
+from typing import Any
 
 import pytest
 import yaml
@@ -39,10 +40,11 @@ def _reusable_target(job: dict[str, object]) -> str | None:
     return uses[len(_REUSABLE_PREFIX) :].split("@", 1)[0]
 
 
-def _workflow_jobs(workflow_file: str) -> dict[str, object]:
+def _workflow_jobs(workflow_file: str) -> dict[str, dict[str, Any]]:
     data = yaml.safe_load((_WORKFLOWS_DIR / workflow_file).read_text())
     jobs = data.get("jobs")
     assert isinstance(jobs, dict)
+    assert all(isinstance(job, dict) for job in jobs.values())
     return jobs
 
 
@@ -222,11 +224,7 @@ def test_reusable_workflows_install_just_with_maintained_authenticated_action() 
         for job_name, job in _workflow_jobs(workflow_file).items():
             steps = job.get("steps")
             assert isinstance(steps, list), f"{workflow_file} job {job_name!r} has no steps"
-            install_steps = [
-                step
-                for step in steps
-                if isinstance(step, dict) and step.get("name") == "Install just"
-            ]
+            install_steps = [step for step in steps if isinstance(step, dict) and step.get("name") == "Install just"]
             assert install_steps, f"{workflow_file} job {job_name!r} has no Install just step"
             for step in install_steps:
                 assert step.get("uses") == "extractions/setup-just@v4"
