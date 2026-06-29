@@ -1,6 +1,7 @@
 import pathlib
 import subprocess
 import sys
+from typing import Any
 
 import pytest
 import yaml
@@ -37,6 +38,14 @@ def _reusable_target(job: dict[str, object]) -> str | None:
     if not isinstance(uses, str) or not uses.startswith(_REUSABLE_PREFIX):
         return None
     return uses[len(_REUSABLE_PREFIX) :].split("@", 1)[0]
+
+
+def _workflow_jobs(workflow_file: str) -> dict[str, dict[str, Any]]:
+    data = yaml.safe_load((_WORKFLOWS_DIR / workflow_file).read_text())
+    jobs = data.get("jobs")
+    assert isinstance(jobs, dict)
+    assert all(isinstance(job, dict) for job in jobs.values())
+    return jobs
 
 
 def _git_repo(tmp_path: pathlib.Path) -> pathlib.Path:
@@ -194,6 +203,33 @@ def test_install_refuses_overwriting_repo_owned_config(
     with pytest.raises(SystemExit):
         _write_trigger_workflows(repo, "bun")
     assert customized.read_text() == "# locally customized\n"
+
+
+def test_reusable_workflows_install_just_with_maintained_authenticated_action() -> None:
+    """Regression guard for #129.
+
+    The reusable workflows must not use the old anonymous
+    `releases/latest | tar` installer. The maintained setup action exposes an
+    explicit token input; wiring it in the workflow keeps the install path
+    authenticated instead of relying on unauthenticated GitHub API calls.
+    """
+
+    for workflow_file in ("_qc.yml", "_review.yml", "_gates.yml"):
+        text = (_WORKFLOWS_DIR / workflow_file).read_text()
+        assert "https://api.github.com/repos/casey/just/releases/latest" not in text
+        assert "tar -xzf" not in text
+        assert "VERSION=$(curl -sL" not in text
+
+    for workflow_file in ("_qc.yml", "_review.yml", "_gates.yml"):
+        for job_name, job in _workflow_jobs(workflow_file).items():
+            steps = job.get("steps")
+            assert isinstance(steps, list), f"{workflow_file} job {job_name!r} has no steps"
+            install_steps = [step for step in steps if isinstance(step, dict) and step.get("name") == "Install just"]
+            assert install_steps, f"{workflow_file} job {job_name!r} has no Install just step"
+            for step in install_steps:
+                assert step.get("uses") == "extractions/setup-just@v4"
+                assert step.get("with", {}).get("github-token") == "${{ github.token }}"
+                assert "env" not in step
 
 
 @pytest.mark.parametrize("profile", SUPPORTED_PROFILES)
