@@ -1,5 +1,15 @@
+# ai-review-ci SageMath QC delegation justfile.
+# The central implementation lives in ~/ai-review-ci/justfiles/sage.just.
+# Public recipes delegate to that central justfile while preserving this repo as the caller root.
+
+# List available recipes.
+default:
+    @just --list
+
+# Run commit-tier SageMath QC through the central implementation.
 test:
     @just -f ~/ai-review-ci/justfiles/sage.just -d . test
 
+# Run push-tier SageMath QC through the central implementation.
 test-ci:
     @just -f ~/ai-review-ci/justfiles/sage.just -d . test-ci

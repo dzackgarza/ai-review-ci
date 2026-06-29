@@ -281,6 +281,68 @@ def test_doctor_classifies_wrong_caller_root_delegation_as_misconfigured(tmp_pat
     assert payload["findings"][0]["remediation_commands"] == ["just install-qc-scaffold python <target-repo>"]
 
 
+def test_doctor_reports_justfile_baseline_violations(tmp_path: pathlib.Path) -> None:
+    project = create_target(tmp_path, "python")
+    (project / "justfile").write_text(
+        "\n".join(
+            [
+                "test:",
+                "    @just -f ~/ai-review-ci/justfiles/python.just -d . test",
+                "",
+                "# Run push-tier Python QC through the central implementation.",
+                "test-ci:",
+                "    @just -f ~/ai-review-ci/justfiles/python.just -d . test-ci",
+                "",
+            ]
+        )
+    )
+
+    status, payload = status_for(project)
+
+    assert status == "misconfigured"
+    justfile_findings = [
+        finding
+        for finding in payload["findings"]
+        if finding["surface"] == "justfile_conformance"
+    ]
+    assert [finding["evidence"].split(" ", 1)[1] for finding in justfile_findings] == [
+        "header-comment: justfile must begin with a comment block",
+        "default-recipe: no default recipe; bare just must list recipes",
+        "public-recipe-doc: recipe `test` has no immediate # doc comment",
+    ]
+
+
+def test_check_justfile_cli_reports_baseline_violations(tmp_path: pathlib.Path) -> None:
+    project = create_target(tmp_path, "python")
+    (project / "justfile").write_text(
+        "\n".join(
+            [
+                "# Delegates Python QC.",
+                "",
+                "# Run commit-tier Python QC through the central implementation.",
+                "test:",
+                "    @just -f ~/ai-review-ci/justfiles/python.just -d . test",
+                "",
+                "# Run push-tier Python QC through the central implementation.",
+                "test-ci:",
+                "    @just -f ~/ai-review-ci/justfiles/python.just -d . test-ci",
+                "",
+            ]
+        )
+    )
+
+    result = subprocess.run(
+        [sys.executable, "-m", "ai_review_ci.cli", "check-justfile", "--target", str(project)],
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+
+    assert result.returncode == 1
+    assert "justfile_conformance" in result.stderr
+    assert "default-recipe" in result.stderr
+
+
 def test_doctor_classifies_non_github_remote_branch_protection_as_unverifiable(tmp_path: pathlib.Path) -> None:
     project = create_target(tmp_path, "python")
     assert run_git(project, "remote", "add", "origin", str(tmp_path / "not-github.git")).returncode == 0

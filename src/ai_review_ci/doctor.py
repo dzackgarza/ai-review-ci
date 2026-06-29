@@ -30,7 +30,15 @@ ObservedProfile = Literal["python", "bun", "bun-playwright", "rust", "sage", "un
 InstallationState = Literal["compliant", "outdated", "noncompliant", "uninstalled", "unknown"]
 GlobalStatus = Literal["current", "stale", "misconfigured", "unverifiable", "intentional_exception"]
 FindingSeverity = Literal["error", "warning"]
-FindingSurface = Literal["manifest", "profile", "workflow", "workflow_ref", "justfile_delegation", "branch_protection"]
+FindingSurface = Literal[
+    "manifest",
+    "profile",
+    "workflow",
+    "workflow_ref",
+    "justfile_delegation",
+    "justfile_conformance",
+    "branch_protection",
+]
 BranchProtectionState = Literal["not_applicable", "compliant", "missing", "missing_contexts", "unverifiable"]
 
 JsonDict = dict[str, Any]
@@ -210,6 +218,21 @@ def doctor(target: Path, *, json: Annotated[int, Parameter(name="--json", count=
         sys.exit(1)
 
 
+def check_justfile(target: Path) -> None:
+    """Fail if the target justfile violates the baseline public justfile contract."""
+    report = doctor_report(target)
+    findings = [
+        finding
+        for finding in report.findings
+        if finding.surface in ("justfile_conformance", "justfile_delegation")
+    ]
+    if findings:
+        for finding in findings:
+            print(f"{finding.surface}: {finding.evidence}", file=sys.stderr)
+        sys.exit(1)
+    print(f"Justfile conformance passed for {Path(target).resolve()}.")
+
+
 def doctor_schema() -> None:
     """Print the JSON Schema for the machine-readable doctor payload."""
     print(jsonlib.dumps(DoctorReport.model_json_schema(), indent=2))
@@ -235,6 +258,7 @@ def doctor_report(target: Path) -> DoctorReport:
     findings = _findings(
         target_root=target_root,
         manifest=manifest,
+        report_profile=report_profile,
         declared_profile=declared_profile,
         effective_profile=effective_profile,
         workflow_refs=workflow_refs,
@@ -482,6 +506,7 @@ def _findings(
     *,
     target_root: Path,
     manifest: ManifestDeclaration,
+    report_profile: ProfileName,
     declared_profile: ObservedProfile,
     effective_profile: ObservedProfile,
     workflow_refs: dict[str, WorkflowRefObservation],
@@ -489,8 +514,9 @@ def _findings(
     branch_protection: BranchProtectionObservation,
     profile_proof: dict[str, ProfileProofObservation],
 ) -> list[DoctorFinding]:
+    findings: list[DoctorFinding] = []
     if not isinstance(manifest, QcManifest):
-        return [
+        findings.append(
             DoctorFinding(
                 severity="error",
                 surface="manifest",
@@ -499,9 +525,10 @@ def _findings(
                     "uvx --from git+https://github.com/dzackgarza/ai-review-ci ai-review-ci install --target <target-repo> --repo owner/repo --branch main --profile <profile>",
                 ),
             )
-        ]
+        )
+        findings.extend(_justfile_conformance_findings(target_root, report_profile))
+        return findings
     declared = manifest.profile
-    findings: list[DoctorFinding] = []
     if effective_profile != declared:
         findings.append(
             DoctorFinding(
@@ -555,6 +582,7 @@ def _findings(
                     remediation_commands=(f"just install-qc-scaffold {declared} <target-repo>",),
                 )
             )
+    findings.extend(_justfile_conformance_findings(target_root, declared))
     if branch_protection.observed_state in ("missing", "missing_contexts"):
         findings.append(
             DoctorFinding(
@@ -574,6 +602,85 @@ def _findings(
             )
         )
     return findings
+
+
+def _justfile_conformance_findings(target: Path, profile: ProfileName) -> list[DoctorFinding]:
+    justfile = _justfile_path(target)
+    if not justfile.is_file():
+        return [
+            DoctorFinding(
+                severity="error",
+                surface="justfile_conformance",
+                evidence=f"{target} must contain exactly one justfile or Justfile",
+                remediation_commands=(f"just install-qc-scaffold {profile} <target-repo>",),
+            )
+        ]
+    lines = justfile.read_text(encoding="utf-8").splitlines()
+    findings: list[DoctorFinding] = []
+    if not lines or not lines[0].startswith("#"):
+        findings.append(
+            DoctorFinding(
+                severity="error",
+                surface="justfile_conformance",
+                evidence=f"{justfile}:1 header-comment: justfile must begin with a comment block",
+                remediation_commands=(f"just install-qc-scaffold {profile} <target-repo>",),
+            )
+        )
+    recipes = _justfile_recipes(lines)
+    default = recipes.get("default")
+    if default is None:
+        findings.append(
+            DoctorFinding(
+                severity="error",
+                surface="justfile_conformance",
+                evidence=f"{justfile} default-recipe: no default recipe; bare just must list recipes",
+                remediation_commands=(f"just install-qc-scaffold {profile} <target-repo>",),
+            )
+        )
+    elif "just --list" not in _recipe_delegation(target, justfile, PROJECT_PROFILES[profile], "default").observed.command:
+        findings.append(
+            DoctorFinding(
+                severity="error",
+                surface="justfile_conformance",
+                evidence=f"{justfile}:{default} default-recipe: default must resolve to just --list",
+                remediation_commands=(f"just install-qc-scaffold {profile} <target-repo>",),
+            )
+        )
+    for recipe, line_no in recipes.items():
+        if not _has_private_attribute(lines, line_no) and not _has_immediate_doc_comment(lines, line_no):
+            findings.append(
+                DoctorFinding(
+                    severity="error",
+                    surface="justfile_conformance",
+                    evidence=f"{justfile}:{line_no} public-recipe-doc: recipe `{recipe}` has no immediate # doc comment",
+                    remediation_commands=(f"just install-qc-scaffold {profile} <target-repo>",),
+                )
+            )
+    return findings
+
+
+def _justfile_recipes(lines: list[str]) -> dict[str, int]:
+    recipes: dict[str, int] = {}
+    for index, line in enumerate(lines, start=1):
+        if line.startswith((" ", "\t", "#", "[")) or ":=" in line or "=" in line:
+            continue
+        match = re.match(r"^([A-Za-z_][A-Za-z0-9_-]*)\b.*:", line)
+        if match is not None:
+            recipes[match.group(1)] = index
+    return recipes
+
+
+def _has_immediate_doc_comment(lines: list[str], line_no: int) -> bool:
+    return line_no > 1 and lines[line_no - 2].startswith("#")
+
+
+def _has_private_attribute(lines: list[str], line_no: int) -> bool:
+    index = line_no - 2
+    while index >= 0 and lines[index].startswith("["):
+        if lines[index].strip() == "[private]":
+            return True
+        index -= 1
+    return False
 
 
 def _classify(manifest: ManifestDeclaration, findings: list[DoctorFinding]) -> tuple[InstallationState, GlobalStatus]:

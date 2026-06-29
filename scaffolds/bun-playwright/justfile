@@ -1,8 +1,19 @@
+# ai-review-ci Bun/Playwright QC delegation justfile.
+# The central implementation lives in ~/ai-review-ci/justfiles/bun.just.
+# Public recipes delegate to that central justfile while preserving this repo as the caller root.
+
+# List available recipes.
+default:
+    @just --list
+
+# Run commit-tier Bun/TypeScript QC through the central implementation.
 test:
     @just -f ~/ai-review-ci/justfiles/bun.just -d . test
 
+# Run push-tier Bun/TypeScript QC through the central implementation.
 test-ci:
     @just -f ~/ai-review-ci/justfiles/bun.just -d . test-ci
 
+# Run the centrally managed Playwright application boot proof.
 app-boot:
     @just -f ~/ai-review-ci/justfiles/bun.just -d . app-boot
