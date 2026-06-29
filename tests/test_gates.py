@@ -127,3 +127,65 @@ def test_thread_resolution_evidence_accepts_commit_or_ledger() -> None:
     assert gates._has_resolution_evidence(commit_node)
     assert gates._has_resolution_evidence(ledger_node)
     assert not gates._has_resolution_evidence(empty_node)
+
+
+def test_thread_resolution_gate_blocks_unresolved_non_ai_review_thread(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    monkeypatch.setattr(
+        gates,
+        "_thread_nodes",
+        lambda _repo, _pr_number: [
+            {
+                "path": "src/app.ts",
+                "isResolved": False,
+                "comments": {"nodes": [{"body": "human review: please fix this"}]},
+            }
+        ],
+    )
+
+    with pytest.raises(SystemExit):
+        gates.check_review_threads("owner/repo", 42)
+
+    assert "src/app.ts: unresolved review thread" in capsys.readouterr().err
+
+
+def test_thread_resolution_gate_requires_evidence_for_resolved_non_ai_review_thread(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    monkeypatch.setattr(
+        gates,
+        "_thread_nodes",
+        lambda _repo, _pr_number: [
+            {
+                "path": "src/app.ts",
+                "isResolved": True,
+                "comments": {"nodes": [{"body": "resolved"}]},
+            }
+        ],
+    )
+
+    with pytest.raises(SystemExit):
+        gates.check_review_threads("owner/repo", 42)
+
+    assert "src/app.ts: resolved review thread lacks commit or disposition-ledger evidence" in capsys.readouterr().err
+
+
+def test_thread_resolution_gate_accepts_any_resolved_thread_with_evidence(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        gates,
+        "_thread_nodes",
+        lambda _repo, _pr_number: [
+            {
+                "path": "src/app.ts",
+                "isResolved": True,
+                "comments": {"nodes": [{"body": "human thread resolved by commit 123456789abc"}]},
+            }
+        ],
+    )
+
+    gates.check_review_threads("owner/repo", 42)

@@ -10,7 +10,6 @@ from typing import Any, NoReturn
 
 from unidiff import PatchSet
 
-from ai_review_ci.threads import FINGERPRINT_MARKER
 
 JsonDict = dict[str, Any]
 
@@ -341,9 +340,6 @@ def _comments(node: JsonDict) -> list[JsonDict]:
     return comments
 
 
-def _is_ai_review_thread(node: JsonDict) -> bool:
-    return any(FINGERPRINT_MARKER in str(comment["body"]) for comment in _comments(node))
-
 
 def _has_resolution_evidence(node: JsonDict) -> bool:
     for comment in _comments(node):
@@ -354,16 +350,14 @@ def _has_resolution_evidence(node: JsonDict) -> bool:
 
 
 def check_review_threads(repo: str, pr_number: int) -> None:
-    """Fail unless all ai-review PR threads are resolved with visible evidence."""
+    """Fail unless every PR review thread is resolved with visible evidence."""
     failures: list[str] = []
     for node in _thread_nodes(repo, pr_number):
-        if not _is_ai_review_thread(node):
-            continue
         path = str(node["path"])
         if not node["isResolved"]:
-            failures.append(f"{path}: unresolved ai-review thread")
+            failures.append(f"{path}: unresolved review thread")
         elif not _has_resolution_evidence(node):
-            failures.append(f"{path}: resolved ai-review thread lacks commit or disposition-ledger evidence")
+            failures.append(f"{path}: resolved review thread lacks commit or disposition-ledger evidence")
     if failures:
         print("Review thread gate found unresolved or unevidenced threads:", file=sys.stderr)
         for failure in failures:

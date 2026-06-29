@@ -10,7 +10,7 @@ Subcommands:
 - check-diff       — fail if a PR unified diff introduces deterministic findings
 - check-delegation — fail if a target justfile stops delegating to global QC
 - check-app-boot   — run the target repo's delegated bun-playwright gate
-- check-review-threads — require evidence-backed ai-review thread resolution
+- check-review-threads — require evidence-backed review thread resolution
 - protect-branch   — apply required branch protection contexts
 - validate-report  — validate a candidate report and write the artifact
 - report-schema    — dump the JSON Schema for a report type
