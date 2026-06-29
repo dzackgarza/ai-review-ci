@@ -138,6 +138,7 @@
             "workflow",
             "workflow_ref",
             "justfile_delegation",
+            "justfile_conformance",
             "branch_protection"
           ],
           "title": "Surface",
@@ -178,6 +179,7 @@
             "workflow",
             "workflow_ref",
             "justfile_delegation",
+            "justfile_conformance",
             "branch_protection"
           ],
           "title": "Surface",

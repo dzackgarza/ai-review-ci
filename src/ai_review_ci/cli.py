@@ -9,6 +9,7 @@ Subcommands:
 - check-profile    — fail if a target repo does not match its curated profile
 - check-diff       — fail if a PR unified diff introduces deterministic findings
 - check-delegation — fail if a target justfile stops delegating to global QC
+- check-justfile   — fail if a target justfile violates the baseline contract
 - check-app-boot   — run the target repo's delegated bun-playwright gate
 - check-review-threads — require evidence-backed ai-review thread resolution
 - protect-branch   — apply required branch protection contexts
@@ -25,7 +26,7 @@ Subcommands:
 from cyclopts import App
 
 from ai_review_ci.context import fetch_context
-from ai_review_ci.doctor import doctor, doctor_schema, version_command
+from ai_review_ci.doctor import check_justfile, doctor, doctor_schema, version_command
 from ai_review_ci.gates import (
     check_app_boot,
     check_delegation,
@@ -52,6 +53,7 @@ app.command(doctor_schema)
 app.command(check_profile)
 app.command(check_diff)
 app.command(check_delegation)
+app.command(check_justfile)
 app.command(check_app_boot)
 app.command(check_review_threads)
 app.command(protect_branch)
