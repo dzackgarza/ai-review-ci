@@ -16,7 +16,9 @@ def test_diff_gate_blocks_added_mock_and_ignores_context_backlog() -> None:
  context();
 """
 
-    assert gates.diff_findings(diff) == ["src/App.test.tsx:3: ts-no-vitest-mock-boundary: Vitest mock helpers replace real proof boundaries."]
+    assert gates.diff_findings(diff) == [
+        "src/App.test.tsx:3: ts-no-vitest-mock-boundary: Vitest mock helpers replace real proof boundaries."
+    ]
 
 
 def test_diff_gate_blocks_uppercase_literals_but_not_local_const_calls() -> None:
@@ -29,7 +31,9 @@ def test_diff_gate_blocks_uppercase_literals_but_not_local_const_calls() -> None
  export const existing = buildValue();
 """
 
-    assert gates.diff_findings(diff) == ["src/settings.ts:1: no-const-assignment: Hardcoded config-shaped constants belong in required config."]
+    assert gates.diff_findings(diff) == [
+        "src/settings.ts:1: no-const-assignment: Hardcoded config-shaped constants belong in required config."
+    ]
 
 
 def test_delegation_accepts_canonical_scaffold(tmp_path: pathlib.Path) -> None:
@@ -38,7 +42,11 @@ def test_delegation_accepts_canonical_scaffold(tmp_path: pathlib.Path) -> None:
     (project / "package.json").write_text('{"scripts": {}}\n')
     (project / "bun.lock").write_text("")
     justfile = project / "justfile"
-    justfile.write_text((pathlib.Path(__file__).parents[1] / "scaffolds" / "bun" / "justfile").read_text())
+    justfile.write_text(
+        (
+            pathlib.Path(__file__).parents[1] / "scaffolds" / "bun" / "justfile"
+        ).read_text()
+    )
 
     gates.check_delegation(project, "bun")
 
@@ -57,13 +65,19 @@ def test_delegation_rejects_local_qc_override(tmp_path: pathlib.Path) -> None:
 def test_delegation_rejects_profile_shape_mismatch(tmp_path: pathlib.Path) -> None:
     project = tmp_path / "project"
     project.mkdir()
-    (project / "justfile").write_text((pathlib.Path(__file__).parents[1] / "scaffolds" / "bun" / "justfile").read_text())
+    (project / "justfile").write_text(
+        (
+            pathlib.Path(__file__).parents[1] / "scaffolds" / "bun" / "justfile"
+        ).read_text()
+    )
 
     with pytest.raises(SystemExit):
         gates.check_delegation(project, "bun")
 
 
-def test_app_boot_rejects_direct_local_playwright_before_execution(tmp_path: pathlib.Path) -> None:
+def test_app_boot_rejects_direct_local_playwright_before_execution(
+    tmp_path: pathlib.Path,
+) -> None:
     project = tmp_path / "project"
     project.mkdir()
     (project / "package.json").write_text('{"scripts": {}}\n')
@@ -100,7 +114,9 @@ def test_branch_protection_payload_uses_profile_check_contexts() -> None:
 
 
 def test_branch_protection_payload_requires_app_boot_for_bun_playwright() -> None:
-    checks = gates.branch_protection_payload("bun-playwright")["required_status_checks"]["checks"]
+    checks = gates.branch_protection_payload("bun-playwright")[
+        "required_status_checks"
+    ]["checks"]
 
     assert {"context": "app-boot / app-boot", "app_id": -1} in checks
 
@@ -122,7 +138,11 @@ def test_thread_resolution_evidence_accepts_commit_or_ledger() -> None:
             ]
         }
     }
-    empty_node = {"comments": {"nodes": [{"body": "<!-- ai-review-fingerprint: " + "c" * 64 + " -->"}]}}
+    empty_node = {
+        "comments": {
+            "nodes": [{"body": "<!-- ai-review-fingerprint: " + "c" * 64 + " -->"}]
+        }
+    }
 
     assert gates._has_resolution_evidence(commit_node)
     assert gates._has_resolution_evidence(ledger_node)
@@ -170,7 +190,10 @@ def test_thread_resolution_gate_requires_evidence_for_resolved_non_ai_review_thr
     with pytest.raises(SystemExit):
         gates.check_review_threads("owner/repo", 42)
 
-    assert "src/app.ts: resolved review thread lacks commit or disposition-ledger evidence" in capsys.readouterr().err
+    assert (
+        "src/app.ts: resolved review thread lacks commit or disposition-ledger evidence"
+        in capsys.readouterr().err
+    )
 
 
 def test_thread_resolution_gate_accepts_any_resolved_thread_with_evidence(
@@ -183,7 +206,9 @@ def test_thread_resolution_gate_accepts_any_resolved_thread_with_evidence(
             {
                 "path": "src/app.ts",
                 "isResolved": True,
-                "comments": {"nodes": [{"body": "human thread resolved by commit 123456789abc"}]},
+                "comments": {
+                    "nodes": [{"body": "human thread resolved by commit 123456789abc"}]
+                },
             }
         ],
     )
