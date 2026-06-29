@@ -95,7 +95,8 @@ def test_runtime_default_rules_flag_only_value_default_positions() -> None:
     _assert_rules_match_annotations(RUNTIME_DEFAULT_RULES, "runtime_default.ts*")
 
 
-def test_no_double_cast_blocks_every_erasure_with_no_escape_hatch() -> None:
-    """#46: all double casts are blocked; a justification comment is not an
-    escape hatch (it would be reward-hackable). Single casts do not fire."""
-    _assert_rules_match_annotations(("no-double-cast",), "no_double_cast.ts")
+def test_no_double_cast_requires_explicit_boundary_assertion_form() -> None:
+    """#46: arbitrary double casts are blocked, while the sanctioned boundary
+    assertion form is allowed only with runtime evidence and source-backed
+    justification."""
+    _assert_rules_match_annotations(("no-double-cast", "no-unproven-boundary-cast"), "no_double_cast.ts")
