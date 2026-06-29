@@ -166,13 +166,13 @@ def test_doctor_schema_cli_exports_producer_owned_contract() -> None:
 
 
 def test_doctor_schema_artifact_matches_exported_contract() -> None:
-    schema = json.loads(DOCTOR_SCHEMA.read_text())
+    schema = json.loads(DOCTOR_SCHEMA.read_text(encoding="utf-8"))
 
     assert schema == DoctorReport.model_json_schema()
 
 
 def test_doctor_golden_example_validates_against_owned_model() -> None:
-    report = DoctorReport.model_validate_json(DOCTOR_EXAMPLE.read_text())
+    report = DoctorReport.model_validate_json(DOCTOR_EXAMPLE.read_text(encoding="utf-8"))
 
     assert report.schema_version == 1
     assert report.global_status == "current"
