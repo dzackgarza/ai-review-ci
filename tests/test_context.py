@@ -335,6 +335,41 @@ def test_fetch_context_treats_no_analysis_as_empty_context(tmp_path: Path, gh_fi
     }
 
 
+def test_fetch_context_treats_code_scanning_disabled_as_empty_context(
+    tmp_path: Path,
+    gh_fixture: Path,
+) -> None:
+    _write_json(
+        gh_fixture / "code_scanning_disabled.json",
+        [
+            {"tool_name": "ai-review/general", "state": "open"},
+            {"tool_name": "ai-review/general", "state": "dismissed"},
+            {"tool_name": "ai-review/general", "state": "fixed"},
+        ],
+    )
+    output = tmp_path / "context.md"
+    carry_forward = tmp_path / "carry-forward.json"
+
+    fetch_context("owner/repo", tool_names="ai-review/general", output=output, alerts_output=carry_forward)
+
+    assert output.read_text(encoding="utf-8") == (
+        "## Existing repo-wide review findings\n"
+        "\n"
+        "Open alerts are carried forward into the next SARIF upload by automation. "
+        "Do not duplicate them in your report unless you have new evidence, the problem "
+        "reappears in a materially different form, or the previous resolution is directly "
+        "contradicted by the current code.\n"
+        "\n"
+        "### ai-review/general\n"
+        "\n"
+        "_No existing findings._\n"
+    )
+    assert json.loads(carry_forward.read_text(encoding="utf-8")) == {
+        "schema_version": 1,
+        "alerts": [],
+    }
+
+
 def test_fetch_context_reads_alert_pages_until_short_page(tmp_path: Path, gh_fixture: Path) -> None:
     alerts = [_alert(number, "open", f"Finding {number}", f"src/file_{number}.py", number) for number in range(1, 102)]
     _write_json(
