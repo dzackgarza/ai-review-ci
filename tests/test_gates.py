@@ -128,3 +128,65 @@ def test_thread_resolution_evidence_accepts_commit_or_ledger() -> None:
     assert gates._has_resolution_evidence(commit_node)
     assert gates._has_resolution_evidence(ledger_node)
     assert not gates._has_resolution_evidence(empty_node)
+
+
+def test_thread_resolution_gate_blocks_unresolved_non_ai_review_threads(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    monkeypatch.setattr(
+        gates,
+        "_thread_nodes",
+        lambda repo, pr_number: [
+            {
+                "path": "src/app.py",
+                "isResolved": False,
+                "comments": {"nodes": [{"body": "Human reviewer concern without ai-review fingerprint."}]},
+            }
+        ],
+    )
+
+    with pytest.raises(SystemExit):
+        gates.check_review_threads("owner/repo", 7)
+
+    assert "src/app.py: unresolved review thread" in capsys.readouterr().err
+
+
+def test_thread_resolution_gate_requires_evidence_for_resolved_non_ai_review_threads(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    monkeypatch.setattr(
+        gates,
+        "_thread_nodes",
+        lambda repo, pr_number: [
+            {
+                "path": "src/app.py",
+                "isResolved": True,
+                "comments": {"nodes": [{"body": "Resolved in the UI without a commit or ledger citation."}]},
+            }
+        ],
+    )
+
+    with pytest.raises(SystemExit):
+        gates.check_review_threads("owner/repo", 7)
+
+    assert "src/app.py: resolved review thread lacks commit or disposition-ledger evidence" in capsys.readouterr().err
+
+
+def test_thread_resolution_gate_accepts_resolved_non_ai_review_threads_with_evidence(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        gates,
+        "_thread_nodes",
+        lambda repo, pr_number: [
+            {
+                "path": "src/app.py",
+                "isResolved": True,
+                "comments": {"nodes": [{"body": "Resolved by commit 123456789abc."}]},
+            }
+        ],
+    )
+
+    gates.check_review_threads("owner/repo", 7)
