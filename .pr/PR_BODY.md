@@ -76,6 +76,11 @@ Reviewer identity and structured state are foundations. Cross-run dedup uses tha
   - Acceptance: the gate rejects in-scope unchecked obligations without treating arbitrary markdown checkboxes, deferred work, or tracking-the-tracking items as blockers.
   - Evidence: pending parser/check tests with valid and invalid PR body fixtures.
 
+
+## Incremental implementation landed
+
+- #127 (under #42): the thread-resolution gate is now source-agnostic. It evaluates every resolvable PR review thread, not only `ai-review` fingerprinted threads. Unresolved threads from any source fail the gate, and resolved threads from any source require commit or disposition-ledger evidence. Evidence: `src/ai_review_ci/gates.py::check_review_threads` and `tests/test_gates.py` source-agnostic regression cases.
+
 ## Automated Gates
 
 This PR remains draft until every checklist item has commit/evidence anchors, state-machine fixtures cover repeated review rounds and PR-body contract cases, review residue is resolved or moved to a separate debt issue, and GitHub checks pass.
