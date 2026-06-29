@@ -7,10 +7,12 @@ from typing import Any
 
 import pytest
 
-from ai_review_ci.doctor import doctor_report, manifest_text
+from ai_review_ci.doctor import DoctorReport, doctor_report, manifest_text
 from ai_review_ci.install import _write_trigger_workflows
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
+DOCTOR_SCHEMA = ROOT / "schemas" / "doctor-report.schema.json"
+DOCTOR_EXAMPLE = ROOT / "schemas" / "examples" / "doctor-report-current-python.json"
 
 
 def run_git(workdir: pathlib.Path, *args: str) -> subprocess.CompletedProcess[str]:
@@ -161,6 +163,20 @@ def test_doctor_schema_cli_exports_producer_owned_contract() -> None:
         "intentional_exception",
     ]
     assert schema["additionalProperties"] is False
+
+
+def test_doctor_schema_artifact_matches_exported_contract() -> None:
+    schema = json.loads(DOCTOR_SCHEMA.read_text(encoding="utf-8"))
+
+    assert schema == DoctorReport.model_json_schema()
+
+
+def test_doctor_golden_example_validates_against_owned_model() -> None:
+    report = DoctorReport.model_validate_json(DOCTOR_EXAMPLE.read_text(encoding="utf-8"))
+
+    assert report.schema_version == 1
+    assert report.global_status == "current"
+    assert report.effective_profile == "python"
 
 
 def test_doctor_classifies_outdated_workflow_refs_as_stale(tmp_path: pathlib.Path) -> None:

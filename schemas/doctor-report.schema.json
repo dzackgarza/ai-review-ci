@@ -1,0 +1,524 @@
+{
+  "$defs": {
+    "BranchProtectionObservation": {
+      "additionalProperties": false,
+      "properties": {
+        "required_contexts": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Required Contexts",
+          "type": "array"
+        },
+        "observed_contexts": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Observed Contexts",
+          "type": "array"
+        },
+        "observed_state": {
+          "enum": [
+            "not_applicable",
+            "compliant",
+            "missing",
+            "missing_contexts",
+            "unverifiable"
+          ],
+          "title": "Observed State",
+          "type": "string"
+        },
+        "evidence": {
+          "title": "Evidence",
+          "type": "string"
+        }
+      },
+      "required": [
+        "required_contexts",
+        "observed_contexts",
+        "observed_state",
+        "evidence"
+      ],
+      "title": "BranchProtectionObservation",
+      "type": "object"
+    },
+    "DeclarationObservation": {
+      "additionalProperties": false,
+      "properties": {
+        "path": {
+          "title": "Path",
+          "type": "string"
+        },
+        "sha256": {
+          "title": "Sha256",
+          "type": "string"
+        },
+        "manifest": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/QcManifest"
+            },
+            {
+              "$ref": "#/$defs/MissingManifest"
+            }
+          ],
+          "title": "Manifest"
+        }
+      },
+      "required": [
+        "path",
+        "sha256",
+        "manifest"
+      ],
+      "title": "DeclarationObservation",
+      "type": "object"
+    },
+    "DelegationCommandObservation": {
+      "additionalProperties": false,
+      "properties": {
+        "present": {
+          "title": "Present",
+          "type": "boolean"
+        },
+        "command": {
+          "title": "Command",
+          "type": "string"
+        },
+        "delegates_to_global_qc": {
+          "title": "Delegates To Global Qc",
+          "type": "boolean"
+        },
+        "caller_root_preserved": {
+          "title": "Caller Root Preserved",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "present",
+        "command",
+        "delegates_to_global_qc",
+        "caller_root_preserved"
+      ],
+      "title": "DelegationCommandObservation",
+      "type": "object"
+    },
+    "DelegationObservation": {
+      "additionalProperties": false,
+      "properties": {
+        "required_justfile": {
+          "title": "Required Justfile",
+          "type": "string"
+        },
+        "observed": {
+          "$ref": "#/$defs/DelegationCommandObservation"
+        }
+      },
+      "required": [
+        "required_justfile",
+        "observed"
+      ],
+      "title": "DelegationObservation",
+      "type": "object"
+    },
+    "DoctorFinding": {
+      "additionalProperties": false,
+      "properties": {
+        "severity": {
+          "enum": [
+            "error",
+            "warning"
+          ],
+          "title": "Severity",
+          "type": "string"
+        },
+        "surface": {
+          "enum": [
+            "manifest",
+            "profile",
+            "workflow",
+            "workflow_ref",
+            "justfile_delegation",
+            "branch_protection"
+          ],
+          "title": "Surface",
+          "type": "string"
+        },
+        "evidence": {
+          "title": "Evidence",
+          "type": "string"
+        },
+        "remediation_commands": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Remediation Commands",
+          "type": "array"
+        }
+      },
+      "required": [
+        "severity",
+        "surface",
+        "evidence",
+        "remediation_commands"
+      ],
+      "title": "DoctorFinding",
+      "type": "object"
+    },
+    "ManifestException": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "surface": {
+          "enum": [
+            "manifest",
+            "profile",
+            "workflow",
+            "workflow_ref",
+            "justfile_delegation",
+            "branch_protection"
+          ],
+          "title": "Surface",
+          "type": "string"
+        },
+        "reason": {
+          "title": "Reason",
+          "type": "string"
+        },
+        "active": {
+          "title": "Active",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "id",
+        "surface",
+        "reason",
+        "active"
+      ],
+      "title": "ManifestException",
+      "type": "object"
+    },
+    "MissingManifest": {
+      "additionalProperties": false,
+      "properties": {
+        "present": {
+          "const": false,
+          "title": "Present",
+          "type": "boolean"
+        },
+        "reason": {
+          "title": "Reason",
+          "type": "string"
+        }
+      },
+      "required": [
+        "present",
+        "reason"
+      ],
+      "title": "MissingManifest",
+      "type": "object"
+    },
+    "ProfileProofObservation": {
+      "additionalProperties": false,
+      "properties": {
+        "profile": {
+          "enum": [
+            "python",
+            "bun",
+            "bun-playwright",
+            "rust",
+            "sage"
+          ],
+          "title": "Profile",
+          "type": "string"
+        },
+        "required_paths": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Required Paths",
+          "type": "array"
+        },
+        "missing_paths": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Missing Paths",
+          "type": "array"
+        }
+      },
+      "required": [
+        "profile",
+        "required_paths",
+        "missing_paths"
+      ],
+      "title": "ProfileProofObservation",
+      "type": "object"
+    },
+    "QcManifest": {
+      "additionalProperties": false,
+      "properties": {
+        "schema_version": {
+          "const": 1,
+          "title": "Schema Version",
+          "type": "integer"
+        },
+        "profile": {
+          "enum": [
+            "python",
+            "bun",
+            "bun-playwright",
+            "rust",
+            "sage"
+          ],
+          "title": "Profile",
+          "type": "string"
+        },
+        "installed_ref": {
+          "minLength": 1,
+          "title": "Installed Ref",
+          "type": "string"
+        },
+        "release_channel": {
+          "minLength": 1,
+          "title": "Release Channel",
+          "type": "string"
+        },
+        "workflow_template_version": {
+          "const": 1,
+          "title": "Workflow Template Version",
+          "type": "integer"
+        },
+        "local_delegation": {
+          "const": "global-justfile",
+          "title": "Local Delegation",
+          "type": "string"
+        },
+        "default_branch": {
+          "minLength": 1,
+          "title": "Default Branch",
+          "type": "string"
+        },
+        "exceptions": {
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/ManifestException"
+          },
+          "title": "Exceptions",
+          "type": "array"
+        }
+      },
+      "required": [
+        "schema_version",
+        "profile",
+        "installed_ref",
+        "release_channel",
+        "workflow_template_version",
+        "local_delegation",
+        "default_branch"
+      ],
+      "title": "QcManifest",
+      "type": "object"
+    },
+    "TargetObservation": {
+      "additionalProperties": false,
+      "properties": {
+        "root": {
+          "title": "Root",
+          "type": "string"
+        },
+        "remote": {
+          "title": "Remote",
+          "type": "string"
+        },
+        "head": {
+          "title": "Head",
+          "type": "string"
+        }
+      },
+      "required": [
+        "root",
+        "remote",
+        "head"
+      ],
+      "title": "TargetObservation",
+      "type": "object"
+    },
+    "WorkflowRefObservation": {
+      "additionalProperties": false,
+      "properties": {
+        "path": {
+          "title": "Path",
+          "type": "string"
+        },
+        "required_ref": {
+          "title": "Required Ref",
+          "type": "string"
+        },
+        "observed_ref": {
+          "title": "Observed Ref",
+          "type": "string"
+        },
+        "required_gates": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Required Gates",
+          "type": "array"
+        },
+        "observed_gates": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Observed Gates",
+          "type": "array"
+        }
+      },
+      "required": [
+        "path",
+        "required_ref",
+        "observed_ref",
+        "required_gates",
+        "observed_gates"
+      ],
+      "title": "WorkflowRefObservation",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {
+      "const": 1,
+      "title": "Schema Version",
+      "type": "integer"
+    },
+    "tool_version": {
+      "title": "Tool Version",
+      "type": "string"
+    },
+    "target": {
+      "$ref": "#/$defs/TargetObservation"
+    },
+    "declaration": {
+      "$ref": "#/$defs/DeclarationObservation"
+    },
+    "declaration_hash": {
+      "title": "Declaration Hash",
+      "type": "string"
+    },
+    "declared_profile": {
+      "enum": [
+        "python",
+        "bun",
+        "bun-playwright",
+        "rust",
+        "sage",
+        "unknown"
+      ],
+      "title": "Declared Profile",
+      "type": "string"
+    },
+    "effective_profile": {
+      "enum": [
+        "python",
+        "bun",
+        "bun-playwright",
+        "rust",
+        "sage",
+        "unknown"
+      ],
+      "title": "Effective Profile",
+      "type": "string"
+    },
+    "workflow_refs": {
+      "additionalProperties": {
+        "$ref": "#/$defs/WorkflowRefObservation"
+      },
+      "title": "Workflow Refs",
+      "type": "object"
+    },
+    "justfile_delegation": {
+      "additionalProperties": {
+        "$ref": "#/$defs/DelegationObservation"
+      },
+      "title": "Justfile Delegation",
+      "type": "object"
+    },
+    "branch_protection": {
+      "$ref": "#/$defs/BranchProtectionObservation"
+    },
+    "profile_proof_requirements": {
+      "additionalProperties": {
+        "$ref": "#/$defs/ProfileProofObservation"
+      },
+      "title": "Profile Proof Requirements",
+      "type": "object"
+    },
+    "findings": {
+      "items": {
+        "$ref": "#/$defs/DoctorFinding"
+      },
+      "title": "Findings",
+      "type": "array"
+    },
+    "invalidation_inputs": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Invalidation Inputs",
+      "type": "array"
+    },
+    "installation_state": {
+      "enum": [
+        "compliant",
+        "outdated",
+        "noncompliant",
+        "uninstalled",
+        "unknown"
+      ],
+      "title": "Installation State",
+      "type": "string"
+    },
+    "global_status": {
+      "enum": [
+        "current",
+        "stale",
+        "misconfigured",
+        "unverifiable",
+        "intentional_exception"
+      ],
+      "title": "Global Status",
+      "type": "string"
+    },
+    "exceptions": {
+      "items": {
+        "$ref": "#/$defs/ManifestException"
+      },
+      "title": "Exceptions",
+      "type": "array"
+    }
+  },
+  "required": [
+    "schema_version",
+    "tool_version",
+    "target",
+    "declaration",
+    "declaration_hash",
+    "declared_profile",
+    "effective_profile",
+    "workflow_refs",
+    "justfile_delegation",
+    "branch_protection",
+    "profile_proof_requirements",
+    "findings",
+    "invalidation_inputs",
+    "installation_state",
+    "global_status",
+    "exceptions"
+  ],
+  "title": "DoctorReport",
+  "type": "object"
+}
