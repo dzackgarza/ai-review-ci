@@ -77,6 +77,11 @@ def _no_analysis_found(stderr: str) -> bool:
     return "no analysis found" in stderr
 
 
+def _code_scanning_disabled(stderr: str) -> bool:
+    lowered = stderr.lower()
+    return "code scanning is not enabled" in lowered and "http 403" in lowered
+
+
 def _validated_alert_page(stdout: str, path: str) -> list[JsonDict]:
     page_alerts = json.loads(stdout)
     if not isinstance(page_alerts, list):
@@ -87,7 +92,7 @@ def _validated_alert_page(stdout: str, path: str) -> list[JsonDict]:
 def _fetch_alert_page(path: str, params: dict[str, str], page: int) -> list[JsonDict]:
     result = subprocess.run(_alerts_api_args(path, params, page), capture_output=True, text=True)
     if result.returncode != 0:
-        if _no_analysis_found(result.stderr):
+        if _no_analysis_found(result.stderr) or _code_scanning_disabled(result.stderr):
             return []
         _fail(f"gh api GET {path} failed: {result.stderr.strip()}")
     return _validated_alert_page(result.stdout, path)
