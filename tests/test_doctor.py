@@ -343,6 +343,38 @@ def test_check_justfile_cli_reports_baseline_violations(tmp_path: pathlib.Path) 
     assert "default-recipe" in result.stderr
 
 
+def test_doctor_justfile_parser_accepts_parameter_defaults_and_recipe_attributes(tmp_path: pathlib.Path) -> None:
+    project = create_target(tmp_path, "python")
+    (project / "justfile").write_text(
+        "\n".join(
+            [
+                "# Delegates Python QC.",
+                'api_url := "https://example.invalid:443"',
+                "",
+                "# List available recipes.",
+                "[no-cd]",
+                "default:",
+                "    @just --list",
+                "",
+                "# Run commit-tier Python QC through the central implementation.",
+                "[no-cd]",
+                'test mode="fast":',
+                "    @just -f ~/ai-review-ci/justfiles/python.just -d . test",
+                "",
+                "# Run push-tier Python QC through the central implementation.",
+                "test-ci:",
+                "    @just -f ~/ai-review-ci/justfiles/python.just -d . test-ci",
+                "",
+            ]
+        )
+    )
+
+    status, payload = status_for(project)
+
+    assert status == "current"
+    assert payload["findings"] == []
+
+
 def test_doctor_classifies_non_github_remote_branch_protection_as_unverifiable(tmp_path: pathlib.Path) -> None:
     project = create_target(tmp_path, "python")
     assert run_git(project, "remote", "add", "origin", str(tmp_path / "not-github.git")).returncode == 0

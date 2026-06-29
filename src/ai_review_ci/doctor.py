@@ -662,16 +662,23 @@ def _justfile_conformance_findings(target: Path, profile: ProfileName) -> list[D
 def _justfile_recipes(lines: list[str]) -> dict[str, int]:
     recipes: dict[str, int] = {}
     for index, line in enumerate(lines, start=1):
-        if line.startswith((" ", "\t", "#", "[")) or ":=" in line or "=" in line:
+        stripped = line.strip()
+        if line.startswith((" ", "\t")) or stripped.startswith(("#", "[")) or ":=" in line:
             continue
-        match = re.match(r"^([A-Za-z_][A-Za-z0-9_-]*)\b.*:", line)
+        clean_line = re.sub(r'"[^"]*"|\'[^\']*\'', "", line)
+        if "=" in clean_line and ":" not in clean_line:
+            continue
+        match = re.match(r"^([A-Za-z_][A-Za-z0-9_-]*)\b.*:", clean_line)
         if match is not None:
             recipes[match.group(1)] = index
     return recipes
 
 
 def _has_immediate_doc_comment(lines: list[str], line_no: int) -> bool:
-    return line_no > 1 and lines[line_no - 2].startswith("#")
+    index = line_no - 2
+    while index >= 0 and lines[index].strip().startswith("["):
+        index -= 1
+    return index >= 0 and lines[index].strip().startswith("#")
 
 
 def _has_private_attribute(lines: list[str], line_no: int) -> bool:
