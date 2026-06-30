@@ -1,26 +1,26 @@
-## Implementation PR — runtime-default rule precision (#120, #130)
+## Implementation PR — stale proof thread convergence (#126)
 
-This PR carries the next review-sized implementation slice for the remaining
-`POLICY.RUNTIME_DEFAULT` false-positive cleanup.
+This PR carries the next review-state bugfix for findings re-raised after their
+own proof no longer reproduces on the reviewed SHA.
 
-- **Target issue set:** #120 and #130
-- **Theme:** distinguish fail-soft defaults from legitimate empty-boundary normalization
-- **Issues to close on merge:** #130; #120 only if the broader `||` / `??` precision acceptance criteria are confirmed complete
+- **Target issue:** #126
+- **Theme:** let the thread-resolution gate withdraw stale ai-review threads when their safe proof grep no longer matches
+- **Issue to close on merge:** #126, if the review accepts grep/rg proof re-evaluation as the intended first slice
 
 ## Implemented behavior
 
-- `no-nullish-coalescing` and `ts-no-or-default` now keep flagging non-empty
-  success-shaped fallbacks, booleans, `null`, and numeric fallbacks.
-- Empty literal fallbacks (`""`, `[]`, `{}`) are treated as valid owned-boundary
-  normalization for genuinely optional data instead of automatic runtime-default
-  violations.
-- Boolean connective cases remain allowed; non-empty render/data defaults remain
-  blocked.
+- The thread-resolution gate extracts `**Proof:** \`...\`` commands from ai-review
+  thread bodies that contain the machine fingerprint marker.
+- Only safe `grep` / `rg` proof commands are eligible for automatic re-checking;
+  shell composition and broad unsafe grep shapes are rejected.
+- If a safe proof exits with status `1` (no matches), the gate resolves the
+  stale GitHub review thread instead of continuing to count it as unresolved.
+- If the proof still reproduces, cannot be parsed safely, or errors, the thread
+  remains blocking.
 
 ## Evidence
 
-- `tests/fixtures/semgrep/runtime_default.ts*` includes both blocked non-empty
-  fallback cases and allowed empty-boundary normalization cases.
-- `tests/test_semgrep_rules.py` runs the shipped Semgrep rules against the
-  annotated fixtures, so the proof covers the production rule config rather than
-  a copied test-only rule.
+- `tests/test_gates.py` covers auto-resolving a stale grep proof, preserving a
+  still-reproducing proof as a blocker, and rejecting shell-composed proofs.
+- The production gate path is covered directly: tests call `check_review_threads`
+  with mocked thread nodes and mocked `gh`/proof-command execution.
