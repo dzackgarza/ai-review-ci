@@ -52,7 +52,7 @@ def test_pick_anchor_prefers_reported_line_when_visible() -> None:
     assert pick_anchor(finding, {"src/example.py": {10, 12, 13}}) == 12
 
 
-def test_partition_findings_surfaces_existing_fingerprint_for_disposition() -> None:
+def test_partition_findings_skips_existing_fingerprint_threads() -> None:
     finding = {
         "tier": "tier2",
         "label": "Duplicate-shaped finding",
@@ -77,14 +77,15 @@ def test_partition_findings_surfaces_existing_fingerprint_for_disposition() -> N
             }
         ],
     }
-    seen = {finding_fingerprint("DOC_CONSISTENCY", "src/example.py")}
+    fingerprint = finding_fingerprint("DOC_CONSISTENCY", "src/example.py")
+    seen = {fingerprint}
 
     comments, off_diff, possible_duplicates = partition_findings([finding], {"src/example.py": {12}}, seen, "General Review")
 
-    assert len(comments) == 1
+    assert not comments
     assert not off_diff
     assert possible_duplicates == 1
-    assert "Possible duplicate disposition required" in comments[0]["body"]
+    assert seen == {fingerprint}
 
 
 def test_render_thread_body_appends_canonical_policy_guidance() -> None:

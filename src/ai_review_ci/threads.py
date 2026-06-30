@@ -173,20 +173,6 @@ def render_thread_body(finding: JsonDict, review_label: str, fp: str) -> str:
     return "\n".join(_thread_body_lines(finding, review_label, fp))
 
 
-def render_duplicate_thread_body(finding: JsonDict, review_label: str, fp: str) -> str:
-    lines = _thread_body_lines(finding, review_label, fp)
-    lines.extend(
-        [
-            "",
-            "**Possible duplicate disposition required:** a prior PR thread "
-            "has this category/path fingerprint. Compare invariant, source, "
-            "consequence, and evidence before resolving; do not suppress this "
-            "finding by similarity alone.",
-        ]
-    )
-    return "\n".join(lines)
-
-
 def render_review_body(
     review_label: str,
     findings: list[JsonDict],
@@ -225,18 +211,19 @@ def partition_findings(
     seen: set[str],
     review_label: str,
 ) -> tuple[list[JsonDict], list[JsonDict], int]:
-    """Split findings into inline comments, off-diff entries, and duplicate flags."""
+    """Split findings into new inline comments, off-diff entries, and skipped duplicates."""
+    seen = set(seen)
     comments: list[JsonDict] = []
     off_diff: list[JsonDict] = []
     possible_duplicates = 0
     for finding in findings:
         loc = finding["location"]
         fp = finding_fingerprint(finding["category"], str(loc["path"]))
-        thread_body = render_thread_body(finding, review_label, fp)
         if fp in seen:
             possible_duplicates += 1
-            thread_body = render_duplicate_thread_body(finding, review_label, fp)
+            continue
         seen.add(fp)
+        thread_body = render_thread_body(finding, review_label, fp)
         anchor = pick_anchor(finding, commentable)
         if anchor is None:
             off_diff.append(finding)
