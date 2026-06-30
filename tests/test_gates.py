@@ -1,4 +1,5 @@
 import pathlib
+import subprocess
 
 import pytest
 
@@ -213,6 +214,87 @@ def test_thread_resolution_gate_requires_evidence_for_resolved_non_ai_review_thr
 
     assert "src/app.py: resolved review thread lacks commit or disposition-ledger evidence" in capsys.readouterr().err
 
+
+def test_thread_resolution_auto_resolves_stale_ai_review_proof(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    resolved: list[str] = []
+    ran: list[list[str]] = []
+    node = {
+        "id": "THREAD_1",
+        "path": "src/app.py",
+        "isResolved": False,
+        "comments": {
+            "nodes": [
+                {
+                    "body": "\n".join(
+                        [
+                            "<!-- ai-review-fingerprint: " + "a" * 64 + " -->",
+                            "**Proof:** `grep -n 'stderr.*pipe' src/pandoc-config.ts`",
+                        ]
+                    )
+                }
+            ]
+        },
+    }
+
+    monkeypatch.setattr(gates, "_thread_nodes", lambda repo, pr_number: [node])
+
+    def fake_run(args: list[str], **kwargs: object) -> subprocess.CompletedProcess[str]:
+        ran.append(args)
+        return subprocess.CompletedProcess(args, 1, "", "")
+
+    def fake_gh(args: list[str], body: gates.JsonDict | None = None) -> gates.JsonDict:
+        assert "resolveReviewThread" in args[3]
+        resolved.append(args[-1])
+        return {"data": {"resolveReviewThread": {"thread": {"id": "THREAD_1", "isResolved": True}}}}
+
+    monkeypatch.setattr(gates.subprocess, "run", fake_run)
+    monkeypatch.setattr(gates, "_gh_json", fake_gh)
+
+    gates.check_review_threads("owner/repo", 7)
+
+    assert ran == [["grep", "-n", "stderr.*pipe", "src/pandoc-config.ts"]]
+    assert resolved == ["threadId=THREAD_1"]
+
+
+def test_thread_resolution_does_not_auto_resolve_reproducing_proof(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    node = {
+        "id": "THREAD_1",
+        "path": "src/app.py",
+        "isResolved": False,
+        "comments": {
+            "nodes": [
+                {
+                    "body": "\n".join(
+                        [
+                            "<!-- ai-review-fingerprint: " + "a" * 64 + " -->",
+                            "**Proof:** `rg 'still-present' src/app.ts`",
+                        ]
+                    )
+                }
+            ]
+        },
+    }
+
+    monkeypatch.setattr(gates, "_thread_nodes", lambda repo, pr_number: [node])
+    monkeypatch.setattr(
+        gates.subprocess,
+        "run",
+        lambda args, **kwargs: subprocess.CompletedProcess(args, 0, "still-present", ""),
+    )
+
+    with pytest.raises(SystemExit):
+        gates.check_review_threads("owner/repo", 7)
+
+    assert "src/app.py: unresolved review thread" in capsys.readouterr().err
+
+
+def test_thread_resolution_rejects_shell_proof_for_auto_resolution() -> None:
+    assert gates._safe_proof_args("grep stale src/app.ts && rm -rf /") is None
 
 def test_thread_resolution_gate_accepts_resolved_non_ai_review_threads_with_evidence(
     monkeypatch: pytest.MonkeyPatch,

@@ -2,6 +2,7 @@
 
 import json
 import re
+import shlex
 import subprocess
 import sys
 from dataclasses import dataclass
@@ -165,6 +166,14 @@ query($owner: String!, $name: String!, $number: Int!, $cursor: String) {
 _COMMIT_EVIDENCE = re.compile(r"(?:commit|commits/|[/-])\s*[0-9a-f]{7,40}\b|\b[0-9a-f]{12,40}\b", re.IGNORECASE)
 _LEDGER_EVIDENCE = re.compile(r"disposition[- ]ledger|resolution[- ]ledger", re.IGNORECASE)
 _DIRECT_PLAYWRIGHT = re.compile(r"\b(?:bunx|npx|npm|pnpm|yarn)\s+(?:exec\s+)?playwright\b|\bplaywright\s+test\b")
+_PROOF_COMMAND = re.compile(r"\*\*Proof:\*\*\s*`([^`]+)`")
+_RESOLVE_THREAD_MUTATION = """
+mutation($threadId: ID!) {
+  resolveReviewThread(input: {threadId: $threadId}) {
+    thread { id isResolved }
+  }
+}
+"""
 
 
 def _fail(message: str) -> NoReturn:
@@ -372,6 +381,69 @@ def _comments(node: JsonDict) -> list[JsonDict]:
     return comments
 
 
+def _first_ai_review_proof(node: JsonDict) -> str | None:
+    """Proof command from an ai-review thread body, if the body uses our marker."""
+    for comment in _comments(node):
+        body = str(comment["body"])
+        if FINGERPRINT_MARKER not in body:
+            continue
+        match = _PROOF_COMMAND.search(body)
+        if match is not None:
+            return match.group(1)
+    return None
+
+
+def _safe_proof_args(proof_command: str) -> list[str] | None:
+    """Return argv for safe grep/rg proof commands; reject shell features."""
+    try:
+        args = shlex.split(proof_command)
+    except ValueError:
+        return None
+    if not args or args[0] not in {"grep", "rg"}:
+        return None
+    if any(token in {";", "&&", "||", "|", ">", "<"} for token in args):
+        return None
+    if args[0] == "grep":
+        # grep proofs must name at least a pattern and a target path. Recursive
+        # project scans are too broad to auto-resolve safely.
+        operands = [arg for arg in args[1:] if not arg.startswith("-")]
+        if len(operands) < 2:
+            return None
+    return args
+
+
+def _proof_is_stale(proof_command: str) -> bool:
+    args = _safe_proof_args(proof_command)
+    if args is None:
+        return False
+    result = subprocess.run(args, capture_output=True, text=True, check=False)
+    # grep/rg exit 1 means no matches. Any other non-zero status is an
+    # execution error and must not auto-resolve the thread.
+    return result.returncode == 1
+
+
+def _resolve_review_thread(thread_id: str) -> None:
+    _gh_json(
+        [
+            "api",
+            "graphql",
+            "-f",
+            f"query={_RESOLVE_THREAD_MUTATION}",
+            "-F",
+            f"threadId={thread_id}",
+        ]
+    )
+
+
+def _auto_resolve_stale_thread(node: JsonDict) -> bool:
+    proof = _first_ai_review_proof(node)
+    if proof is None or not _proof_is_stale(proof):
+        return False
+    thread_id = str(node.get("id", ""))
+    if not thread_id:
+        _fail("cannot auto-resolve stale proof thread without a thread id")
+    _resolve_review_thread(thread_id)
+    return True
 
 def _has_resolution_evidence(node: JsonDict) -> bool:
     for comment in _comments(node):
@@ -387,6 +459,8 @@ def check_review_threads(repo: str, pr_number: int) -> None:
     for node in _thread_nodes(repo, pr_number):
         path = str(node["path"])
         if not node["isResolved"]:
+            if _auto_resolve_stale_thread(node):
+                continue
             failures.append(f"{path}: unresolved review thread")
         elif not _has_resolution_evidence(node):
             failures.append(f"{path}: resolved review thread lacks commit or disposition-ledger evidence")
