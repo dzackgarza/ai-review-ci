@@ -31,6 +31,7 @@ from typing import Any, NoReturn
 from unidiff import PatchSet
 
 from ai_review_ci.models import finding_fingerprint
+from ai_review_ci.reviewer_identity import reviewer_identity
 from ai_review_ci.policy_index import canonical_guidance
 
 JsonDict = dict[str, Any]
@@ -38,7 +39,6 @@ JsonDict = dict[str, Any]
 FINGERPRINT_MARKER = "ai-review-fingerprint:"
 REVIEW_LABELS = {"general": "General Review", "slop": "Slop Review"}
 REVIEW_IDENTITY_MARKER = "ai-review-reviewer:"
-REVIEW_PROMPT_VERSION = "1"
 
 THREADS_QUERY = """
 query($owner: String!, $name: String!, $number: Int!, $cursor: String) {
@@ -145,22 +145,17 @@ def pick_anchor(finding: JsonDict, commentable: dict[str, set[int]]) -> int | No
 def _thread_body_lines(finding: JsonDict, review_label: str, fp: str) -> list[str]:
     loc = finding["location"]
     review_type = next((key for key, label in REVIEW_LABELS.items() if label == review_label), "general")
-    reviewer_identity = {
-        "type": review_type,
-        "agent": "opencode-ai",
-        "prompt_id": f"reviews/{review_type}",
-        "prompt_version": REVIEW_PROMPT_VERSION,
-    }
+    identity = reviewer_identity(review_type)
     lines = [
         f"### [{review_label}][{finding['tier']}] {finding['label']}",
         f"<!-- {FINGERPRINT_MARKER} {fp} -->",
-        f"<!-- {REVIEW_IDENTITY_MARKER} {json.dumps(reviewer_identity, sort_keys=True)} -->",
+        f"<!-- {REVIEW_IDENTITY_MARKER} {json.dumps(identity, sort_keys=True)} -->",
         "",
         f"**Location:** `{loc['path']}:{loc['start_line']}-{loc['end_line']}`",
         (
             "**Reviewer identity:** "
-            f"`type={review_type}; agent=opencode-ai; "
-            f"prompt_id=reviews/{review_type}; prompt_version={REVIEW_PROMPT_VERSION}`"
+            f"`type={review_type}; agent={identity['agent']}; "
+            f"prompt_id=reviews/{review_type}; prompt_version={identity['prompt_version']}`"
         ),
         f"**Violated invariant:** {finding['violated_invariant']}",
         f"**Proof:** `{finding['proof_command']}`",

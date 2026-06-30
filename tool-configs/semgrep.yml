@@ -102,7 +102,7 @@ rules:
               - pattern: runtimeBoundaryCast<$T>($VALUE, $PRED, $REASON)
               - metavariable-regex:
                   metavariable: $REASON
-                  regex: '^["''`](?!.*(?:#[0-9]+|https?://|issue[ -][0-9]+)).*["''`]$'
+                  regex: '^["''`](?![\s\S]*(?:#[0-9]+|https?://|issue[ -][0-9]+))[\s\S]*["''`]$'
     metadata:
       policy_code: POLICY.NO_TYPE_ESCAPE
       remediation_code: REMEDIATE.STRUCTURED_TYPES
