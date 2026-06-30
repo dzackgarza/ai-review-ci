@@ -13,20 +13,13 @@ rules:
       - javascript
     severity: ERROR
     patterns:
-      - pattern-either:
-          - pattern: $X ?? "..."
-          - pattern: $X ?? '...'
-          - pattern: $X ?? `...`
-          - pattern: $X ?? {...}
-          - pattern: $X ?? [...]
-          - pattern: $X ?? null
-          - pattern: $X ?? true
-          - pattern: $X ?? false
-          - patterns:
-              - pattern: $X ?? $N
-              - metavariable-regex:
-                  metavariable: $N
-                  regex: '^-?[0-9]'
+      - pattern: $X ?? $FALLBACK
+      - metavariable-regex:
+          metavariable: $FALLBACK
+          # Empty literals are valid owned-boundary normalization for genuinely
+          # optional data (#130). Keep flagging non-empty success-shaped stubs,
+          # booleans/null, and numeric fallbacks.
+          regex: '^(?:"[^"]+"|\x27[^\x27]+\x27|`[^`]+`|-?[0-9]|true|false|null|\[[\s\S]+\]|\{[\s\S]+\})$'
     metadata:
       policy_code: POLICY.RUNTIME_DEFAULT
       remediation_code: REMEDIATE.TOTAL_CONFIG_MODEL
@@ -321,20 +314,13 @@ rules:
       - javascript
     severity: ERROR
     patterns:
-      - pattern-either:
-          - pattern: $X || "..."
-          - pattern: $X || '...'
-          - pattern: $X || `...`
-          - pattern: $X || {...}
-          - pattern: $X || [...]
-          - pattern: $X || null
-          - pattern: $X || true
-          - pattern: $X || false
-          - patterns:
-              - pattern: $X || $N
-              - metavariable-regex:
-                  metavariable: $N
-                  regex: '^-?[0-9]'
+      - pattern: $X || $FALLBACK
+      - metavariable-regex:
+          metavariable: $FALLBACK
+          # Empty literals are valid owned-boundary normalization for genuinely
+          # optional data (#130). Keep flagging non-empty success-shaped stubs,
+          # booleans/null, and numeric fallbacks.
+          regex: '^(?:"[^"]+"|\x27[^\x27]+\x27|`[^`]+`|-?[0-9]|true|false|null|\[[\s\S]+\]|\{[\s\S]+\})$'
     metadata:
       policy_code: POLICY.RUNTIME_DEFAULT
       remediation_code: REMEDIATE.TOTAL_CONFIG_MODEL

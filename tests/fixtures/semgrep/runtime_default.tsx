@@ -21,6 +21,10 @@ export function Card({ content, posting, body, repo }: any) {
           repo.a || repo.b
         }
       />
+      {
+        // ok: ts-no-or-default
+        repo.optionalFooter || ""
+      }
     </div>
   );
 }
