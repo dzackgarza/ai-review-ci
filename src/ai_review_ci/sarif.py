@@ -47,6 +47,8 @@ SARIF_VERSION = "2.1.0"
 SARIF_SCHEMA = "https://raw.githubusercontent.com/oasis-tcs/sarif-spec/master/Schemata/sarif-schema-2.1.0.json"
 
 CATEGORY_PREFIX = "ai-review"
+REVIEW_AGENT = "opencode-ai"
+REVIEW_PROMPT_VERSION = "1"
 
 _OPTIONAL_PROPERTY_KEYS = (
     ("policy_code", "policy_code"),
@@ -104,6 +106,15 @@ def _tool_name(report_type: str) -> str:
     return f"{CATEGORY_PREFIX}/{report_type}"
 
 
+def _reviewer_identity(report_type: str) -> JsonDict:
+    return {
+        "type": report_type,
+        "agent": REVIEW_AGENT,
+        "prompt_id": f"reviews/{report_type}",
+        "prompt_version": REVIEW_PROMPT_VERSION,
+    }
+
+
 def _tier_to_level(tier: str) -> str:
     return "error" if tier == "tier1" else "warning"
 
@@ -153,11 +164,12 @@ def _region(start_line: int, end_line: int) -> Region:
     return Region(startLine=start_line, endLine=end_line if end_line != start_line else None)
 
 
-def _result_properties(finding: JsonDict) -> JsonDict:
+def _result_properties(finding: JsonDict, report_type: str) -> JsonDict:
     properties: JsonDict = {
         "label": finding["label"],
         "tier": finding["tier"],
         "category": finding["category"],
+        "reviewer": _reviewer_identity(report_type),
     }
     policy_code = finding.get("policy_code")
     if isinstance(policy_code, str):
@@ -173,7 +185,7 @@ def _result_properties(finding: JsonDict) -> JsonDict:
     return properties
 
 
-def _sarif_result(finding: JsonDict, rule_index: int) -> Result:
+def _sarif_result(finding: JsonDict, rule_index: int, report_type: str) -> Result:
     loc = finding["location"]
     message_text = finding["violated_invariant"]
     policy_code = finding.get("policy_code")
@@ -197,7 +209,7 @@ def _sarif_result(finding: JsonDict, rule_index: int) -> Result:
             )
         ],
         partialFingerprints={"reviewFindingKey": finding_fingerprint(finding["category"], loc["path"])},
-        properties=_result_properties(finding),
+        properties=_result_properties(finding, report_type),
     )
 
 
@@ -327,7 +339,7 @@ def build_sarif(
             results,
             finding_category,
             _rule_for(finding),
-            _sarif_result(finding, 0),
+            _sarif_result(finding, 0, report_type),
         )
 
     sarif = Sarif(

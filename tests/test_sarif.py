@@ -139,6 +139,25 @@ def test_build_sarif_resolves_policy_guidance_from_vendored_index(checkout: Path
     }
 
 
+def test_build_sarif_embeds_structured_reviewer_identity(checkout: Path) -> None:
+    configure_github_env()
+
+    artifact = general_candidate(findings=[general_finding()])
+
+    sarif = build_sarif(
+        artifact,
+        report_type="general",
+        category="ai-general-review",
+    )
+
+    assert sarif["runs"][0]["results"][0]["properties"]["reviewer"] == {
+        "type": "general",
+        "agent": "opencode-ai",
+        "prompt_id": "reviews/general",
+        "prompt_version": "1",
+    }
+
+
 def test_append_result_updates_runtime_rule_index_field() -> None:
     seen_rules = {"existing-rule": 0}
     rules = [ReportingDescriptor(id="existing-rule")]
