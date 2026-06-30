@@ -212,6 +212,7 @@ def partition_findings(
     review_label: str,
 ) -> tuple[list[JsonDict], list[JsonDict], int]:
     """Split findings into new inline comments, off-diff entries, and skipped duplicates."""
+    seen = set(seen)
     comments: list[JsonDict] = []
     off_diff: list[JsonDict] = []
     possible_duplicates = 0

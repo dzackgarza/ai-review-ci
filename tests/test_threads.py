@@ -77,13 +77,15 @@ def test_partition_findings_skips_existing_fingerprint_threads() -> None:
             }
         ],
     }
-    seen = {finding_fingerprint("DOC_CONSISTENCY", "src/example.py")}
+    fingerprint = finding_fingerprint("DOC_CONSISTENCY", "src/example.py")
+    seen = {fingerprint}
 
     comments, off_diff, possible_duplicates = partition_findings([finding], {"src/example.py": {12}}, seen, "General Review")
 
     assert not comments
     assert not off_diff
     assert possible_duplicates == 1
+    assert seen == {fingerprint}
 
 
 def test_render_thread_body_appends_canonical_policy_guidance() -> None:
