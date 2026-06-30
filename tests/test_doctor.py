@@ -7,7 +7,7 @@ from typing import Any
 
 import pytest
 
-from ai_review_ci.doctor import DoctorReport, doctor_report, manifest_text
+from ai_review_ci.doctor import DoctorReport, _has_private_attribute, _justfile_recipes, doctor_report, manifest_text
 from ai_review_ci.install import _write_trigger_workflows
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
@@ -373,6 +373,21 @@ def test_doctor_justfile_parser_accepts_parameter_defaults_and_recipe_attributes
 
     assert status == "current"
     assert payload["findings"] == []
+
+
+def test_justfile_parser_accepts_trailing_dash_recipe_names_and_indented_private_attributes() -> None:
+    lines = [
+        "# Example justfile.",
+        "test-recipe-:",
+        "    @true",
+        "",
+        "  [private]",
+        "helper:",
+        "    @true",
+    ]
+
+    assert _justfile_recipes(lines)["test-recipe-"] == 2
+    assert _has_private_attribute(lines, 6)
 
 
 def test_doctor_classifies_non_github_remote_branch_protection_as_unverifiable(tmp_path: pathlib.Path) -> None:

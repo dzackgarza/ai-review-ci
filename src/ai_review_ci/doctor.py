@@ -674,7 +674,7 @@ def _justfile_recipes(lines: list[str]) -> dict[str, int]:
         clean_line = re.sub(r'"[^"]*"|\'[^\']*\'', "", line)
         if "=" in clean_line and ":" not in clean_line:
             continue
-        match = re.match(r"^([A-Za-z_][A-Za-z0-9_-]*)\b.*:", clean_line)
+        match = re.match(r"^([A-Za-z_][A-Za-z0-9_-]*).*:", clean_line)
         if match is not None:
             recipes[match.group(1)] = index
     return recipes
@@ -689,7 +689,7 @@ def _has_immediate_doc_comment(lines: list[str], line_no: int) -> bool:
 
 def _has_private_attribute(lines: list[str], line_no: int) -> bool:
     index = line_no - 2
-    while index >= 0 and lines[index].startswith("["):
+    while index >= 0 and lines[index].strip().startswith("["):
         if lines[index].strip() == "[private]":
             return True
         index -= 1

@@ -39,6 +39,7 @@ FINGERPRINT_MARKER = "ai-review-fingerprint:"
 REVIEW_LABELS = {"general": "General Review", "slop": "Slop Review"}
 REVIEW_IDENTITY_MARKER = "ai-review-reviewer:"
 REVIEW_PROMPT_VERSION = "1"
+REVIEW_AGENT = "opencode-ai"
 
 THREADS_QUERY = """
 query($owner: String!, $name: String!, $number: Int!, $cursor: String) {
@@ -147,7 +148,7 @@ def _thread_body_lines(finding: JsonDict, review_label: str, fp: str) -> list[st
     review_type = next((key for key, label in REVIEW_LABELS.items() if label == review_label), "general")
     reviewer_identity = {
         "type": review_type,
-        "agent": "opencode-ai",
+        "agent": REVIEW_AGENT,
         "prompt_id": f"reviews/{review_type}",
         "prompt_version": REVIEW_PROMPT_VERSION,
     }
@@ -159,7 +160,7 @@ def _thread_body_lines(finding: JsonDict, review_label: str, fp: str) -> list[st
         f"**Location:** `{loc['path']}:{loc['start_line']}-{loc['end_line']}`",
         (
             "**Reviewer identity:** "
-            f"`type={review_type}; agent=opencode-ai; "
+            f"`type={review_type}; agent={REVIEW_AGENT}; "
             f"prompt_id=reviews/{review_type}; prompt_version={REVIEW_PROMPT_VERSION}`"
         ),
         f"**Violated invariant:** {finding['violated_invariant']}",
