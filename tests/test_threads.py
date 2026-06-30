@@ -142,5 +142,5 @@ def test_render_thread_body_includes_structured_reviewer_identity() -> None:
 
     body = render_thread_body(finding, "Slop Review", "b" * 64)
 
-    assert '<!-- ai-review-reviewer: {"agent": "opencode-ai", "prompt_id": "reviews/slop", "prompt_version": "1", "type": "slop"} -->' in body
-    assert "**Reviewer identity:** `type=slop; agent=opencode-ai; prompt_id=reviews/slop; prompt_version=1`" in body
+    assert '<!-- ai-review-reviewer: {"agent": "opencode-ai", "prompt_id": "reviews/slop", "prompt_version": "1.0.0", "type": "slop"} -->' in body
+    assert "**Reviewer identity:** `type=slop; agent=opencode-ai; prompt_id=reviews/slop; prompt_version=1.0.0`" in body

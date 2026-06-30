@@ -40,6 +40,7 @@ from sarif_pydantic import (
 
 from ai_review_ci.models import finding_fingerprint
 from ai_review_ci.policy_index import canonical_guidance, load_policy_index
+from ai_review_ci.reviewer_identity import reviewer_identity
 
 JsonDict = dict[str, Any]
 
@@ -47,9 +48,6 @@ SARIF_VERSION = "2.1.0"
 SARIF_SCHEMA = "https://raw.githubusercontent.com/oasis-tcs/sarif-spec/master/Schemata/sarif-schema-2.1.0.json"
 
 CATEGORY_PREFIX = "ai-review"
-REVIEW_AGENT = "opencode-ai"
-REVIEW_PROMPT_VERSION = "1"
-
 _OPTIONAL_PROPERTY_KEYS = (
     ("policy_code", "policy_code"),
     ("remediation_code", "remediation_code"),
@@ -106,15 +104,6 @@ def _tool_name(report_type: str) -> str:
     return f"{CATEGORY_PREFIX}/{report_type}"
 
 
-def _reviewer_identity(report_type: str) -> JsonDict:
-    return {
-        "type": report_type,
-        "agent": REVIEW_AGENT,
-        "prompt_id": f"reviews/{report_type}",
-        "prompt_version": REVIEW_PROMPT_VERSION,
-    }
-
-
 def _tier_to_level(tier: str) -> str:
     return "error" if tier == "tier1" else "warning"
 
@@ -169,7 +158,7 @@ def _result_properties(finding: JsonDict, report_type: str) -> JsonDict:
         "label": finding["label"],
         "tier": finding["tier"],
         "category": finding["category"],
-        "reviewer": _reviewer_identity(report_type),
+        "reviewer": reviewer_identity(report_type),
     }
     policy_code = finding.get("policy_code")
     if isinstance(policy_code, str):

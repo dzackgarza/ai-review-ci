@@ -15,7 +15,7 @@ from ai_review_ci.sarif import (
     build_sarif,
     to_sarif,
 )
-from tests.conftest import APP_FILE, general_candidate, general_finding
+from tests.conftest import APP_FILE, general_candidate, general_finding, slop_candidate, slop_finding
 
 JsonDict = dict[str, Any]
 
@@ -139,8 +139,9 @@ def test_build_sarif_resolves_policy_guidance_from_vendored_index(checkout: Path
     }
 
 
-def test_build_sarif_embeds_structured_reviewer_identity(checkout: Path) -> None:
+def test_build_sarif_embeds_structured_reviewer_identity(checkout: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     configure_github_env()
+    monkeypatch.setenv("AI_REVIEW_AGENT", "codex-reviewer")
 
     artifact = general_candidate(findings=[general_finding()])
 
@@ -152,9 +153,28 @@ def test_build_sarif_embeds_structured_reviewer_identity(checkout: Path) -> None
 
     assert sarif["runs"][0]["results"][0]["properties"]["reviewer"] == {
         "type": "general",
-        "agent": "opencode-ai",
+        "agent": "codex-reviewer",
         "prompt_id": "reviews/general",
-        "prompt_version": "1",
+        "prompt_version": "1.0.0",
+    }
+
+
+def test_build_sarif_routes_reviewer_identity_by_report_type(checkout: Path) -> None:
+    configure_github_env()
+
+    artifact = slop_candidate(findings=[slop_finding()])
+
+    sarif = build_sarif(
+        artifact,
+        report_type="slop",
+        category="ai-slop-review",
+    )
+
+    assert sarif["runs"][0]["results"][0]["properties"]["reviewer"] == {
+        "type": "slop",
+        "agent": "opencode-ai",
+        "prompt_id": "reviews/slop",
+        "prompt_version": "1.0.0",
     }
 
 
