@@ -144,7 +144,7 @@ def pick_anchor(finding: JsonDict, commentable: dict[str, set[int]]) -> int | No
 
 def _thread_body_lines(finding: JsonDict, review_label: str, fp: str) -> list[str]:
     loc = finding["location"]
-    review_type = "slop" if review_label == REVIEW_LABELS["slop"] else "general"
+    review_type = next((key for key, label in REVIEW_LABELS.items() if label == review_label), "general")
     reviewer_identity = {
         "type": review_type,
         "agent": "opencode-ai",
