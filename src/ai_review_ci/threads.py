@@ -37,6 +37,8 @@ JsonDict = dict[str, Any]
 
 FINGERPRINT_MARKER = "ai-review-fingerprint:"
 REVIEW_LABELS = {"general": "General Review", "slop": "Slop Review"}
+REVIEW_IDENTITY_MARKER = "ai-review-reviewer:"
+REVIEW_PROMPT_VERSION = "1"
 
 THREADS_QUERY = """
 query($owner: String!, $name: String!, $number: Int!, $cursor: String) {
@@ -142,11 +144,24 @@ def pick_anchor(finding: JsonDict, commentable: dict[str, set[int]]) -> int | No
 
 def _thread_body_lines(finding: JsonDict, review_label: str, fp: str) -> list[str]:
     loc = finding["location"]
+    review_type = "slop" if review_label == REVIEW_LABELS["slop"] else "general"
+    reviewer_identity = {
+        "type": review_type,
+        "agent": "opencode-ai",
+        "prompt_id": f"reviews/{review_type}",
+        "prompt_version": REVIEW_PROMPT_VERSION,
+    }
     lines = [
         f"### [{review_label}][{finding['tier']}] {finding['label']}",
         f"<!-- {FINGERPRINT_MARKER} {fp} -->",
+        f"<!-- {REVIEW_IDENTITY_MARKER} {json.dumps(reviewer_identity, sort_keys=True)} -->",
         "",
         f"**Location:** `{loc['path']}:{loc['start_line']}-{loc['end_line']}`",
+        (
+            "**Reviewer identity:** "
+            f"`type={review_type}; agent=opencode-ai; "
+            f"prompt_id=reviews/{review_type}; prompt_version={REVIEW_PROMPT_VERSION}`"
+        ),
         f"**Violated invariant:** {finding['violated_invariant']}",
         f"**Proof:** `{finding['proof_command']}`",
     ]

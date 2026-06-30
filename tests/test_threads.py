@@ -117,3 +117,30 @@ def test_render_thread_body_appends_canonical_policy_guidance() -> None:
     assert "#### Canonical policy guidance" in body
     assert "Policy: `POLICY.NO_MOCK_PROOF`" in body
     assert "Remediation: `REMEDIATE.REAL_PROOF_LOOP`" in body
+
+
+def test_render_thread_body_includes_structured_reviewer_identity() -> None:
+    finding = {
+        "tier": "tier1",
+        "label": "SLOP",
+        "category": "bridge-burning",
+        "location": {
+            "path": "src/example.py",
+            "start_line": 12,
+            "end_line": 13,
+        },
+        "violated_invariant": "Review feedback needs a routable reviewer identity.",
+        "proof_command": "inspect rendered review thread body",
+        "evidence": [
+            {
+                "path": "src/example.py",
+                "lines": [12, 13],
+                "kind": "primary",
+            }
+        ],
+    }
+
+    body = render_thread_body(finding, "Slop Review", "b" * 64)
+
+    assert '<!-- ai-review-reviewer: {"agent": "opencode-ai", "prompt_id": "reviews/slop", "prompt_version": "1", "type": "slop"} -->' in body
+    assert "**Reviewer identity:** `type=slop; agent=opencode-ai; prompt_id=reviews/slop; prompt_version=1`" in body
