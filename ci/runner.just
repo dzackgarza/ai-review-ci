@@ -156,6 +156,11 @@ check-qc-doctor:
     printf '\n```\n'
     exit "$doctor_status"
 
+check-pr-description pr_number:
+    uv run --project {{infra}} ai-review-ci check-pr-description \
+      --repo "${GITHUB_REPOSITORY}" \
+      --pr-number "{{pr_number}}"
+
 check-app-boot profile:
     uv run --project {{infra}} ai-review-ci check-app-boot \
       --target "{{control_repo}}" \

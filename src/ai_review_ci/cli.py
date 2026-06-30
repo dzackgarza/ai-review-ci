@@ -10,6 +10,7 @@ Subcommands:
 - check-diff       — fail if a PR unified diff introduces deterministic findings
 - check-delegation — fail if a target justfile stops delegating to global QC
 - check-justfile   — fail if a target justfile violates the baseline contract
+- check-pr-description — fail if a PR body contains unchecked checklist items
 - check-app-boot   — run the target repo's delegated bun-playwright gate
 - check-review-threads — require evidence-backed ai-review thread resolution
 - protect-branch   — apply required branch protection contexts
@@ -32,6 +33,7 @@ from ai_review_ci.gates import (
     check_delegation,
     check_diff,
     check_profile,
+    check_pr_description,
     check_review_threads,
     protect_branch,
 )
@@ -54,6 +56,7 @@ app.command(check_profile)
 app.command(check_diff)
 app.command(check_delegation)
 app.command(check_justfile)
+app.command(check_pr_description)
 app.command(check_app_boot)
 app.command(check_review_threads)
 app.command(protect_branch)
