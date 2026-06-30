@@ -86,6 +86,45 @@ def test_app_boot_rejects_direct_local_playwright_before_execution(tmp_path: pat
     assert not marker.exists()
 
 
+def test_pr_description_checklist_detects_unchecked_variants() -> None:
+    body = "\n".join(
+        [
+            "Ready:",
+            "- [x] completed",
+            "- [ ] incomplete",
+            "* [  ] also incomplete",
+            "+ [X] uppercase checked",
+        ]
+    )
+
+    assert gates.unchecked_checklist_lines(body) == [3, 4]
+
+
+def test_pr_description_checklist_accepts_checked_or_absent_items() -> None:
+    body = "\n".join(
+        [
+            "No checklist here.",
+            "- [x] checked lowercase",
+            "- [X] checked uppercase",
+        ]
+    )
+
+    assert gates.unchecked_checklist_lines(body) == []
+
+
+def test_pr_description_gate_blocks_unchecked_items(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(gates, "_gh_json", lambda args: {"body": "- [ ] finish this\n- [x] done\n"})
+
+    with pytest.raises(SystemExit):
+        gates.check_pr_description("owner/repo", 12)
+
+
+def test_pr_description_gate_passes_without_unchecked_items(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(gates, "_gh_json", lambda args: {"body": "- [x] done\n"})
+
+    gates.check_pr_description("owner/repo", 12)
+
+
 def test_branch_protection_payload_uses_profile_check_contexts() -> None:
     payload = gates.branch_protection_payload("bun")
 
@@ -94,6 +133,7 @@ def test_branch_protection_payload_uses_profile_check_contexts() -> None:
         {"context": "deterministic-diff / deterministic-diff", "app_id": -1},
         {"context": "delegation-conformance / delegation-conformance", "app_id": -1},
         {"context": "qc-doctor / qc-doctor", "app_id": -1},
+        {"context": "pr-description-checklist / pr-description-checklist", "app_id": -1},
         {"context": "general / review", "app_id": -1},
         {"context": "slop / review", "app_id": -1},
         {"context": "thread-resolution / thread-resolution", "app_id": -1},

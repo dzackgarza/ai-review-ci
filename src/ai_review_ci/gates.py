@@ -57,6 +57,7 @@ BASE_REQUIRED_CHECK_CONTEXTS = (
     "deterministic-diff / deterministic-diff",
     "delegation-conformance / delegation-conformance",
     "qc-doctor / qc-doctor",
+    "pr-description-checklist / pr-description-checklist",
     "general / review",
     "slop / review",
     "thread-resolution / thread-resolution",
@@ -296,6 +297,18 @@ def check_app_boot(target: Path, profile: str) -> None:
     print(f"App boot gate passed for {target}.")
 
 
+_UNCHECKED_CHECKLIST_ITEM = re.compile(r"^\s*[-*+]\s*\[\s*\]\s+\S", re.MULTILINE)
+
+
+def unchecked_checklist_lines(body: str) -> list[int]:
+    """Return 1-indexed PR body lines containing unchecked markdown checklist items."""
+    return [
+        line_no
+        for line_no, line in enumerate(body.splitlines(), start=1)
+        if _UNCHECKED_CHECKLIST_ITEM.search(line)
+    ]
+
+
 def _gh_json(args: list[str], body: JsonDict | None = None) -> JsonDict:
     result = subprocess.run(
         ["gh", *args],
@@ -307,6 +320,23 @@ def _gh_json(args: list[str], body: JsonDict | None = None) -> JsonDict:
         _fail(f"gh {' '.join(args[:3])} failed: {result.stderr.strip()}")
     data: JsonDict = json.loads(result.stdout)
     return data
+
+
+def check_pr_description(repo: str, pr_number: int) -> None:
+    """Fail if the original PR description contains unchecked markdown checklist items."""
+    pr = _gh_json(["api", f"repos/{repo}/pulls/{pr_number}"])
+    body = pr.get("body")
+    if body is None:
+        body = ""
+    if not isinstance(body, str):
+        _fail("pull request body was not a string")
+    unchecked = unchecked_checklist_lines(body)
+    if unchecked:
+        print("PR description contains unchecked markdown checklist items:", file=sys.stderr)
+        for line_no in unchecked:
+            print(f"- PR body line {line_no}: unchecked checklist item", file=sys.stderr)
+        sys.exit(1)
+    print("PR description checklist gate found no unchecked items.")
 
 
 def _thread_nodes(repo: str, pr_number: int) -> list[JsonDict]:

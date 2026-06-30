@@ -24,6 +24,14 @@ jobs:
     with:
       gate: qc-doctor
       profile: '{{ profile }}'
+  pr-description-checklist:
+    uses: dzackgarza/ai-review-ci/.github/workflows/_gates.yml@{{ ref }}
+    permissions:
+      contents: read
+      pull-requests: read
+    with:
+      gate: pr-description-checklist
+      profile: '{{ profile }}'
   general:
     uses: dzackgarza/ai-review-ci/.github/workflows/_review.yml@{{ ref }}
     permissions:
