@@ -1,26 +1,26 @@
-## Implementation PR — stale proof thread convergence (#126)
+## Implementation PR — structured review state and meaningful review checks (#26)
 
-This PR carries the next review-state bugfix for findings re-raised after their
-own proof no longer reproduces on the reviewed SHA.
+This PR carries the next review-state milestone slice: make review jobs expose a
+machine-readable finding state and fail consistently when actionable findings are
+present.
 
-- **Target issue:** #126
-- **Theme:** let the thread-resolution gate withdraw stale ai-review threads when their safe proof grep no longer matches
-- **Issue to close on merge:** #126, if the review accepts grep/rg proof re-evaluation as the intended first slice
+- **Target issue:** #26
+- **Theme:** stop requiring consumers to scrape review prose to know whether a run has actionable findings
+- **Issue to close on merge:** #26
 
 ## Implemented behavior
 
-- The thread-resolution gate extracts `**Proof:** \`...\`` commands from ai-review
-  thread bodies that contain the machine fingerprint marker.
-- Only safe `grep` / `rg` proof commands are eligible for automatic re-checking;
-  shell composition and broad unsafe grep shapes are rejected.
-- If a safe proof exits with status `1` (no matches), the gate resolves the
-  stale GitHub review thread instead of continuing to count it as unresolved.
-- If the proof still reproduces, cannot be parsed safely, or errors, the thread
-  remains blocking.
+- `report-metadata` now emits a structured `findings` array with fingerprint,
+  tier, review type, category, label, path, line range, and status.
+- New `enforce-report-status` CLI command fails when the validated report has
+  tier1 findings and passes when no tier1 findings are present.
+- `_review.yml` writes `.review-findings.json`, uploads it as a workflow
+  artifact, then enforces the review status after SARIF upload and PR thread
+  posting so the evidence remains available even when the review check fails.
 
 ## Evidence
 
-- `tests/test_gates.py` covers auto-resolving a stale grep proof, preserving a
-  still-reproducing proof as a blocker, and rejecting shell-composed proofs.
-- The production gate path is covered directly: tests call `check_review_threads`
-  with mocked thread nodes and mocked `gh`/proof-command execution.
+- `tests/test_report.py` validates the structured state payload and tier1/tier2
+  status behavior directly against validated report-shaped artifacts.
+- `tests/test_install.py` verifies the reusable review workflow uploads the
+  structured state artifact before enforcing the final status.

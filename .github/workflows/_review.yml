@@ -104,6 +104,15 @@ jobs:
       - name: Collect review output
         run: just -f "$INFRA/ci/runner.just" collect-output
 
+      - name: Write structured review state
+        run: just -f "$INFRA/ci/runner.just" write-review-state
+
+      - name: Upload structured review state
+        uses: actions/upload-artifact@v4
+        with:
+          name: ai-${{ inputs.report_type }}-review-state
+          path: .review-findings.json
+
       - name: Convert report to SARIF
         run: just -f "$INFRA/ci/runner.just" convert-sarif "ai-$REVIEW_REPORT_TYPE-review"
 
@@ -118,3 +127,6 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: just -f "$INFRA/ci/runner.just" post-threads "$REVIEW_PR_NUMBER"
+
+      - name: Enforce review status
+        run: just -f "$INFRA/ci/runner.just" enforce-review-status
