@@ -191,6 +191,15 @@ run-review report_type scope:
 collect-output:
     cp {{reviewer_repo}}/.review-report-artifact.json {{control_repo}}/.review-report-artifact.json
 
+write-review-state:
+    uv run --project {{infra}} ai-review-ci report-metadata \
+      --path "{{control_repo}}/.review-report-artifact.json" \
+      > "{{control_repo}}/.review-findings.json"
+
+enforce-review-status:
+    uv run --project {{infra}} ai-review-ci enforce-report-status \
+      --path "{{control_repo}}/.review-report-artifact.json"
+
 convert-sarif category:
     uv run --project {{infra}} ai-review-ci to-sarif \
       --artifact "{{control_repo}}/.review-report-artifact.json" \
