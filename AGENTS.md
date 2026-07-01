@@ -100,12 +100,19 @@ checkout:
 Do not rely on globally-installed skills: remote review/coding agents (Codex, Jules, cloud
 runs) do not have them. The vendored copy is the contract.
 
-Policy-index **content is owned by this repo**: authored under `skills/policy-index/` and
-built into `reviews/vendor/policy-index/` via `just vendor-owned-skills`. Changing what a
-policy *says* is a local edit to `skills/policy-index/` followed by a rebuild; the vendored
-copy is sha256-pinned against that source (`tests/test_policy_index.py`), so editing the
-vendored copy directly fails the pin. The owned skill is then installed into `~/ai`
-(ai-review-ci is the source of truth; `~/ai` is a downstream install target — see #163).
+The integration-time enforcement skills **are owned by this repo**, not vendored from
+elsewhere. `reviews/vendor/MANIFEST.toml` classifies every vendored entry:
+
+- **owned** — authored under `skills/<name>/` (policy-index, anti-slop, reviewing-llm-code,
+  fixing-slop, bespoke-software-policy) and built into `reviews/vendor/` via
+  `just vendor-owned-skills`. Change what one *says* by editing `skills/<name>/` and
+  rebuilding — never the vendored copy (`tests/test_vendor_skills.py` fails on drift in
+  either direction; policy-index is additionally sha256-pinned in its `VENDOR.toml`). Owned
+  skills are then installed into `~/ai` via `just publish-skills <hub>` (ai-review-ci is the
+  source of truth; `~/ai` is a downstream install target — see #163).
+- **consumed** — vendored from an external upstream (test-guidelines / tool-provisioning
+  from `dzackgarza/ai`; the Brooks-Lint composites from `hyhmrright/brooks-lint`). Refresh
+  these from their named upstream; do not author or publish them here.
 
 ## Tier 0 — every PR
 
