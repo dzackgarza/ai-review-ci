@@ -1248,6 +1248,19 @@ def test_pytest_with_coverage_generates_xml_without_total_threshold(
     assert "Coverage XML report:" in output
 
 
+def test_slop_torture_python_complexity_fixture_trips_lizard(tmp_path: pathlib.Path) -> None:
+    fixture = ROOT / "tests" / "fixtures" / "mini-project-slop" / "python-complexity"
+    project = tmp_path / "python-complexity"
+    shutil.copytree(fixture, project)
+
+    result = run_just(ROOT / "justfiles" / "python.just", project, "_lizard-python")
+    output = result.stdout + result.stderr
+
+    assert result.returncode != 0, output
+    assert "ERROR: lizard found excessive complexity" in output
+    assert TRIAGE_MARKER in output
+
+
 def test_deptry_accepts_declared_distributions_with_different_import_names(
     tmp_path: pathlib.Path,
 ) -> None:

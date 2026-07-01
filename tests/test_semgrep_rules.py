@@ -26,7 +26,7 @@ FIXTURES = pathlib.Path(__file__).resolve().parent / "fixtures" / "semgrep"
 # bare ``||`` / ``??`` operator, must be the signal.
 RUNTIME_DEFAULT_RULES = ("ts-no-or-default", "no-nullish-coalescing")
 
-_ANNOTATION = re.compile(r"//\s*(ruleid|ok):\s*([\w-]+)")
+_ANNOTATION = re.compile(r"(?:#|//)\s*(ruleid|ok):\s*([\w-]+)")
 
 
 def _rules_subset(ids: tuple[str, ...]) -> list[dict[str, object]]:
@@ -46,7 +46,9 @@ def _expected(files: list[pathlib.Path]) -> tuple[set[tuple[str, int]], set[tupl
         for i, line in enumerate(path.read_text().splitlines()):
             match = _ANNOTATION.search(line)
             if match:
-                (flag if match.group(1) == "ruleid" else clean).add((path.name, i + 2))
+                prefix = line[: match.start()].strip()
+                expected_line = i + 1 if prefix else i + 2
+                (flag if match.group(1) == "ruleid" else clean).add((path.name, expected_line))
     return flag, clean
 
 
@@ -100,3 +102,21 @@ def test_no_double_cast_requires_explicit_boundary_assertion_form() -> None:
     assertion form is allowed only with runtime evidence and source-backed
     justification."""
     _assert_rules_match_annotations(("no-double-cast", "no-unproven-boundary-cast"), "no_double_cast.ts")
+
+
+def test_slop_torture_error_swallowing_rules() -> None:
+    """#62: swallowed exceptions are blocked, fail-loud observed errors are clean."""
+    _assert_rules_match_annotations(("py-no-bare-except", "py-no-suppress"), "error_swallowing.py")
+
+
+def test_slop_torture_optional_config_rules() -> None:
+    """#62: runtime defaults and optional core state remain flagged."""
+    _assert_rules_match_annotations(
+        ("py-no-getenv-default", "py-no-dict-get-default", "py-no-getattr-default", "py-no-optional-type"),
+        "optional_config.py",
+    )
+
+
+def test_slop_torture_mock_proof_rules() -> None:
+    """#62: mocked, monkeypatched, and skipped proof paths remain flagged."""
+    _assert_rules_match_annotations(("py-no-mock-import", "py-no-magicmock", "py-no-monkeypatch", "py-no-skip-test"), "mock_proof.py")
