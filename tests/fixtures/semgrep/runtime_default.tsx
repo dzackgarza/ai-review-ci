@@ -22,7 +22,7 @@ export function Card({ content, posting, body, repo }: any) {
         }
       />
       {
-        // ok: ts-no-or-default
+        // ruleid: ts-no-or-default
         repo.optionalFooter || ""
       }
     </div>
