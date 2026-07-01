@@ -6,12 +6,14 @@ from typing import Any
 import pytest
 import yaml
 
-from ai_review_ci.gates import SUPPORTED_PROFILES
+from ai_review_ci.gates import POLICY_GATE_MARKER, SUPPORTED_PROFILES
 from ai_review_ci.install import (
+    PR_TEMPLATE,
     TEMPLATES,
     _prove_installation,
     _template_text,
     _write_manifest,
+    _write_pr_template,
     _write_scaffold,
     _write_trigger_workflows,
 )
@@ -79,6 +81,26 @@ def _run_cli_install(
         capture_output=True,
         check=False,
     )
+
+
+def test_install_writes_pr_template_with_gate_marker(tmp_path: pathlib.Path) -> None:
+    repo = _git_repo(tmp_path)
+    _write_pr_template(repo)
+    dest = repo / ".github" / PR_TEMPLATE
+    assert dest.is_file()
+    # The distributed template carries the marker, which is what opts the target
+    # repo into check_pr_description marker enforcement (#154).
+    assert POLICY_GATE_MARKER in dest.read_text()
+
+
+def test_install_pr_template_refuses_overwrite(tmp_path: pathlib.Path) -> None:
+    repo = _git_repo(tmp_path)
+    dest = repo / ".github" / PR_TEMPLATE
+    dest.parent.mkdir(parents=True)
+    dest.write_text("existing repo-owned template\n")
+    with pytest.raises(SystemExit):
+        _write_pr_template(repo)
+    assert dest.read_text() == "existing repo-owned template\n"
 
 
 def test_install_writes_trigger_workflows(tmp_path: pathlib.Path) -> None:

@@ -24,6 +24,7 @@ from ai_review_ci.gates import SUPPORTED_PROFILES, protect_branch
 
 TEMPLATES = ("review-general.yml", "review-slop.yml", "review-pr.yml")
 SCAFFOLD_FILES = ("justfile",)
+PR_TEMPLATE = "pull_request_template.md"
 DEFAULT_INFRA_REF = "main"
 SUCCESSFUL_DOCTOR_STATUSES = ("current", "intentional_exception")
 
@@ -92,6 +93,29 @@ def _write_trigger_workflows(target: pathlib.Path, profile: str, ref: str = DEFA
         print(f"installed .github/workflows/{name}")
 
 
+def _write_pr_template(target: pathlib.Path) -> None:
+    """Write the policy-alignment PR template.
+
+    Installing this template opts the repo into gate enforcement: the marker it
+    carries is what `check_pr_description` requires in every PR body, so the
+    affirmation section cannot be deleted to bypass the gate.
+    """
+    target = _git_repo_root(target)
+    dest = target / ".github" / PR_TEMPLATE
+    if dest.exists():
+        print(
+            f"FATAL: {dest} already exists — this PR template is repo-owned configuration; edit it directly, or remove it first to re-initialize.",
+            file=sys.stderr,
+        )
+        sys.exit(1)
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    dest.write_text(
+        (files("ai_review_ci") / "templates" / PR_TEMPLATE).read_text(encoding="utf-8"),
+        encoding="utf-8",
+    )
+    print(f"installed .github/{PR_TEMPLATE}")
+
+
 def _write_manifest(target: pathlib.Path, profile: str, branch: str, ref: str, release_channel: str) -> None:
     from ai_review_ci.doctor import LOCAL_DELEGATION_MODE, WORKFLOW_TEMPLATE_VERSION, manifest_text
 
@@ -155,6 +179,11 @@ def install(
     _write_scaffold(target, profile)
     _write_trigger_workflows(target, profile, ref)
     _write_manifest(target, profile, branch, ref, release_channel)
+    # PR template last among local writes: it is the opt-in signal for gate
+    # enforcement, so create it only after profile validation and every other
+    # repo-owned-file conflict has already passed. A failed install must not leave
+    # a repo opted into PR-description enforcement.
+    _write_pr_template(target)
     protect_branch(repo, branch, profile)
     _prove_installation(target)
 
