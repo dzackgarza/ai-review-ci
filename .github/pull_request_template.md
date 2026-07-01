@@ -33,7 +33,7 @@ and the wiki [Policy Alignment Gate](https://github.com/dzackgarza/ai-review-ci/
 
 Check the one line that applies (both are valid answers, so this never blocks a non-QC PR):
 
-- [ ] **Not applicable** — this PR touches none of `tool-configs/`, `reviews/`, detectors, or QC `justfiles/`; **or** it does, and: a `ruleid`/equivalent **regression-lock** fixture proves each previously-flagged banned pattern still fires (precision narrows by *position*, never *value*), the change weakens no `POLICY.*` / silences no true finding, and any policy-*semantics* change was made upstream in `dzackgarza/ai` + re-vendored via `just sync-policy-index` (not edited locally — the vendor is hash-pinned).
+- [ ] **Not applicable** — this PR touches none of `tool-configs/`, `reviews/`, detectors, or QC `justfiles/`; **or** it does, and: a `ruleid`/equivalent **regression-lock** fixture proves each previously-flagged banned pattern still fires (precision narrows by *position*, never *value*), the change weakens no `POLICY.*` / silences no true finding, and any policy-*semantics* change was authored in `skills/policy-index/` + rebuilt via `just vendor-owned-skills` (not edited in the vendored copy — it is hash-pinned to the source).
 
 ## Evidence
 

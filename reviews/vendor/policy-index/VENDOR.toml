@@ -1,12 +1,11 @@
 [source]
-repo = "dzackgarza/ai"
-ref = "0c1d9cbd79818286fe686795995f99ddb5789652"
-source_path = "opencode/skills/policy-index"
-source_worktree_dirty = true
+repo = "dzackgarza/ai-review-ci"
+source_path = "skills/policy-index"
+ownership = "owned"
 
-[sync]
-command = "just sync-policy-index"
-mode = "git show <ref>:<source_path>, never dirty worktree copy"
+[build]
+command = "just vendor-owned-skills"
+mode = "copy from local skills/ source, sha256-pinned"
 
 [copied_files]
   [copied_files."SKILL.md"]

@@ -100,9 +100,12 @@ checkout:
 Do not rely on globally-installed skills: remote review/coding agents (Codex, Jules, cloud
 runs) do not have them. The vendored copy is the contract.
 
-Policy **content** is owned upstream at `github.com/dzackgarza/ai`. Changing what a policy
-*says* is an upstream edit re-vendored via `just sync-policy-index`; the vendored files are
-sha256-pinned (`tests/test_policy_index.py`) and a local edit fails the pin and is clobbered.
+Policy-index **content is owned by this repo**: authored under `skills/policy-index/` and
+built into `reviews/vendor/policy-index/` via `just vendor-owned-skills`. Changing what a
+policy *says* is a local edit to `skills/policy-index/` followed by a rebuild; the vendored
+copy is sha256-pinned against that source (`tests/test_policy_index.py`), so editing the
+vendored copy directly fails the pin. The owned skill is then installed into `~/ai`
+(ai-review-ci is the source of truth; `~/ai` is a downstream install target — see #163).
 
 ## Tier 0 — every PR
 

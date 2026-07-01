@@ -3,8 +3,6 @@ repo := justfile_directory()
 global_hooks_source_dir := repo / "global-hooks"
 repo_hooks_source_dir := repo / "repo-hooks"
 scaffold_source_dir := repo / "scaffolds"
-policy_index_source := "/home/dzack/gitclones/ai"
-policy_index_ref := "0c1d9cbd79818286fe686795995f99ddb5789652"
 
 # Normalize infrastructure files before parse checks inspect them
 _normalize:
@@ -29,12 +27,11 @@ check: _normalize
     sh -n repo-hooks/pre-commit
     sh -n repo-hooks/pre-push
 
-# Sync vendored policy/remediation index from the pinned dzackgarza/ai ref.
-sync-policy-index:
-    python3 tool-artifacts/scripts/sync-policy-index.py \
-      --source-root {{policy_index_source}} \
-      --vendor-root reviews/vendor/policy-index \
-      --ref {{policy_index_ref}}
+# Build vendored copies of owned enforcement skills from the local skills/ source.
+vendor-owned-skills:
+    python3 tool-artifacts/scripts/build-vendor-skills.py \
+      --skills-root skills \
+      --vendor-root reviews/vendor
 
 # Commit gate: this repo is QC tooling, so it runs the qc-tooling profile
 # (correctness + normalization, without the product-only slop/style gates it
