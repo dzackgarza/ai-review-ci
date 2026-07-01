@@ -800,9 +800,11 @@ The following checks are **mandatory** gates (all owned by global QC):
    measures coverage on changed lines.
    This catches overgenerated, unexercised code.
 
-3. **No dead code / unused exports / unused deps**: Use `vulture`, `knip`, `deptry`.
-   These catch abandoned helpers, unused files/exports, and speculative dependencies
-   left behind by failed generations.
+3. **No dead code / unused exports / missing dependency failures**: Use `vulture`,
+   `knip`, and dependency import checks. These catch abandoned helpers, unused
+   files/exports, missing imports, broken installs, and dependency metadata that
+   creates runtime failure. A declared dependency that is not import-visible is
+   maintenance hygiene, not slop or a routine blocking gate.
 
 4. **Type checker passes**: Use `mypy`, `pyright`, or `tsc --noEmit`. These catch
    interface drift and incompatible assumptions without running the code.

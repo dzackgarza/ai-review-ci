@@ -1300,6 +1300,87 @@ def test_deptry_accepts_declared_distributions_with_different_import_names(
     assert result.returncode == 0, result.stdout + result.stderr
 
 
+def test_deptry_allows_framework_required_import_invisible_dependencies(
+    tmp_path: pathlib.Path,
+) -> None:
+    project = tmp_path / "framework-runtime-dependency-project"
+    package_dir = project / "src" / "framework_runtime_dependency_project"
+    package_dir.mkdir(parents=True)
+    (project / "pyproject.toml").write_text(
+        "\n".join(
+            [
+                "[project]",
+                'name = "framework-runtime-dependency-project"',
+                'version = "0.1.0"',
+                'requires-python = ">=3.14"',
+                "dependencies = [",
+                '    "fastapi>=0.115",',
+                '    "python-multipart>=0.0.20",',
+                "]",
+                "",
+            ]
+        )
+    )
+    (package_dir / "__init__.py").write_text(
+        "\n".join(
+            [
+                "from fastapi import FastAPI, File",
+                "",
+                "app = FastAPI()",
+                "",
+                '@app.post("/upload")',
+                "async def upload(payload: bytes = File(...)) -> int:",
+                "    return len(payload)",
+                "",
+            ]
+        )
+    )
+
+    result = run_just(ROOT / "justfiles" / "python.just", project, "_deptry")
+    output = result.stdout + result.stderr
+
+    assert result.returncode == 0, output
+    assert "DEP002" not in output
+
+
+def test_deptry_still_blocks_missing_import_dependencies(
+    tmp_path: pathlib.Path,
+) -> None:
+    project = tmp_path / "missing-dependency-project"
+    package_dir = project / "src" / "missing_dependency_project"
+    package_dir.mkdir(parents=True)
+    (project / "pyproject.toml").write_text(
+        "\n".join(
+            [
+                "[project]",
+                'name = "missing-dependency-project"',
+                'version = "0.1.0"',
+                'requires-python = ">=3.14"',
+                "dependencies = []",
+                "",
+            ]
+        )
+    )
+    (package_dir / "__init__.py").write_text(
+        "\n".join(
+            [
+                "import requests",
+                "",
+                'VALUE = requests.get("https://example.com", timeout=1).status_code',
+                "",
+            ]
+        )
+    )
+
+    result = run_just(ROOT / "justfiles" / "python.just", project, "_deptry")
+    output = result.stdout + result.stderr
+
+    assert result.returncode != 0, output
+    assert "DEP001" in output
+    assert "missing/import dependency issues" in output
+    assert TRIAGE_MARKER in output
+
+
 def test_deptry_accepts_first_party_imports_in_src_layout(
     tmp_path: pathlib.Path,
 ) -> None:
