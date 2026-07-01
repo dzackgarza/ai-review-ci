@@ -3,7 +3,7 @@ on:
   workflow_call:
     inputs:
       gate:
-        description: 'Gate to run: deterministic-diff, delegation-conformance, qc-doctor, app-boot, or thread-resolution'
+        description: 'Gate to run: deterministic-diff, delegation-conformance, qc-doctor, pr-description-checklist, app-boot, or thread-resolution'
         required: true
         type: string
       profile:
@@ -40,7 +40,10 @@ jobs:
         with:
           python-version: '3.14'
       - name: Install just
-        run: "mkdir -p \"$RUNNER_TEMP/bin\"\nVERSION=$(curl -sL https://api.github.com/repos/casey/just/releases/latest | jq -r '.tag_name')\ncurl -sL \"https://github.com/casey/just/releases/download/${VERSION}/just-${VERSION}-x86_64-unknown-linux-musl.tar.gz\" \\\n  | tar -xzf - -C \"$RUNNER_TEMP/bin\" just\necho \"$RUNNER_TEMP/bin\" >> \"$GITHUB_PATH\"\n"
+        # Authenticated install via the maintained action. Mirrors _qc.yml.
+        uses: extractions/setup-just@v4
+        with:
+          github-token: ${{ github.token }}
       - name: Install gate tools
         run: just -f "$INFRA/ci/runner.just" install-gate-tools
       - name: Stage PR diff
@@ -70,7 +73,10 @@ jobs:
         with:
           python-version: '3.14'
       - name: Install just
-        run: "mkdir -p \"$RUNNER_TEMP/bin\"\nVERSION=$(curl -sL https://api.github.com/repos/casey/just/releases/latest | jq -r '.tag_name')\ncurl -sL \"https://github.com/casey/just/releases/download/${VERSION}/just-${VERSION}-x86_64-unknown-linux-musl.tar.gz\" \\\n  | tar -xzf - -C \"$RUNNER_TEMP/bin\" just\necho \"$RUNNER_TEMP/bin\" >> \"$GITHUB_PATH\"\n"
+        # Authenticated install via the maintained action. Mirrors _qc.yml.
+        uses: extractions/setup-just@v4
+        with:
+          github-token: ${{ github.token }}
       - name: Install gate tools
         run: just -f "$INFRA/ci/runner.just" install-gate-tools
       - name: Check delegation conformance
@@ -99,7 +105,10 @@ jobs:
         with:
           python-version: '3.14'
       - name: Install just
-        run: "mkdir -p \"$RUNNER_TEMP/bin\"\nVERSION=$(curl -sL https://api.github.com/repos/casey/just/releases/latest | jq -r '.tag_name')\ncurl -sL \"https://github.com/casey/just/releases/download/${VERSION}/just-${VERSION}-x86_64-unknown-linux-musl.tar.gz\" \\\n  | tar -xzf - -C \"$RUNNER_TEMP/bin\" just\necho \"$RUNNER_TEMP/bin\" >> \"$GITHUB_PATH\""
+        # Authenticated install via the maintained action. Mirrors _qc.yml.
+        uses: extractions/setup-just@v4
+        with:
+          github-token: ${{ github.token }}
       - name: Install gate tools
         run: just -f "$INFRA/ci/runner.just" install-gate-tools
       - name: Check QC doctor
@@ -135,7 +144,10 @@ jobs:
         with:
           python-version: '3.14'
       - name: Install just
-        run: "mkdir -p \"$RUNNER_TEMP/bin\"\nVERSION=$(curl -sL https://api.github.com/repos/casey/just/releases/latest | jq -r '.tag_name')\ncurl -sL \"https://github.com/casey/just/releases/download/${VERSION}/just-${VERSION}-x86_64-unknown-linux-musl.tar.gz\" \\\n  | tar -xzf - -C \"$RUNNER_TEMP/bin\" just\necho \"$RUNNER_TEMP/bin\" >> \"$GITHUB_PATH\"\n"
+        # Authenticated install via the maintained action. Mirrors _qc.yml.
+        uses: extractions/setup-just@v4
+        with:
+          github-token: ${{ github.token }}
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2
       - name: Install gate tools
@@ -144,6 +156,41 @@ jobs:
         run: just -f "$INFRA/ci/runner.just" setup-profile "$REVIEW_PROFILE"
       - name: Check app boot
         run: just -f "$INFRA/ci/runner.just" check-app-boot "$REVIEW_PROFILE"
+  pr-description-checklist:
+    if: inputs.gate == 'pr-description-checklist'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read
+    env:
+      REVIEW_INFRA_REF: ${{ inputs.infra_ref }}
+      REVIEW_PROFILE: ${{ inputs.profile }}
+      REVIEW_PR_NUMBER: ${{ github.event.number || 0 }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Locate infrastructure clone path
+        run: echo "INFRA=$RUNNER_TEMP/ai-review-ci" >> "$GITHUB_ENV"
+      - name: Validate gate inputs
+        run: "if [[ \"$REVIEW_INFRA_REF\" =~ [^A-Za-z0-9._/-] ]]; then\n  echo \"invalid infra_ref: $REVIEW_INFRA_REF\" >&2\n  exit 1\nfi\ncase \"$REVIEW_PROFILE\" in\n  python|bun|bun-playwright|rust|sage) ;;\n  *)\n    echo \"invalid profile: $REVIEW_PROFILE\" >&2\n    exit 1\n    ;;\nesac\nif [[ ! \"$REVIEW_PR_NUMBER\" =~ ^[0-9]+$ || \"$REVIEW_PR_NUMBER\" == 0 ]]; then\n  echo \"invalid pull request number: $REVIEW_PR_NUMBER\" >&2\n  exit 1\nfi\n"
+      - name: Clone review infrastructure
+        run: git clone --depth 1 --branch "$REVIEW_INFRA_REF" https://github.com/dzackgarza/ai-review-ci.git "$INFRA"
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.14'
+      - name: Install just
+        # Authenticated install via the maintained action. Mirrors _qc.yml.
+        uses: extractions/setup-just@v4
+        with:
+          github-token: ${{ github.token }}
+      - name: Install gate tools
+        run: just -f "$INFRA/ci/runner.just" install-gate-tools
+      - name: Check PR description checklist
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: just -f "$INFRA/ci/runner.just" check-pr-description "$REVIEW_PR_NUMBER"
   thread-resolution:
     if: inputs.gate == 'thread-resolution'
     runs-on: ubuntu-latest
@@ -166,7 +213,10 @@ jobs:
         with:
           python-version: '3.14'
       - name: Install just
-        run: "mkdir -p \"$RUNNER_TEMP/bin\"\nVERSION=$(curl -sL https://api.github.com/repos/casey/just/releases/latest | jq -r '.tag_name')\ncurl -sL \"https://github.com/casey/just/releases/download/${VERSION}/just-${VERSION}-x86_64-unknown-linux-musl.tar.gz\" \\\n  | tar -xzf - -C \"$RUNNER_TEMP/bin\" just\necho \"$RUNNER_TEMP/bin\" >> \"$GITHUB_PATH\"\n"
+        # Authenticated install via the maintained action. Mirrors _qc.yml.
+        uses: extractions/setup-just@v4
+        with:
+          github-token: ${{ github.token }}
       - name: Install gate tools
         run: just -f "$INFRA/ci/runner.just" install-gate-tools
       - name: Check review thread resolution

@@ -156,6 +156,11 @@ check-qc-doctor:
     printf '\n```\n'
     exit "$doctor_status"
 
+check-pr-description pr_number:
+    uv run --project {{infra}} ai-review-ci check-pr-description \
+      --repo "${GITHUB_REPOSITORY}" \
+      --pr-number "{{pr_number}}"
+
 check-app-boot profile:
     uv run --project {{infra}} ai-review-ci check-app-boot \
       --target "{{control_repo}}" \
@@ -185,6 +190,15 @@ run-review report_type scope:
 
 collect-output:
     cp {{reviewer_repo}}/.review-report-artifact.json {{control_repo}}/.review-report-artifact.json
+
+write-review-state:
+    uv run --project {{infra}} ai-review-ci report-metadata \
+      --path "{{control_repo}}/.review-report-artifact.json" \
+      > "{{control_repo}}/.review-findings.json"
+
+enforce-review-status:
+    uv run --project {{infra}} ai-review-ci enforce-report-status \
+      --path "{{control_repo}}/.review-report-artifact.json"
 
 convert-sarif category:
     uv run --project {{infra}} ai-review-ci to-sarif \

@@ -7,10 +7,12 @@ from typing import Any
 
 import pytest
 
-from ai_review_ci.doctor import doctor_report, manifest_text
+from ai_review_ci.doctor import DoctorReport, _has_private_attribute, _justfile_recipes, doctor_report, manifest_text
 from ai_review_ci.install import _write_trigger_workflows
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
+DOCTOR_SCHEMA = ROOT / "schemas" / "doctor-report.schema.json"
+DOCTOR_EXAMPLE = ROOT / "schemas" / "examples" / "doctor-report-current-python.json"
 
 
 def run_git(workdir: pathlib.Path, *args: str) -> subprocess.CompletedProcess[str]:
@@ -163,6 +165,20 @@ def test_doctor_schema_cli_exports_producer_owned_contract() -> None:
     assert schema["additionalProperties"] is False
 
 
+def test_doctor_schema_artifact_matches_exported_contract() -> None:
+    schema = json.loads(DOCTOR_SCHEMA.read_text(encoding="utf-8"))
+
+    assert schema == DoctorReport.model_json_schema()
+
+
+def test_doctor_golden_example_validates_against_owned_model() -> None:
+    report = DoctorReport.model_validate_json(DOCTOR_EXAMPLE.read_text(encoding="utf-8"))
+
+    assert report.schema_version == 1
+    assert report.global_status == "current"
+    assert report.effective_profile == "python"
+
+
 def test_doctor_classifies_outdated_workflow_refs_as_stale(tmp_path: pathlib.Path) -> None:
     project = create_target(tmp_path, "python")
     (project / ".ai-review-ci.toml").write_text(
@@ -263,6 +279,115 @@ def test_doctor_classifies_wrong_caller_root_delegation_as_misconfigured(tmp_pat
     assert payload["installation_state"] == "noncompliant"
     assert payload["justfile_delegation"]["test"]["observed"]["caller_root_preserved"] is False
     assert payload["findings"][0]["remediation_commands"] == ["just install-qc-scaffold python <target-repo>"]
+
+
+def test_doctor_reports_justfile_baseline_violations(tmp_path: pathlib.Path) -> None:
+    project = create_target(tmp_path, "python")
+    (project / "justfile").write_text(
+        "\n".join(
+            [
+                "test:",
+                "    @just -f ~/ai-review-ci/justfiles/python.just -d . test",
+                "",
+                "# Run push-tier Python QC through the central implementation.",
+                "test-ci:",
+                "    @just -f ~/ai-review-ci/justfiles/python.just -d . test-ci",
+                "",
+            ]
+        )
+    )
+
+    status, payload = status_for(project)
+
+    assert status == "misconfigured"
+    justfile_findings = [
+        finding
+        for finding in payload["findings"]
+        if finding["surface"] == "justfile_conformance"
+    ]
+    assert [finding["evidence"].split(" ", 1)[1] for finding in justfile_findings] == [
+        "header-comment: justfile must begin with a comment block",
+        "default-recipe: no default recipe; bare just must list recipes",
+        "public-recipe-doc: recipe `test` has no immediate # doc comment",
+    ]
+
+
+def test_check_justfile_cli_reports_baseline_violations(tmp_path: pathlib.Path) -> None:
+    project = create_target(tmp_path, "python")
+    (project / "justfile").write_text(
+        "\n".join(
+            [
+                "# Delegates Python QC.",
+                "",
+                "# Run commit-tier Python QC through the central implementation.",
+                "test:",
+                "    @just -f ~/ai-review-ci/justfiles/python.just -d . test",
+                "",
+                "# Run push-tier Python QC through the central implementation.",
+                "test-ci:",
+                "    @just -f ~/ai-review-ci/justfiles/python.just -d . test-ci",
+                "",
+            ]
+        )
+    )
+
+    result = subprocess.run(
+        [sys.executable, "-m", "ai_review_ci.cli", "check-justfile", "--target", str(project)],
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+
+    assert result.returncode == 1
+    assert "justfile_conformance" in result.stderr
+    assert "default-recipe" in result.stderr
+
+
+def test_doctor_justfile_parser_accepts_parameter_defaults_and_recipe_attributes(tmp_path: pathlib.Path) -> None:
+    project = create_target(tmp_path, "python")
+    (project / "justfile").write_text(
+        "\n".join(
+            [
+                "# Delegates Python QC.",
+                'api_url := "https://example.invalid:443"',
+                "",
+                "# List available recipes.",
+                "[no-cd]",
+                "default:",
+                "    @just --list",
+                "",
+                "# Run commit-tier Python QC through the central implementation.",
+                "[no-cd]",
+                'test mode="fast":',
+                "    @just -f ~/ai-review-ci/justfiles/python.just -d . test",
+                "",
+                "# Run push-tier Python QC through the central implementation.",
+                "test-ci:",
+                "    @just -f ~/ai-review-ci/justfiles/python.just -d . test-ci",
+                "",
+            ]
+        )
+    )
+
+    status, payload = status_for(project)
+
+    assert status == "current"
+    assert payload["findings"] == []
+
+
+def test_justfile_parser_accepts_trailing_dash_recipe_names_and_indented_private_attributes() -> None:
+    lines = [
+        "# Example justfile.",
+        "test-recipe-:",
+        "    @true",
+        "",
+        "  [private]",
+        "helper:",
+        "    @true",
+    ]
+
+    assert _justfile_recipes(lines)["test-recipe-"] == 2
+    assert _has_private_attribute(lines, 6)
 
 
 def test_doctor_classifies_non_github_remote_branch_protection_as_unverifiable(tmp_path: pathlib.Path) -> None:

@@ -13,20 +13,13 @@ rules:
       - javascript
     severity: ERROR
     patterns:
-      - pattern-either:
-          - pattern: $X ?? "..."
-          - pattern: $X ?? '...'
-          - pattern: $X ?? `...`
-          - pattern: $X ?? {...}
-          - pattern: $X ?? [...]
-          - pattern: $X ?? null
-          - pattern: $X ?? true
-          - pattern: $X ?? false
-          - patterns:
-              - pattern: $X ?? $N
-              - metavariable-regex:
-                  metavariable: $N
-                  regex: '^-?[0-9]'
+      - pattern: $X ?? $FALLBACK
+      - metavariable-regex:
+          metavariable: $FALLBACK
+          # Empty literals are valid owned-boundary normalization for genuinely
+          # optional data (#130). Keep flagging non-empty success-shaped stubs,
+          # booleans/null, and numeric fallbacks.
+          regex: '^(?:"[^"]+"|\x27[^\x27]+\x27|`[^`]+`|-?[0-9]|true|false|null|\[[\s\S]+\]|\{[\s\S]+\})$'
     metadata:
       policy_code: POLICY.RUNTIME_DEFAULT
       remediation_code: REMEDIATE.TOTAL_CONFIG_MODEL
@@ -73,17 +66,36 @@ rules:
       policy_code: POLICY.NO_HIDDEN_CONFIG
       remediation_code: REMEDIATE.TOTAL_CONFIG_MODEL
   - id: no-double-cast
-    # #46: there is intentionally NO sanctioned double-cast form. A justification
-    # comment or a `boundaryCast`-style escape would be reward-hackable by
-    # confabulating a plausible reason, and then QC is stuck adjudicating whether
-    # each reason is "valid". Every double cast (`as unknown as`, `as any as`,
-    # parenthesized, comment-"justified") stays blocked and routes to
-    # REMEDIATE.STRUCTURED_TYPES — fix the type at the owned boundary, do not erase.
+    # #46: arbitrary double casts stay blocked. Runtime/type-surface mismatches
+    # must use the explicit runtimeBoundaryCast form below so the local code
+    # carries both a runtime predicate and source-backed issue/URL justification.
     pattern: $X as $T as $Z
     message: POLICY.NO_TYPE_ESCAPE
     languages:
       - typescript
     severity: ERROR
+    metadata:
+      policy_code: POLICY.NO_TYPE_ESCAPE
+      remediation_code: REMEDIATE.STRUCTURED_TYPES
+  - id: no-unproven-boundary-cast
+    # #46 sanctioned boundary form:
+    # runtimeBoundaryCast<T>(value, predicate, "issue/url-backed reason").
+    # The predicate is runtime evidence; the reason links the known mismatch.
+    message: POLICY.NO_TYPE_ESCAPE
+    languages:
+      - typescript
+    severity: ERROR
+    patterns:
+      - pattern-either:
+          - pattern: runtimeBoundaryCast<$T>($VALUE)
+          - pattern: runtimeBoundaryCast<$T>($VALUE, $PRED)
+          - pattern: runtimeBoundaryCast<$T>($VALUE, $PRED, "")
+          - pattern: runtimeBoundaryCast<$T>($VALUE, $PRED, '')
+          - patterns:
+              - pattern: runtimeBoundaryCast<$T>($VALUE, $PRED, $REASON)
+              - metavariable-regex:
+                  metavariable: $REASON
+                  regex: '^["''`](?![\s\S]*(?:#[0-9]+|https?://|issue[ -][0-9]+))[\s\S]*["''`]$'
     metadata:
       policy_code: POLICY.NO_TYPE_ESCAPE
       remediation_code: REMEDIATE.STRUCTURED_TYPES
@@ -302,20 +314,13 @@ rules:
       - javascript
     severity: ERROR
     patterns:
-      - pattern-either:
-          - pattern: $X || "..."
-          - pattern: $X || '...'
-          - pattern: $X || `...`
-          - pattern: $X || {...}
-          - pattern: $X || [...]
-          - pattern: $X || null
-          - pattern: $X || true
-          - pattern: $X || false
-          - patterns:
-              - pattern: $X || $N
-              - metavariable-regex:
-                  metavariable: $N
-                  regex: '^-?[0-9]'
+      - pattern: $X || $FALLBACK
+      - metavariable-regex:
+          metavariable: $FALLBACK
+          # Empty literals are valid owned-boundary normalization for genuinely
+          # optional data (#130). Keep flagging non-empty success-shaped stubs,
+          # booleans/null, and numeric fallbacks.
+          regex: '^(?:"[^"]+"|\x27[^\x27]+\x27|`[^`]+`|-?[0-9]|true|false|null|\[[\s\S]+\]|\{[\s\S]+\})$'
     metadata:
       policy_code: POLICY.RUNTIME_DEFAULT
       remediation_code: REMEDIATE.TOTAL_CONFIG_MODEL

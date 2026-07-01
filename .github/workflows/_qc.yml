@@ -62,15 +62,12 @@ jobs:
         uses: astral-sh/setup-uv@v6
 
       - name: Install just
-        # Use the maintained action rather than a hand-rolled `curl
-        # releases/latest | tar` pipeline: the bare API call is unauthenticated,
-        # so under GitHub's rate limit it returns no tag_name, the download URL
-        # becomes malformed, and `tar` fails on the non-gzip error page. The
-        # action resolves the version through GITHUB_TOKEN (no anonymous rate
-        # limit) and fails loud on a bad download.
-        uses: extractions/setup-just@v3
-        env:
-          GITHUB_TOKEN: ${{ github.token }}
+        # Use the maintained action's authenticated resolver instead of the
+        # former hand-rolled release lookup, which could hit anonymous API
+        # limits and fail after downloading an error payload.
+        uses: extractions/setup-just@v4
+        with:
+          github-token: ${{ github.token }}
 
       - name: Install ripgrep
         # The QC file-discovery recipes (_python-qc-files etc.) shell out to `rg`.

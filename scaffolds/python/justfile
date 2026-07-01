@@ -1,5 +1,15 @@
+# ai-review-ci Python QC delegation justfile.
+# The central implementation lives in ~/ai-review-ci/justfiles/python.just.
+# Public recipes delegate to that central justfile while preserving this repo as the caller root.
+
+# List available recipes.
+default:
+    @just --list
+
+# Run commit-tier Python QC through the central implementation.
 test:
     @just -f ~/ai-review-ci/justfiles/python.just -d . test
 
+# Run push-tier Python QC through the central implementation.
 test-ci:
     @just -f ~/ai-review-ci/justfiles/python.just -d . test-ci

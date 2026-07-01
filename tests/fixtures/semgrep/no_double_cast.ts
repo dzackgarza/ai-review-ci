@@ -1,10 +1,23 @@
 // Fixtures for POLICY.NO_TYPE_ESCAPE / no-double-cast (#46).
 //
-// Decision: there is NO sanctioned double-cast form. A justification comment
-// must not create an escape hatch — a reason can be confabulated, and QC must
-// not be in the business of adjudicating reasons. Every double cast is blocked
-// and routed to REMEDIATE.STRUCTURED_TYPES (fix the type at the boundary).
-// Single casts are a different concern and this rule does not fire on them.
+// Arbitrary double casts stay blocked. A real runtime/type-surface mismatch
+// must use the explicit runtimeBoundaryCast form, which requires both a runtime
+// predicate and source-backed local justification. Single casts are a different
+// concern and this rule does not fire on them.
+
+declare function runtimeBoundaryCast<T>(
+  value: unknown,
+  predicate: (value: unknown) => value is T,
+  reason: string,
+): T;
+
+interface Foo {
+  id: string;
+}
+
+function isBlob(value: unknown): value is Blob {
+  return value instanceof Blob;
+}
 
 export function erasures(blob: unknown, x: unknown, y: unknown) {
   // ruleid: no-double-cast
@@ -18,6 +31,18 @@ export function erasures(blob: unknown, x: unknown, y: unknown) {
   // ruleid: no-double-cast
   const d = (x as unknown) as Bar;
   return { a, b, c, d };
+}
+
+export function boundaryAssertions(blob: unknown) {
+  // ok: no-double-cast
+  const allowed = runtimeBoundaryCast<Blob>(blob, isBlob, "issue #46: Zotero accepts Blob at runtime");
+  // ruleid: no-unproven-boundary-cast
+  const missingReason = runtimeBoundaryCast<Blob>(blob, isBlob, "");
+  // ruleid: no-unproven-boundary-cast
+  const missingPredicate = runtimeBoundaryCast<Blob>(blob, "issue #46: no runtime check");
+  // ruleid: no-unproven-boundary-cast
+  const localStoryOnly = runtimeBoundaryCast<Blob>(blob, isBlob, "works in local testing");
+  return { allowed, missingReason, missingPredicate, localStoryOnly };
 }
 
 export function singleCasts(x: unknown) {

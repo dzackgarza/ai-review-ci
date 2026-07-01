@@ -67,6 +67,13 @@ def _emit_rest_page(argv: list[str], fixture_dir: Path) -> None:
     if _request_matches(fixture_dir / "failures.json", fields):
         print("code scanning request failed", file=sys.stderr)
         raise SystemExit(2)
+    if _request_matches(fixture_dir / "code_scanning_disabled.json", fields):
+        print(
+            "gh: Code scanning is not enabled for this repository. "
+            "Please enable code scanning in the repository settings. (HTTP 403)",
+            file=sys.stderr,
+        )
+        raise SystemExit(1)
     if _request_matches(fixture_dir / "no_analysis.json", fields):
         print("no analysis found for requested ref", file=sys.stderr)
         raise SystemExit(1)
