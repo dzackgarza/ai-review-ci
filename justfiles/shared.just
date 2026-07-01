@@ -308,8 +308,9 @@ _semgrep:
 		ec=$?
 		echo ""
 		echo "!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!"
-		echo "  ERROR: semgrep found pattern violations in project code."
-		echo "  Fix the project code, not the QC tooling."
+		echo "  ERROR: semgrep found policy violations in project code."
+		echo "  Review the Semgrep finding snippets above; they identify the target file, line, rule id, and offending source."
+		echo "  Route POLICY.RUNTIME_DEFAULT and other POLICY.* findings through the QC triage directive below; do not silence or locally weaken QC."
 		echo "!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!"
 		"{{artifacts}}/scripts/emit-triage-directive.sh"
 		exit $ec
