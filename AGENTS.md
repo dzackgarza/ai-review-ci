@@ -1,5 +1,34 @@
 # Agent Rules
 
+
+## Policy Source and Adversarial Review Gate
+
+- Before changing policy, QC rules, reviewer behavior, remediation routing, or tests
+  that assert policy behavior, load the external policy source at `~/ai`. If it is
+  not present, clone `https://github.com/dzackgarza/ai` to `~/ai` before editing.
+- Treat these policy sources as mandatory review inputs for such work:
+  - `~/ai/AGENTSmd/hard-rules/bridge-burning-policy-router.md`
+  - `~/ai/opencode/skills/policy-index/SKILL.md`
+  - `~/ai/opencode/skills/policy-index/references/policies.md`
+  - `~/ai/opencode/skills/policy-index/references/red-flags.md`
+  - `~/ai/opencode/skills/policy-index/references/test-proof-rules.md`
+  - `~/ai/opencode/skills/bespoke-software-policy/SKILL.md`
+- Run an adversarial policy review before committing policy/QC/reviewer changes:
+  ask whether the patch makes a policy violation quieter, converts a blocker into
+  a warning, adds an exception, encodes a local workaround as acceptable, or makes
+  the test suite bless behavior the policy exists to forbid.
+- Runtime/default policy is a strict fail-open rule: empty strings, empty arrays,
+  empty objects, `false`, `null`, placeholder objects, cached guesses, and other
+  success-shaped substitutes are not safe normalization. They are fallbacks unless
+  an explicit semantic state or boundary model proves otherwise.
+- Detector precision must remove false positives without weakening the protected
+  class. For example, excluding boolean-control-flow `||` / `??` contexts is
+  progress; allowing value-position fallbacks such as `x || {}`, `x ?? []`, or
+  `x ?? ""` is anti-progress.
+- Tests for policy detectors must include nearby invalid cases that remain blocked.
+  A regression fixture that labels a forbidden fallback as `ok` is itself a policy
+  violation, even if it reduces finding volume.
+
 ## QC Delegation
 
 - Treat `~/ai-review-ci` as the authoritative QC implementation.

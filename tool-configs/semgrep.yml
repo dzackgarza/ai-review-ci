@@ -16,10 +16,11 @@ rules:
       - pattern: $X ?? $FALLBACK
       - metavariable-regex:
           metavariable: $FALLBACK
-          # Empty literals are valid owned-boundary normalization for genuinely
-          # optional data (#130). Keep flagging non-empty success-shaped stubs,
-          # booleans/null, and numeric fallbacks.
-          regex: '^(?:"[^"]+"|\x27[^\x27]+\x27|`[^`]+`|-?[0-9]|true|false|null|\[[\s\S]+\]|\{[\s\S]+\})$'
+          # Empty literals are success-shaped fallbacks too (#120/#130).
+          # Flag value-position literal defaults including "", [], and {};
+          # precision comes from excluding boolean-connective contexts, not from
+          # allowing ambiguous empty containers through the policy boundary.
+          regex: '^(?:"[^"]*"|\x27[^\x27]*\x27|`[^`]*`|-?[0-9]|true|false|null|\[[\s\S]*\]|\{[\s\S]*\})$'
     metadata:
       policy_code: POLICY.RUNTIME_DEFAULT
       remediation_code: REMEDIATE.TOTAL_CONFIG_MODEL
@@ -317,10 +318,11 @@ rules:
       - pattern: $X || $FALLBACK
       - metavariable-regex:
           metavariable: $FALLBACK
-          # Empty literals are valid owned-boundary normalization for genuinely
-          # optional data (#130). Keep flagging non-empty success-shaped stubs,
-          # booleans/null, and numeric fallbacks.
-          regex: '^(?:"[^"]+"|\x27[^\x27]+\x27|`[^`]+`|-?[0-9]|true|false|null|\[[\s\S]+\]|\{[\s\S]+\})$'
+          # Empty literals are success-shaped fallbacks too (#120/#130).
+          # Flag value-position literal defaults including "", [], and {};
+          # precision comes from excluding boolean-connective contexts, not from
+          # allowing ambiguous empty containers through the policy boundary.
+          regex: '^(?:"[^"]*"|\x27[^\x27]*\x27|`[^`]*`|-?[0-9]|true|false|null|\[[\s\S]*\]|\{[\s\S]*\})$'
     metadata:
       policy_code: POLICY.RUNTIME_DEFAULT
       remediation_code: REMEDIATE.TOTAL_CONFIG_MODEL
