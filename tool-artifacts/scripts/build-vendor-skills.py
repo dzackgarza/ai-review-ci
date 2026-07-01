@@ -14,10 +14,15 @@ import argparse
 import hashlib
 from pathlib import Path
 
-# Owned dir-shaped skills whose vendored copy is built from ``skills/<name>``.
-OWNED_DIR_SKILLS = ("policy-index",)
-
 OWNER_REPO = "dzackgarza/ai-review-ci"
+
+
+def owned_skill_names(skills_root: Path) -> list[str]:
+    """Owned skills are exactly the directories under ``skills/`` — no separate list."""
+    names = sorted(path.name for path in skills_root.iterdir() if path.is_dir())
+    if not names:
+        raise SystemExit(f"no owned skills found under {skills_root}")
+    return names
 
 
 def sha256_text(text: str) -> str:
@@ -77,7 +82,7 @@ def main() -> None:
     parser.add_argument("--vendor-root", type=Path, required=True)
     args = parser.parse_args()
 
-    for name in OWNED_DIR_SKILLS:
+    for name in owned_skill_names(args.skills_root):
         build_skill(args.skills_root, args.vendor_root, name)
 
 

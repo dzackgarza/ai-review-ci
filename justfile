@@ -33,6 +33,12 @@ vendor-owned-skills:
       --skills-root skills \
       --vendor-root reviews/vendor
 
+# Publish owned enforcement skills into a target skills hub (e.g. ~/ai). Downstream install; re-run is a no-op.
+publish-skills target:
+    python3 tool-artifacts/scripts/publish-skills.py \
+      --skills-root skills \
+      --target {{target}}
+
 # Commit gate: this repo is QC tooling, so it runs the qc-tooling profile
 # (correctness + normalization, without the product-only slop/style gates it
 # ships for downstream). Same standardized recipe shape as every other repo.
