@@ -109,7 +109,10 @@ def _write_pr_template(target: pathlib.Path) -> None:
         )
         sys.exit(1)
     dest.parent.mkdir(parents=True, exist_ok=True)
-    dest.write_text((files("ai_review_ci") / "templates" / PR_TEMPLATE).read_text())
+    dest.write_text(
+        (files("ai_review_ci") / "templates" / PR_TEMPLATE).read_text(encoding="utf-8"),
+        encoding="utf-8",
+    )
     print(f"installed .github/{PR_TEMPLATE}")
 
 
@@ -173,9 +176,11 @@ def install(
         release_channel: Human-readable ai-review-ci release channel recorded in the manifest.
     """
     target = target.resolve()
+    # PR template first: it is the file a repo is most likely to already own, so a
+    # conflict fails before any other file is written rather than leaving a partial install.
+    _write_pr_template(target)
     _write_scaffold(target, profile)
     _write_trigger_workflows(target, profile, ref)
-    _write_pr_template(target)
     _write_manifest(target, profile, branch, ref, release_channel)
     protect_branch(repo, branch, profile)
     _prove_installation(target)

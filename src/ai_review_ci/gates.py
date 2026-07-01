@@ -311,11 +311,7 @@ _UNCHECKED_CHECKLIST_ITEM = re.compile(r"^\s*[-*+]\s*\[\s*\]\s+\S", re.MULTILINE
 
 def unchecked_checklist_lines(body: str) -> list[int]:
     """Return 1-indexed PR body lines containing unchecked markdown checklist items."""
-    return [
-        line_no
-        for line_no, line in enumerate(body.splitlines(), start=1)
-        if _UNCHECKED_CHECKLIST_ITEM.search(line)
-    ]
+    return [line_no for line_no, line in enumerate(body.splitlines(), start=1) if _UNCHECKED_CHECKLIST_ITEM.search(line)]
 
 
 # Machine marker embedded in the distributed PR template's Policy Alignment Gate
@@ -334,7 +330,10 @@ def gate_template_requires_marker(repo_root: Path) -> bool:
     gate does not break repos that have not installed the template.
     """
     template = repo_root / ".github" / "pull_request_template.md"
-    return template.is_file() and POLICY_GATE_MARKER in template.read_text()
+    # The template carries non-ASCII glyphs; the gate runs in CI where the locale
+    # is not guaranteed UTF-8, so read_text() without an explicit encoding could
+    # raise. Pin UTF-8 (the template's actual encoding).
+    return template.is_file() and POLICY_GATE_MARKER in template.read_text(encoding="utf-8")
 
 
 def _gh_json(args: list[str], body: JsonDict | None = None) -> JsonDict:
@@ -476,6 +475,7 @@ def _auto_resolve_stale_thread(node: JsonDict) -> bool:
         _fail("cannot auto-resolve stale proof thread without a thread id")
     _resolve_review_thread(thread_id)
     return True
+
 
 def _has_resolution_evidence(node: JsonDict) -> bool:
     for comment in _comments(node):
