@@ -514,6 +514,9 @@ def test_semgrep_blocks_typescript_value_defaults(tmp_path: pathlib.Path) -> Non
     output = result.stdout + result.stderr
     assert result.returncode != 0, output
     assert "ts-no-or-default" in output
+    assert "maybeLabel || 'fallback'" in output
+    assert "Review the Semgrep finding snippets above" in output
+    assert "Route POLICY.RUNTIME_DEFAULT and other POLICY.* findings" in output
 
 
 def test_semgrep_allows_fail_loud_typescript_guards(tmp_path: pathlib.Path) -> None:
