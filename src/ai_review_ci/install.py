@@ -176,12 +176,14 @@ def install(
         release_channel: Human-readable ai-review-ci release channel recorded in the manifest.
     """
     target = target.resolve()
-    # PR template first: it is the file a repo is most likely to already own, so a
-    # conflict fails before any other file is written rather than leaving a partial install.
-    _write_pr_template(target)
     _write_scaffold(target, profile)
     _write_trigger_workflows(target, profile, ref)
     _write_manifest(target, profile, branch, ref, release_channel)
+    # PR template last among local writes: it is the opt-in signal for gate
+    # enforcement, so create it only after profile validation and every other
+    # repo-owned-file conflict has already passed. A failed install must not leave
+    # a repo opted into PR-description enforcement.
+    _write_pr_template(target)
     protect_branch(repo, branch, profile)
     _prove_installation(target)
 

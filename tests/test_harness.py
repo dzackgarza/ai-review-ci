@@ -120,6 +120,19 @@ def test_reviewer_path_contract_does_not_expose_just() -> None:
     assert "/usr/local/bin/uv run --project {{reviewer_infra}}" in runner
 
 
+def test_check_pr_description_reads_target_checkout_not_infra() -> None:
+    # Wiring contract (#155/cubic P1): the pr-description gate detects the target
+    # repo's installed PR template, so it must read the target checkout
+    # (control_repo := GITHUB_WORKSPACE), not the infra clone the recipe runs from.
+    # Without --repo-root the process cwd is the infra checkout and an installed
+    # template is never detected in CI.
+    runner = Path("ci/runner.just").read_text()
+
+    assert 'control_repo := env_var("GITHUB_WORKSPACE")' in runner
+    recipe = runner.split("check-pr-description pr_number:", 1)[1].split("\n\n", 1)[0]
+    assert '--repo-root "{{control_repo}}"' in recipe
+
+
 def test_qc_doctor_runner_emits_fenced_payload_and_preserves_failure(tmp_path: Path) -> None:
     target = tmp_path / "target"
     target.mkdir()

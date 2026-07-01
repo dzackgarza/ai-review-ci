@@ -159,7 +159,8 @@ check-qc-doctor:
 check-pr-description pr_number:
     uv run --project {{infra}} ai-review-ci check-pr-description \
       --repo "${GITHUB_REPOSITORY}" \
-      --pr-number "{{pr_number}}"
+      --pr-number "{{pr_number}}" \
+      --repo-root "{{control_repo}}"
 
 check-app-boot profile:
     uv run --project {{infra}} ai-review-ci check-app-boot \
