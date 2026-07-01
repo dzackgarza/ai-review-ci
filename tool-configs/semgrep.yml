@@ -249,7 +249,11 @@ rules:
       policy_code: POLICY.NO_HIDDEN_CONFIG
       remediation_code: REMEDIATE.TOTAL_CONFIG_MODEL
   - id: py-no-bare-except
-    pattern: "except:\n    pass"
+    pattern: |
+      try:
+        ...
+      except:
+        pass
     message: POLICY.NO_ERROR_DISCARD
     languages:
       - python
