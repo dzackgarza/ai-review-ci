@@ -22,7 +22,7 @@ rules:
           # owned-boundary normalization, so they flag too (#130, POLICY.FAIL_OPEN).
           # Non-literal operands (function calls, identifiers, boolean connectives)
           # do not match and are not flagged (#120 precision).
-          regex: '^(?:"[^"]*"|\x27[^\x27]*\x27|`[^`]*`|-?[0-9]|true|false|null|\[[\s\S]*\]|\{[\s\S]*\})$'
+          regex: '^(?:"[^"]*"|\x27[^\x27]*\x27|\x60[^\x60]*\x60|-?[0-9]+(?:\.[0-9]+)?|true|false|null|\[[\s\S]*\]|\{[\s\S]*\})$'
     metadata:
       policy_code: POLICY.RUNTIME_DEFAULT
       remediation_code: REMEDIATE.TOTAL_CONFIG_MODEL
@@ -326,7 +326,7 @@ rules:
           # owned-boundary normalization, so they flag too (#130, POLICY.FAIL_OPEN).
           # Non-literal operands (function calls, identifiers, boolean connectives)
           # do not match and are not flagged (#120 precision).
-          regex: '^(?:"[^"]*"|\x27[^\x27]*\x27|`[^`]*`|-?[0-9]|true|false|null|\[[\s\S]*\]|\{[\s\S]*\})$'
+          regex: '^(?:"[^"]*"|\x27[^\x27]*\x27|\x60[^\x60]*\x60|-?[0-9]+(?:\.[0-9]+)?|true|false|null|\[[\s\S]*\]|\{[\s\S]*\})$'
     metadata:
       policy_code: POLICY.RUNTIME_DEFAULT
       remediation_code: REMEDIATE.TOTAL_CONFIG_MODEL

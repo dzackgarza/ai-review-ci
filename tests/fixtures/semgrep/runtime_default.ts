@@ -21,7 +21,13 @@ export function fallbacks(headers: Headers, prDetail: any, comment: any, run: an
   const logs = run.logs || "[INFO] Run build initialized correctly.";
   // ruleid: no-nullish-coalescing
   const retries = repo.retries ?? 0;
-  return { title, ciStatus, avatar, tags, logs, retries };
+  // ruleid: no-nullish-coalescing
+  const limit = repo.limit ?? 10;
+  // ruleid: ts-no-or-default
+  const timeout = repo.timeout || 30;
+  // ruleid: no-nullish-coalescing
+  const ratio = repo.ratio ?? 3.14;
+  return { title, ciStatus, avatar, tags, logs, retries, limit, timeout, ratio };
 }
 
 export function emptyLiteralFallbacks(optionalFilters: string[] | undefined, scaffold: { fields?: Record<string, unknown> }, mount: Element, dep: { key?: string }) {
