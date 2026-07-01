@@ -90,7 +90,13 @@ def test_install_writes_pr_template_with_gate_marker(tmp_path: pathlib.Path) -> 
     assert dest.is_file()
     # The distributed template carries the marker, which is what opts the target
     # repo into check_pr_description marker enforcement (#154).
-    assert POLICY_GATE_MARKER in dest.read_text()
+    text = dest.read_text()
+    assert POLICY_GATE_MARKER in text
+    assert "## Issue-scoped lifecycle gate — required" in text
+    assert "Linked triaged issue(s)" in text
+    assert "started as a draft" in text
+    assert "Ready-for-review was requested only after" in text
+    assert "Review feedback disposition ledger" in text
 
 
 def test_install_pr_template_refuses_overwrite(tmp_path: pathlib.Path) -> None:

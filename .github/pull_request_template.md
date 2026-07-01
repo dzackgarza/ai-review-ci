@@ -2,6 +2,15 @@
 
 <!-- What this PR does, and the issue(s) it closes / references. -->
 
+
+## Issue-scoped lifecycle gate — required
+
+- [ ] Linked triaged issue(s): #____
+- [ ] This PR started as a draft while implementation/proof was in progress.
+- [ ] The PR scope maps to the linked issue acceptance criteria; unrelated issue families are excluded.
+- [ ] Ready-for-review was requested only after the policy alignment gate and evidence below were complete.
+- [ ] Review feedback loop followed: accepted comments have committed remediation; rejected or modified feedback is recorded in a top-level `Review feedback disposition ledger`.
+
 ## Policy alignment gate — required
 
 <!-- policy-alignment-gate -->
