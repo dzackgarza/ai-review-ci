@@ -39,6 +39,13 @@ publish-skills target:
       --skills-root skills \
       --target {{target}}
 
+# Refresh vendored copies of consumed advisory skills from their upstream checkout (e.g. ~/ai), pinned to a ref.
+refresh-consumed-skills source ref="HEAD":
+    python3 tool-artifacts/scripts/refresh-consumed-skills.py \
+      --source {{source}} \
+      --ref {{ref}} \
+      --vendor-root reviews/vendor
+
 # Commit gate: this repo is QC tooling, so it runs the qc-tooling profile
 # (correctness + normalization, without the product-only slop/style gates it
 # ships for downstream). Same standardized recipe shape as every other repo.

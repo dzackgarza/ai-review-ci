@@ -26,7 +26,7 @@ documents it.
 ## Prohibitions
 
 > [!IMPORTANT]
-> All code produced under this skill must adhere to the [Bridge-Burning Policies](file:///home/dzack/ai/opencode/skills/anti-slop/SKILL.md#bridge-burning-policies) in `anti-slop/SKILL.md`. These are non-negotiable hard constraints that eliminate runtime defaults, fallbacks, mocks, optional critical dependencies, and other agent validation-evasion pathways.
+> All code produced under this skill must adhere to the [Bridge-Burning Policies](file:///home/dzack/ai/opencode/skills/policy-index/SKILL.md#policy-registry) in `policy-index/SKILL.md`. These are non-negotiable hard constraints that eliminate runtime defaults, fallbacks, mocks, optional critical dependencies, and other agent validation-evasion pathways.
 
 - Never use `pip install --break-system-packages`.
 - Never install into system Python.
@@ -156,6 +156,6 @@ spot-check of any agent-produced artifact.
 - `reality-grounded-debugging` — command-output discipline, stderr preservation,
   surface-classification matrix.
 
-- `python-patterns` — uv-only, PEP 723 inline metadata for standalone scripts.
+- `code-patterns-python` — uv-only, PEP 723 inline metadata for standalone scripts.
 
 - `writing-scripts-and-cli-interfaces` — standalone script template, Cyclopts/Pydantic.
