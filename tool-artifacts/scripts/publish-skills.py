@@ -1,30 +1,34 @@
 #!/usr/bin/env python3
-"""Publish ai-review-ci's owned enforcement skills into a target skills hub.
+"""Publish this repo's owned enforcement skills into a target skills hub.
 
 ai-review-ci owns its integration-time enforcement skills; their source of truth is the
-repo-local ``skills/<name>`` directory. This installs each owned skill into
-``<target>/opencode/skills/<name>`` (e.g. ``~/ai``), which is a downstream install target,
-not a source. Re-running is a no-op when the target already matches. See ai-review-ci#163.
+repo-local ``skills/<name>`` directory. This installs each ``[owned.*]`` skill declared in
+``reviews/vendor/MANIFEST.toml`` into ``<target>/opencode/skills/<name>`` (e.g. ``~/ai``),
+which is a downstream install target, not a source. Only owned skills publish — consumed
+docs (vendored from an external upstream) and repo-local skills not in the manifest do not.
+Re-running is a no-op when the target already matches. See ai-review-ci#163.
 """
 
 from __future__ import annotations
 
 import argparse
+import tomllib
 from pathlib import Path
 
 SKILLS_SUBPATH = "opencode/skills"
 
 
-def owned_skill_names(skills_root: Path) -> list[str]:
-    """Owned skills are exactly the directories under ``skills/`` — no separate list."""
-    names = sorted(path.name for path in skills_root.iterdir() if path.is_dir())
-    if not names:
-        raise SystemExit(f"no owned skills found under {skills_root}")
-    return names
+def owned_source_paths(vendor_root: Path) -> dict[str, str]:
+    manifest_path = vendor_root / "MANIFEST.toml"
+    if not manifest_path.is_file():
+        raise SystemExit(f"missing vendor manifest: {manifest_path}")
+    owned = tomllib.loads(manifest_path.read_text()).get("owned")
+    if not owned:
+        raise SystemExit(f"no [owned.*] skills declared in {manifest_path}")
+    return {name: spec["source_path"] for name, spec in owned.items()}
 
 
-def publish_skill(skills_root: Path, target_skills: Path, name: str) -> list[str]:
-    source = skills_root / name
+def publish_skill(source: Path, target_skills: Path, name: str) -> list[str]:
     written: list[str] = []
     for source_file in sorted(source.rglob("*.md")):
         relative = source_file.relative_to(source)
@@ -42,15 +46,19 @@ def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--skills-root", type=Path, required=True)
     parser.add_argument("--target", type=Path, required=True, help="skills hub checkout root, e.g. ~/ai")
+    parser.add_argument("--vendor-root", type=Path, default=Path("reviews/vendor"))
     args = parser.parse_args()
 
     if not args.target.is_dir():
         raise SystemExit(f"target skills hub does not exist: {args.target}")
+    repo_root = args.skills_root.resolve().parent
     target_skills = args.target / SKILLS_SUBPATH
 
-    for name in owned_skill_names(args.skills_root):
-        written = publish_skill(args.skills_root, target_skills, name)
-        for relative in written:
+    for name, source_path in sorted(owned_source_paths(args.vendor_root).items()):
+        source = repo_root / source_path
+        if not source.is_dir():
+            raise SystemExit(f"missing owned skill source directory: {source}")
+        for relative in publish_skill(source, target_skills, name):
             print(f"published {relative}")
 
 
