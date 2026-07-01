@@ -98,10 +98,11 @@ Before requesting review or merging, the PR body (or disposition ledger) must st
   default, optional core-state, swallowed error, or partial-success path added to make
   required work look successful after it should have failed loudly.
 
-Empty and falsy literals are not exceptions. `""`, `[]`, `{}`, `null`, `false`, and `0` in a
-fallback position are the canonical `POLICY.FAIL_OPEN` violation, not "safe boundary
-normalization." Genuinely optional product state is represented as an explicit typed/semantic
-state at the owned boundary, never laundered through an empty default.
+Empty and falsy literals are not exceptions. A fallback whose value is a placeholder — the
+vendored `POLICY.FAIL_OPEN` record names `None`, `[]`, `{}`, and `false`; empty strings behave
+the same way — is a `POLICY.FAIL_OPEN` violation, not "safe boundary normalization." Genuinely
+optional product state is represented as an explicit typed/semantic state at the owned
+boundary, never laundered through an empty default.
 
 ## Tier 1 — PRs that change the QC tooling itself
 
