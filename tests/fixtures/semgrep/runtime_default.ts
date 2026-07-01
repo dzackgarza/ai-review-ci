@@ -1,11 +1,12 @@
-// Fixtures for POLICY.RUNTIME_DEFAULT precision (#120).
+// Fixtures for POLICY.RUNTIME_DEFAULT precision (#120, #130).
 //
-// `ruleid:` lines are fail-soft DEFAULTS — a missing/malformed value silently
-// backfilled with a non-empty success-shaped stub. These are the real target of
-// the policy and MUST flag. `ok:` lines use `||`/`??` as a boolean connective
-// (guard, JSX boolean prop, search predicate) or normalize genuinely-optional
-// owned-boundary values to empty literals; those MUST NOT flag. Position and
-// fallback shape, not the bare operator, are the signal.
+// `ruleid:` lines are fail-soft DEFAULTS — a value backfilled with a literal stub,
+// INCLUDING empty literals ("", [], {}). Empty and falsy literals are ambiguous
+// fail-open containers (missing input / failed fetch / parse failure / no result),
+// not valid owned-boundary normalization (#130, POLICY.FAIL_OPEN), so they MUST flag.
+// `ok:` lines use `||`/`??` as a boolean connective (guard, JSX boolean prop, search
+// predicate) with a non-literal operand; those MUST NOT flag. Position, not the bare
+// operator, is the signal.
 
 export function fallbacks(headers: Headers, prDetail: any, comment: any, run: any, repo: any) {
   // ruleid: no-nullish-coalescing
@@ -23,14 +24,14 @@ export function fallbacks(headers: Headers, prDetail: any, comment: any, run: an
   return { title, ciStatus, avatar, tags, logs, retries };
 }
 
-export function boundaryNormalization(optionalFilters: string[] | undefined, scaffold: { fields?: Record<string, unknown> }, mount: Element, dep: { key?: string }) {
-  // ok: no-nullish-coalescing
+export function emptyLiteralFallbacks(optionalFilters: string[] | undefined, scaffold: { fields?: Record<string, unknown> }, mount: Element, dep: { key?: string }) {
+  // ruleid: no-nullish-coalescing
   const filters = optionalFilters ?? [];
-  // ok: no-nullish-coalescing
+  // ruleid: no-nullish-coalescing
   const fields = scaffold.fields ?? {};
-  // ok: no-nullish-coalescing
+  // ruleid: no-nullish-coalescing
   const label = mount.getAttribute("data-label") ?? "";
-  // ok: ts-no-or-default
+  // ruleid: ts-no-or-default
   const sortKey = dep.key || "";
   return { filters, fields, label, sortKey };
 }

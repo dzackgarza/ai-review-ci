@@ -16,10 +16,13 @@ rules:
       - pattern: $X ?? $FALLBACK
       - metavariable-regex:
           metavariable: $FALLBACK
-          # Empty literals are valid owned-boundary normalization for genuinely
-          # optional data (#130). Keep flagging non-empty success-shaped stubs,
-          # booleans/null, and numeric fallbacks.
-          regex: '^(?:"[^"]+"|\x27[^\x27]+\x27|`[^`]+`|-?[0-9]|true|false|null|\[[\s\S]+\]|\{[\s\S]+\})$'
+          # Match a literal-stub right operand — the fail-soft default shape.
+          # Empty literals ("", '', ``, [], {}) are ambiguous fail-open containers
+          # (missing input / failed fetch / parse failure / no result), NOT valid
+          # owned-boundary normalization, so they flag too (#130, POLICY.FAIL_OPEN).
+          # Non-literal operands (function calls, identifiers, boolean connectives)
+          # do not match and are not flagged (#120 precision).
+          regex: '^(?:"[^"]*"|\x27[^\x27]*\x27|`[^`]*`|-?[0-9]|true|false|null|\[[\s\S]*\]|\{[\s\S]*\})$'
     metadata:
       policy_code: POLICY.RUNTIME_DEFAULT
       remediation_code: REMEDIATE.TOTAL_CONFIG_MODEL
@@ -317,10 +320,13 @@ rules:
       - pattern: $X || $FALLBACK
       - metavariable-regex:
           metavariable: $FALLBACK
-          # Empty literals are valid owned-boundary normalization for genuinely
-          # optional data (#130). Keep flagging non-empty success-shaped stubs,
-          # booleans/null, and numeric fallbacks.
-          regex: '^(?:"[^"]+"|\x27[^\x27]+\x27|`[^`]+`|-?[0-9]|true|false|null|\[[\s\S]+\]|\{[\s\S]+\})$'
+          # Match a literal-stub right operand — the fail-soft default shape.
+          # Empty literals ("", '', ``, [], {}) are ambiguous fail-open containers
+          # (missing input / failed fetch / parse failure / no result), NOT valid
+          # owned-boundary normalization, so they flag too (#130, POLICY.FAIL_OPEN).
+          # Non-literal operands (function calls, identifiers, boolean connectives)
+          # do not match and are not flagged (#120 precision).
+          regex: '^(?:"[^"]*"|\x27[^\x27]*\x27|`[^`]*`|-?[0-9]|true|false|null|\[[\s\S]*\]|\{[\s\S]*\})$'
     metadata:
       policy_code: POLICY.RUNTIME_DEFAULT
       remediation_code: REMEDIATE.TOTAL_CONFIG_MODEL
