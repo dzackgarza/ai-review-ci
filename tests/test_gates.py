@@ -143,9 +143,7 @@ def test_gate_template_requires_marker_detects_installed_template(tmp_path: path
     assert gates.gate_template_requires_marker(tmp_path) is True
 
 
-def test_pr_description_blocks_missing_marker_when_template_installed(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: pathlib.Path
-) -> None:
+def test_pr_description_blocks_missing_marker_when_template_installed(monkeypatch: pytest.MonkeyPatch, tmp_path: pathlib.Path) -> None:
     # Regression-lock for #154: a repo that installed the gate template cannot pass a
     # PR whose body omits the gate section, even when every checklist item is checked.
     _install_gate_template(tmp_path, marker=True)
@@ -155,9 +153,7 @@ def test_pr_description_blocks_missing_marker_when_template_installed(
         gates.check_pr_description("owner/repo", 12, repo_root=tmp_path)
 
 
-def test_pr_description_passes_with_marker_and_checked_when_template_installed(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: pathlib.Path
-) -> None:
+def test_pr_description_passes_with_marker_and_checked_when_template_installed(monkeypatch: pytest.MonkeyPatch, tmp_path: pathlib.Path) -> None:
     _install_gate_template(tmp_path, marker=True)
     body = f"## Policy alignment gate\n{gates.POLICY_GATE_MARKER}\n\n- [x] affirmed\n"
     monkeypatch.setattr(gates, "_gh_json", lambda args: {"body": body})
@@ -165,9 +161,7 @@ def test_pr_description_passes_with_marker_and_checked_when_template_installed(
     gates.check_pr_description("owner/repo", 12, repo_root=tmp_path)
 
 
-def test_pr_description_lenient_when_no_template_installed(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: pathlib.Path
-) -> None:
+def test_pr_description_lenient_when_no_template_installed(monkeypatch: pytest.MonkeyPatch, tmp_path: pathlib.Path) -> None:
     # Non-breaking: a repo that has NOT installed the gate template keeps the prior
     # lenient behavior, so distributing the gate does not fail unrelated repos' PRs.
     monkeypatch.setattr(gates, "_gh_json", lambda args: {"body": "## Summary\n\nno checklist, no marker\n"})
@@ -344,6 +338,7 @@ def test_thread_resolution_does_not_auto_resolve_reproducing_proof(
 
 def test_thread_resolution_rejects_shell_proof_for_auto_resolution() -> None:
     assert gates._safe_proof_args("grep stale src/app.ts && rm -rf /") is None
+
 
 def test_thread_resolution_gate_accepts_resolved_non_ai_review_threads_with_evidence(
     monkeypatch: pytest.MonkeyPatch,

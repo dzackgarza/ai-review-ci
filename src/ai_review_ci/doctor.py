@@ -221,11 +221,7 @@ def doctor(target: Path, *, json: Annotated[int, Parameter(name="--json", count=
 def check_justfile(target: Path) -> None:
     """Fail if the target justfile violates the baseline public justfile contract."""
     report = doctor_report(target)
-    findings = [
-        finding
-        for finding in report.findings
-        if finding.surface in ("justfile_conformance", "justfile_delegation")
-    ]
+    findings = [finding for finding in report.findings if finding.surface in ("justfile_conformance", "justfile_delegation")]
     if findings:
         for finding in findings:
             print(f"{finding.surface}: {finding.evidence}", file=sys.stderr)

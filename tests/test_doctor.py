@@ -300,11 +300,7 @@ def test_doctor_reports_justfile_baseline_violations(tmp_path: pathlib.Path) -> 
     status, payload = status_for(project)
 
     assert status == "misconfigured"
-    justfile_findings = [
-        finding
-        for finding in payload["findings"]
-        if finding["surface"] == "justfile_conformance"
-    ]
+    justfile_findings = [finding for finding in payload["findings"] if finding["surface"] == "justfile_conformance"]
     assert [finding["evidence"].split(" ", 1)[1] for finding in justfile_findings] == [
         "header-comment: justfile must begin with a comment block",
         "default-recipe: no default recipe; bare just must list recipes",

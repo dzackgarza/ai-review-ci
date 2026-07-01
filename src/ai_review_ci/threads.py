@@ -31,8 +31,8 @@ from typing import Any, NoReturn
 from unidiff import PatchSet
 
 from ai_review_ci.models import finding_fingerprint
-from ai_review_ci.reviewer_identity import reviewer_identity
 from ai_review_ci.policy_index import canonical_guidance
+from ai_review_ci.reviewer_identity import reviewer_identity
 
 JsonDict = dict[str, Any]
 
@@ -152,11 +152,7 @@ def _thread_body_lines(finding: JsonDict, review_label: str, fp: str) -> list[st
         f"<!-- {REVIEW_IDENTITY_MARKER} {json.dumps(identity, sort_keys=True)} -->",
         "",
         f"**Location:** `{loc['path']}:{loc['start_line']}-{loc['end_line']}`",
-        (
-            "**Reviewer identity:** "
-            f"`type={review_type}; agent={identity['agent']}; "
-            f"prompt_id=reviews/{review_type}; prompt_version={identity['prompt_version']}`"
-        ),
+        (f"**Reviewer identity:** `type={review_type}; agent={identity['agent']}; prompt_id=reviews/{review_type}; prompt_version={identity['prompt_version']}`"),
         f"**Violated invariant:** {finding['violated_invariant']}",
         f"**Proof:** `{finding['proof_command']}`",
     ]

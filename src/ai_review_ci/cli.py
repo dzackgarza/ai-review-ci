@@ -33,8 +33,8 @@ from ai_review_ci.gates import (
     check_app_boot,
     check_delegation,
     check_diff,
-    check_profile,
     check_pr_description,
+    check_profile,
     check_review_threads,
     protect_branch,
 )
