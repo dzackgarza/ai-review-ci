@@ -1,23 +1,28 @@
 # Ownership manifest for everything vendored into reviews/vendor/.
 #
-# Two categories, and every vendored entry is in exactly one:
+# The split is by ENFORCEMENT PHASE, not by where a doc originally came from:
 #
-#   owned    — authored in THIS repo under skills/<name>/. Built into reviews/vendor/
-#              by `just vendor-owned-skills` and installed into a downstream skills hub
-#              (e.g. ~/ai) by `just publish-skills`. ai-review-ci is the source of truth;
-#              the vendored copy and the ~/ai copy are both downstream artifacts. Never
-#              edit the vendored copy directly — edit skills/<name>/ and rebuild.
+#   owned    — part of this repo's integration-time enforcement surface (the reviewer
+#              bundle / QC that fires when code is integrated). Authored and controlled
+#              HERE under skills/<name>/, even when the text was originally adopted from an
+#              external framework (e.g. the Brooks-Lint composites) — ai-review-ci owns its
+#              copy and may diverge from that origin. Built into reviews/vendor/ by
+#              `just vendor-owned-skills` and installed into a downstream skills hub
+#              (e.g. ~/ai) by `just publish-skills`. Never edit the vendored copy directly;
+#              edit skills/<name>/ and rebuild.
 #              vendor_layout says how the build lays the skill out under reviews/vendor/:
 #                nested — reviews/vendor/<name>/{SKILL.md,references/...} + a VENDOR.toml
 #                         sha256 manifest (read at runtime by src/ai_review_ci/policy_index.py).
-#                flat   — reviews/vendor/<name>.md (from SKILL.md) plus, if the skill has
+#                flat   — reviews/vendor/<name>.md (from SKILL.md) plus, if the skill ships
 #                         references, reviews/vendor/<name>-references/ (from references/).
 #              The layout is preserved from how each skill was already vendored so the
 #              reviewer bundle (reviews/*/manifest.txt) and doc links stay stable.
 #
-#   consumed — owned by an EXTERNAL upstream and vendored here only so the reviewer prompt
-#              can inline it. NOT authored in skills/, NOT built from skills/, NOT published.
-#              Refresh by re-vendoring the named upstream file, not by editing here.
+#   consumed — pre-/during-writing ADVISORY guidance that ~/ai owns (guidance an agent reads
+#              before it writes code, not enforcement applied at integration time). Vendored
+#              here only so the reviewer prompt can inline it; NOT authored here, NOT built
+#              from skills/, NOT published. Refresh from the named upstream with
+#              `just refresh-consumed-skills`.
 #
 # See ai-review-ci#163.
 
@@ -41,6 +46,26 @@ vendor_layout = "flat"
 source_path = "skills/bespoke-software-policy"
 vendor_layout = "flat"
 
+[owned.common]
+source_path = "skills/common"
+vendor_layout = "flat"
+
+[owned.source-coverage]
+source_path = "skills/source-coverage"
+vendor_layout = "flat"
+
+[owned.decay-risks]
+source_path = "skills/decay-risks"
+vendor_layout = "flat"
+
+[owned.ci-sweep-protocol]
+source_path = "skills/ci-sweep-protocol"
+vendor_layout = "flat"
+
+[owned.pr-review-guide]
+source_path = "skills/pr-review-guide"
+vendor_layout = "flat"
+
 [consumed.test-guidelines]
 upstream_repo = "dzackgarza/ai"
 upstream_path = "opencode/skills/test-guidelines/SKILL.md"
@@ -50,30 +75,3 @@ vendor_path = "test-guidelines.md"
 upstream_repo = "dzackgarza/ai"
 upstream_path = "opencode/skills/tool-provisioning-and-environment-hygiene/SKILL.md"
 vendor_path = "tool-provisioning-and-environment-hygiene.md"
-
-[consumed.common]
-upstream_repo = "hyhmrright/brooks-lint"
-upstream_path = "skills/_shared/common.md"
-vendor_path = "common.md"
-
-[consumed.source-coverage]
-upstream_repo = "hyhmrright/brooks-lint"
-upstream_path = "skills/_shared/source-coverage.md"
-vendor_path = "source-coverage.md"
-
-[consumed.decay-risks]
-upstream_repo = "hyhmrright/brooks-lint"
-upstream_path = "skills/_shared/decay-risks.md"
-vendor_path = "decay-risks.md"
-
-[consumed.ci-sweep-protocol]
-upstream_repo = "hyhmrright/brooks-lint"
-# Brooks-Lint CI-sweep protocol doc. Not present in the current upstream snapshot
-# (checked marketplace skills/ tree); refresh path must be re-confirmed against upstream.
-upstream_path = "unconfirmed"
-vendor_path = "ci-sweep-protocol.md"
-
-[consumed.pr-review-guide]
-upstream_repo = "hyhmrright/brooks-lint"
-upstream_path = "skills/brooks-review/pr-review-guide.md"
-vendor_path = "pr-review-guide.md"
