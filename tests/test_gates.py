@@ -113,17 +113,66 @@ def test_pr_description_checklist_accepts_checked_or_absent_items() -> None:
     assert gates.unchecked_checklist_lines(body) == []
 
 
-def test_pr_description_gate_blocks_unchecked_items(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_pr_description_gate_blocks_unchecked_items(monkeypatch: pytest.MonkeyPatch, tmp_path: pathlib.Path) -> None:
     monkeypatch.setattr(gates, "_gh_json", lambda args: {"body": "- [ ] finish this\n- [x] done\n"})
 
     with pytest.raises(SystemExit):
-        gates.check_pr_description("owner/repo", 12)
+        gates.check_pr_description("owner/repo", 12, repo_root=tmp_path)
 
 
-def test_pr_description_gate_passes_without_unchecked_items(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_pr_description_gate_passes_without_unchecked_items(monkeypatch: pytest.MonkeyPatch, tmp_path: pathlib.Path) -> None:
     monkeypatch.setattr(gates, "_gh_json", lambda args: {"body": "- [x] done\n"})
 
-    gates.check_pr_description("owner/repo", 12)
+    gates.check_pr_description("owner/repo", 12, repo_root=tmp_path)
+
+
+def _install_gate_template(repo_root: pathlib.Path, *, marker: bool = True) -> None:
+    gh = repo_root / ".github"
+    gh.mkdir(parents=True, exist_ok=True)
+    body = "## Policy alignment gate\n"
+    if marker:
+        body += f"{gates.POLICY_GATE_MARKER}\n"
+    (gh / "pull_request_template.md").write_text(body)
+
+
+def test_gate_template_requires_marker_detects_installed_template(tmp_path: pathlib.Path) -> None:
+    assert gates.gate_template_requires_marker(tmp_path) is False
+    _install_gate_template(tmp_path, marker=False)
+    assert gates.gate_template_requires_marker(tmp_path) is False
+    _install_gate_template(tmp_path, marker=True)
+    assert gates.gate_template_requires_marker(tmp_path) is True
+
+
+def test_pr_description_blocks_missing_marker_when_template_installed(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: pathlib.Path
+) -> None:
+    # Regression-lock for #154: a repo that installed the gate template cannot pass a
+    # PR whose body omits the gate section, even when every checklist item is checked.
+    _install_gate_template(tmp_path, marker=True)
+    monkeypatch.setattr(gates, "_gh_json", lambda args: {"body": "## Summary\n\n- [x] done\n"})
+
+    with pytest.raises(SystemExit):
+        gates.check_pr_description("owner/repo", 12, repo_root=tmp_path)
+
+
+def test_pr_description_passes_with_marker_and_checked_when_template_installed(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: pathlib.Path
+) -> None:
+    _install_gate_template(tmp_path, marker=True)
+    body = f"## Policy alignment gate\n{gates.POLICY_GATE_MARKER}\n\n- [x] affirmed\n"
+    monkeypatch.setattr(gates, "_gh_json", lambda args: {"body": body})
+
+    gates.check_pr_description("owner/repo", 12, repo_root=tmp_path)
+
+
+def test_pr_description_lenient_when_no_template_installed(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: pathlib.Path
+) -> None:
+    # Non-breaking: a repo that has NOT installed the gate template keeps the prior
+    # lenient behavior, so distributing the gate does not fail unrelated repos' PRs.
+    monkeypatch.setattr(gates, "_gh_json", lambda args: {"body": "## Summary\n\nno checklist, no marker\n"})
+
+    gates.check_pr_description("owner/repo", 12, repo_root=tmp_path)
 
 
 def test_branch_protection_payload_uses_profile_check_contexts() -> None:

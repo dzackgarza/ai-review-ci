@@ -318,6 +318,25 @@ def unchecked_checklist_lines(body: str) -> list[int]:
     ]
 
 
+# Machine marker embedded in the distributed PR template's Policy Alignment Gate
+# section. A repo "opts in" to gate enforcement by installing that template; the
+# gate then requires the marker in every PR body so the section cannot be deleted
+# to bypass the affirmation. See AGENTS.md -> Policy Alignment Gate and #154.
+POLICY_GATE_MARKER = "<!-- policy-alignment-gate -->"
+
+
+def gate_template_requires_marker(repo_root: Path) -> bool:
+    """True when the repo has installed the policy-alignment PR template.
+
+    Enforcement is opt-in by installation: only when the repo's own PR template
+    carries the marker do we require PR bodies to carry it too. Repos without the
+    template keep the lenient unchecked-items-only behavior, so distributing the
+    gate does not break repos that have not installed the template.
+    """
+    template = repo_root / ".github" / "pull_request_template.md"
+    return template.is_file() and POLICY_GATE_MARKER in template.read_text()
+
+
 def _gh_json(args: list[str], body: JsonDict | None = None) -> JsonDict:
     result = subprocess.run(
         ["gh", *args],
@@ -331,14 +350,27 @@ def _gh_json(args: list[str], body: JsonDict | None = None) -> JsonDict:
     return data
 
 
-def check_pr_description(repo: str, pr_number: int) -> None:
-    """Fail if the original PR description contains unchecked markdown checklist items."""
+def check_pr_description(repo: str, pr_number: int, repo_root: Path = Path(".")) -> None:
+    """Fail if the PR description omits the policy-alignment gate or has unchecked items.
+
+    When the repo has installed the policy-alignment PR template (opt-in), the PR body
+    must carry the gate marker: the affirmation section cannot be deleted to bypass the
+    gate. The unchecked-checklist-item check always applies.
+    """
     pr = _gh_json(["api", f"repos/{repo}/pulls/{pr_number}"])
     body = pr.get("body")
     if body is None:
         body = ""
     if not isinstance(body, str):
         _fail("pull request body was not a string")
+    if gate_template_requires_marker(repo_root) and POLICY_GATE_MARKER not in body:
+        print(
+            "PR description is missing the required policy-alignment gate section "
+            f"(marker {POLICY_GATE_MARKER!r}). This repo installs the gate template; "
+            "restore the section from .github/pull_request_template.md and affirm it.",
+            file=sys.stderr,
+        )
+        sys.exit(1)
     unchecked = unchecked_checklist_lines(body)
     if unchecked:
         print("PR description contains unchecked markdown checklist items:", file=sys.stderr)
