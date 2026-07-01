@@ -730,7 +730,7 @@ slop — bad code that arises from agent psychology and accretion.
 - Code style — "inconsistent formatting"
 - Magic numbers — "hardcoded constant"
 - Dead code — "unused function"
-- Unused imports or dependencies
+- Unused imports
 
 These are PR-review concerns. An anti-slop review gates the PR itself: a repo full of
 slop should never reach standard code review. The anti-slop finding is the narrative of

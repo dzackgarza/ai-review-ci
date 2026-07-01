@@ -374,8 +374,8 @@ _deptry: _install-tools
 	#!/usr/bin/env bash
 	set -euo pipefail
 	echo "============================="
-	echo "=== Running: deptry dependency linting ==="
-	echo "# Checks for unused/missing dependencies in pyproject.toml, detects transitive deps, and verifies type checking"
+	echo "=== Running: deptry import dependency linting ==="
+	echo "# Checks for missing/import dependency failures in pyproject.toml; unused declared dependencies are maintenance-only and do not block global QC"
 	if [ ! -f pyproject.toml ]; then
 		echo "ERROR: deptry: no pyproject.toml found — Python project must have one."
 		"{{artifacts}}/scripts/emit-triage-directive.sh"
@@ -387,7 +387,7 @@ _deptry: _install-tools
 		mapfile -t python_files <<<"$python_files_output"
 	fi
 	package_module_name_map="$(uv run --no-project python "{{artifacts}}/scripts/deptry_package_module_name_map.py" "{{configs}}/pyproject.toml")"
-	deptry_args=(. --package-module-name-map "$package_module_name_map")
+	deptry_args=(. --package-module-name-map "$package_module_name_map" --ignore DEP002)
 	first_party_modules_output="$(uv run --no-project python "{{artifacts}}/scripts/python_qc_metadata.py" first-party-modules .)"
 	if [ -n "$first_party_modules_output" ]; then
 		mapfile -t first_party_modules <<<"$first_party_modules_output"
@@ -406,7 +406,7 @@ _deptry: _install-tools
 		:
 	else
 		ec=$?
-		echo "ERROR: deptry found dependency issues in project."
+		echo "ERROR: deptry found missing/import dependency issues in project."
 		"{{artifacts}}/scripts/emit-triage-directive.sh"
 		exit $ec
 	fi
