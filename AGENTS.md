@@ -1,5 +1,20 @@
 # Agent Rules
 
+
+## Issue-Scoped PR Lifecycle
+
+Policy, QC, reviewer, workflow, and gate changes must be issue-first and draft-first.
+Do not accumulate local changes and then invent a PR scope around them. Before writing code:
+
+- identify the existing triaged issue or create one with the original problem, policy risk, and acceptance criteria;
+- create a draft PR associated with that issue before broad implementation continues;
+- keep the PR diff limited to that issue family; unrelated reopened issues require separate branches/PRs;
+- keep the PR body mapped to the issue acceptance criteria and the Policy Alignment Gate;
+- move from draft to ready-for-review only after tests/evidence and adversarial policy review are complete;
+- handle review feedback as a loop: accepted feedback requires a committed remediation before any “fixed/addressed” reply, and rejected or modified feedback belongs in a top-level `Review feedback disposition ledger`.
+
+If a branch is discovered to contain a broad, untriaged, or policy-poisoned diff, close or abandon the PR rather than trying to salvage it by summary wording. Recreate the work from `origin/main` on an issue-scoped branch.
+
 ## QC Delegation
 
 - Treat `~/ai-review-ci` as the authoritative QC implementation.
