@@ -96,7 +96,7 @@ def test_install_writes_pr_template_with_gate_marker(tmp_path: pathlib.Path) -> 
     assert "Linked triaged issue(s)" in text
     assert "started as a draft" in text
     assert "Ready-for-review was requested only after" in text
-    assert "Review feedback disposition ledger" in text
+    assert "top-level PR comment titled `Review feedback disposition ledger`" in text
 
 
 def test_install_pr_template_refuses_overwrite(tmp_path: pathlib.Path) -> None:
