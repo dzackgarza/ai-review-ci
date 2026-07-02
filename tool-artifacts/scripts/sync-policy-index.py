@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Sync the vendored policy index from a pinned dzackgarza/ai git ref."""
+"""Sync the vendored policy index from this repo's canonical skills/policy-index."""
 
 from __future__ import annotations
 
@@ -9,12 +9,12 @@ import subprocess
 from pathlib import Path
 
 SOURCE_FILES = (
-    "opencode/skills/policy-index/SKILL.md",
-    "opencode/skills/policy-index/references/policies.md",
-    "opencode/skills/policy-index/references/remediations.md",
-    "opencode/skills/policy-index/references/red-flags.md",
-    "opencode/skills/policy-index/references/runtime-control-flow.md",
-    "opencode/skills/policy-index/references/test-proof-rules.md",
+    "skills/policy-index/SKILL.md",
+    "skills/policy-index/references/policies.md",
+    "skills/policy-index/references/remediations.md",
+    "skills/policy-index/references/red-flags.md",
+    "skills/policy-index/references/runtime-control-flow.md",
+    "skills/policy-index/references/test-proof-rules.md",
 )
 
 
@@ -30,7 +30,7 @@ def git_output(source_root: Path, *args: str) -> str:
 
 
 def destination_path(vendor_root: Path, source_path: str) -> Path:
-    relative = source_path.removeprefix("opencode/skills/policy-index/")
+    relative = source_path.removeprefix("skills/policy-index/")
     return vendor_root / relative
 
 
@@ -42,9 +42,9 @@ def write_manifest(vendor_root: Path, source_root: Path, ref: str, hashes: dict[
     status = git_output(source_root, "status", "--porcelain")
     lines = [
         "[source]",
-        'repo = "dzackgarza/ai"',
+        'repo = "dzackgarza/ai-review-ci"',
         f'ref = "{ref}"',
-        'source_path = "opencode/skills/policy-index"',
+        'source_path = "skills/policy-index"',
         f"source_worktree_dirty = {str(bool(status)).lower()}",
         "",
         "[sync]",

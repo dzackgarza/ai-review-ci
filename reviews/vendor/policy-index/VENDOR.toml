@@ -1,7 +1,7 @@
 [source]
-repo = "dzackgarza/ai"
-ref = "0c1d9cbd79818286fe686795995f99ddb5789652"
-source_path = "opencode/skills/policy-index"
+repo = "dzackgarza/ai-review-ci"
+ref = "HEAD"
+source_path = "skills/policy-index"
 source_worktree_dirty = true
 
 [sync]
@@ -10,14 +10,14 @@ mode = "git show <ref>:<source_path>, never dirty worktree copy"
 
 [copied_files]
   [copied_files."SKILL.md"]
-  sha256 = "d82b0d37737c98b6cd2d499488b59aec13fd86fc0cd2114a7f7f329e432afb08"
+  sha256 = "4846b247e8febfe58bc65cd66048f61e3e6577063d6fb833926ce803f91f9a49"
   [copied_files."references/policies.md"]
-  sha256 = "fd1ceec1908edbbd61bb5518c3c28600669975624261c3af29fa82bc767e659e"
+  sha256 = "9d8412729d21d572ead9aa4579db66b9a4db8d6c3bb533a778b7ddb2c14d1d53"
   [copied_files."references/red-flags.md"]
-  sha256 = "1c35f9722be7b230acbf18144afee447bf245b34f8c76a901143b0149bc47263"
+  sha256 = "55b7e0a105939ddc512671dd98629efba46a435337db73b41619586327c47a4f"
   [copied_files."references/remediations.md"]
-  sha256 = "170bf618585f1e3a1ac420c3941d70b7ed580ceb224d8e159338e284ec3a6309"
+  sha256 = "1ca765bb251181d4682638b12e31efae81841279d9a05fbfc96a8015b5ebc4db"
   [copied_files."references/runtime-control-flow.md"]
-  sha256 = "9d0072708512ba0cbf34d1d974f5b6867f92738c7a32451f60a2092224182226"
+  sha256 = "a4fc786a29d22d62bb4b75fd865cbec2cff999a03aca35d4dc9e92c8c317bdff"
   [copied_files."references/test-proof-rules.md"]
-  sha256 = "84c51c56fe64fda30e811b29d74073d99ea7d4bc36b24eece7941a64bb73c0e2"
+  sha256 = "56e0b925b7e0cbb2ec637f311a1ccd03e509eecf254e12d74e1e072e6803277e"
