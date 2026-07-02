@@ -15,6 +15,9 @@
 #                         sha256 manifest (read at runtime by src/ai_review_ci/policy_index.py).
 #                flat   — reviews/vendor/<name>.md (from SKILL.md) plus, if the skill ships
 #                         references, reviews/vendor/<name>-references/ (from references/).
+#                (absent) — the skill is agent-facing only: loaded during authoring/PR work,
+#                         NOT inlined into the reviewer prompt, so it is published to ~/ai but
+#                         not built into reviews/vendor.
 #              The layout is preserved from how each skill was already vendored so the
 #              reviewer bundle (reviews/*/manifest.txt) and doc links stay stable.
 #
@@ -65,6 +68,11 @@ vendor_layout = "flat"
 [owned.pr-review-guide]
 source_path = "skills/pr-review-guide"
 vendor_layout = "flat"
+
+# Agent-facing only (loaded when doing PR/issue work), not part of the reviewer bundle:
+# published to ~/ai but not built into reviews/vendor (no vendor_layout).
+[owned.git-integration-workflow]
+source_path = "skills/git-integration-workflow"
 
 [consumed.test-guidelines]
 upstream_repo = "dzackgarza/ai"
