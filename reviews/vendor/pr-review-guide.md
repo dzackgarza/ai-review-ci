@@ -19,7 +19,21 @@ tool choices, not developer decisions. Note in the report which files were skipp
 | 50–300 lines | Full process, all steps |
 | > 300 lines | Full process; note in the Scope line that review is sampled — cover the highest-risk areas rather than every file |
 
-For PRs > 500 lines: flag in the Summary that a PR this size is itself a Change Propagation signal. A change that cannot be reviewed in one pass suggests tangled responsibilities.
+**Size is not a defect. Incohesion is.** Never flag a PR merely for being
+large: a broad diff with one design narrative (one root cause, all its
+symptoms, the issues it closes named in the body) is the *healthy* shape of a
+work unit, and review is sampled accordingly. The defect signals are
+orthogonal to size:
+
+- A PR of any size mixing changes with **no shared root cause** → 🟡 Warning:
+  Change Propagation (tangled responsibilities).
+- A **trivially scoped PR** — one that patches a single symptom of a pattern
+  visible elsewhere (sibling callers with the same bug, an open epic naming
+  the cause, related findings left untouched) → 🟡 Warning: Myopic
+  Remediation. Name the siblings or the parent work unit the PR should have
+  claimed. A ten-line nudge that leaves its constellation open consumes a full
+  review cycle while moving the project nowhere; the remedy is a re-scoped PR
+  that closes the cluster or removes the symptom generator, not a merge.
 
 ---
 
@@ -32,9 +46,16 @@ Work through these seven steps in order. Do not skip steps.
 Read the diff or files and answer:
 - What is the stated purpose of this change?
 - Which files were modified?
-- Flag immediately if the PR changes more than 10 unrelated files — that itself is a
-  🟡 Warning: Change Propagation (a PR that touches many unrelated things is a sign
-  that responsibilities are tangled).
+- Flag immediately if the PR changes many files with **no conceptual connection to each
+  other or to the stated purpose** — that is a 🟡 Warning: Change Propagation
+  (a PR that touches many *unrelated* things is a sign that responsibilities are
+  tangled). Many files serving one root cause is not this signal — a rewrite that
+  touches thirty files to remove one symptom generator is cohesive, not tangled.
+- Flag the inverse as well: if the diff patches one instance of a defect whose
+  siblings are visible from the diff's own context (other callers of the touched
+  function, parallel modules with the same pattern, an issue/epic the PR body says
+  it "partially" addresses) — that is a 🟡 Warning: Myopic Remediation (see
+  Scope calibration above).
 
 ### Step 2: Scan for Change Propagation
 

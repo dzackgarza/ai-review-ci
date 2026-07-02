@@ -3,6 +3,7 @@ repo := justfile_directory()
 global_hooks_source_dir := repo / "global-hooks"
 repo_hooks_source_dir := repo / "repo-hooks"
 scaffold_source_dir := repo / "scaffolds"
+skills_source_dir := repo / "skills"
 policy_index_source := "/home/dzack/gitclones/ai"
 policy_index_ref := "0c1d9cbd79818286fe686795995f99ddb5789652"
 
@@ -88,6 +89,29 @@ install-global-hooks:
 
     git config --global core.hooksPath "$global_hooks_dir"
     git config --global core.hooksPath
+
+# Symlink every skill in skills/ into the user's skills directory (AI_SKILLS_DIR).
+install-skills:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    if [[ "${AI_SKILLS_DIR+x}" != x ]]; then
+        echo "ERROR: AI_SKILLS_DIR must be set to your skills directory (e.g. ~/ai/opencode/skills). Set it in ~/.envrc."
+        exit 1
+    fi
+    skills_dir="$AI_SKILLS_DIR"
+    mkdir -p "$skills_dir"
+
+    for skill in "{{ skills_source_dir }}"/*/; do
+        skill="${skill%/}"
+        name="$(basename "$skill")"
+        target="$skills_dir/$name"
+        if [[ -e "$target" && ! -L "$target" ]]; then
+            echo "Error: refusing to replace non-symlink skill: $target"
+            exit 1
+        fi
+        ln -snf "$skill" "$target"
+        echo "$target -> $skill"
+    done
 
 # Install repo-local hook symlinks into a target repository.
 install-repo-hooks target=".":
