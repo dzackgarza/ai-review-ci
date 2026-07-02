@@ -412,7 +412,7 @@ Global QC enforces code-shape policy.
 Issues record unresolved proof burdens.
 Nothing else belongs in the test suite.
 
-For the canonical catalog of banned test shapes and their allowed replacements, see the [Banned Test Shapes Catalog](file:///home/dzack/ai/opencode/skills/test-guidelines/references/banned-test-shapes.md).
+For the canonical catalog of banned test shapes and their allowed replacements, see the [Banned Test Shapes Catalog](file:///home/dzack/ai/opencode/skills/policy-index/references/test-proof-rules.md).
 
 ## Try/Catch Ban
 
@@ -540,6 +540,12 @@ It should not be a broad memorialization of incidental internal details.
 Regression tests are for unintentional broken behavior (bugs), not for intentional
 design decisions. Intentional feature removals, deprecations, or breaking changes do not
 need regression tests — these are design choices, not defects.
+For bug-fix work, the first proof is end-to-end reproduction of the failing path;
+unit tests should follow and should be derived from the reproduced failure, not replace it.
+For E2E or full-system reproductions, save an evidence bundle in the test artifact directory:
+- a screenshot of the observable failure state and post-repro state,
+- a video or trace of the end-to-end flow when browser tooling supports it, and
+- command/session logs that show the boundary inputs, outputs, and errors.
 
 * * *
 
@@ -600,7 +606,7 @@ Never reveal all decisive examples in the visible tests for an agent benchmark.
 Anti-gaming claims must be enforceable assertions, not commentary.
 A docstring that says “uses dynamic data” does not matter if the assertions would pass
 on a hard-coded branch.
-A review says “no gaming detected” does not matter unless the diff and tests
+A review note that says “no gaming detected” does not matter unless the diff and tests
 actually rule out the gaming strategy.
 
 For new services, grow tests through the simplest real boundary before complex behavior:
@@ -621,6 +627,9 @@ If the user-visible interface is a CLI text report, do not prove only an interna
 JSON helper. If the boundary is a real file, service, database, PDF, or model response,
 use representative captured or live data at that boundary rather than an invented
 internal object.
+For E2E or GUI-facing behavior, green proof requires attached evidence artifacts (at least
+one screenshot, one persisted log stream, and one replayable trace or video where
+available).
 
 For persistence claims, use cross-session or cross-process checks when feasible: create
 state through the public boundary, reopen through a separate invocation, and assert the
@@ -655,7 +664,7 @@ the resulting state safe to remove.
 
 ## Web Application and Frontend Testing
 
-To test local web applications, write native Python Playwright scripts. 
+To test local web applications, write native Python Playwright scripts.
 
 **Helper Scripts Available**:
 - `scripts/with_server.py` (in `test-guidelines/`) - Manages server lifecycle (supports multiple servers)
@@ -753,14 +762,16 @@ Red flags:
 - test would pass even if the application stopped calling the helper;
 - the helper did not exist before the review.
 
-Correct response: See `bridge-burning-red-flags.md` → **Remediation: Boundary Test Bypass**.
+Correct response after triage: See `policy-index/references/remediations.md` → **Remediation: Boundary Test Bypass**.
 
 * * *
 
 ## Verification Rigor
-
 - **FRESH PROOF**: A claim of “tests pass” requires fresh command output from the
   current turn showing 0 failures.
+
+- **REPRO-FIRST**: For bug claims, the end-to-end reproduction must be captured and
+  verified before test-green is treated as proof of correction.
 
 - **RED-GREEN-REVERT**: A regression test is verified only if it fails when the fix is
   removed.
@@ -800,11 +811,9 @@ The following checks are **mandatory** gates (all owned by global QC):
    measures coverage on changed lines.
    This catches overgenerated, unexercised code.
 
-3. **No dead code / unused exports / missing dependency failures**: Use `vulture`,
-   `knip`, and dependency import checks. These catch abandoned helpers, unused
-   files/exports, missing imports, broken installs, and dependency metadata that
-   creates runtime failure. A declared dependency that is not import-visible is
-   maintenance hygiene, not slop or a routine blocking gate.
+3. **No dead code / unused exports / unused deps**: Use `vulture`, `knip`, `deptry`.
+   These catch abandoned helpers, unused files/exports, and speculative dependencies
+   left behind by failed generations.
 
 4. **Type checker passes**: Use `mypy`, `pyright`, or `tsc --noEmit`. These catch
    interface drift and incompatible assumptions without running the code.
@@ -930,10 +939,10 @@ The important move is to stop treating this as a case-by-case review problem. Ag
 
 The recurring pattern is that an agent first tries to satisfy checking/validation surfaces (such as the compiler/typechecker, QC gates, PR review, or user queries) by manipulating the validation surface (e.g. by adding fallbacks, defaults, mocks, try/except blocks, or bypass comments) instead of reconstructing the original obligation and solving it. The policy answer is to remove the vocabulary that enables that manipulation.
 
-Adhering to the [Bridge-Burning Policies](file:///home/dzack/ai/opencode/skills/anti-slop/SKILL.md#bridge-burning-policies) defined in `anti-slop/SKILL.md` is a non-negotiable hard constraint for all development. These rules eliminate common agent validation-evasion pathways (such as runtime defaults, fallbacks, mocks, and diagnostic smoke tests in proof paths). Refer to them as hard boundaries.
+Adhering to the [Bridge-Burning Policies](file:///home/dzack/ai/opencode/skills/policy-index/SKILL.md#policy-registry) defined in `policy-index/SKILL.md` is a non-negotiable hard constraint for all development. These rules eliminate common agent validation-evasion pathways (such as runtime defaults, fallbacks, mocks, and diagnostic smoke tests in proof paths). Refer to them as hard boundaries.
 
 > [!IMPORTANT]
-> **Bridge-Burning Red Flags:** If the original review concern is boundary-level, helper-level tests cannot resolve it. They may supplement proof, but they do not close the burden. If a construct would let an agent preserve the appearance of correctness while weakening the obligation, treat it as a red flag even if the code currently works. For a detailed list of testing red flags (such as mock/fake/stub/simulation usage, smoke tests in the suite, exact string assertions, etc.), see the [Bridge-Burning Red Flags Reference Catalog](file:///home/dzack/ai/opencode/skills/reviewing-llm-code/references/bridge-burning-red-flags.md) and the [Runtime Control-Flow Red Flags Catalog](file:///home/dzack/ai/opencode/skills/reviewing-llm-code/references/runtime-control-flow-red-flags.md).
+> **Bridge-Burning Red Flags:** If the original review concern is boundary-level, helper-level tests cannot resolve it. They may supplement proof, but they do not close the burden. If a construct would let an agent preserve the appearance of correctness while weakening the obligation, treat it as a red flag even if the code currently works. For a detailed list of testing red flags (such as mock/fake/stub/simulation usage, smoke tests in the suite, exact string assertions, etc.), see the [Bridge-Burning Red Flags Reference Catalog](file:///home/dzack/ai/opencode/skills/policy-index/references/red-flags.md) and the [Runtime Control-Flow Red Flags Catalog](file:///home/dzack/ai/opencode/skills/policy-index/references/runtime-control-flow.md).
 
 ---
 

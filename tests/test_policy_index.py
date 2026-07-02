@@ -1,3 +1,4 @@
+import hashlib
 from pathlib import Path
 from typing import Any, cast
 
@@ -55,15 +56,32 @@ Detection handles: `BAD-HANDLE`
         parse_policies(text)
 
 
-def test_vendor_manifest_pins_clean_source_ref_and_file_hashes() -> None:
+def test_vendored_policy_index_is_a_faithful_build_of_owned_source() -> None:
+    # policy-index is owned by ai-review-ci: authored under skills/policy-index/ and
+    # built into reviews/vendor/policy-index/. The vendored copy must be a byte-faithful
+    # build of the source, and the manifest must pin the actual content — any drift in
+    # either direction (edit the vendored copy, or edit the source without rebuilding) fails.
     manifest = load_vendor_manifest()
     source = cast(dict[str, Any], manifest["source"])
     copied_files = cast(dict[str, dict[str, str]], manifest["copied_files"])
 
-    assert source["repo"] == "dzackgarza/ai"
-    assert source["ref"]
-    assert copied_files["SKILL.md"]["sha256"]
-    assert copied_files["references/policies.md"]["sha256"]
+    assert source["repo"] == "dzackgarza/ai-review-ci"
+    assert source["ownership"] == "owned"
+    assert source["source_path"] == "skills/policy-index"
+
+    repo_root = Path(__file__).resolve().parents[1]
+    skills_source = repo_root / "skills/policy-index"
+    vendored = repo_root / "reviews/vendor/policy-index"
+
+    source_files = sorted(path.relative_to(skills_source) for path in skills_source.rglob("*.md"))
+    assert [str(path) for path in source_files] == sorted(copied_files)
+
+    for relative in source_files:
+        source_text = (skills_source / relative).read_text()
+        vendor_text = (vendored / relative).read_text()
+        assert vendor_text == source_text, f"vendored {relative} drifted from skills/ source"
+        digest = hashlib.sha256(vendor_text.encode()).hexdigest()
+        assert copied_files[str(relative)]["sha256"] == digest, f"manifest sha256 stale for {relative}"
 
 
 def test_semgrep_rules_use_id_only_messages_and_valid_metadata() -> None:
