@@ -111,7 +111,7 @@ If no new imports and no structural changes → skip, no finding.
 
 ## Severity Calibration
 
-Apply the Iron Law format from `../_shared/common.md`. Each risk in `../_shared/decay-risks.md` has its own Severity
+Apply the Iron Law format from `../SKILL.md`. Each risk in `decay-risks.md` has its own Severity
 Guide with numeric thresholds — use those as the primary reference. When a finding sits
 on the boundary between two tiers, use this as a tiebreaker:
 - 🔴 Critical — actively breaking velocity or creating production risk *today*
@@ -179,6 +179,6 @@ Label the risk as the test decay risk name (e.g., "Coverage Illusion", "Mock Abu
 
 ## Output
 
-Use the standard Report Template from `../_shared/common.md`.
+Use the standard Report Template from `../SKILL.md`.
 Mode: PR Review
 Scope: list the files reviewed (excluding skipped generated files).

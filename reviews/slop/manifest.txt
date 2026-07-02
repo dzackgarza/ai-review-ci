@@ -2,7 +2,7 @@
 # Paths relative to the reviews/ directory (this file's parent's parent).
 # A directory entry inlines all of its top-level *.md files, sorted by name.
 # Missing entries are fatal.
-common.md
+../skills/ci-review-protocol/SKILL.md
 ../skills/policy-index/SKILL.md
 ../skills/policy-index/references/policies.md
 ../skills/policy-index/references/red-flags.md

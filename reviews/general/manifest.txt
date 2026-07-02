@@ -2,10 +2,10 @@
 # Paths relative to the reviews/ directory (this file's parent's parent).
 # A directory entry inlines all of its top-level *.md files, sorted by name.
 # Missing entries are fatal.
-common.md
-source-coverage.md
-decay-risks.md
-ci-sweep-protocol.md
+../skills/ci-review-protocol/SKILL.md
+../skills/ci-review-protocol/references/source-coverage.md
+../skills/ci-review-protocol/references/decay-risks.md
+../skills/ci-review-protocol/references/ci-sweep-protocol.md
 ../skills/policy-index/SKILL.md
 ../skills/policy-index/references/policies.md
 ../skills/policy-index/references/red-flags.md
@@ -14,4 +14,4 @@ ci-sweep-protocol.md
 ../skills/bespoke-software-policy/SKILL.md
 ../skills/test-guidelines/SKILL.md
 ../skills/tool-provisioning-and-environment-hygiene/SKILL.md
-pr-review-guide.md
+../skills/ci-review-protocol/references/pr-review-guide.md

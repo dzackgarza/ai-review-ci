@@ -1,7 +1,12 @@
-# Brooks-Lint — Shared Framework
+---
+name: ci-review-protocol
+description: Use when performing a structural code-quality review — the shared diagnosis framework (Iron Law, decay risks, severity calibration, report format) used by the review CI reviewers. References cover the decay-risk catalog, source coverage rules, the repo-sweep protocol, and the PR diff review guide.
+---
+
+# CI Review Protocol — Shared Framework
 
 Code and test quality diagnosis using principles from twelve classic software engineering books.
-Use `source-coverage.md` to keep those sources grounded in real evidence, exceptions, and tradeoffs.
+Use `references/source-coverage.md` to keep those sources grounded in real evidence, exceptions, and tradeoffs.
 
 ## The Iron Law
 
@@ -56,8 +61,8 @@ ignore:
   - "**/*.generated.*"
 ```
 
-If `.brooks-lint.yaml` contains a `custom_risks` map, read `custom-risks-guide.md`
-from the `_shared/` directory for loading and scanning instructions.
+Ignore any `custom_risks` map in `.brooks-lint.yaml`; custom risk definitions are not
+part of this framework.
 
 ### Config Validation
 
@@ -182,8 +187,8 @@ Remedy: ...
 
 ## Remedy Mode
 
-When the user passes `--fix` or asks to "fix the findings", read
-`remedy-guide.md` from the `_shared/` directory before writing the report.
+When the user passes `--fix` or asks to "fix the findings", every remedy must still
+follow the Iron Law finding it fixes; do not fix without a completed diagnosis.
 
 ## Health Score Calculation
 
