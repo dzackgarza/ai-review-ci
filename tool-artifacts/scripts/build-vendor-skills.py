@@ -103,10 +103,10 @@ def build_flat(skill_source: Path, vendor_root: Path, name: str) -> None:
 
 def build_skill(repo_root: Path, vendor_root: Path, name: str, spec: dict[str, str]) -> None:
     source_path = spec["source_path"]
-    layout = spec["vendor_layout"]
     skill_source = repo_root / source_path
     if not skill_source.is_dir():
         raise SystemExit(f"missing owned skill source directory: {skill_source}")
+    layout = spec["vendor_layout"]
     if layout == "nested":
         build_nested(skill_source, vendor_root, name, source_path)
     elif layout == "flat":
@@ -123,6 +123,10 @@ def main() -> None:
 
     repo_root = args.skills_root.resolve().parent
     for name, spec in sorted(load_owned(args.vendor_root).items()):
+        # Owned skills that are only agent-facing (loaded during authoring, not inlined into
+        # the reviewer prompt) omit vendor_layout: they are published to ~/ai but not vendored.
+        if "vendor_layout" not in spec:
+            continue
         build_skill(repo_root, args.vendor_root, name, spec)
 
 

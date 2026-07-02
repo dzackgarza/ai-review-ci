@@ -34,7 +34,7 @@ def test_manifest_partitions_every_top_level_vendored_doc() -> None:
     owned = manifest["owned"]
     consumed = manifest["consumed"]
 
-    classified = {f"{name}.md" for name, spec in owned.items() if spec["vendor_layout"] == "flat"}
+    classified = {f"{name}.md" for name, spec in owned.items() if spec.get("vendor_layout") == "flat"}
     classified |= {spec["vendor_path"] for spec in consumed.values()}
 
     top_level_docs = {p.name for p in VENDOR_ROOT.glob("*.md")}
@@ -42,9 +42,22 @@ def test_manifest_partitions_every_top_level_vendored_doc() -> None:
 
 
 def test_owned_skills_declare_source_and_layout() -> None:
+    # Every owned skill has a skills/ source. vendor_layout is optional: present (flat|nested)
+    # means it is built into the reviewer bundle; absent means it is agent-facing only
+    # (published to ~/ai but not vendored).
     for name, spec in _manifest()["owned"].items():
         assert (REPO_ROOT / spec["source_path"]).is_dir(), f"{name}: source_path is not a dir"
-        assert spec["vendor_layout"] in {"flat", "nested"}, f"{name}: bad vendor_layout"
+        if "vendor_layout" in spec:
+            assert spec["vendor_layout"] in {"flat", "nested"}, f"{name}: bad vendor_layout"
+
+
+def test_published_only_owned_skills_are_not_vendored() -> None:
+    # An owned skill with no vendor_layout must leave no build artifact under reviews/vendor.
+    for name, spec in _manifest()["owned"].items():
+        if "vendor_layout" in spec:
+            continue
+        assert not (VENDOR_ROOT / f"{name}.md").exists(), f"{name}: published-only skill leaked a vendored .md"
+        assert not (VENDOR_ROOT / name).exists(), f"{name}: published-only skill leaked a vendored dir"
 
 
 def test_consumed_docs_are_not_authored_here() -> None:
@@ -64,7 +77,7 @@ def test_all_owned_skills_rebuild_byte_identical(tmp_path: Path) -> None:
     shutil.copytree(VENDOR_ROOT, scratch)
 
     manifest = _manifest()
-    expected = {name: _owned_vendor_outputs(name, spec) for name, spec in manifest["owned"].items()}
+    expected = {name: _owned_vendor_outputs(name, spec) for name, spec in manifest["owned"].items() if "vendor_layout" in spec}
     for outputs in expected.values():
         for relative in outputs:
             (scratch / relative).unlink()
