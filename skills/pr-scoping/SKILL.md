@@ -1,6 +1,6 @@
 ---
 name: pr-scoping
-description: Use before drafting, scoping, or opening any pull request, and when triaging a backlog into units of work. Forces PRs to be scoped as significant work units that close constellations of related issues, and bans the trivial single-nudge PRs agents default to.
+description: Use before drafting, scoping, or opening any pull request (including draft work-unit PRs), when deciding whether a change warrants a PR at all, and when triaging a backlog into units of work. Forces PRs to be scoped as significant work units that close constellations of related issues, routes small urgent repairs direct to main, and bans the trivial single-nudge PRs agents default to.
 ---
 
 # PR Scoping: Significant Work Units, Not Nudges
@@ -27,7 +27,35 @@ as much to shepherd through the loop as a 1,000-line PR. Ten timid PRs cost
 deliver less, because the ten nudges never remove the root cause that keeps
 generating new symptoms.
 
-Timidity is not safety. It is the most expensive possible way to work.
+Timidity is not safety. It is the most expensive possible way to work. A
+merged partial fix is worse than no PR: it leaves the tool in a mixed
+half-fixed state that *generates* new issues, and every subsequent agent must
+first reconstruct which issue text is stale, what partial progress landed,
+and which symptoms remain — before doing any work. When inbound issue flow
+exceeds the outbound fix rate, the repo is in churn, not progress.
+
+The reward signal is **backlog burn-down per review cycle**, not landed PRs.
+A landed PR that leaves its issue open moved the project backward.
+
+## Two paths — there is no third
+
+Every change takes exactly one of these routes:
+
+1. **Direct to main.** Urgent crash relief, trivial fixes, doc/config nudges,
+   behavioural updates — anything the owner would accept as a direct repair.
+   No PR, no review loop. Add a regression test when cheap. If the crash is a
+   symptom of an open root-cause issue, note the relief on that issue and
+   leave it open.
+2. **Review-loop PR.** Issue-complete, cluster-complete, or milestone-subtree
+   work: rewrites, feature grafts, structural consolidations. Enough scope to
+   justify the review cost.
+
+The review loop is an expensive mechanism for validating substantial changes,
+not a ritual for all changes. A small fix routed through the PR pipeline
+burns a review budget sized for architecture on a traceback tweak. A
+crash-fix-only PR is invalid unless the owner explicitly asks for one. Small
+urgent repairs go to main; large coherent repairs go through review; small
+timid PRs do not exist.
 
 ## The unit of work is the constellation, not the issue
 
@@ -42,6 +70,11 @@ Before drafting any PR:
    individually patched? If yes, **that rewrite is the PR.** The rewrite is
    the *smaller* change when measured in total system cost: one review cycle
    instead of N, and the symptom generator removed instead of throttled.
+   These are bespoke owner-local tools (see `bespoke-software-policy`): no
+   downstream consumers exist, so break internal APIs freely and rewrite the
+   subsystem when that is simpler than preserving broken structure.
+   "Bespoke" means *move aggressively* — not "be careful because policy
+   exists."
 3. **Scope the PR as a claim against the cluster.** The PR body names the
    issues it closes, the epic or subtree it advances, and the class of future
    findings it obviates. `Closes #a, #b, #c; advances epic #z` is the expected
@@ -60,8 +93,31 @@ Every PR must satisfy at least one of:
   sentences proving the change is genuinely isolated — no sibling symptoms, no
   parent epic, no cluster it could join. Silence is not justification.
 
-If a change fails the floor, it does not ship alone. It rides along inside the
-significant PR whose territory it belongs to, or it waits until that PR forms.
+If a change fails the floor, it does not become its own PR. It goes direct to
+main if it qualifies for that path, rides along inside the significant PR
+whose territory it belongs to, or waits until that PR forms.
+
+## Draft work-unit PRs are scope artifacts — the same floor applies
+
+A draft PR that pre-scopes a work unit for pickup is a *design decision about
+the unit of work*, and it is where timidity actually enters: if the draft
+defines the unit below the issue boundary or below the root-cause cluster, the
+failure has already happened before any code is written. Every rule in this
+skill applies to drafts at creation time, not just to ready-for-review.
+
+- **Issues are the minimum unit of work.** A draft scoped to *part* of an
+  issue is invalid — there is no altitude below one whole issue. The valid
+  altitudes are: one genuinely atomic issue, a root-cause cluster, or a
+  milestone subtree.
+- **A draft whose "not claimed" list contains the actual feature the issue
+  requests is invalid.** Scoping the easy fragments and deferring the
+  requested behavior is the timid slice in draft form. Re-scope upward.
+- **A planning-shell draft must not carry `Closes #N`.** Issue-closing
+  semantics attach only when the branch actually delivers the closing
+  behavior; until then use `Refs`.
+- **Drafts exist to hand agents pre-scoped ambitious units**, so smaller
+  agents can pick up a coherent rewrite without re-deriving the constellation.
+  A draft that hands them a sliver defeats its own purpose.
 
 ## Banned scopes
 
@@ -81,6 +137,15 @@ significant PR whose territory it belongs to, or it waits until that PR forms.
   Ship the rewrite as one PR with a clear narrative.
 - **One-finding remediation PRs.** Review findings arrive in batches; their
   remediations ship in batches, grouped by root cause.
+- **Shrinking scope behind a manufactured blocker.** "Needs a design
+  decision," "blocked by research," "split into a follow-up PR," "belongs
+  upstream" — occasionally real, but never a license to carve out a smaller
+  safe PR around the blocker. Make the design decision and implement it, or
+  stop and report the blocker. Uncertainty does not convert into a nudge.
+- **Crash-fix and urgent-slice PRs.** Crashes are symptoms. Fix them inside
+  the root-cause branch, or if owner-blocking right now, relieve them direct
+  to main. A crash is usually evidence the subsystem boundary is wrong — not
+  evidence that the correct PR is smaller.
 
 ## What this does NOT license
 
@@ -101,6 +166,8 @@ Significance is measured in **cohesion × consequence**, not line count.
 
 Answer these; if any answer is wrong, re-scope:
 
+0. Does this change warrant a PR at all, or is it a direct-to-main repair?
+   (A PR for something the owner would accept as a direct fix = wrong path.)
 1. What constellation does this PR close? (Naming one issue = probable nudge.)
 2. What symptom generator does it remove? ("None, it patches an instance" =
    re-scope to the generator.)
