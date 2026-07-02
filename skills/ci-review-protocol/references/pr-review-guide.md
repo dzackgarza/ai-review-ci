@@ -7,6 +7,35 @@ in the changed code. Every finding must follow the Iron Law: Symptom → Source 
 
 ## Before You Start
 
+**Work-unit gate — does this PR warrant the review loop at all?**
+
+This review loop is expensive and sized for substantial work: issue-complete,
+cluster-complete, or milestone-subtree changes (see `pr-scoping`). Before any
+analysis step, check whether the PR is a valid unit of work. If it fails the
+gate, emit the gate finding as the report and **stop — do not run the full
+seven-step process on an invalid unit.** Spending the loop on it is itself
+the failure mode the gate exists to prevent.
+
+Gate failures (any one is sufficient):
+
+- **Zero-diff planning shell claiming closure** — no implementing diff, but
+  `Closes #N` in the body. → 🔴 Critical: Invalid Work Unit. Remedy: demote
+  `Closes` to `Refs`; the draft must re-scope to the full cluster before any
+  review spend.
+- **Direct-to-main-qualifying change** — a trivial fix, doc/config nudge, or
+  crash relief the owner would accept as a direct repair. → 🔴 Critical:
+  Wrong Path. Remedy: this should not be a PR; land it on main and close the
+  PR, or fold it into the root-cause work unit it belongs to.
+- **Sub-issue scope** — the body says `partial #N`, defers the feature the
+  issue actually requests ("not claimed", "follow-up PR", "needs design
+  decision"), or patches one symptom under an open epic. → 🔴 Critical:
+  Under-scoped Work Unit. Remedy: re-scope upward to the whole issue,
+  cluster, or subtree. Merging it would create a mixed half-fixed state that
+  generates new issues; the merge is the defect.
+
+A PR that passes the gate gets the full review below. The gate protects the
+review budget; the review protects the code.
+
 **Auto-generated files:** If the diff contains generated files (protobuf stubs, OpenAPI clients,
 ORM migrations, lock files, minified bundles), skip those files entirely. Generated code reflects
 tool choices, not developer decisions. Note in the report which files were skipped and why.
@@ -138,6 +167,10 @@ production logic changes → skip Step 7 entirely.
   → 🟡 Warning: Coverage Illusion — new behavior is untested
   → Source: Feathers — Working Effectively with Legacy Code, Ch. 1
 - If the change is a pure refactor and existing tests cover the behavior → no finding.
+- If the body claims `Closes #a, #b, #c`, each closed issue needs a regression
+  test witnessing its reported failure. A claimed issue with no corresponding
+  test:
+  → 🟡 Warning: Coverage Illusion — issue closed without a regression witness
 
 **Signal 2: Quick Mock Abuse sniff**
 

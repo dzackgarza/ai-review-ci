@@ -219,6 +219,28 @@ Significance is measured in **cohesion × consequence**, not line count.
   #42, #140, #141, #144") is *more* reviewable than ten disconnected 40-line
   PRs, because the reviewer holds one idea instead of ten contexts.
 
+## The completion contract: burn down the tree, don't just land the diff
+
+A work unit is finished when the issue tree reflects the new reality, not
+when the PR merges. The final PR body must state, concretely:
+
+- **Issues closed** — each with a regression test witnessing its reported
+  failure. No `partial #N` claims anywhere.
+- **The shared root cause removed** — and what old behavior is now
+  *impossible*, not just fixed.
+- **Issues made obsolete or narrowed** — the rewrite usually invalidates
+  more issues than it formally closes. Name them.
+
+Then do the hygiene, as part of the unit: close the obsoleted issues with a
+one-line reason, and update any issue the rewrite narrowed so its text
+describes what actually remains. This is not paperwork — it is the point.
+The next wave of issues should be about *the rewrite*, filed against a
+coherent new state, not about a partial in-progress state nobody can map.
+An agent arriving after you should read the open issues and see the true
+remaining work, without reconstructing which issue text is stale, what
+partial progress landed, or which symptoms still reproduce. If they must do
+that archaeology, the work unit failed even though the PR merged.
+
 ## Self-check before opening
 
 Answer these; if any answer is wrong, re-scope:
