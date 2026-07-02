@@ -57,9 +57,63 @@ crash-fix-only PR is invalid unless the owner explicitly asks for one. Small
 urgent repairs go to main; large coherent repairs go through review; small
 timid PRs do not exist.
 
+## Calibrate ambition to actual capability, not to fear
+
+Your prior about what fits in one PR is years out of date. A 2026
+frontier model can read an entire issue tree, understand the app, and
+deliver the subsystem rewrite that obviates most of it — with regression
+tests and decent code — in a single work window. Smaller agents can do the
+same for a pre-scoped root-cause cluster. These repos are small bespoke
+tools; "simple subsystem rewrite with regression tests" is a normal,
+one-shot-able unit of work here, not a special project requiring staging.
+
+So when a scope feels "too big," check which is actually true:
+
+- **It fits your window.** Then the feeling is the miscalibrated prior —
+  the trained reflex toward the minimum defensible diff. Do the rewrite.
+- **It genuinely exceeds your window.** Then the correct move is a draft
+  work-unit PR scoping the *full* cluster for a more capable agent to pick
+  up — never silently shrinking the scope below the issue boundary so it
+  fits. Scope is set by the root cause; capability decides *who* executes,
+  not *what* the unit is.
+
+The "hard" work agents route around — reconciling a subsystem, collapsing
+two command surfaces onto one path, replacing a hand-rolled layer — is
+typically not hard. It is just larger than a nudge, and it is exactly the
+work that closes issue trees.
+
+## Selecting the work unit: start from the backlog, not the symptom
+
+"Grab the most urgent work" does not mean "fix the most immediately broken
+thing." The most immediately broken thing is almost always a symptom of an
+umbrella problem that is generating it *and* several siblings, and patching
+it leaves the generator running. Urgency means leverage: the fix or rewrite
+that obviates this issue and as many others as possible.
+
+The selection procedure, in order:
+
+1. **Read the whole backlog first** — every open issue, epic, and milestone
+   in the repo. Not the newest issue, not the one that paged loudest. You
+   cannot pick the right unit of work from one issue.
+2. **Find the umbrella.** Which subsystem, design defect, or missing
+   abstraction is generating the most open issues? Dozens of issues in one
+   area almost always mean one root cause that agents have been sidestepping
+   because it looks "hard" — and it is usually not hard, just bigger than a
+   nudge: a subsystem rewrite with regression tests.
+3. **Ask what rewrite or feature obviates the largest cluster.** A rewrite
+   that closes or invalidates ten issues outranks ten individual fixes —
+   always. Large rewrites and whole features are not the risky option to
+   attempt after the small fixes; they are the *first-choice* unit of work
+   precisely because they burn down the backlog instead of grooming it.
+4. **That umbrella is the most urgent work.** Only when a repo genuinely has
+   no umbrella — all open issues atomic and unrelated — does single-issue
+   work become the right unit.
+
 ## The unit of work is the constellation, not the issue
 
-Before drafting any PR:
+A PR typically bundles **several issues**. One issue per PR is the floor for
+the rare genuinely-atomic case, not the norm; part of an issue is never a
+unit at all. Before drafting any PR:
 
 1. **Cluster first.** Read the open issues, review findings, and epics. Group
    them by shared root cause: same subsystem, same design defect, same missing
@@ -121,9 +175,12 @@ skill applies to drafts at creation time, not just to ready-for-review.
 
 ## Banned scopes
 
-- **`partial #x` as a PR scope.** A PR that partially addresses an issue and
-  leaves the rest open is a nudge wearing a claim. Take the whole issue or
-  take the subtree containing it.
+- **`partial #x` as a PR scope.** An issue is already the *minimum* unit of
+  work, so a PR that partially closes one is guaranteed to be wildly
+  underambitious — it is below the floor by construction, a nudge wearing a
+  claim. There is no judgment call to make here: if you find yourself writing
+  "partial", the scope is wrong. Take the whole issue or the subtree
+  containing it.
 - **Fixing one caller when siblings share the bug.** The lazy fix and the
   root-cause fix are the same fix: one change where all callers route through.
   Patching only the path the finding named leaves every sibling broken and

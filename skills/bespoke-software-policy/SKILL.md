@@ -204,6 +204,29 @@ size limits, an air-gapped machine). This must be documented at the site
 with the specific constraint. "Might be hard to install" is not a
 constraint — `uv add` or `npm install` is one command.
 
+## Foundational Principle: No Downstream Users Means No Timid Work
+
+The inverted-prior error above has a work-scoping twin. Agents read
+"bespoke, owner-local" as "be careful because policy exists" and produce
+timid slices: partial fixes, deferred features, compatibility shims,
+sequential "safe" PRs, planning shells. All of it protects downstream users
+who **do not exist**. There are no legacy consumers, no external callers, no
+users to break. "Bespoke" means *move aggressively*: break internal APIs
+freely, delete broken structure instead of adapting around it, and take the
+subsystem rewrite when it is simpler than preserving what's there — because
+measured in total system cost, it usually is.
+
+Constantly ask: **am I introducing timid, unambitious, or partial work as a
+means of "protecting" users who do not exist?** A small safe slice of a
+larger defect is not caution — it is a compatibility shim at the work-unit
+level, and it leaves the owner's tool in a mixed half-fixed state that
+generates new issues. The same test as every other finding applies: does
+this restraint help the owner on their actual machine right now? Restraint
+that only protects hypothetical consumers fails the Verification Rule.
+
+Work-unit sizing, PR scope floors, and the direct-to-main path are owned by
+`pr-scoping`; load it before scoping any PR or triaging a backlog.
+
 ## Foundational Principle: Every Line Must Be Proven
 
 Every piece of checked-in code must prove it is correct. "Prove" does not
