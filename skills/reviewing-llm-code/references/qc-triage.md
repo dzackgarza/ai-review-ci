@@ -94,8 +94,8 @@ Spawn a separate remediation subagent. The subagent must:
 - Receive only the policy-coded findings: file/line, snippet when present in the raw QC
   output, and `POLICY.*` code. Do not include B's prose, root-cause narrative, suggested
   fix, or the orchestrator's opinion.
-- Load the remediation policy index: `policy-index/references/remediations.md` (vendored
-  in `ai-review-ci` runtime copies under `reviews/vendor/policy-index/references/remediations.md`) and `fixing-slop`.
+- Load the remediation policy index: `policy-index/references/remediations.md` (canonical
+  home: `ai-review-ci` `skills/policy-index/references/remediations.md`) and `fixing-slop`.
 - For each `POLICY.*` code, look up the matching `REMEDIATE.*` entry and derive the fix
   from the policy, not from another agent's suggestion.
 - Implement the remediation in the target repository only.

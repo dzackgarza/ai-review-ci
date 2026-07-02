@@ -299,7 +299,7 @@ target repo                          this repo (cloned at CI time)
                                        ai_review_ci.sarif    artifact -> SARIF
                                        ai_review_ci.context  alert/thread context
                                        ai_review_ci.threads  PR review poster
-                                       reviews/              templates, manifests, scopes, vendor/
+                                       reviews/              templates, manifests, scopes
 ```
 
 ## QC Layout
@@ -314,9 +314,9 @@ The non-CI quality-control stack is split by operational concern:
 | `tool-configs/` | Static tool configuration and QC planning notes. |
 | `tool-artifacts/` | Scripts, generated model artifacts, and helper code consumed by QC recipes. |
 | `justfiles/` | Shared and language-specific QC recipe hierarchy. |
-| `skills/` | Agent-facing QC operating instructions owned by this repo. |
+| `skills/` | Canonical skills owned by this repo, symlink-installed via `just install-skills`. |
 | `ci/` | Review CI runner, reviewer home, and private validator surface. |
-| `reviews/` | Review prompt templates, manifests, scopes, and vendored policy text. |
+| `reviews/` | Review prompt templates, manifests, and scopes (policy text is inlined from `skills/`). |
 
 Use the migrated quality gate directly from a target repo:
 

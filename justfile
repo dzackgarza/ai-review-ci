@@ -4,8 +4,6 @@ global_hooks_source_dir := repo / "global-hooks"
 repo_hooks_source_dir := repo / "repo-hooks"
 scaffold_source_dir := repo / "scaffolds"
 skills_source_dir := repo / "skills"
-policy_index_source := repo
-policy_index_ref := "HEAD"
 
 # Normalize infrastructure files before parse checks inspect them
 _normalize:
@@ -29,13 +27,6 @@ check: _normalize
     sh -n global-hooks/pre-push
     sh -n repo-hooks/pre-commit
     sh -n repo-hooks/pre-push
-
-# Sync vendored policy/remediation index from this repo's canonical skills/policy-index.
-sync-policy-index:
-    python3 tool-artifacts/scripts/sync-policy-index.py \
-      --source-root {{policy_index_source}} \
-      --vendor-root reviews/vendor/policy-index \
-      --ref {{policy_index_ref}}
 
 # Commit gate: this repo is QC tooling, so it runs the qc-tooling profile
 # (correctness + normalization, without the product-only slop/style gates it

@@ -2,15 +2,15 @@
 # Paths relative to the reviews/ directory (this file's parent's parent).
 # A directory entry inlines all of its top-level *.md files, sorted by name.
 # Missing entries are fatal.
-vendor/common.md
-vendor/policy-index/SKILL.md
-vendor/policy-index/references/policies.md
-vendor/policy-index/references/red-flags.md
-vendor/policy-index/references/runtime-control-flow.md
-vendor/policy-index/references/test-proof-rules.md
-vendor/bespoke-software-policy.md
-vendor/test-guidelines.md
-vendor/anti-slop.md
-vendor/anti-slop-references
-vendor/reviewing-llm-code.md
-vendor/reviewing-llm-code-references
+common.md
+../skills/policy-index/SKILL.md
+../skills/policy-index/references/policies.md
+../skills/policy-index/references/red-flags.md
+../skills/policy-index/references/runtime-control-flow.md
+../skills/policy-index/references/test-proof-rules.md
+../skills/bespoke-software-policy/SKILL.md
+../skills/test-guidelines/SKILL.md
+../skills/anti-slop/SKILL.md
+../skills/anti-slop/references
+../skills/reviewing-llm-code/SKILL.md
+../skills/reviewing-llm-code/references

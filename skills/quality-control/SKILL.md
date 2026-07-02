@@ -5,7 +5,7 @@ description: Use when implementing, understanding, or delegating to the global q
 
 # Quality Control System
 
-Before configuring, running, or modifying Quality Control checks, consult the central policy index: [policy-index](file:///home/dzack/ai-review-ci/reviews/vendor/policy-index.md)
+Before configuring, running, or modifying Quality Control checks, consult the central policy index: [policy-index](file:///home/dzack/ai-review-ci/skills/policy-index/SKILL.md)
 
 The global quality control system at `~/ai-review-ci` provides centralized linting, typechecking, formatting, complexity analysis, and code quality enforcement for all projects.
 It is the single source of truth for QC workflows.
@@ -415,14 +415,14 @@ This exception is documented at the recipe site in `_eslint-deps`. No other tool
 
 ### Bridge-Burning Policies
 
-Adhering to the [Bridge-Burning Policies](file:///home/dzack/ai-review-ci/reviews/vendor/anti-slop.md#bridge-burning-policies) is a non-negotiable constraint for all development.
+Adhering to the [Bridge-Burning Policies](file:///home/dzack/ai-review-ci/skills/anti-slop/SKILL.md#bridge-burning-policies) is a non-negotiable constraint for all development.
 These rules eliminate common agent validation-evasion pathways (such as runtime defaults, fallbacks, mocks, and diagnostic smoke tests in proof paths).
 
-Any exception to these rules must strictly follow the **Policy Exception Protocol** defined in [anti-slop.md](file:///home/dzack/ai-review-ci/reviews/vendor/anti-slop.md#policy-exception-protocol).
+Any exception to these rules must strictly follow the **Policy Exception Protocol** defined in [anti-slop.md](file:///home/dzack/ai-review-ci/skills/anti-slop/SKILL.md#policy-exception-protocol).
 
 > [!IMPORTANT]
 > **Bridge-Burning Red Flags:** If a construct would let an agent preserve the appearance of correctness while weakening the obligation, treat it as a red flag even if the code currently works.
-> For a comprehensive catalog of code signatures, keywords, and patterns to look for, see the [Bridge-Burning Red Flags Reference Catalog](file:///home/dzack/ai-review-ci/reviews/vendor/reviewing-llm-code-references/bridge-burning-red-flags.md) and the [Runtime Control-Flow Red Flags Catalog](file:///home/dzack/ai-review-ci/reviews/vendor/reviewing-llm-code-references/runtime-control-flow-red-flags.md).
+> For a comprehensive catalog of code signatures, keywords, and patterns to look for, see the [Bridge-Burning Red Flags Reference Catalog](file:///home/dzack/ai-review-ci/skills/policy-index/references/red-flags.md) and the [Runtime Control-Flow Red Flags Catalog](file:///home/dzack/ai-review-ci/skills/policy-index/references/runtime-control-flow.md).
 
 ## Purpose
 
@@ -817,7 +817,7 @@ Project tests own behavior proof:
 - independent oracles used.
 
 Do not scatter policy-policing tests into projects.
-For assertion constraints, see the central [Test Guidelines](file:///home/dzack/ai-review-ci/reviews/vendor/test-guidelines.md).
+For assertion constraints, see the central [Test Guidelines](file:///home/dzack/ai-review-ci/skills/test-guidelines/SKILL.md).
 
 ## Key Principle
 

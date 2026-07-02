@@ -89,20 +89,16 @@ every downstream consumer. It was merged, then reopened for policy-aligned remed
 
 ## Canonical policy source (self-contained — no external fetch)
 
-The authoritative policy travels with this repo, vendored and hash-pinned. Load it from the
-checkout:
+The authoritative policy is owned by this repo under `skills/`. Load it from the checkout:
 
-- `reviews/vendor/policy-index/SKILL.md` and `reviews/vendor/policy-index/references/policies.md`
+- `skills/policy-index/SKILL.md` and `skills/policy-index/references/policies.md`
   — the `POLICY.*` records and their **Invalid local fixes**.
-- `reviews/vendor/reviewing-llm-code-references/bridge-burning-red-flags.md` — the red-flag
-  inventory.
+- `skills/policy-index/references/red-flags.md` — the red-flag inventory.
+- `skills/policy-index/references/runtime-control-flow.md` — runtime control-flow red flags.
 
 Do not rely on globally-installed skills: remote review/coding agents (Codex, Jules, cloud
-runs) do not have them. The vendored copy is the contract.
-
-Policy **content** is owned upstream at `github.com/dzackgarza/ai`. Changing what a policy
-*says* is an upstream edit re-vendored via `just sync-policy-index`; the vendored files are
-sha256-pinned (`tests/test_policy_index.py`) and a local edit fails the pin and is clobbered.
+runs) do not have them. The in-repo copy is the contract — this repo is the canonical home;
+other machines install these skills as symlinks via `just install-skills`.
 
 ## Tier 0 — every PR
 
@@ -114,7 +110,7 @@ Before requesting review or merging, the PR body (or disposition ledger) must st
   required work look successful after it should have failed loudly.
 
 Empty and falsy literals are not exceptions. A fallback whose value is a placeholder — the
-vendored `POLICY.FAIL_OPEN` record names `None`, `[]`, `{}`, and `false`; empty strings behave
+canonical `POLICY.FAIL_OPEN` record names `None`, `[]`, `{}`, and `false`; empty strings behave
 the same way — is a `POLICY.FAIL_OPEN` violation, not "safe boundary normalization." Genuinely
 optional product state is represented as an explicit typed/semantic state at the owned
 boundary, never laundered through an empty default.
