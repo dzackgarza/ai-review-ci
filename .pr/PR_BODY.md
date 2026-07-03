@@ -1,26 +1,40 @@
-## Implementation PR — structured review state and meaningful review checks (#26)
+<!-- policy-alignment-gate -->
 
-This PR carries the next review-state milestone slice: make review jobs expose a
-machine-readable finding state and fail consistently when actionable findings are
-present.
+## Intended result
 
-- **Target issue:** #26
-- **Theme:** stop requiring consumers to scrape review prose to know whether a run has actionable findings
-- **Issue to close on merge:** #26
+ai-review-ci documents and enforces where proof burden belongs across commit, push, PR, review, and milestone gates, so low-risk work is not forced through full push/PR ceremony while high-risk boundary work still receives fail-loud proof and review.
 
-## Implemented behavior
+## Scope
 
-- `report-metadata` now emits a structured `findings` array with fingerprint,
-  tier, review type, category, label, path, line range, and status.
-- New `enforce-report-status` CLI command fails when the validated report has
-  tier1 findings and passes when no tier1 findings are present.
-- `_review.yml` writes `.review-findings.json`, uploads it as a workflow
-  artifact, then enforces the review status after SARIF upload and PR thread
-  posting so the evidence remains available even when the review check fails.
+- Included: risk-tiered proof-lane doctrine for the commit/push/PR/review gates this repo owns, mapping each tier to existing hook and CI surfaces.
+- Excluded: live agent planning/runtime behavior before work begins, and changes that belong only in `dzackgarza/ai` skills.
+- Preserved behavior: bridge-burning constraints, fail-loud policy, and existing Signal Separation work (#52-#56) are not weakened or duplicated.
 
-## Evidence
+## GitHub tracking
 
-- `tests/test_report.py` validates the structured state payload and tier1/tier2
-  status behavior directly against validated report-shaped artifacts.
-- `tests/test_install.py` verifies the reusable review workflow uploads the
-  structured state artifact before enforcing the final status.
+- Target issue set / subtree: #103
+- Milestone: Adaptive Workflow Orchestration
+- Closes on merge:
+  - Closes #103
+- References only:
+  - Refs #102 parent epic.
+  - Refs #52-#56 Signal Separation context.
+
+## Implementation plan
+
+1. Inventory existing commit, push, PR, review, and milestone gates owned by ai-review-ci.
+2. Add a policy/workflow guide that maps low/medium/high/milestone-risk work to those gates without duplicating the Signal Separation split.
+3. Include the pandoc-preview-greenfield2 and zotero-gui calibration examples.
+4. Add a lightweight regression/proof check if the guide is surfaced through a maintained template, skill, or vendor manifest.
+
+## Claim map
+
+- [ ] **#103 - proof lanes are mapped to ai-review-ci-owned gates**
+  - Proof obligations claimed: doctrine, calibration examples, mapping to commit/push/PR/review/milestone gates.
+  - Partial / not claimed: pre-work agent planning behavior outside integration surfaces.
+  - Evidence required: changed maintained docs/templates/skills plus tests if manifest/schema routing is touched.
+  - Current evidence: issue only.
+
+## Automated gates
+
+Keep draft until the maintained surface is chosen, evidence maps to #103 acceptance criteria, and relevant docs/tests plus `just test` are green.
