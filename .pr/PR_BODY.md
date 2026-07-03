@@ -1,26 +1,40 @@
-## Implementation PR — structured review state and meaningful review checks (#26)
+<!-- policy-alignment-gate -->
 
-This PR carries the next review-state milestone slice: make review jobs expose a
-machine-readable finding state and fail consistently when actionable findings are
-present.
+## Intended result
+Review delivery stops doubling maintainer triage load without dropping a channel that uniquely finds accepted issues.
 
-- **Target issue:** #26
-- **Theme:** stop requiring consumers to scrape review prose to know whether a run has actionable findings
-- **Issue to close on merge:** #26
+## Scope
+- Included: empirical unique-yield measurement for current review channels (#29), then the delivery/dedup decision for double emission (#25).
+- Excluded: reviewer prompt quality and slop classification work owned by Reviewer signal quality.
+- Preserved behavior: no review channel is removed or silenced until accepted-finding overlap/unique-yield evidence supports the change.
 
-## Implemented behavior
+## GitHub tracking
+- Target issue set / subtree: #29 then #25
+- Milestone: Review delivery state machine
+- Closes on merge:
+  - Closes #29
+  - Closes #25
+- References only:
+  - Refs #42 parent epic.
+  - Refs PR #147, which keeps the separate review-state implementation slice.
 
-- `report-metadata` now emits a structured `findings` array with fingerprint,
-  tier, review type, category, label, path, line range, and status.
-- New `enforce-report-status` CLI command fails when the validated report has
-  tier1 findings and passes when no tier1 findings are present.
-- `_review.yml` writes `.review-findings.json`, uploads it as a workflow
-  artifact, then enforces the review status after SARIF upload and PR thread
-  posting so the evidence remains available even when the review check fails.
+## Implementation plan
+1. Extract accepted findings from the representative PR archaeology named by #29.
+2. Measure per-channel overlap and unique yield.
+3. Decide whether to remove, dedup, or keep channels based on that evidence.
+4. Implement the smallest delivery-state change that follows from the data.
 
-## Evidence
+## Claim map
+- [ ] **#29 - channel unique-yield is measured before consolidation**
+  - Proof obligations claimed: accepted-finding corpus, source/channel labels, overlap/unique-yield summary.
+  - Partial / not claimed: prompt/classifier quality.
+  - Evidence required: reproducible extraction or auditable manual ledger.
+  - Current evidence: issue evidence only.
+- [ ] **#25 - double-emission is removed or justified by measured yield**
+  - Proof obligations claimed: delivery decision and implementation/proof if consolidation is warranted.
+  - Partial / not claimed: external Kilo policy beyond measured additive value.
+  - Evidence required: before/after delivery behavior or explicit no-change justification grounded in #29.
+  - Current evidence: blocked by #29 measurement.
 
-- `tests/test_report.py` validates the structured state payload and tier1/tier2
-  status behavior directly against validated report-shaped artifacts.
-- `tests/test_install.py` verifies the reusable review workflow uploads the
-  structured state artifact before enforcing the final status.
+## Automated gates
+Keep draft until #29 evidence exists. If implementation changes review/QC delivery, run `just test` and targeted delivery-state tests.
