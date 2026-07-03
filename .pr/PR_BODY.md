@@ -1,26 +1,32 @@
-## Implementation PR — structured review state and meaningful review checks (#26)
+<!-- policy-alignment-gate -->
 
-This PR carries the next review-state milestone slice: make review jobs expose a
-machine-readable finding state and fail consistently when actionable findings are
-present.
+## Intended result
+ai-review-ci owns a reusable label taxonomy, issue/PR template distribution path, and agent-facing label-routing guidance so downstream repositories receive consistent triage metadata during installation.
 
-- **Target issue:** #26
-- **Theme:** stop requiring consumers to scrape review prose to know whether a run has actionable findings
-- **Issue to close on merge:** #26
+## Scope
+- Included: canonical label taxonomy, idempotent install-labels command or install flag, vendored issue/PR templates, and label-routing skill/guidance.
+- Excluded: repo-specific label bikeshedding and manual label cleanup in every downstream repo.
+- Preserved behavior: existing workflow/scaffold installation remains non-destructive and repo-owned files are not overwritten silently.
 
-## Implemented behavior
+## GitHub tracking
+- Target issue set / subtree: #166
+- Milestone: Versioned QC distribution
+- Closes on merge:
+  - Closes #166
+- References only: none
 
-- `report-metadata` now emits a structured `findings` array with fingerprint,
-  tier, review type, category, label, path, line range, and status.
-- New `enforce-report-status` CLI command fails when the validated report has
-  tier1 findings and passes when no tier1 findings are present.
-- `_review.yml` writes `.review-findings.json`, uploads it as a workflow
-  artifact, then enforces the review status after SARIF upload and PR thread
-  posting so the evidence remains available even when the review check fails.
+## Implementation plan
+1. Define the canonical taxonomy in one machine-readable source.
+2. Add an idempotent label installation command that creates or updates labels safely.
+3. Extend install/template distribution only where conflicts are explicit and fail-loud.
+4. Add label-routing guidance so agents opening issues pick the right labels.
 
-## Evidence
+## Claim map
+- [ ] **#166 - downstream repos can install and use the canonical label taxonomy**
+  - Proof obligations claimed: taxonomy source, installer behavior, conflict/idempotence proof, templates/guidance.
+  - Partial / not claimed: applying labels to every existing downstream repo in this PR.
+  - Evidence required: tests with an isolated target/repo API boundary or mocked `gh` boundary that proves create/update/skip behavior.
+  - Current evidence: issue definition only.
 
-- `tests/test_report.py` validates the structured state payload and tier1/tier2
-  status behavior directly against validated report-shaped artifacts.
-- `tests/test_install.py` verifies the reusable review workflow uploads the
-  structured state artifact before enforcing the final status.
+## Automated gates
+Keep draft until installer tests, template conflict behavior, and `just test` are green.
