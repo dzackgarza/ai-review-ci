@@ -1,26 +1,38 @@
-## Implementation PR — structured review state and meaningful review checks (#26)
+<!-- policy-alignment-gate -->
 
-This PR carries the next review-state milestone slice: make review jobs expose a
-machine-readable finding state and fail consistently when actionable findings are
-present.
+## Intended result
+Downstream Python repositories can run the centrally delegated `just test` and `just test-ci` recipes without contradictory local QC configuration or central-map blind spots.
 
-- **Target issue:** #26
-- **Theme:** stop requiring consumers to scrape review prose to know whether a run has actionable findings
-- **Issue to close on merge:** #26
+## Scope
+- Included: Python central QC recipes for import-linter and deptry, caller-root behavior, and fixture-backed downstream proof for #167 and #162.
+- Excluded: unrelated Python QC tools, downstream workaround commits, and broad policy changes to allow local QC overrides.
+- Preserved behavior: downstream justfiles remain thin delegators; nested central calls preserve `-d .`; true dependency/import violations still fail loudly.
 
-## Implemented behavior
+## GitHub tracking
+- Target issue set / subtree: #167 and #162
+- Milestone: Delegated QC rule precision
+- Closes on merge:
+  - Closes #167
+  - Closes #162
+- References only: none
 
-- `report-metadata` now emits a structured `findings` array with fingerprint,
-  tier, review type, category, label, path, line range, and status.
-- New `enforce-report-status` CLI command fails when the validated report has
-  tier1 findings and passes when no tier1 findings are present.
-- `_review.yml` writes `.review-findings.json`, uploads it as a workflow
-  artifact, then enforces the review status after SARIF upload and PR thread
-  posting so the evidence remains available even when the review check fails.
+## Implementation plan
+1. Add red downstream-target fixtures that reproduce both failures from a caller repo boundary.
+2. Fix `_import-linter` so config isolation and push-tier import-linter can both be satisfied without project-owned QC overrides.
+3. Fix `_deptry` map handling so target package-module maps are honored or merged without overriding central policy.
+4. Prove both recipes scan the caller repository, not `~/ai-review-ci` implementation files.
 
-## Evidence
+## Claim map
+- [ ] **#167 - Python `test-ci` import-linter contradiction is removed**
+  - Proof obligations claimed: red fixture, fixed central recipe, caller-root regression.
+  - Partial / not claimed: broad import-linter policy redesign.
+  - Evidence required: fixture fails before/fails for the right reason, then passes after the central fix.
+  - Current evidence: issue reproduction only.
+- [ ] **#162 - deptry package-module maps preserve target project semantics**
+  - Proof obligations claimed: target map repro using mismatched package/module names, central recipe fix, no false DEP001/DEP002.
+  - Partial / not claimed: downstream agent-memory remediation commits.
+  - Evidence required: canonical target fixture and central recipe run with `-d .`.
+  - Current evidence: issue reproduction only.
 
-- `tests/test_report.py` validates the structured state payload and tier1/tier2
-  status behavior directly against validated report-shaped artifacts.
-- `tests/test_install.py` verifies the reusable review workflow uploads the
-  structured state artifact before enforcing the final status.
+## Automated gates
+Keep draft until red/green fixture proof exists and `just test` plus relevant targeted recipe tests are green.
