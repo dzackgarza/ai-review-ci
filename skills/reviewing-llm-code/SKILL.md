@@ -6,7 +6,7 @@ description: Use when reviewing code, tests, QC, or documentation produced by an
 # Reviewing LLM Code
 
 Before reviewing, testing, or triaging code, consult the central policy index to locate the canonical source-of-truth skill:
-[policy-index](file:///home/dzack/ai/opencode/skills/policy-index/SKILL.md)
+[policy-index](../policy-index/SKILL.md)
 
 Review LLM-produced code as an agent-failure audit, not as a normal bug list.
 The point is to identify the mechanisms that made bad work look acceptable.
@@ -129,11 +129,11 @@ Also load as applicable:
 - `thermo-nuclear-code-quality-review` when the review includes maintainability, architecture, abstractions, giant files, or code that feels obviously badly shaped.
 
 - **Jules Review Delegation** (if the user asks to use Jules for review): Load:
-  - [jules](file:///home/dzack/ai/opencode/skills/jules/SKILL.md)
-  - [jules/references/anti-slop-report-review.md](file:///home/dzack/ai/opencode/skills/jules/references/anti-slop-report-review.md)
-  - [reviewing-llm-code](file:///home/dzack/ai/opencode/skills/reviewing-llm-code/SKILL.md)
-  - [anti-slop](file:///home/dzack/ai/opencode/skills/anti-slop/SKILL.md)
-  - [reviewing-subagent-work](file:///home/dzack/ai/opencode/skills/reviewing-subagent-work/SKILL.md)
+  - `jules`
+  - `jules/references/anti-slop-report-review.md`
+  - [reviewing-llm-code](SKILL.md)
+  - [anti-slop](../anti-slop/SKILL.md)
+  - `reviewing-subagent-work`
   - `test-guidelines` if tests/QC/proof surfaces are in scope
   - `pr-feedback-triage` if existing review comments are being evaluated
 
@@ -420,7 +420,7 @@ clean code around it. Two posture rules apply before any finding:
   a project's preferred documentation on its own terms; start from what runs, what data
   exists, and what a user receives. Reviewers get captured by an internally coherent frame
   (`V1`–`V9` in
-  [llm-failure-modes/references/agent-distortion-index.md](file:///home/dzack/ai/opencode/skills/llm-failure-modes/references/agent-distortion-index.md)).
+  `llm-failure-modes/references/agent-distortion-index.md`).
   Keep findings in ordinary engineering language.
 - **Reconcile bespoke constructs against the standard alternative, not on their own terms.**
   The capturing question is "is this gate matrix / status system / ownership model well
@@ -431,7 +431,7 @@ clean code around it. Two posture rules apply before any finding:
 The concrete patterns are catalogued, not duplicated here:
 
 - Document patterns and forcing questions:
-  [llm-failure-modes/documentation-failures.md](file:///home/dzack/ai/opencode/skills/llm-failure-modes/documentation-failures.md)
+  `llm-failure-modes/documentation-failures.md`
   and the `PRIVATE-ONTOLOGY` / `CONTROL-PAYLOAD-INVERSION` / `DISCLOSURE-AS-REPAIR` /
   `CIRCULAR-DOCTRINE` / `FRAME-CAPTURE-REVIEW` entries in
   [references/pattern-catalog.md](references/pattern-catalog.md).
@@ -760,10 +760,10 @@ The important move is to stop treating this as a case-by-case review problem. Ag
 
 The recurring pattern is that an agent first tries to satisfy checking/validation surfaces (such as the compiler/typechecker, QC gates, PR review, or user queries) by manipulating the validation surface (e.g. by adding fallbacks, defaults, mocks, try/except blocks, or bypass comments) instead of reconstructing the original obligation and solving it. The policy answer is to remove the vocabulary that enables that manipulation.
 
-Adhering to the [Bridge-Burning Policies](file:///home/dzack/ai/opencode/skills/policy-index/SKILL.md#policy-registry) defined in `policy-index/SKILL.md` is a non-negotiable hard constraint for all development. These rules eliminate common agent validation-evasion pathways (such as runtime defaults, fallbacks, mocks, and diagnostic smoke tests in proof paths). Refer to them as hard boundaries.
+Adhering to the [Bridge-Burning Policies](../policy-index/SKILL.md#policy-registry) defined in `policy-index/SKILL.md` is a non-negotiable hard constraint for all development. These rules eliminate common agent validation-evasion pathways (such as runtime defaults, fallbacks, mocks, and diagnostic smoke tests in proof paths). Refer to them as hard boundaries.
 
 > [!IMPORTANT]
-> **Bridge-Burning Red Flags:** If a construct would let an agent preserve the appearance of correctness while weakening the obligation, treat it as a red flag even if the code currently works. For a comprehensive catalog of code signatures, keywords, and patterns to look for, see the [Bridge-Burning Red Flags Reference Catalog](file:///home/dzack/ai/opencode/skills/policy-index/references/red-flags.md) and the [Runtime Control-Flow Red Flags Catalog](file:///home/dzack/ai/opencode/skills/policy-index/references/runtime-control-flow.md).
+> **Bridge-Burning Red Flags:** If a construct would let an agent preserve the appearance of correctness while weakening the obligation, treat it as a red flag even if the code currently works. For a comprehensive catalog of code signatures, keywords, and patterns to look for, see the [Bridge-Burning Red Flags Reference Catalog](../policy-index/references/red-flags.md) and the [Runtime Control-Flow Red Flags Catalog](../policy-index/references/runtime-control-flow.md).
 
 ---
 

@@ -576,7 +576,7 @@ corrections, internal identifiers precede any real retrieval need. It is justifi
 by internal documents, given grandiose private names, larger than the work it governs, and
 resistant to deletion. This is `O5 Complexity Displacement` / `O6 Process–Payload
 Inversion` in the
-[agent-distortion-index](file:///home/dzack/ai/opencode/skills/llm-failure-modes/references/agent-distortion-index.md).
+`llm-failure-modes/references/agent-distortion-index.md`.
 
 Two symmetric failure modes to reject:
 

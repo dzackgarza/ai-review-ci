@@ -869,7 +869,7 @@ def test_notification_logged_in_database():
     service.notify(user_email)
     log_entry = Log.query.filter_by(email=user_email).first()
     assert log_entry is not None
-    assert log_entry.body contains expected_body
+    assert expected_body in log_entry.body
 ```
 
 Remediation applies when:

@@ -5,6 +5,7 @@ description = "OpenCode-powered review CI: SARIF-tracked repo-wide audits and PR
 requires-python = ">=3.14"
 dependencies = [
     "cyclopts",
+    "playwright",
     "pydantic>=2",
     "pyyaml>=6.0.3",
     "sarif-pydantic>=0.6.2",

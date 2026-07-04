@@ -8,6 +8,7 @@ from ai_review_ci.policy_index import (
     canonical_guidance,
     load_policy_index,
     parse_policies,
+    parse_remediations,
 )
 
 
@@ -51,6 +52,21 @@ Detection handles: `BAD-HANDLE`
 
     with pytest.raises(PolicyIndexError, match="Related remediation"):
         parse_policies(text)
+
+
+def test_load_policy_index_rejects_missing_canonical_file(tmp_path: Path) -> None:
+    with pytest.raises(PolicyIndexError, match="missing policy-index file"):
+        load_policy_index(tmp_path)
+
+
+def test_policy_parser_rejects_empty_policy_source() -> None:
+    with pytest.raises(PolicyIndexError, match="contained no POLICY records"):
+        parse_policies("# No policies here\n")
+
+
+def test_remediation_parser_rejects_empty_remediation_source() -> None:
+    with pytest.raises(PolicyIndexError, match="contained no REMEDIATE records"):
+        parse_remediations("# No remediation rows here\n")
 
 
 def test_semgrep_rules_use_id_only_messages_and_valid_metadata() -> None:

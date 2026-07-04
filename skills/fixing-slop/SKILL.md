@@ -6,7 +6,7 @@ description: Use when fixing slop identified by anti-slop or reviewing-llm-code 
 # Fixing Slop
 
 Before attempting to remediate or fix code quality/slop findings, consult the central policy index:
-[policy-index](file:///home/dzack/ai/opencode/skills/policy-index/SKILL.md)
+[policy-index](../policy-index/SKILL.md)
 
 
 ## Core Rule
@@ -15,7 +15,7 @@ Before attempting to remediate or fix code quality/slop findings, consult the ce
 
 You cannot fix slop by removing it. You fix slop by reconstructing the narrative that produced it, identifying the correct intention, and fulfilling that intention with the right implementation.
 
-Remediation must strictly respect the **Bridge-Burning Policies** (defined in [policy-index/SKILL.md](file:///home/dzack/ai/opencode/skills/policy-index/SKILL.md#policy-registry)). Any fix that introduces fallbacks, defaults, mocks, optional critical dependencies, or boolean flags to "remediate" a finding is violating policy and is considered laundering.
+Remediation must strictly respect the **Bridge-Burning Policies** (defined in [policy-index/SKILL.md](../policy-index/SKILL.md#policy-registry)). Any fix that introduces fallbacks, defaults, mocks, optional critical dependencies, or boolean flags to "remediate" a finding is violating policy and is considered laundering.
 
 ## Slop Is Never Localized: The Blast Radius Rule
 
@@ -122,7 +122,7 @@ Valid:
 - move code-shape enforcement to global QC;
 - record unresolved proof debt.
 
-Consult the central [Banned Test Shapes Catalog](file:///home/dzack/ai/opencode/skills/policy-index/references/test-proof-rules.md) for the inventory of banned and preferred assertion patterns.
+Consult the central [Banned Test Shapes Catalog](../policy-index/references/test-proof-rules.md) for the inventory of banned and preferred assertion patterns.
 
 ## The Golden Rule
 
@@ -152,9 +152,9 @@ Some slop is not a localized defect inside an otherwise sound artifact — the a
 READMEs, architecture docs, roadmaps, schemas, and prompts that have accreted private
 ontology, correction history, invented institutions, or governance machinery
 disproportionate to the work. See
-[llm-failure-modes/documentation-failures.md](file:///home/dzack/ai/opencode/skills/llm-failure-modes/documentation-failures.md)
+`llm-failure-modes/documentation-failures.md`
 and the `L10`/`C9`/`T8` codes in
-[llm-failure-modes/references/agent-distortion-index.md](file:///home/dzack/ai/opencode/skills/llm-failure-modes/references/agent-distortion-index.md).
+`llm-failure-modes/references/agent-distortion-index.md`.
 
 **An agent holding the contaminated artifact and its correction history in context cannot
 cleanly repair it.** It reads the existing material as gospel (treats generated residue as
@@ -186,11 +186,11 @@ This protocol is the correct disposition for the **mold-on-bread** case in the B
 Radius Rule: when the visible artifact is a sample of a contaminated production process,
 you throw out the loaf and rebake from sound ingredients — you do not scrape the mold off.
 The delegation mechanics (two fresh subagents, no shared contaminated context) live in
-[subagent-delegation](file:///home/dzack/ai/opencode/skills/subagent-delegation/SKILL.md).
+`subagent-delegation`.
 
 ## Cross-References
 
 - **`anti-slop/references/code-patterns.md`** → **Honest-Label Laundering** — The specific detection heuristics for renaming/relabeling.
 - **`anti-slop/SKILL.md`** — The analysis skill; use this FIRST to identify slop, then use fixing-slop to remediate.
-- **policy-index → Bridge-Burning Policies** — The [Bridge-Burning Policies](file:///home/dzack/ai/opencode/skills/policy-index/SKILL.md#policy-registry) are the core criteria for what constitutes a correct, non-evasive implementation. Any fix must follow them as hard constraints. For a detailed list of prohibited code constructs and testing red flags, see the [Bridge-Burning Red Flags Catalog](file:///home/dzack/ai/opencode/skills/policy-index/references/red-flags.md) and the [Runtime Control-Flow Red Flags Catalog](file:///home/dzack/ai/opencode/skills/policy-index/references/runtime-control-flow.md).
+- **policy-index -> Bridge-Burning Policies** — The [Bridge-Burning Policies](../policy-index/SKILL.md#policy-registry) are the core criteria for what constitutes a correct, non-evasive implementation. Any fix must follow them as hard constraints. For a detailed list of prohibited code constructs and testing red flags, see the [Bridge-Burning Red Flags Catalog](../policy-index/references/red-flags.md) and the [Runtime Control-Flow Red Flags Catalog](../policy-index/references/runtime-control-flow.md).
 - **`handling-corrections/SKILL.md`** — The anti-thrashing protocol; use when a fix attempt is rejected as laundering.

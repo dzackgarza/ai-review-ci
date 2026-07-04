@@ -131,11 +131,11 @@ A policy exception requires all of:
 | What policy applies to embedding large strings/prompts/messages inline in code? | `POLICY.NO_DYNAMIC_ARTIFACTS` in `references/policies.md`. |
 | What policy applies to embedding one language inside another? | `POLICY.NO_DYNAMIC_ARTIFACTS` in `references/policies.md`. |
 | What policy applies to mypy `import-untyped`, missing stubs, or missing `py.typed`? | `POLICY.NO_UNTYPED_IMPORT_LEAK`; remediation is `REMEDIATE.TYPED_DEPENDENCY_BOUNDARY`, not dependency churn. |
-| How do I review LLM-produced code? | [reviewing-llm-code/SKILL.md](file:///home/dzack/ai/opencode/skills/reviewing-llm-code/SKILL.md). |
-| How do I fix slop without laundering? | [fixing-slop/SKILL.md](file:///home/dzack/ai/opencode/skills/fixing-slop/SKILL.md) plus fixer-only `references/remediations.md`. |
-| What makes a test valid proof? | [test-guidelines/SKILL.md](file:///home/dzack/ai/opencode/skills/test-guidelines/SKILL.md) plus `references/test-proof-rules.md`. |
+| How do I review LLM-produced code? | [reviewing-llm-code/SKILL.md](../reviewing-llm-code/SKILL.md). |
+| How do I fix slop without laundering? | [fixing-slop/SKILL.md](../fixing-slop/SKILL.md) plus fixer-only `references/remediations.md`. |
+| What makes a test valid proof? | [test-guidelines/SKILL.md](../test-guidelines/SKILL.md) plus `references/test-proof-rules.md`. |
 | Who owns QC invocation/config/tooling? | `POLICY.GLOBAL_QC_AUTHORITY`; operational QC invocation remains in the global `quality-control` skill. |
-| How do I triage PR feedback? | [pr-feedback-triage/SKILL.md](file:///home/dzack/ai/opencode/skills/pr-feedback-triage/SKILL.md). |
-| How do I debug without prior-shaped probing? | [reality-grounded-debugging](file:///home/dzack/ai/opencode/skills/reality-grounded-debugging/SKILL.md) + [systematic-debugging](file:///home/dzack/ai/opencode/skills/systematic-debugging/SKILL.md). |
-| How do I handle external tool/library/compiler uncertainty? | [known-solution-first](file:///home/dzack/ai/opencode/skills/known-solution-first/SKILL.md). |
-| How do I provision tools? | [tool-provisioning-and-environment-hygiene](file:///home/dzack/ai/opencode/skills/tool-provisioning-and-environment-hygiene/SKILL.md). |
+| How do I triage PR feedback? | `pr-feedback-triage`. |
+| How do I debug without prior-shaped probing? | `reality-grounded-debugging` + `systematic-debugging`. |
+| How do I handle external tool/library/compiler uncertainty? | `known-solution-first`. |
+| How do I provision tools? | [tool-provisioning-and-environment-hygiene](../tool-provisioning-and-environment-hygiene/SKILL.md). |
