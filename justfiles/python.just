@@ -172,7 +172,8 @@ _check-python-project:
 			'\[tool\.coverage' \
 			'\[tool\.deptry' \
 			'\[tool\.vulture' \
-			'\[tool\.import-linter'; do
+			'\[tool\.import-linter' \
+			'\[tool\.importlinter'; do
 			if grep -qP "$section" pyproject.toml 2>/dev/null; then
 				echo "ERROR: pyproject.toml contains section matching '$section' — global QC owns this tool config."
 				echo "       DELETE this section from pyproject.toml. The global config for this tool"
@@ -484,15 +485,10 @@ _import-linter: _install-tools
 	echo "============================="
 	echo "=== Running: import-linter dependency rules ==="
 	echo "# Enforces layer-based import rules (e.g., core cannot import from plugins, data cannot import from domain)"
-	config=""
-	if [ -f .importlinter ]; then
-		config=".importlinter"
-	elif [ -f pyproject.toml ] && python -c 'import pathlib, sys, tomllib; data = tomllib.loads(pathlib.Path("pyproject.toml").read_text(encoding="utf-8")); tool_section = data.get("tool", {}); sys.exit(0 if ("import-linter" in tool_section or "importlinter" in tool_section) else 1)'
-	then
-		config="pyproject.toml"
-	fi
-	if [ -z "$config" ]; then
-		echo "ERROR: import-linter: no project-specific import-linter config found. Add [tool.import-linter] to pyproject.toml or create .importlinter."
+	config="$(mktemp "${TMPDIR:-/tmp}/ai-review-ci-importlinter.XXXXXX.toml")"
+	trap 'rm -f "$config"' EXIT
+	if ! uv run --no-project python "{{artifacts}}/scripts/python_qc_metadata.py" import-linter-config . > "$config"; then
+		echo "ERROR: import-linter could not build the central config for this project."
 		"{{artifacts}}/scripts/emit-triage-directive.sh"
 		exit 1
 	fi
