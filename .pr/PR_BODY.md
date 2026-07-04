@@ -47,6 +47,10 @@ Closes #163. Refs #63, #164, and #178.
 ## Evidence
 
 - `python -m pytest tests/test_skill_references.py -q` — passed.
-- `just test-ci` — passed after final reconciliation: 243 tests in the commit-tier
-  pytest leg, 243 tests in the coverage leg, 100% diff coverage for changed
-  `policy_index.py` lines, and deptry/import-linter/bypass checks passed.
+- `tests/test_justfiles.py` proves `just install-skills` treats each top-level
+  `skills/*/SKILL.md` folder as an installable skill, requires `$AI_SKILLS_DIR`,
+  and refuses to replace non-symlink targets.
+- `just test-ci` — passed after final merge reconciliation: 246 tests in the
+  commit-tier pytest leg, 246 tests in the coverage leg, diff-cover reported no
+  coverage-bearing lines in the final diff, and deptry/import-linter/bypass checks
+  passed.
