@@ -59,11 +59,13 @@ exception to global QC. Any policy semantics remain in canonical `skills/policy-
 
 - `tests/test_policy_index.py` proves runtime policy lookup resolves the repo-local
   `skills/policy-index` source and that review manifests no longer reference `vendor/`.
-- `tests/test_justfiles.py` covers the `just install-skills` recipe surface.
+- `tests/test_justfiles.py` proves the `just install-skills` recipe treats each
+  top-level `skills/*/SKILL.md` folder as an installable skill, requires
+  `$AI_SKILLS_DIR`, and refuses to replace non-symlink targets.
 - `PATH=/home/zack/.local/bin:$PATH uv run --python 3.14 pytest -s tests/test_policy_index.py -q`
   — 8 passed.
-- `PATH=/home/zack/.local/bin:$PATH uv run --python 3.14 pytest -s tests/test_justfiles.py::test_install_global_hooks_requires_env_only_inside_recipe tests/test_justfiles.py::test_scaffold_bare_just_entrypoint_survives_working_directory_binding --tb=short -q`
-  — 11 passed.
+- `PATH=/home/zack/.local/bin:$PATH uv run --python 3.14 pytest -s tests/test_justfiles.py::test_install_skills_symlinks_every_top_level_skill tests/test_justfiles.py::test_install_skills_requires_ai_skills_dir tests/test_justfiles.py::test_install_skills_refuses_to_replace_non_symlink tests/test_policy_index.py::test_review_manifests_reference_canonical_skills_policy_index -q`
+  — 4 passed.
 - Ruff and mypy were rerun across all Python files after the branch was reconciled:
   ruff passed, ruff format was stable under the final `just test` attempt, and mypy
   reported no issues in 42 source files.
