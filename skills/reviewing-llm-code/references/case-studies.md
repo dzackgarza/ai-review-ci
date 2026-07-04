@@ -215,7 +215,7 @@ function withPreviewAssetUrls(html: string) {
 2. **Bypassing the Semantic Layer**: The system already owns a rich AST or DOM representation (or could easily adopt one like `cheerio` or `jsdom`). Refusing to use the semantic parser represents dependency aversion and introduces major security/escaping bugs.
 
 ### The Correct / Trivial Solution
- a DOM parsing library or native URL/path APIs to cleanly extract and transform attributes without flattening the hierarchy.
+Leverage a DOM parsing library or native URL/path APIs to cleanly extract and transform attributes without flattening the hierarchy.
 
 #### Remediated Code Shape (After)
 ```typescript

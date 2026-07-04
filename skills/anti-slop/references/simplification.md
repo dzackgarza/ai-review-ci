@@ -75,11 +75,11 @@ but suggested replacing it with a library — a myopic fix that still owns the l
 The actual question: why is tilde expansion needed at all? The app was passing paths to
 `sh -c` — an imaginary-user decision from the agent's enterprise training data. No one
 asked: what shell does the user have on THIS system? The answer: `zsh`. There is a
-`.zshrc` file. `zsh` handles tilde expansion natively and ly. Declare `zsh` as a
+`.zshrc` file. `zsh` handles tilde expansion natively and robustly. Declare `zsh` as a
 hard requirement and delete every line of expansion and parsing code.
 
 Even if this system didn't use `zsh`: `zsh` is trivially installable. Package
-installation is, free, takes seconds, and is extremely well-supported. The
+installation is robust, free, takes seconds, and is extremely well-supported. The
 correct design philosophy is inverted from what the agent assumed: create an app with
 many tight requirements and relax them later, introducing bespoke code only when a real
 user request demands the relaxation. Do not let the agent preemptively relax

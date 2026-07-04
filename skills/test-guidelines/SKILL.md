@@ -664,6 +664,29 @@ the resulting state safe to remove.
 
 ## Web Application and Frontend Testing
 
+### Screenshot Suites Are Mandatory for GUI Surfaces
+
+Every test suite for an app with a GUI — web frontend, desktop GUI, TUI, slide deck, or
+any rendered surface — must produce an extensive set of real screenshots of the actual
+rendered states, captured so they can be opened and inspected for correctness. Automate
+capture with Playwright or the framework's own snapshot tooling (its test plugin, page
+object, or native equivalent); a desktop GUI or TUI uses its own capture mechanism.
+
+This is correctness-by-inspection, not golden comparison. The deliverable is real images
+of real rendered states that an agent or human can look at and judge against the intended
+design — it is explicitly NOT generating golden images or asserting pixel/DOM equality
+against a stored baseline. A suite that only diffs against goldens, or that captures a
+single happy-path frame, does not satisfy this requirement. Capture every meaningful
+state — empty, loading, populated, error, each major viewport or breakpoint, and each
+interactive state the surface exposes — and inspect them before calling the surface
+correct.
+
+Screenshots that are produced but never viewed are receipts, not proof. The proof
+obligation is discharged by inspecting the rendered output and fixing observed defects,
+per the Visual Verification rule in AGENTS.md.
+
+### Driving Local Web Applications
+
 To test local web applications, write native Python Playwright scripts.
 
 **Helper Scripts Available**:

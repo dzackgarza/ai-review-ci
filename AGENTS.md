@@ -89,30 +89,16 @@ every downstream consumer. It was merged, then reopened for policy-aligned remed
 
 ## Canonical policy source (self-contained — no external fetch)
 
-The authoritative policy travels with this repo, vendored and hash-pinned. Load it from the
-checkout:
+The authoritative policy is owned by this repo under `skills/`. Load it from the checkout:
 
-- `reviews/vendor/policy-index/SKILL.md` and `reviews/vendor/policy-index/references/policies.md`
+- `skills/policy-index/SKILL.md` and `skills/policy-index/references/policies.md`
   — the `POLICY.*` records and their **Invalid local fixes**.
-- `reviews/vendor/reviewing-llm-code-references/bridge-burning-red-flags.md` — the red-flag
-  inventory.
+- `skills/policy-index/references/red-flags.md` — the red-flag inventory.
+- `skills/policy-index/references/runtime-control-flow.md` — runtime control-flow red flags.
 
 Do not rely on globally-installed skills: remote review/coding agents (Codex, Jules, cloud
-runs) do not have them. The vendored copy is the contract.
-
-The integration-time enforcement skills **are owned by this repo**, not vendored from
-elsewhere. `reviews/vendor/MANIFEST.toml` classifies every vendored entry:
-
-- **owned** — authored under `skills/<name>/` (policy-index, anti-slop, reviewing-llm-code,
-  fixing-slop, bespoke-software-policy) and built into `reviews/vendor/` via
-  `just vendor-owned-skills`. Change what one *says* by editing `skills/<name>/` and
-  rebuilding — never the vendored copy (`tests/test_vendor_skills.py` fails on drift in
-  either direction; policy-index is additionally sha256-pinned in its `VENDOR.toml`). Owned
-  skills are then installed into `~/ai` via `just publish-skills <hub>` (ai-review-ci is the
-  source of truth; `~/ai` is a downstream install target — see #163).
-- **consumed** — vendored from an external upstream (test-guidelines / tool-provisioning
-  from `dzackgarza/ai`; the Brooks-Lint composites from `hyhmrright/brooks-lint`). Refresh
-  these from their named upstream; do not author or publish them here.
+runs) do not have them. The in-repo copy is the contract — this repo is the canonical home;
+other machines install these skills as symlinks via `just install-skills`.
 
 ## Tier 0 — every PR
 
@@ -124,7 +110,7 @@ Before requesting review or merging, the PR body (or disposition ledger) must st
   required work look successful after it should have failed loudly.
 
 Empty and falsy literals are not exceptions. A fallback whose value is a placeholder — the
-vendored `POLICY.FAIL_OPEN` record names `None`, `[]`, `{}`, and `false`; empty strings behave
+canonical `POLICY.FAIL_OPEN` record names `None`, `[]`, `{}`, and `false`; empty strings behave
 the same way — is a `POLICY.FAIL_OPEN` violation, not "safe boundary normalization." Genuinely
 optional product state is represented as an explicit typed/semantic state at the owned
 boundary, never laundered through an empty default.

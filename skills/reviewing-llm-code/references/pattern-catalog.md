@@ -20,6 +20,19 @@ If a careful human would have stopped while editing and asked why the code is sh
 Do not sand these findings into soft “consider refactoring” notes.
 Name the pattern, explain why it is ridiculous or deceptive in this repository, and connect it to the decision the user needs to make: reject, replace, simplify, centralize, wire into QC, or investigate further.
 
+## Review-Axis Discipline
+
+Slop review has two separable axes:
+
+- **Implementation quality / standards**: whether the changed code follows this repo's documented standards and the slop-pattern catalog.
+- **Spec-faithfulness**: whether the changed code implements the originating issue, PRD, plan, or user directive without omission or scope creep.
+
+Keep the axes separate. A change can be faithful to the spec and still be slop; a change can be stylistically clean and still implement the wrong thing. Do not let one axis launder the other. When reviewing a diff, pin the fixed point and inspect the commits/diff before sending subagents or writing findings; a bad base ref, empty diff, or missing spec source is a review setup failure, not a finding about the code.
+
+Generic code smells are heuristics, not hard bridge-burning policy by themselves. Repo standards override the heuristic baseline, and deterministic tooling owns anything it already enforces. Treat names, duplication, data clumps, primitive obsession, repeated switches, shotgun surgery, divergent change, speculative generality, message chains, middle-man wrappers, and inheritance mismatches as prompts to ask whether the implementation is accretive, over-generalized, or missing a deeper owner. Escalate only when the smell maps to a catalog pattern or `POLICY.*` obligation.
+
+Scope creep belongs on the spec-faithfulness axis first. If the extra behavior also created abstractions, hooks, modes, wrappers, or generalized pathways the spec did not require, classify the implementation mechanism through the slop catalog as well. Do not report the same issue as a single blended finding; state which part is spec drift and which part is implementation slop.
+
 ## Code Patterns
 
 - **[BLAST-RADIUS] Brittleness as blast-radius smell**: code where small changes have large blast radii — scattered truth (same concept defined in multiple places), coupling to volatile data (string outputs, exact structures of other code, exact log messages, exact file paths), tight coupling to implementation details (depends on internal shape of another module’s output, exact order of dictionary keys, specific error message text), or regex used where simpler correct approaches exist (e.g., complex regex to match `\begin{align*}` in LaTeX when `'align*' in mystring` is equally correct and far more maintainable).
@@ -143,7 +156,7 @@ Name the pattern, explain why it is ridiculous or deceptive in this repository, 
   - final report says the review item is resolved because the artifact is gone;
   - the original requirement is absent from the new PR narrative.
 
-  Correct response: See `bridge-burning-red-flags.md` → **Remediation: Deletion Laundering / Proof-Burden Erasure**.
+  Correct response after triage: See `policy-index/references/remediations.md` → **Remediation: Deletion Laundering / Proof-Burden Erasure**.
 
 - **[WHACK-A-MOLE] Reviewer-signal whack-a-mole**:
   The agent treats every evaluator as a layer to appease: typechecker, compiler, test,
@@ -280,7 +293,7 @@ Name the pattern, explain why it is ridiculous or deceptive in this repository, 
   - No real fixture or boundary artifact (TOML file, temp directory) appears in the test.
   - The test would still pass even if the application stopped calling the helper entirely (meaningless for product correctness).
 
-  Correct Response: See `bridge-burning-red-flags.md` → **Remediation: Boundary Test Bypass**.
+  Correct response after triage: See `policy-index/references/remediations.md` → **Remediation: Boundary Test Bypass**.
 
 ## Documentation Patterns
 
@@ -289,6 +302,20 @@ Name the pattern, explain why it is ridiculous or deceptive in this repository, 
 - **[FROZEN-FACTS] Dynamic facts frozen into prose**: docs that restate CLI help, recipe listings, generated metadata, file counts, feature counts, version details, or other facts that should be discovered from the canonical tool.
 
 - **[THEORY-MIND-FAILURE] Theory-of-mind failure**: docs that omit the first obvious questions: what is the entrypoint, what proves it works, what owns the data, what fails loudly, what should never be bypassed, and what is intentionally bespoke to this machine.
+
+- **[PRIVATE-ONTOLOGY] Private ontology presented as public context**: docs require the reader to understand project-created terms, pass numbers, status cells, "canonical" roots, invisible prior sessions, or internal labels before the reader can tell what the artifact is. Ask for the ordinary artifact, user task, input, output, data, and executable surface. If the named thing has no external referent, the doc is importing agent context into a public surface.
+
+- **[META-WORK-COLONIZATION] Agent meta-work colonizes user-facing work**: public docs mix product facts with agent instructions, correction history, anti-hallucination doctrine, review process, prompt residues, internal maturity labels, or live planning state. The fix is boundary restoration, not another disclaimer. Move agent-control material to an agent-owned surface and live work state to issues, PRs, or plan records.
+
+- **[NAMING-AS-EXISTENCE] Naming treated as implementation**: docs give names, owners, schemas, lifecycle, or authority to a subsystem before locating running code, data, workflows, or source-backed examples. A named subsystem is a claim to verify. Ask where it runs, what it accepts, what it emits, and what user-visible capability disappears if it is removed.
+
+- **[CONTROL-PAYLOAD-INVERSION] Control system larger than payload**: docs front-load governance, trust, threats, receipts, gates, status, or review machinery while the useful payload is small, missing, hard to find, or not demonstrated. Complexity is not itself a defect; the defect is control machinery that precedes incidents, categories that precede instances, or custom process disproportionate to the data, users, risks, and workflows.
+
+- **[DISCLOSURE-AS-REPAIR] Disclosure substituted for remediation**: a doc responds to criticism by explaining the bad pattern, labeling it non-authoritative, or pointing elsewhere while leaving the contaminated surface in place. "The README is not the source of truth for current status" inside the README is still bad README content. Correct remediation removes volatile status from the README; it does not publish doctrine about why the README should not have contained it.
+
+- **[CIRCULAR-DOCTRINE] Internal cross-reference as authority**: generated docs, summaries, policies, or agent reports "confirm" each other without reaching code, data, user-visible behavior, external sources, or contemporaneous issue/PR evidence. Cross-references are pointers, not evidence. Trace every authority claim to an inspected reality surface.
+
+- **[FRAME-CAPTURE-REVIEW] Reviewer captured by document frame**: the review debates internal constructs instead of asking why they exist. Bad: "Is the seven-gate matrix complete?" Better: "Which externally observable workflow requires a custom gate system instead of ordinary validation, review, access control, or release state?" Translate project terms into ordinary language before accepting them as review objects.
 
 - **[MARKETING-INFLATION] Marketing inflation**: feature lists, achievement language, completion claims, LOC counts, test counts, and confident summaries that do not help operate or audit the system.
 

@@ -96,10 +96,10 @@ Before producing review findings, load these skills in this order:
   The canonical catalog of concrete LLM code, test, QC, and documentation failure patterns.
   Read this to learn the specific signatures to look for.
 
-- **`references/bridge-burning-red-flags.md`** — Read third.
+- **`../policy-index/references/red-flags.md`** — Read third.
   The canonical reference catalog of validation-evasion "red flags" (such as runtime defaults, fallbacks, mocks, skips, and bypass comments) that are strictly prohibited under the bridge-burning policies. Read this to audit implementations for validator-silencing behavior.
 
-- **`references/runtime-control-flow-red-flags.md`** — Read fourth.
+- **`../policy-index/references/runtime-control-flow.md`** — Read fourth.
   The canonical reference catalog of runtime control-flow policy rules, invariant assertions, and disallowed control-flow shapes. Read this to audit control-flow branching in runtime code.
 
 - **`llm-failure-modes`** — Read fifth.
@@ -409,6 +409,42 @@ That IS the finding.
 
 **This is the difference between a linter report and an agent-failure audit.** A linter says "this line could be shorter." This audit says "this line should never have been written, and the fact that it exists proves the agent did not search for an existing solution."
 
+## Reviewing Documents and Project Structure
+
+The Idiot Test above is tuned for owned code. Agent-generated **documents** (READMEs,
+architecture docs, roadmaps, schemas, prompts) and **project structure** (directory
+layouts, status systems, governance) carry their own slop, often with clean prose and
+clean code around it. Two posture rules apply before any finding:
+
+- **Establish external reality before adopting the artifact's vocabulary.** Do not review
+  a project's preferred documentation on its own terms; start from what runs, what data
+  exists, and what a user receives. Reviewers get captured by an internally coherent frame
+  (`V1`–`V9` in
+  [llm-failure-modes/references/agent-distortion-index.md](file:///home/dzack/ai/opencode/skills/llm-failure-modes/references/agent-distortion-index.md)).
+  Keep findings in ordinary engineering language.
+- **Reconcile bespoke constructs against the standard alternative, not on their own terms.**
+  The capturing question is "is this gate matrix / status system / ownership model well
+  designed?" The grounding question is "which observable workflow requires this instead of
+  ordinary validation, git, PR review, issues, or access control?" The bespoke construct
+  carries the burden of proof for departing from standard practice.
+
+The concrete patterns are catalogued, not duplicated here:
+
+- Document patterns and forcing questions:
+  [llm-failure-modes/documentation-failures.md](file:///home/dzack/ai/opencode/skills/llm-failure-modes/documentation-failures.md)
+  and the `PRIVATE-ONTOLOGY` / `CONTROL-PAYLOAD-INVERSION` / `DISCLOSURE-AS-REPAIR` /
+  `CIRCULAR-DOCTRINE` / `FRAME-CAPTURE-REVIEW` entries in
+  [references/pattern-catalog.md](references/pattern-catalog.md).
+- Project-structure tells (empty-stub sprawl, classification baked into the filesystem,
+  control plane larger than payload): `anti-slop` →
+  **Structural and Organizational Slop (Project-Level)**.
+- The proportionality rule that prevents false-positiving intentional bespoke complexity:
+  `bespoke-software-policy` → **Proportionality: Earned vs. Manufactured Complexity**.
+
+When a document's or structure's whole frame is contaminated, do not propose in-place
+edits as the fix — route to `fixing-slop` →
+**Contaminated Artifacts Cannot Be Repaired In Place**.
+
 ## Review Procedure
 
 Read the artifacts in this order:
@@ -566,7 +602,7 @@ Each finding must explain how the pattern can produce more bad work, not merely 
 Load [`references/pattern-catalog.md`](references/pattern-catalog.md) before producing findings.
 It is the canonical list for automaton-grade code, test, QC, and documentation patterns, including regex against semantic formats, developer-controlled test assertions, fallback laundering, recipe bypasses, fake data, no-op behavior, and stale documentation.
 
-Load [`references/case-studies.md`](references/case-studies.md) to inspect real-world case studies detailing how idiotic LLM code decisions, dependency aversion, and event-loop starvation anti-patterns were identified and remediated with simple, alternatives.
+Load [`references/case-studies.md`](references/case-studies.md) to inspect real-world case studies detailing how idiotic LLM code decisions, dependency aversion, and event-loop starvation anti-patterns were identified and remediated with simple, robust alternatives.
 
 ## Priority Calibration
 
@@ -724,10 +760,10 @@ The important move is to stop treating this as a case-by-case review problem. Ag
 
 The recurring pattern is that an agent first tries to satisfy checking/validation surfaces (such as the compiler/typechecker, QC gates, PR review, or user queries) by manipulating the validation surface (e.g. by adding fallbacks, defaults, mocks, try/except blocks, or bypass comments) instead of reconstructing the original obligation and solving it. The policy answer is to remove the vocabulary that enables that manipulation.
 
-Adhering to the [Bridge-Burning Policies](file:///home/dzack/ai/opencode/skills/anti-slop/SKILL.md#bridge-burning-policies) defined in `anti-slop/SKILL.md` is a non-negotiable hard constraint for all development. These rules eliminate common agent validation-evasion pathways (such as runtime defaults, fallbacks, mocks, and diagnostic smoke tests in proof paths). Refer to them as hard boundaries.
+Adhering to the [Bridge-Burning Policies](file:///home/dzack/ai/opencode/skills/policy-index/SKILL.md#policy-registry) defined in `policy-index/SKILL.md` is a non-negotiable hard constraint for all development. These rules eliminate common agent validation-evasion pathways (such as runtime defaults, fallbacks, mocks, and diagnostic smoke tests in proof paths). Refer to them as hard boundaries.
 
 > [!IMPORTANT]
-> **Bridge-Burning Red Flags:** If a construct would let an agent preserve the appearance of correctness while weakening the obligation, treat it as a red flag even if the code currently works. For a comprehensive catalog of code signatures, keywords, and patterns to look for, see the [Bridge-Burning Red Flags Reference Catalog](file:///home/dzack/ai/opencode/skills/reviewing-llm-code/references/bridge-burning-red-flags.md) and the [Runtime Control-Flow Red Flags Catalog](file:///home/dzack/ai/opencode/skills/reviewing-llm-code/references/runtime-control-flow-red-flags.md).
+> **Bridge-Burning Red Flags:** If a construct would let an agent preserve the appearance of correctness while weakening the obligation, treat it as a red flag even if the code currently works. For a comprehensive catalog of code signatures, keywords, and patterns to look for, see the [Bridge-Burning Red Flags Reference Catalog](file:///home/dzack/ai/opencode/skills/policy-index/references/red-flags.md) and the [Runtime Control-Flow Red Flags Catalog](file:///home/dzack/ai/opencode/skills/policy-index/references/runtime-control-flow.md).
 
 ---
 

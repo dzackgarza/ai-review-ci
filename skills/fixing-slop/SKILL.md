@@ -15,7 +15,7 @@ Before attempting to remediate or fix code quality/slop findings, consult the ce
 
 You cannot fix slop by removing it. You fix slop by reconstructing the narrative that produced it, identifying the correct intention, and fulfilling that intention with the right implementation.
 
-Remediation must strictly respect the **Bridge-Burning Policies** (defined in [anti-slop/SKILL.md](file:///home/dzack/ai/opencode/skills/anti-slop/SKILL.md#bridge-burning-policies)). Any fix that introduces fallbacks, defaults, mocks, optional critical dependencies, or boolean flags to "remediate" a finding is violating policy and is considered laundering.
+Remediation must strictly respect the **Bridge-Burning Policies** (defined in [policy-index/SKILL.md](file:///home/dzack/ai/opencode/skills/policy-index/SKILL.md#policy-registry)). Any fix that introduces fallbacks, defaults, mocks, optional critical dependencies, or boolean flags to "remediate" a finding is violating policy and is considered laundering.
 
 ## Slop Is Never Localized: The Blast Radius Rule
 
@@ -90,7 +90,7 @@ These are NEVER valid fixes for a slop finding. Reject them on sight.
 | --- | --- | --- |
 | **Honest relabeling** | Renames the artifact so the label matches its fraudulence. Consumes the critique while leaving the defect intact. Destroys the label/behavior mismatch detection signal. | `Tauri E2E` → `browser-smoke`; `validateInput()` → `inputPresent()`; `just test` → `just test-unit` |
 | **Deletion without reconstruction** | Removes the artifact without determining what intention it served. The unmet need remains; the next agent will reinvent the slop. | `git rm` the file, mark finding resolved |
-| **Documentation laundering** | Adds a comment, doc, or README explains the slop instead of fixing it. Converts the finding into a documentation omission. | Adding `# mirrors /var/www/html/` above a hardcoded path; adding a "known limitation" section |
+| **Documentation laundering** | Adds a comment, doc, or README note that explains the slop instead of fixing it. Converts the finding into a documentation omission. | Adding `# mirrors /var/www/html/` above a hardcoded path; adding a "known limitation" section |
 | **Status-field laundering** | Changes a status label, TODO marker, or issue state instead of changing the artifact. | Moving a finding from "bug" to "wontfix"; marking a card "future work" |
 | **Scope relabeling** | Reframes the slop as intentionally scoped: "this is a smoke test," "this is minimal," "this is basic." The slop is now presented as deliberate under-engineering. | Calling a no-op test "minimal verification"; calling dead code "placeholder scaffolding" |
 | **Commit message laundering** | The commit message describes the relabel or deletion as the resolution. | "reclassify: label mocked tests as browser-smoke"; "docs: document known recovery architecture gap" |
@@ -122,7 +122,7 @@ Valid:
 - move code-shape enforcement to global QC;
 - record unresolved proof debt.
 
-Consult the central [Banned Test Shapes Catalog](file:///home/dzack/ai/opencode/skills/test-guidelines/references/banned-test-shapes.md) for the inventory of banned and preferred assertion patterns.
+Consult the central [Banned Test Shapes Catalog](file:///home/dzack/ai/opencode/skills/policy-index/references/test-proof-rules.md) for the inventory of banned and preferred assertion patterns.
 
 ## The Golden Rule
 
@@ -145,9 +145,52 @@ A review-driven slop fix must be written as a first-principles spec and implemen
 an independent subagent or fresh context. The spec must not expose the reviewer’s exact
 suggested fix.
 
+## Contaminated Artifacts Cannot Be Repaired In Place
+
+Some slop is not a localized defect inside an otherwise sound artifact — the artifact's
+**entire frame** is contaminated. This is common in agent-generated prose artifacts:
+READMEs, architecture docs, roadmaps, schemas, and prompts that have accreted private
+ontology, correction history, invented institutions, or governance machinery
+disproportionate to the work. See
+[llm-failure-modes/documentation-failures.md](file:///home/dzack/ai/opencode/skills/llm-failure-modes/documentation-failures.md)
+and the `L10`/`C9`/`T8` codes in
+[llm-failure-modes/references/agent-distortion-index.md](file:///home/dzack/ai/opencode/skills/llm-failure-modes/references/agent-distortion-index.md).
+
+**An agent holding the contaminated artifact and its correction history in context cannot
+cleanly repair it.** It reads the existing material as gospel (treats generated residue as
+a requirement), and every correction it receives gets written *into* the artifact rather
+than fixing the process that produced it. In-place editing reseeds the same slop in
+cleaner prose. Agents do reliable greenfield work and unreliable brownfield work, so the
+only safe repair is to **force the brownfield job to look like a greenfield job**:
+
+1. **Encode the standard.** The skill that owns the artifact type must already state what
+   a correct and an incorrect such artifact looks like (`writing-documentation`,
+   the `plan` skill, etc.). This is the priming, not the
+   contaminated artifact.
+2. **Adversarial requirement extraction (fresh agent).** A fresh agent, primed on the
+   owning skill and *not* carrying the correction history, audits the contaminated
+   artifact and extracts only the real, externally-verifiable, user-facing requirements
+   and surviving facts. It must verify each surviving claim against inspected reality
+   (code, data, command output, external sources), not against other generated documents.
+   Anything that cannot be grounded is dropped, not relabeled.
+3. **Greenfield rebuild (separate fresh agent).** A second fresh agent, primed the same
+   way and given only the extracted requirements — never the original artifact or the
+   reviewer's framing — produces the replacement from scratch.
+4. **Independent review pass.** Review the rebuild against the owning skill and the
+   extracted requirements.
+
+Do not skip to step 3 by handing an agent the old artifact and asking it to "rewrite this
+properly." That is brownfield work wearing a greenfield label, and it reinfects.
+
+This protocol is the correct disposition for the **mold-on-bread** case in the Blast
+Radius Rule: when the visible artifact is a sample of a contaminated production process,
+you throw out the loaf and rebake from sound ingredients — you do not scrape the mold off.
+The delegation mechanics (two fresh subagents, no shared contaminated context) live in
+[subagent-delegation](file:///home/dzack/ai/opencode/skills/subagent-delegation/SKILL.md).
+
 ## Cross-References
 
 - **`anti-slop/references/code-patterns.md`** → **Honest-Label Laundering** — The specific detection heuristics for renaming/relabeling.
 - **`anti-slop/SKILL.md`** — The analysis skill; use this FIRST to identify slop, then use fixing-slop to remediate.
-- **anti-slop → Bridge-Burning Policies** — The [Bridge-Burning Policies](file:///home/dzack/ai/opencode/skills/anti-slop/SKILL.md#bridge-burning-policies) are the core criteria for what constitutes a correct, non-evasive implementation. Any fix must follow them as hard constraints. For a detailed list of prohibited code constructs and testing red flags, see the [Bridge-Burning Red Flags Catalog](file:///home/dzack/ai/opencode/skills/reviewing-llm-code/references/bridge-burning-red-flags.md) and the [Runtime Control-Flow Red Flags Catalog](file:///home/dzack/ai/opencode/skills/reviewing-llm-code/references/runtime-control-flow-red-flags.md).
+- **policy-index → Bridge-Burning Policies** — The [Bridge-Burning Policies](file:///home/dzack/ai/opencode/skills/policy-index/SKILL.md#policy-registry) are the core criteria for what constitutes a correct, non-evasive implementation. Any fix must follow them as hard constraints. For a detailed list of prohibited code constructs and testing red flags, see the [Bridge-Burning Red Flags Catalog](file:///home/dzack/ai/opencode/skills/policy-index/references/red-flags.md) and the [Runtime Control-Flow Red Flags Catalog](file:///home/dzack/ai/opencode/skills/policy-index/references/runtime-control-flow.md).
 - **`handling-corrections/SKILL.md`** — The anti-thrashing protocol; use when a fix attempt is rejected as laundering.

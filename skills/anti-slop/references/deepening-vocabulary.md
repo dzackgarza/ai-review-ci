@@ -18,7 +18,7 @@ _Avoid_: API, signature (too narrow — those refer only to the type-level surfa
 What's inside a module — its body of code. Distinct from **Adapter**: a thing can be a small adapter with a large implementation (a Postgres repository) or a large adapter with a small implementation (an in-memory fake). Reach for "adapter" when the seam is the topic; "implementation" otherwise.
 
 **Depth**
- at the interface — the amount of behaviour a caller (or test) can exercise per unit of interface they have to learn. A module is **deep** when a large amount of behaviour sits behind a small interface. A module is **shallow** when the interface is nearly as complex as the implementation.
+Leverage at the interface — the amount of behaviour a caller (or test) can exercise per unit of interface they have to learn. A module is **deep** when a large amount of behaviour sits behind a small interface. A module is **shallow** when the interface is nearly as complex as the implementation.
 
 **Seam** _(from Michael Feathers)_
 A place where you can alter behaviour without editing in that place. The *location* at which a module's interface lives. Choosing where to put the seam is its own design decision, distinct from what goes behind it.
@@ -27,7 +27,7 @@ _Avoid_: boundary (overloaded with DDD's bounded context).
 **Adapter**
 A concrete thing that satisfies an interface at a seam. Describes *role* (what slot it fills), not substance (what's inside).
 
-****
+**Leverage**
 What callers get from depth. More capability per unit of interface they have to learn. One implementation pays back across N call sites and M tests.
 
 **Locality**
@@ -47,5 +47,5 @@ What maintainers get from depth. Change, bugs, knowledge, and verification conce
 
 - **anti-slop** → Uses this vocabulary to name what's shallow and what deepening would replace it with.
 - **thermo-nuclear-code-quality-review** → Uses this vocabulary when identifying pass-through wrappers and missed deepening opportunities.
-- **clean-code/classes.md** → Overlaps on DIP and cohesion; deepening vocabulary adds the ** and *locality* dimensions.
+- **code-patterns/references/classes.md** → Overlaps on DIP and cohesion; deepening vocabulary adds the *leverage* and *locality* dimensions.
 - **addressing-shallow-work** → "Shallow work" in that skill's sense maps directly to "shallow modules" in this vocabulary.

@@ -1,71 +1,74 @@
-## Implementation PR — own QC/enforcement skills here; fix inverted policy-index sync (#163)
+## Implementation PR — own integration-time skills in `skills/` (#163)
 
-Closes #163 (epic #63). Decision-grounding doctrine tracked in #164 (blocked-by #163) — referenced, not closed here.
+Closes #163. Refs #63 and #164.
 
-`ai-review-ci` is the source of truth for the integration-time enforcement skills it applies;
-`~/ai` is a downstream install target. Previously only `policy-index` was pinned and it was
-vendored *from* `~/ai` — backwards, since `ai-review-ci` owns it. This PR inverts that and
-generalizes the model.
+`ai-review-ci` is the source of truth for the integration-time skills and review/QC
+doctrine it applies. The canonical surface is the repo-local `skills/` tree: each
+top-level folder is a skill, and installation is `just install-skills`, which symlinks
+those folders into `$AI_SKILLS_DIR`.
 
-## Boundary (by enforcement phase, not origin)
+## Boundary
 
-- **owned** — this repo's integration-time enforcement surface. Authored under `skills/<name>/`,
-  built into `reviews/vendor/`, published into `~/ai`. Origin-independent: the Brooks-Lint
-  composites stay owned even though byte-identical to `hyhmrright/brooks-lint`.
-- **consumed** — pre-/during-writing advisory guidance `~/ai` owns (`test-guidelines`,
-  `tool-provisioning-and-environment-hygiene`). Vendored for the reviewer prompt only;
-  refreshed from upstream, never authored or published here.
-
-`reviews/vendor/MANIFEST.toml` classifies every vendored entry.
+- **Owned here:** integration-time enforcement and review/QC doctrine under `skills/`.
+  Policy lookup, review manifests, templates, and installed skill copies all read the
+  repo-local `skills/` source.
+- **Not used:** `reviews/vendor`, `VENDOR.toml`, skill manifests, or build/publish/refresh
+  scripts. Those created a second source of truth after `origin/main` moved to direct
+  `skills/` ownership.
+- **New owned workflow:** `skills/git-integration-workflow/` owns the GitHub-boundary
+  lifecycle: issue tree, draft PR, TDD, ready-for-review, review trigger, feedback
+  disposition, and merge.
 
 ## Implemented behavior
 
-- **Owned source dir `skills/`** — ten owned enforcement skills authored here and built into
-  `reviews/vendor/` byte-for-byte (reviewer bundle unchanged): `policy-index` (nested +
-  sha256 `VENDOR.toml`), `anti-slop`, `reviewing-llm-code`, `fixing-slop`,
-  `bespoke-software-policy`, and the composites `common`, `source-coverage`, `decay-risks`,
-  `ci-sweep-protocol`, `pr-review-guide` (flat).
-- **Owned enforced git integration workflow** — new `git-integration-workflow` skill
-  (issue-tree → draft PR → TDD → mark-ready → trigger review → disposition → merge), migrated
-  faithfully from `git-guidelines`' enforcement sections; references the already-owned
-  `reviewing-llm-code`/`anti-slop`/`policy-index` instead of duplicating. Agent-facing only:
-  published to `~/ai`, not in the reviewer bundle.
-- **Build** — `just vendor-owned-skills` (`build-vendor-skills.py`) rebuilds owned skills from
-  `skills/` per their MANIFEST `vendor_layout` (nested/flat/absent). Replaces the old
-  `sync-policy-index` step that pulled from `~/ai`.
-- **Publish** — `just publish-skills <hub>` (`publish-skills.py`) installs the eleven owned
-  skills into `<hub>/opencode/skills/`; idempotent; skips consumed + repo-local skills.
-- **Consumed refresh** — `just refresh-consumed-skills <source> [ref]`
-  (`refresh-consumed-skills.py`) pulls each consumed doc from its upstream checkout at a pinned
-  ref (`git show <ref>:<path>`); refreshed `test-guidelines`/`tool-provisioning` from `~/ai`.
-- **Docs** — AGENTS.md and both PR-template copies describe the owned-vs-consumed model and
-  point at the drift test.
+- Preserves the current `origin/main` model where reviewer manifests inline
+  `../skills/...` paths directly and `src/ai_review_ci/policy_index.py` loads
+  `skills/policy-index`.
+- Removes the stale PR #165 vendor-manifest implementation path from the reconciled
+  branch: no `reviews/vendor/MANIFEST.toml`, no `vendor-owned-skills`, no
+  `publish-skills`, no `refresh-consumed-skills`.
+- Adds `git-integration-workflow` as a normal top-level skill folder, so it installs by
+  the same `just install-skills` mechanism as every other skill.
+- Keeps PR templates and AGENTS guidance pointed at canonical `skills/policy-index`
+  records rather than vendored or globally installed copies.
 
-## Deliverables (from the plan)
+## Policy Alignment Gate
 
-- **D1 owned-skill manifest** — done (`reviews/vendor/MANIFEST.toml`).
-- **D2 install/publish mechanism** — done (`skills/` source + `publish-skills`).
-- **D3 versioning/update** — done both directions (build owned→vendor, publish owned→`~/ai`,
-  refresh upstream→vendor).
-- **git-guidelines split** — enforcement half owned here (`git-integration-workflow`); advisory
-  half (edit hygiene, commit-message format, auth, repo-management) stays in `~/ai`.
+Touched/risked policies:
+
+- `POLICY.GLOBAL_QC_AUTHORITY` — this change preserves central ownership of review/QC
+  doctrine in `ai-review-ci`.
+- `POLICY.NO_QC_SILENCING` — no validator rule, threshold, suppressions, or QC target
+  exclusions are weakened to make the branch pass.
+- `POLICY.NO_ADMIN_COMPLETION` — the PR is not complete on comments or tracker updates;
+  it requires current tests/gates and pushed code.
+- `POLICY.NO_DYNAMIC_ARTIFACTS` — skill content remains tracked source under `skills/`,
+  not generated from hidden runtime strings.
+- `POLICY.FAIL_OPEN` / `POLICY.NO_PARTIAL_SUCCESS` — install and policy-loading paths must
+  fail loudly when required files or directories are absent.
+
+No Invalid local fix is introduced: no fallback, runtime default, optional core-state,
+swallowed error, partial-success path, local QC override, or empty/falsy placeholder is
+added to silence the ownership problem.
+
+Tier 1 statement: this PR touches review/QC workflow and policy surfaces. It does not
+weaken a `POLICY.*` record, convert a true finding into scanner silence, or add a local
+exception to global QC. Any policy semantics remain in canonical `skills/policy-index/`.
 
 ## Evidence
 
-- `tests/test_vendor_skills.py` — every owned skill rebuilds byte-identical (drift-capable both
-  directions, proven); MANIFEST partitions every vendored doc; published-only skills leave no
-  vendor artifact.
-- `tests/test_publish_skills.py` — only owned skills publish; byte-faithful; idempotent;
-  repo-local skills (e.g. `quality-control`) excluded.
-- `tests/test_refresh_consumed_skills.py` — refresh pulls upstream content, is idempotent, and
-  fails loud on bad source / missing path.
-- `tests/test_policy_index.py` — vendored `policy-index` is a faithful sha256-pinned build of
-  its `skills/` source.
-- Full gate: `just test` (251 passed) and `just test-ci` green on every pushed commit.
-
-## Required cross-repo follow-ups (cannot live in an ai-review-ci PR)
-
-- Remove the migrated enforcement sections from `~/ai`'s `git-guidelines` to end duplication.
-- Move the `extract_unresolved_issues` tool from `~/ai/.../git-guidelines/scripts` into this repo.
-- Run `just publish-skills ~/ai` (deliberate operator action) to install the owned skills; not
-  run in this PR.
+- `tests/test_policy_index.py` proves runtime policy lookup resolves the repo-local
+  `skills/policy-index` source and that review manifests no longer reference `vendor/`.
+- `tests/test_justfiles.py` covers the `just install-skills` recipe surface.
+- `PATH=/home/zack/.local/bin:$PATH uv run --python 3.14 pytest -s tests/test_policy_index.py -q`
+  — 8 passed.
+- `PATH=/home/zack/.local/bin:$PATH uv run --python 3.14 pytest -s tests/test_justfiles.py::test_install_global_hooks_requires_env_only_inside_recipe tests/test_justfiles.py::test_scaffold_bare_just_entrypoint_survives_working_directory_binding --tb=short -q`
+  — 11 passed.
+- Ruff and mypy were rerun across all Python files after the branch was reconciled:
+  ruff passed, ruff format was stable under the final `just test` attempt, and mypy
+  reported no issues in 42 source files.
+- `git diff --check && git diff --cached --check` passed.
+- `PATH=/home/zack/.local/bin:$PATH just test` is not green locally: ruff, Python syntax,
+  and mypy passed, then the pytest step reported `collected 0 items` and failed during
+  pytest capture cleanup with `FileNotFoundError` before running the suite. This is not
+  counted as completion evidence.

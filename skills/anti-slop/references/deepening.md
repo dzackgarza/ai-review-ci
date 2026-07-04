@@ -1,10 +1,10 @@
 # Deepening: From Shallow Modules to Deep Interfaces
 
-How to deepen a cluster of shallow modules safely, given its dependencies. Assumes the vocabulary in [`deepening-vocabulary.md`](deepening-vocabulary.md) — **module**, **interface**, **seam**, **adapter**, ****, **locality**.
+How to deepen a cluster of shallow modules safely, given its dependencies. Assumes the vocabulary in [`deepening-vocabulary.md`](deepening-vocabulary.md) — **module**, **interface**, **seam**, **adapter**, **leverage**, **locality**.
 
 ## The Constructive Inverse of Anti-Slop
 
-Anti-slop detects shallow modules (pass-throughs, bespoke reinvention, interface inflation). This reference tells you what to replace them with: deep modules that concentrate at their interface and locality in their implementation.
+Anti-slop detects shallow modules (pass-throughs, bespoke reinvention, interface inflation). This reference tells you what to replace them with: deep modules that concentrate leverage at their interface and locality in their implementation.
 
 The **deletion test** is the key diagnostic. Imagine deleting the module:
 - If complexity vanishes → it was a pass-through (shallow, delete it or deepen it)
@@ -54,14 +54,14 @@ When exploring alternative interfaces for a deepened module, use a parallel sub-
 1. **Frame the problem space** — Write a user-facing explanation of the constraints: what invariants any new interface must satisfy, what dependencies it relies on (and their category), and a rough code sketch to ground the constraints.
 
 2. **Spawn 3+ sub-agents in parallel** — each producing a radically different interface for the deepened module:
- - Agent 1: Minimize the interface — aim for 1-3 entry points max. Maximise per entry point.
+   - Agent 1: Minimize the interface — aim for 1-3 entry points max. Maximise leverage per entry point.
    - Agent 2: Maximise flexibility — support many use cases and extension.
    - Agent 3: Optimise for the most common caller — make the default case trivial.
    - Agent 4 (if applicable): Design around ports & adapters for cross-seam dependencies.
 
    Each outputs: interface types/methods/params plus invariants, usage example, what the implementation hides, dependency strategy and adapters, and trade-offs.
 
-3. **Present and compare** — Contrast by **depth** ( at the interface), **locality** (where change concentrates), and **seam placement**. Give a strong recommendation, not a menu. If elements from different designs would combine well, propose a hybrid.
+3. **Present and compare** — Contrast by **depth** (leverage at the interface), **locality** (where change concentrates), and **seam placement**. Give a strong recommendation, not a menu. If elements from different designs would combine well, propose a hybrid.
 
 ## Cross-References
 
@@ -69,5 +69,5 @@ When exploring alternative interfaces for a deepened module, use a parallel sub-
 - [`code-patterns.md`](code-patterns.md) — Detects the shallow patterns that deepening replaces.
 - [`simplification.md`](simplification.md) — Patterns for simplifying existing code toward depth.
 - **thermo-nuclear-code-quality-review** — Identifies missed deepening opportunities during code quality reviews. Uses this vocabulary for pass-through wrappers and "code judo" moves.
-- **clean-code/classes.md** — SRP and DIP overlap with deepening's emphasis on interface concentration.
+- **code-patterns/references/classes.md** — SRP and DIP overlap with deepening's emphasis on interface concentration.
 - **addressing-shallow-work** — The "shallow work" concept maps directly to shallow modules. Deepening vocabulary gives it precise structure.

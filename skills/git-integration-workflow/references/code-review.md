@@ -105,7 +105,7 @@ for f in json.load(sys.stdin):
 
 ```bash
 git fetch origin pull/123/head:pr-123
-git checkout pr-123
+git switch pr-123
 
 # View diff against base
 git diff main...pr-123
@@ -157,9 +157,8 @@ or remediation question.
 
 When you need "how to review a suspect PR" — the slop field guide, bridge-burning
 red flags, and validation-evasion auditing — do NOT rebuild it here. Load
-[reviewing-llm-code](file:///home/dzack/ai/opencode/skills/reviewing-llm-code/SKILL.md)
-(vendored locally under `reviews/vendor/reviewing-llm-code.md`) and
-[anti-slop](file:///home/dzack/ai/opencode/skills/anti-slop/SKILL.md). This file owns the
+[reviewing-llm-code](../../reviewing-llm-code/SKILL.md) and
+[anti-slop](../../anti-slop/SKILL.md). This file owns the
 review *mechanics*; those skills own the review *judgment*.
 
 * * *
@@ -182,15 +181,16 @@ Ensure authenticated (see `auth.md` in the `git-guidelines` skill, advisory in `
 
 ### Step 2: Gather PR context
 ```bash
-gh pr view 123
-gh pr diff 123 --name-only
-gh pr checks 123
+PR_NUMBER=123
+gh pr view "$PR_NUMBER"
+gh pr diff "$PR_NUMBER" --name-only
+gh pr checks "$PR_NUMBER"
 ```
 
 ### Step 3: Check out PR locally
 ```bash
-git fetch origin pull/$PR_NUMBER/head:pr-$PR_NUMBER
-git checkout pr-$PR_NUMBER
+git fetch origin "pull/$PR_NUMBER/head:pr-$PR_NUMBER"
+git switch "pr-$PR_NUMBER"
 ```
 
 ### Step 4: Read the diff
@@ -220,7 +220,7 @@ gh pr review $PR_NUMBER --request-changes --body "Found issues — see inline co
 gh pr comment $PR_NUMBER --body "$(cat <<'EOF'
 ## Code Review Summary
 
-**Verdict: Changes Requested**
+**Verdict: <Approved | Changes Requested | Comment Only>**
 
 ### Critical
 - **<file>:<line>** — <Critical finding>
