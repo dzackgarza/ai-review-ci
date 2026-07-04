@@ -1262,6 +1262,8 @@ def test_deptry_accepts_declared_distributions_with_different_import_names(
                 'version = "0.1.0"',
                 'requires-python = ">=3.14"',
                 "dependencies = [",
+                '    "markdown-it-py>=3",',
+                '    "python-frontmatter>=1.3",',
                 '    "python-slugify>=8",',
                 '    "PyYAML>=6",',
                 '    "types-PyYAML>=6",',
@@ -1273,10 +1275,12 @@ def test_deptry_accepts_declared_distributions_with_different_import_names(
     (package_dir / "__init__.py").write_text(
         "\n".join(
             [
+                "import frontmatter",
                 "import yaml",
+                "from markdown_it import MarkdownIt",
                 "from slugify import slugify",
                 "",
-                'VALUE = yaml.safe_dump({"slug": slugify("A B")})',
+                'VALUE = yaml.safe_dump({"html": MarkdownIt().render("# A"), "metadata": frontmatter.Post("").metadata, "slug": slugify("A B")})',
                 "",
             ]
         )
