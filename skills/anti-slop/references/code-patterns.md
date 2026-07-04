@@ -577,7 +577,7 @@ knowing them lets you predict what slop to look for:
 
 - **[ASSERTION-FRAGILITY-INVERSION] Assertion-as-fragility inversion.** The agent treats fixed conventions, hard-coded
   values, and explicit assertions as "fragile" and treats dynamic, flexible, adaptive
- behavior as "." On a fixed, known system, the relationship is inverted: the
+  behavior as "robust." On a fixed, known system, the relationship is inverted: the
   assertion IS the safety guarantee. A fixed port means you know what to firewall. A
   dynamic port means it could land on 81 — where `ufw` has different rules for another
   service — and you'll never know. The agent will always frame "pick dynamically" as
@@ -730,7 +730,7 @@ slop — bad code that arises from agent psychology and accretion.
 - Code style — "inconsistent formatting"
 - Magic numbers — "hardcoded constant"
 - Dead code — "unused function"
-- Unused imports
+- Unused imports or dependencies
 
 These are PR-review concerns. An anti-slop review gates the PR itself: a repo full of
 slop should never reach standard code review. The anti-slop finding is the narrative of
@@ -964,7 +964,7 @@ The absence of an import is the defect, not the presence of the dependency.
 
 ### Correct Response
 
-See `bridge-burning-red-flags.md` → **Remediation: Bespoke Dependency Reinvention**.
+See `policy-index/references/remediations.md` → **Remediation: Bespoke Dependency Reinvention**.
 
 * * *
 

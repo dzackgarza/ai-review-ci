@@ -15,14 +15,14 @@
 
 <!-- policy-alignment-gate -->
 
-Authoritative policy is vendored in-repo: `reviews/vendor/policy-index/SKILL.md` +
-`reviews/vendor/policy-index/references/policies.md`. Load it **from this checkout** — do not rely on globally-installed
+Authoritative policy is in this checkout: `skills/policy-index/SKILL.md` +
+`skills/policy-index/references/policies.md`. Load it **from this checkout** — do not rely on globally-installed
 skills (remote agents do not have them). Full rationale: AGENTS.md → **Policy Alignment Gate**
 and the wiki [Policy Alignment Gate](https://github.com/dzackgarza/ai-review-ci/wiki/Policy-Alignment-Gate).
 
 ### Tier 0 — every PR
 
-- [ ] Loaded the vendored `POLICY.*` records. Codes this change touches or risks: `POLICY.____`
+- [ ] Loaded the in-repo `POLICY.*` records. Codes this change touches or risks: `POLICY.____`
 - [ ] No **Invalid local fix** introduced — no new fallback, runtime default, optional
       core-state, swallowed error, or partial-success path that makes required work look
       successful after it should fail loudly.
@@ -33,7 +33,7 @@ and the wiki [Policy Alignment Gate](https://github.com/dzackgarza/ai-review-ci/
 
 Check the one line that applies (both are valid answers, so this never blocks a non-QC PR):
 
-- [ ] **Not applicable** — this PR touches none of `tool-configs/`, `reviews/`, detectors, or QC `justfiles/`; **or** it does, and: a `ruleid`/equivalent **regression-lock** fixture proves each previously-flagged banned pattern still fires (precision narrows by *position*, never *value*), the change weakens no `POLICY.*` / silences no true finding, and any change to an owned enforcement skill (a `skills/<name>/` source per `reviews/vendor/MANIFEST.toml`) was authored in that source + rebuilt via `just vendor-owned-skills` (not edited in the vendored copy — `tests/test_vendor_skills.py` fails on drift).
+- [ ] **Not applicable** — this PR touches none of `tool-configs/`, `reviews/`, detectors, QC `justfiles/`, or `skills/`; **or** it does, and: a `ruleid`/equivalent **regression-lock** fixture proves each previously-flagged banned pattern still fires (precision narrows by *position*, never *value*), the change weakens no `POLICY.*` / silences no true finding, and any change to an owned enforcement skill was authored under `skills/<name>/` and verified from this checkout.
 
 ## Evidence
 

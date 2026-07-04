@@ -3,6 +3,7 @@ repo := justfile_directory()
 global_hooks_source_dir := repo / "global-hooks"
 repo_hooks_source_dir := repo / "repo-hooks"
 scaffold_source_dir := repo / "scaffolds"
+skills_source_dir := repo / "skills"
 
 # Normalize infrastructure files before parse checks inspect them
 _normalize:
@@ -26,25 +27,6 @@ check: _normalize
     sh -n global-hooks/pre-push
     sh -n repo-hooks/pre-commit
     sh -n repo-hooks/pre-push
-
-# Build vendored copies of owned enforcement skills from the local skills/ source.
-vendor-owned-skills:
-    python3 tool-artifacts/scripts/build-vendor-skills.py \
-      --skills-root skills \
-      --vendor-root reviews/vendor
-
-# Publish owned enforcement skills into a target skills hub (e.g. ~/ai). Downstream install; re-run is a no-op.
-publish-skills target:
-    python3 tool-artifacts/scripts/publish-skills.py \
-      --skills-root skills \
-      --target {{target}}
-
-# Refresh vendored copies of consumed advisory skills from their upstream checkout (e.g. ~/ai), pinned to a ref.
-refresh-consumed-skills source ref="HEAD":
-    python3 tool-artifacts/scripts/refresh-consumed-skills.py \
-      --source {{source}} \
-      --ref {{ref}} \
-      --vendor-root reviews/vendor
 
 # Commit gate: this repo is QC tooling, so it runs the qc-tooling profile
 # (correctness + normalization, without the product-only slop/style gates it
@@ -98,6 +80,29 @@ install-global-hooks:
 
     git config --global core.hooksPath "$global_hooks_dir"
     git config --global core.hooksPath
+
+# Symlink every skill in skills/ into the user's skills directory (AI_SKILLS_DIR).
+install-skills:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    if [[ "${AI_SKILLS_DIR+x}" != x ]]; then
+        echo "ERROR: AI_SKILLS_DIR must be set to your skills directory (e.g. ~/ai/opencode/skills). Set it in ~/.envrc."
+        exit 1
+    fi
+    skills_dir="$AI_SKILLS_DIR"
+    mkdir -p "$skills_dir"
+
+    for skill in "{{ skills_source_dir }}"/*/; do
+        skill="${skill%/}"
+        name="$(basename "$skill")"
+        target="$skills_dir/$name"
+        if [[ -e "$target" && ! -L "$target" ]]; then
+            echo "Error: refusing to replace non-symlink skill: $target"
+            exit 1
+        fi
+        ln -snf "$skill" "$target"
+        echo "$target -> $skill"
+    done
 
 # Install repo-local hook symlinks into a target repository.
 install-repo-hooks target=".":

@@ -75,7 +75,7 @@ The following are BANNED at external boundaries:
 - **Schema validation that defaults or falls back** — `z.object({...}).passthrough()`,
   `parse()` with a fallback default, or any construct that accepts data that
   doesn't match the expected shape and tries to "make it work." See
-  `anti-slop` bridge-burning policies.
+  the `policy-index` bridge-burning policies.
 
 **The correct pattern:** A runtime assertion that crashes on mismatch.
 
@@ -113,7 +113,7 @@ too — and the crash ensures that change cannot be ignored.
 is on the ABSENCE of a dependency, not its presence. Dependency-dodging code
 (hand-rolling what a library already provides) must have a strong, explicit,
 auditable justification for remaining in the codebase — recorded as a comment
-at the site or a memory indexed by `iwe`.
+at the site or in `agent-memory`.
 
 **Bespoke tools are GLUE.** A "small tool" / "not a production service" /
 "259-line CLI utility" has almost NO need to reproduce any solved problem,
@@ -203,6 +203,29 @@ in the target environment (e.g., an embedded system, a lambda with strict
 size limits, an air-gapped machine). This must be documented at the site
 with the specific constraint. "Might be hard to install" is not a
 constraint — `uv add` or `npm install` is one command.
+
+## Foundational Principle: No Downstream Users Means No Timid Work
+
+The inverted-prior error above has a work-scoping twin. Agents read
+"bespoke, owner-local" as "be careful because policy exists" and produce
+timid slices: partial fixes, deferred features, compatibility shims,
+sequential "safe" PRs, planning shells. All of it protects downstream users
+who **do not exist**. There are no legacy consumers, no external callers, no
+users to break. "Bespoke" means *move aggressively*: break internal APIs
+freely, delete broken structure instead of adapting around it, and take the
+subsystem rewrite when it is simpler than preserving what's there — because
+measured in total system cost, it usually is.
+
+Constantly ask: **am I introducing timid, unambitious, or partial work as a
+means of "protecting" users who do not exist?** A small safe slice of a
+larger defect is not caution — it is a compatibility shim at the work-unit
+level, and it leaves the owner's tool in a mixed half-fixed state that
+generates new issues. The same test as every other finding applies: does
+this restraint help the owner on their actual machine right now? Restraint
+that only protects hypothetical consumers fails the Verification Rule.
+
+Work-unit sizing, PR scope floors, and the direct-to-main path are owned by
+`pr-scoping`; load it before scoping any PR or triaging a backlog.
 
 ## Foundational Principle: Every Line Must Be Proven
 
@@ -315,7 +338,7 @@ Report these even if no crash or wrong output has been observed:
   substituted for boundary-level proof. See `test-guidelines`.
 - **Mocks in proof paths** — substituting a simulated component for a real
   one in a test that is supposed to prove correctness. Mocks prove nothing.
-  See `reviewing-llm-code/references/bridge-burning-red-flags.md`.
+  See `policy-index/references/red-flags.md`.
 - **Deletion without burden transfer** — deleting dead code, quarantined
   paths, or legacy branches without adding an assertion or invariant that
   would warn if the deletion was wrong. See `fixing-slop`.
@@ -332,7 +355,7 @@ If a finding matches any of these, suppress it without reporting:
 ### Portability
 - Hardcoded `/home/dzack/` paths or any absolute local paths. Directory
   structure is enforced across the owner's machines. These are intentional.
-- Machine-specific config files (`.serena_config.yml`, local editor configs,
+- Machine-specific config files (local agent-tool configs, local editor configs,
   personal tool configs). They are machine-specific by design.
 - Non-portable conventions, shell aliases, or tool choices. Portability
   across machines is not a goal.
@@ -363,7 +386,7 @@ tool" is not a defense against reimplementing what a library provides.
 ### Meta / Infrastructure
 - The agent's own configuration (AGENTS.md, .agents/, skills/, prompts/).
   If it had a concrete defect, the user would see task failures.
-- CI pipeline files (.github/workflows/, quality-control/). The mechanism
+- CI pipeline files (.github/workflows/, ~/ai-review-ci/). The mechanism
   is not the target.
 - Stale backup files, temporary markers, throwaway comments. Housekeeping
   is Tier 2 at most and only reported when no significant issues exist.
@@ -412,8 +435,8 @@ These are NOT in any Out of Scope category. Do NOT suppress them:
 
 - **Runtime-suppression patterns like `try { ... } catch { /* ignore */ }`
   or `2>/dev/null` without an explicit reason.** See
-  `anti-slop` bridge-burning policies and
-  `reviewing-llm-code/references/bridge-burning-red-flags.md`.
+  the `policy-index` bridge-burning policies and
+  `policy-index/references/red-flags.md`.
 
 ### Comments Are Laundering (Treat Adversarially)
 
@@ -521,6 +544,55 @@ the constraint) is fine. The red flag is `as any` at **module/SDK/API
 boundaries** where it erases the contract between caller and callee, or
 at **critical runtime paths** where a type mismatch would cause silent
 wrong behavior. Use judgment, not cargo-cult flagging.
+
+## Proportionality: Earned vs. Manufactured Complexity
+
+Complexity is not itself evidence of slop, and "complexity = bad" is the same error
+running in reverse — replacing judgment with a crude heuristic. Some problems are
+genuinely hard (mathematical proof, statistical inference, provenance tracking,
+distributed systems), and **agent workflows legitimately need guardrails** against real
+failure modes: hallucinated data, provenance loss, draft/published confusion, stale
+context, source laundering, and review bypasses. This very system is intentionally complex
+bespoke software; do not flag its real guardrails as slop.
+
+The question is never "is this simple or complex?" It is:
+
+> Is this the simplest **standard** mechanism that adequately addresses a **demonstrated**
+> failure mode?
+
+**Earned complexity** is forced by a real constraint outside the agent's own explanatory
+system. It has observable pressure behind it (a real incident, scale, domain, legal, or
+reproducibility constraint), can explain why the standard alternative is insufficient *in
+this case*, remains locally testable without learning a private cosmology, and is
+subordinate to the payload. A long proof, a real schema-validation layer, an
+artifact-boundary check, a source-required claim record, or an adversarial review pass are
+controls, not slop.
+
+**Manufactured complexity** is generated by the agent's need to organize, justify, or
+preserve its own thoughts. Its tell is **ordering**: categories precede instances, policy
+precedes users, governance precedes payload, terms precede referents, roles precede
+people, threat models precede observed threats, correction machinery precedes actual
+corrections, internal identifiers precede any real retrieval need. It is justified mainly
+by internal documents, given grandiose private names, larger than the work it governs, and
+resistant to deletion. This is `O5 Complexity Displacement` / `O6 Process–Payload
+Inversion` in the
+`llm-failure-modes/references/agent-distortion-index.md`.
+
+Two symmetric failure modes to reject:
+
+- **False positive:** flagging the owner's intentional bespoke complexity or a real
+  agent-failure guardrail as slop because it is elaborate. Run the Design-Choice gate
+  first; a deliberately coupled, narrowly-scoped, owner-requested mechanism is a design
+  choice, not slop.
+- **Slop pass:** accepting manufactured governance, classification, or doctrine machinery
+  by calling it "intentional bespoke complexity." A control earns its place only against a
+  demonstrated failure mode and only when it is the simplest standard mechanism for it.
+
+The reconciliation question for any bespoke mechanism is comparative, not existential:
+not "why does this exist?" (which accepts its frame) but "why this, when
+\[database / git / PR review / issues / ordinary access control / citations] already
+addresses the demonstrated failure?" The bespoke mechanism carries the burden of proof for
+departing from standard practice.
 
 ## Verification Rule
 

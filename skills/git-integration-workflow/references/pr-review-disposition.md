@@ -33,17 +33,20 @@ automatically pulls inline review threads, issue-style comments, and automated c
 errors in a single command.
 
 ```bash
+extract_tool="$AI_SKILLS_DIR/git-guidelines/scripts/extract_unresolved_issues"
+
 # Summarize all feedback on a PR
-uv run --directory ~/ai/opencode/skills/git-guidelines/scripts/extract_unresolved_issues \
+uv run --directory "$extract_tool" \
     -m extract_unresolved_issues summarize <owner>/<repo>#<N>
 
 # Get only unresolved (actionable) issues
-uv run --directory ~/ai/opencode/skills/git-guidelines/scripts/extract_unresolved_issues \
+uv run --directory "$extract_tool" \
     -m extract_unresolved_issues issues <owner>/<repo>#<N>
 ```
 
-Usage from anywhere (full path to the module):
+Usage from the tool directory:
 ```bash
+cd "$extract_tool"
 uv run -m extract_unresolved_issues --help
 ```
 
@@ -54,7 +57,7 @@ This tool pulls:
 
 After dispositioning feedback, resolve threads with a required justification:
 ```bash
-uv run --directory ~/ai/opencode/skills/git-guidelines/scripts/extract_unresolved_issues \
+uv run --directory "$extract_tool" \
     -m extract_unresolved_issues resolve <COMMENT_ID> \
     "Accepted in commit 1234abc. Reason: <why this satisfies the review concern>."
 ```
@@ -71,7 +74,7 @@ This includes low-severity notices from automated tools.
 ```bash
 while true; do
     gh pr checks <N> --repo <owner>/<repo>
-    uv run --directory ~/ai/opencode/skills/git-guidelines/scripts/extract_unresolved_issues \
+    uv run --directory "$extract_tool" \
         -m extract_unresolved_issues issues <owner>/<repo>#<N>
     sleep 90
 done
@@ -291,10 +294,10 @@ gh api repos/<owner>/<repo>/issues/<N>/comments
 ## Jules Review Delegation
 
 If the user asks to use Jules for review, load:
-- [jules](file:///home/dzack/ai/opencode/skills/jules/SKILL.md)
-- [jules/references/anti-slop-report-review.md](file:///home/dzack/ai/opencode/skills/jules/references/anti-slop-report-review.md)
-- [reviewing-llm-code](file:///home/dzack/ai/opencode/skills/reviewing-llm-code/SKILL.md)
-- [anti-slop](file:///home/dzack/ai/opencode/skills/anti-slop/SKILL.md)
-- [reviewing-subagent-work](file:///home/dzack/ai/opencode/skills/reviewing-subagent-work/SKILL.md)
+- `jules`
+- `jules/references/anti-slop-report-review.md`
+- [reviewing-llm-code](../../reviewing-llm-code/SKILL.md)
+- [anti-slop](../../anti-slop/SKILL.md)
+- `reviewing-subagent-work`
 - `test-guidelines` if tests/QC/proof surfaces are in scope
 - `pr-feedback-triage` if existing review comments are being evaluated

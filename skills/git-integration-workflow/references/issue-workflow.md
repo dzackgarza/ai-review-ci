@@ -5,7 +5,7 @@ templates, labels, and the CLI mechanics for viewing, creating, managing, and tr
 issues. Sourced from the `git-guidelines` Issue Workflow section and `issues.md`.
 
 For planning-tree issues — roadmap, phase, feature, story, proof obligation, or
-implementation node — load and read `plan/references/externalization.md` before
+implementation node — load `plan` and read its `references/externalization.md` before
 creating or restructuring anything. The model it defines (single root roadmap issue,
 story-shaped nodes at altitude, milestones scoped to subtree roots, proof obligations
 in issue bodies) is not reconstructable from the CLI commands below.
@@ -34,7 +34,7 @@ Use
 `gh issue create --repo <owner>/<repo> --title "..." --body-file issue.md --label "<label>"`
 
 For roadmap, feature, PRD, or cross-agent planning issues, first load
-`plan/references/externalization.md`. Create story-shaped issue nodes, use native
+the `plan` skill's `references/externalization.md`. Create story-shaped issue nodes, use native
 sub-issues for parent/child tree edges, use dependencies only for blockers, assign the
 GitHub Milestone that owns the delivery slice, and avoid turning a wiki page or issue body
 into a second live tracker.

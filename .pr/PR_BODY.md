@@ -1,71 +1,52 @@
 ## Implementation PR — own QC/enforcement skills here; fix inverted policy-index sync (#163)
 
-Closes #163 (epic #63). Decision-grounding doctrine tracked in #164 (blocked-by #163) — referenced, not closed here.
+Closes #163. Refs #63, #164, and #178.
 
-`ai-review-ci` is the source of truth for the integration-time enforcement skills it applies;
-`~/ai` is a downstream install target. Previously only `policy-index` was pinned and it was
-vendored *from* `~/ai` — backwards, since `ai-review-ci` owns it. This PR inverts that and
-generalizes the model.
+`ai-review-ci` is the source of truth for integration-time QC/enforcement skills.
+`~/ai` is an install target, not the upstream source for those enforced policies.
 
-## Boundary (by enforcement phase, not origin)
+## Boundary
 
-- **owned** — this repo's integration-time enforcement surface. Authored under `skills/<name>/`,
-  built into `reviews/vendor/`, published into `~/ai`. Origin-independent: the Brooks-Lint
-  composites stay owned even though byte-identical to `hyhmrright/brooks-lint`.
-- **consumed** — pre-/during-writing advisory guidance `~/ai` owns (`test-guidelines`,
-  `tool-provisioning-and-environment-hygiene`). Vendored for the reviewer prompt only;
-  refreshed from upstream, never authored or published here.
-
-`reviews/vendor/MANIFEST.toml` classifies every vendored entry.
+- **Owned enforcement surface** — authored in this checkout under `skills/<name>/`.
+- **Install target** — `just install-skills` symlinks the repo-owned skills into
+  `$AI_SKILLS_DIR`.
+- **Reviewer bundle** — review manifests reference `../skills/policy-index/...`
+  directly; there is no `reviews/vendor` policy copy to sync or rebuild.
+- **External advisory skills** — skills not owned here are named as external skills,
+  not linked through machine-local `file://` paths.
 
 ## Implemented behavior
 
-- **Owned source dir `skills/`** — ten owned enforcement skills authored here and built into
-  `reviews/vendor/` byte-for-byte (reviewer bundle unchanged): `policy-index` (nested +
-  sha256 `VENDOR.toml`), `anti-slop`, `reviewing-llm-code`, `fixing-slop`,
-  `bespoke-software-policy`, and the composites `common`, `source-coverage`, `decay-risks`,
-  `ci-sweep-protocol`, `pr-review-guide` (flat).
-- **Owned enforced git integration workflow** — new `git-integration-workflow` skill
-  (issue-tree → draft PR → TDD → mark-ready → trigger review → disposition → merge), migrated
-  faithfully from `git-guidelines`' enforcement sections; references the already-owned
-  `reviewing-llm-code`/`anti-slop`/`policy-index` instead of duplicating. Agent-facing only:
-  published to `~/ai`, not in the reviewer bundle.
-- **Build** — `just vendor-owned-skills` (`build-vendor-skills.py`) rebuilds owned skills from
-  `skills/` per their MANIFEST `vendor_layout` (nested/flat/absent). Replaces the old
-  `sync-policy-index` step that pulled from `~/ai`.
-- **Publish** — `just publish-skills <hub>` (`publish-skills.py`) installs the eleven owned
-  skills into `<hub>/opencode/skills/`; idempotent; skips consumed + repo-local skills.
-- **Consumed refresh** — `just refresh-consumed-skills <source> [ref]`
-  (`refresh-consumed-skills.py`) pulls each consumed doc from its upstream checkout at a pinned
-  ref (`git show <ref>:<path>`); refreshed `test-guidelines`/`tool-provisioning` from `~/ai`.
-- **Docs** — AGENTS.md and both PR-template copies describe the owned-vs-consumed model and
-  point at the drift test.
+- Reconciles the PR with the current `origin/main` ownership model: `skills/` is the
+  canonical enforcement source and the stale `reviews/vendor` build/refresh/publish
+  machinery is removed.
+- Adds `skills/git-integration-workflow` for the GitHub-boundary workflow: issue tree,
+  draft PR, TDD proof, ready-for-review, automated review trigger, feedback disposition,
+  and merge gates.
+- Keeps review judgment and policy catalogs centralized by routing to repo-owned
+  `policy-index`, `anti-slop`, `reviewing-llm-code`, and `test-guidelines` instead of
+  duplicating their contents in the git integration skill.
+- Adds compatibility references for the old `reviewing-llm-code` red-flag filenames that
+  point to the canonical `policy-index` catalogs.
+- Fixes broken machine-local skill references and stale vendor references in the PR
+  template and skill documentation.
 
-## Deliverables (from the plan)
+## Deliverables
 
-- **D1 owned-skill manifest** — done (`reviews/vendor/MANIFEST.toml`).
-- **D2 install/publish mechanism** — done (`skills/` source + `publish-skills`).
-- **D3 versioning/update** — done both directions (build owned→vendor, publish owned→`~/ai`,
-  refresh upstream→vendor).
-- **git-guidelines split** — enforcement half owned here (`git-integration-workflow`); advisory
-  half (edit hygiene, commit-message format, auth, repo-management) stays in `~/ai`.
+- **D1 ownership inventory** — satisfied by the repo-owned `skills/` directory plus direct
+  review-manifest references to `skills/policy-index`; the duplicate vendored inventory
+  is intentionally removed.
+- **D2 install mechanism** — satisfied by `just install-skills`, which installs every
+  repo-owned skill into `$AI_SKILLS_DIR`.
+- **D3 update/versioning model** — no vendored policy copy remains to pin; policy freshness
+  is the checked-out git source itself, and link integrity is now tested.
+- **Git integration split** — the enforced GitHub integration workflow is owned here as
+  `skills/git-integration-workflow`; during-writing git hygiene remains in the external
+  `git-guidelines` skill.
 
 ## Evidence
 
-- `tests/test_vendor_skills.py` — every owned skill rebuilds byte-identical (drift-capable both
-  directions, proven); MANIFEST partitions every vendored doc; published-only skills leave no
-  vendor artifact.
-- `tests/test_publish_skills.py` — only owned skills publish; byte-faithful; idempotent;
-  repo-local skills (e.g. `quality-control`) excluded.
-- `tests/test_refresh_consumed_skills.py` — refresh pulls upstream content, is idempotent, and
-  fails loud on bad source / missing path.
-- `tests/test_policy_index.py` — vendored `policy-index` is a faithful sha256-pinned build of
-  its `skills/` source.
-- Full gate: `just test` (251 passed) and `just test-ci` green on every pushed commit.
-
-## Required cross-repo follow-ups (cannot live in an ai-review-ci PR)
-
-- Remove the migrated enforcement sections from `~/ai`'s `git-guidelines` to end duplication.
-- Move the `extract_unresolved_issues` tool from `~/ai/.../git-guidelines/scripts` into this repo.
-- Run `just publish-skills ~/ai` (deliberate operator action) to install the owned skills; not
-  run in this PR.
+- `python -m pytest tests/test_skill_references.py -q` — passed.
+- `just test-ci` — passed after final reconciliation: 243 tests in the commit-tier
+  pytest leg, 243 tests in the coverage leg, 100% diff coverage for changed
+  `policy_index.py` lines, and deptry/import-linter/bypass checks passed.

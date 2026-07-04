@@ -1,6 +1,4 @@
-import hashlib
 from pathlib import Path
-from typing import Any, cast
 
 import pytest
 import yaml
@@ -9,8 +7,8 @@ from ai_review_ci.policy_index import (
     PolicyIndexError,
     canonical_guidance,
     load_policy_index,
-    load_vendor_manifest,
     parse_policies,
+    parse_remediations,
 )
 
 
@@ -56,32 +54,19 @@ Detection handles: `BAD-HANDLE`
         parse_policies(text)
 
 
-def test_vendored_policy_index_is_a_faithful_build_of_owned_source() -> None:
-    # policy-index is owned by ai-review-ci: authored under skills/policy-index/ and
-    # built into reviews/vendor/policy-index/. The vendored copy must be a byte-faithful
-    # build of the source, and the manifest must pin the actual content — any drift in
-    # either direction (edit the vendored copy, or edit the source without rebuilding) fails.
-    manifest = load_vendor_manifest()
-    source = cast(dict[str, Any], manifest["source"])
-    copied_files = cast(dict[str, dict[str, str]], manifest["copied_files"])
+def test_load_policy_index_rejects_missing_canonical_file(tmp_path: Path) -> None:
+    with pytest.raises(PolicyIndexError, match="missing policy-index file"):
+        load_policy_index(tmp_path)
 
-    assert source["repo"] == "dzackgarza/ai-review-ci"
-    assert source["ownership"] == "owned"
-    assert source["source_path"] == "skills/policy-index"
 
-    repo_root = Path(__file__).resolve().parents[1]
-    skills_source = repo_root / "skills/policy-index"
-    vendored = repo_root / "reviews/vendor/policy-index"
+def test_policy_parser_rejects_empty_policy_source() -> None:
+    with pytest.raises(PolicyIndexError, match="contained no POLICY records"):
+        parse_policies("# No policies here\n")
 
-    source_files = sorted(path.relative_to(skills_source) for path in skills_source.rglob("*.md"))
-    assert [str(path) for path in source_files] == sorted(copied_files)
 
-    for relative in source_files:
-        source_text = (skills_source / relative).read_text()
-        vendor_text = (vendored / relative).read_text()
-        assert vendor_text == source_text, f"vendored {relative} drifted from skills/ source"
-        digest = hashlib.sha256(vendor_text.encode()).hexdigest()
-        assert copied_files[str(relative)]["sha256"] == digest, f"manifest sha256 stale for {relative}"
+def test_remediation_parser_rejects_empty_remediation_source() -> None:
+    with pytest.raises(PolicyIndexError, match="contained no REMEDIATE records"):
+        parse_remediations("# No remediation rows here\n")
 
 
 def test_semgrep_rules_use_id_only_messages_and_valid_metadata() -> None:
@@ -118,9 +103,9 @@ def test_test_semgrep_fixture_uses_policy_id_metadata() -> None:
         index.remediation_for_policy(rule["metadata"]["policy_code"], rule["metadata"]["remediation_code"])
 
 
-def test_review_manifests_do_not_reference_flattened_policy_index() -> None:
+def test_review_manifests_reference_canonical_skills_policy_index() -> None:
     for path in (Path("reviews/general/manifest.txt"), Path("reviews/slop/manifest.txt")):
         manifest = path.read_text()
-        assert "vendor/policy-index.md" not in manifest
-        assert "vendor/policy-index/SKILL.md" in manifest
-        assert "vendor/policy-index/references/policies.md" in manifest
+        assert "vendor/" not in manifest
+        assert "../skills/policy-index/SKILL.md" in manifest
+        assert "../skills/policy-index/references/policies.md" in manifest

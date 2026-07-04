@@ -157,9 +157,8 @@ or remediation question.
 
 When you need "how to review a suspect PR" — the slop field guide, bridge-burning
 red flags, and validation-evasion auditing — do NOT rebuild it here. Load
-[reviewing-llm-code](file:///home/dzack/ai/opencode/skills/reviewing-llm-code/SKILL.md)
-(vendored locally under `reviews/vendor/reviewing-llm-code.md`) and
-[anti-slop](file:///home/dzack/ai/opencode/skills/anti-slop/SKILL.md). This file owns the
+[reviewing-llm-code](../../reviewing-llm-code/SKILL.md) and
+[anti-slop](../../anti-slop/SKILL.md). This file owns the
 review *mechanics*; those skills own the review *judgment*.
 
 * * *
@@ -189,8 +188,8 @@ gh pr checks 123
 
 ### Step 3: Check out PR locally
 ```bash
-git fetch origin pull/$PR_NUMBER/head:pr-$PR_NUMBER
-git checkout pr-$PR_NUMBER
+git fetch origin pull/<PR_NUMBER>/head:pr-<PR_NUMBER>
+git checkout pr-<PR_NUMBER>
 ```
 
 ### Step 4: Read the diff
@@ -209,18 +208,18 @@ just test
 ### Step 7: Post the review
 ```bash
 # If no issues
-gh pr review $PR_NUMBER --approve --body "Reviewed. Looks clean."
+gh pr review <PR_NUMBER> --approve --body "Reviewed with no blocking findings."
 
 # If issues found
-gh pr review $PR_NUMBER --request-changes --body "Found issues — see inline comments."
+gh pr review <PR_NUMBER> --request-changes --body "Blocking findings are recorded inline."
 ```
 
 ### Step 8: Also post a summary comment
 ```bash
-gh pr comment $PR_NUMBER --body "$(cat <<'EOF'
+gh pr comment <PR_NUMBER> --body "$(cat <<'EOF'
 ## Code Review Summary
 
-**Verdict: Changes Requested**
+**Verdict: <Approve | Comment | Changes Requested>**
 
 ### Critical
 - **<file>:<line>** — <Critical finding>
@@ -240,7 +239,7 @@ EOF
 ### Step 9: Clean up
 ```bash
 git checkout main
-git branch -D pr-$PR_NUMBER
+git branch -D pr-<PR_NUMBER>
 ```
 
 ### Decision: Approve vs Request Changes vs Comment

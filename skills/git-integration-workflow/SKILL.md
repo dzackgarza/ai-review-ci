@@ -13,10 +13,9 @@ in the `git-guidelines` skill in `~/ai` and is not restated here.
 
 For "how to review a suspect PR" — the slop field guide, bridge-burning red flags, and
 validation-evasion auditing — this skill references
-[reviewing-llm-code](file:///home/dzack/ai/opencode/skills/reviewing-llm-code/SKILL.md)
-(vendored locally at `reviews/vendor/reviewing-llm-code.md`) rather than duplicating it.
-For banned patterns, policy codes, and disposition doctrine, reference `anti-slop` and
-`policy-index` (vendored under `reviews/vendor/`).
+[reviewing-llm-code](../reviewing-llm-code/SKILL.md) rather than duplicating it.
+For banned patterns, policy codes, and disposition doctrine, reference
+[anti-slop](../anti-slop/SKILL.md) and [policy-index](../policy-index/SKILL.md).
 
 ## Enforced lifecycle
 

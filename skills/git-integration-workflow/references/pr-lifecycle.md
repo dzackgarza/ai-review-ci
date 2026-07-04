@@ -105,11 +105,11 @@ is not ready to externalize.
 
 The canonical model for this projection — the issue-tree/milestone/PR-claim mapping, the
 externalization sequence, the source-plan requirements, and the Plan Fit Gate — is owned
-by `plan/references/externalization.md`. Load and follow it; this guide does not restate
-the model. Before opening the PR, the source plan must already satisfy that reference's
-Plan Fit Gate: tree root, parent or roadmap node, GitHub Milestone scope, the claimed
-issue set or subtree, the close/reference split, and the proof obligations claimed versus
-not claimed.
+by the `plan` skill's `references/externalization.md`. Load and follow it; this guide
+does not restate the model. Before opening the PR, the source plan must already satisfy
+that reference's Plan Fit Gate: tree root, parent or roadmap node, GitHub Milestone
+scope, the claimed issue set or subtree, the close/reference split, and the proof
+obligations claimed versus not claimed.
 
 This guide adds only the PR-execution specializations: the claim-map body shape below,
 closing-keyword discipline, and the stop rules specific to projecting one finalized plan
@@ -474,7 +474,8 @@ The most robust way to gather all feedback is to use the `extract_unresolved_iss
 tool bundled with the git-guidelines skill:
 
 ```bash
-uv run --directory ~/ai/opencode/skills/git-guidelines/scripts/extract_unresolved_issues -m extract_unresolved_issues summarize <OWNER>/<REPO>#<PR_NUMBER>
+extract_tool="$AI_SKILLS_DIR/git-guidelines/scripts/extract_unresolved_issues"
+uv run --directory "$extract_tool" -m extract_unresolved_issues summarize <OWNER>/<REPO>#<PR_NUMBER>
 ```
 
 This will automatically fetch:

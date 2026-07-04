@@ -26,6 +26,7 @@ assigns a policy code.
 - Use `POLICY.*` codes from this skill and `references/policies.md` as authoritative.
 - Use `references/red-flags.md` to classify validation-evasion constructs.
 - Use `references/runtime-control-flow.md` to classify runtime branch shapes.
+- Use `references/runtime-control-flow.md#addd-assert-dump-data-direct` as the canonical ADDD coding style lookup for assertions: assert early, dump related data, then direct the maintainer to the owning fix surface.
 - Use `references/test-proof-rules.md` to classify proof and assertion shapes.
 - Do not remediate from the detector message alone.
 - State the weakened obligation before editing.
@@ -42,7 +43,7 @@ assigns a policy code.
 | --- | --- | --- |
 | `references/policies.md` | Reviewers, triage agents, fixers after code assignment | Categorized policy database with named `POLICY.*` records. |
 | `references/red-flags.md` | Reviewers and detector authors | Validation-evasion red flags, language-specific signatures, and QC detector targets. |
-| `references/runtime-control-flow.md` | Reviewers and detector authors | Runtime branch admission rules, banned branch shapes, assertion guidance, and examples. |
+| `references/runtime-control-flow.md` | Reviewers, detector authors, and fixers after code assignment | Runtime branch admission rules, banned branch shapes, ADDD assertion style, and examples. |
 | `references/test-proof-rules.md` | Test writers, test reviewers, detector authors | Banned test/assertion shapes and proof-admission rules. |
 | `references/remediations.md` | Fixers only after triage | Remediation registry and detailed restoration procedures keyed by policy/remediation code. |
 
@@ -83,7 +84,8 @@ assigns a policy code.
 | `POLICY.NO_LEGACY_SHIM` | No compatibility shims in pre-launch bespoke software | Replace wrong paths, migrate callers, and remove old interfaces after transferring their burden. Do not preserve legacy branches without external consumers. | Deprecated wrappers; compat mode; old parser retained "just in case"; feature flags for obsolete paths. |
 | `POLICY.NO_DEFENSIVE_HOTPATH` | No defensive validation inside trusted hot paths | Validate once at the owned boundary, then use total types internally. Core code should not repeatedly defend against impossible malformed state. | Every function checking null/missing/impossible variants; tests for impossible branches; defensive guards in trusted core paths. |
 | `POLICY.NO_QUARANTINE_REMEDIATION` | No quarantine as remediation | Quarantine labels such as smoke, non-proof, legacy, diagnostic-only, temporary, compatibility, fallback, scaffold, or out-of-scope require burden disposition. They do not make slop acceptable. | Keeping proof-shaped artifacts under disclaimer labels; moving slop to "future-owned"; renaming rather than resolving burden. |
-| `POLICY.NO_HYPOTHETICAL_PATH` | No hypothetical failure-path code | Do not add branches for failure modes that have not been observed, tested, or reported. Assert invariants now; handle real incidents when they exist. | "What if" guards; speculative fallback code; enterprise deployment branches for bespoke local tools. |
+| `POLICY.NO_HYPOTHETICAL_PATH` | No hypothetical failure-path code | Do not add branches for failure modes that have not been observed, tested, or reported. Assert invariants now; handle real incidents when they exist. | "What if" guards; speculative fallback code; enterprise deployment branches for bespoke local tools; swapping `assert` for `if/raise` to defend against `python -O`. |
+| `POLICY.PREFER_ASSERTION` | Prefer assertions over `if/raise` for invariants | Assertions are the strongly-preferred idiom for invariants, preconditions, and type-narrowing. Litter code with them: an `assert` is an auditable proof of what must be true, forcing real engagement with the data. `if/raise`/`raise ValueError` on an invariant is the red flag; catching `AssertionError` is also banned because it turns a provable state claim into runtime logic. `-O`-stripping arguments are hypothetical fiction in bespoke software. | Replacing `assert` with `if/raise`/`ValueError`/`RuntimeError` for a reviewer or `-O` argument; raise-based guard where an assertion documents the precondition; weakening an assertion into a tolerant branch; catching `AssertionError` or converting assertion failure into fallback, retry, warning, user-facing error, or partial success. |
 | `POLICY.NO_ADMIN_COMPLETION` | No administrative artifact as completion | Issues, comments, docs, labels, review replies, and status fields can preserve truth but do not satisfy implementation or proof obligations. | Marking as future work; documenting a limitation; closing a thread without code/proof; resolving by metadata. |
 | `POLICY.NO_DELETION_LAUNDERING` | No deletion or relabeling without burden disposition | Slop artifacts are forensic evidence of an unmet need. Removing or renaming them is valid only after the original burden is solved, invalidated, transferred, or recorded unresolved. | Deleting the evidence; renaming to smoke/basic/legacy; "cleaning up" without reconstructing intent. |
 
@@ -122,17 +124,18 @@ A policy exception requires all of:
 | What named policy applies? | `references/policies.md` and [Policy Registry](#policy-registry). |
 | What code/test red flags should I scan for? | `references/red-flags.md`. |
 | What runtime control-flow shapes are banned? | `references/runtime-control-flow.md`. |
+| What is the coding style for assertions and invariant failures? | `references/runtime-control-flow.md#addd-assert-dump-data-direct`. |
 | What test assertion patterns are banned? | `references/test-proof-rules.md`. |
 | What codenamed remediation applies? | `references/remediations.md`, loaded only by the remediation/fixer agent after triage. |
 | What policy applies to creating files dynamically from code? | `POLICY.NO_DYNAMIC_ARTIFACTS` in `references/policies.md`. |
 | What policy applies to embedding large strings/prompts/messages inline in code? | `POLICY.NO_DYNAMIC_ARTIFACTS` in `references/policies.md`. |
 | What policy applies to embedding one language inside another? | `POLICY.NO_DYNAMIC_ARTIFACTS` in `references/policies.md`. |
 | What policy applies to mypy `import-untyped`, missing stubs, or missing `py.typed`? | `POLICY.NO_UNTYPED_IMPORT_LEAK`; remediation is `REMEDIATE.TYPED_DEPENDENCY_BOUNDARY`, not dependency churn. |
-| How do I review LLM-produced code? | [reviewing-llm-code/SKILL.md](file:///home/dzack/ai/opencode/skills/reviewing-llm-code/SKILL.md). |
-| How do I fix slop without laundering? | [fixing-slop/SKILL.md](file:///home/dzack/ai/opencode/skills/fixing-slop/SKILL.md) plus fixer-only `references/remediations.md`. |
-| What makes a test valid proof? | [test-guidelines/SKILL.md](file:///home/dzack/ai/opencode/skills/test-guidelines/SKILL.md) plus `references/test-proof-rules.md`. |
+| How do I review LLM-produced code? | [reviewing-llm-code/SKILL.md](../reviewing-llm-code/SKILL.md). |
+| How do I fix slop without laundering? | [fixing-slop/SKILL.md](../fixing-slop/SKILL.md) plus fixer-only `references/remediations.md`. |
+| What makes a test valid proof? | [test-guidelines/SKILL.md](../test-guidelines/SKILL.md) plus `references/test-proof-rules.md`. |
 | Who owns QC invocation/config/tooling? | `POLICY.GLOBAL_QC_AUTHORITY`; operational QC invocation remains in the global `quality-control` skill. |
-| How do I triage PR feedback? | [pr-feedback-triage/SKILL.md](file:///home/dzack/ai/opencode/skills/pr-feedback-triage/SKILL.md). |
-| How do I debug without prior-shaped probing? | [reality-grounded-debugging](file:///home/dzack/ai/opencode/skills/reality-grounded-debugging/SKILL.md) + [systematic-debugging](file:///home/dzack/ai/opencode/skills/systematic-debugging/SKILL.md). |
-| How do I handle external tool/library/compiler uncertainty? | [known-solution-first](file:///home/dzack/ai/opencode/skills/known-solution-first/SKILL.md). |
-| How do I provision tools? | [tool-provisioning-and-environment-hygiene](file:///home/dzack/ai/opencode/skills/tool-provisioning-and-environment-hygiene/SKILL.md). |
+| How do I triage PR feedback? | `pr-feedback-triage`. |
+| How do I debug without prior-shaped probing? | `reality-grounded-debugging` + `systematic-debugging`. |
+| How do I handle external tool/library/compiler uncertainty? | `known-solution-first`. |
+| How do I provision tools? | [tool-provisioning-and-environment-hygiene](../tool-provisioning-and-environment-hygiene/SKILL.md). |

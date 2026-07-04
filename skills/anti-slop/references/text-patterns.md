@@ -41,7 +41,7 @@ content:
 
 - “at the end of the day”
 
-- “it’s important to ”
+- “it’s important to note that”
 
 - “it’s worth noting that”
 
@@ -129,7 +129,7 @@ Excessive business jargon that obscures meaning:
 
 - “revolutionary”
 
-- “” (when not literally about edges)
+- “cutting-edge” (when not literally about edges)
 
 - “next-generation”
 
@@ -137,7 +137,7 @@ Excessive business jargon that obscures meaning:
 
 - “best-in-class”
 
-- “” (when “use” would work)
+- “leverage” (when “use” would work)
 
 - “utilize” (when “use” would work)
 
@@ -227,7 +227,7 @@ Words that try to add emphasis but fail:
 
 ### Sentence-Level Red Flags
 
-1. Sentences starting with “It is important to ”
+1. Sentences starting with “It is important to note that”
 
 2. Sentences with 3+ hedge words ("might possibly perhaps")
 
