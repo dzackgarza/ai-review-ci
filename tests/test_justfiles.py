@@ -117,7 +117,8 @@ def test_install_skills_requires_ai_skills_dir(tmp_path: pathlib.Path) -> None:
 
 def test_install_skills_refuses_to_replace_non_symlink(tmp_path: pathlib.Path) -> None:
     skills_dir = tmp_path / "skills-hub"
-    blocking_target = skills_dir / "anti-slop"
+    blocking_skill = top_level_skill_dirs()[0]
+    blocking_target = skills_dir / blocking_skill.name
     blocking_target.mkdir(parents=True)
     env = os.environ.copy()
     env["AI_SKILLS_DIR"] = str(skills_dir)

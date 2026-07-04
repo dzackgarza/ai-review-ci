@@ -70,16 +70,21 @@ an already-handled item that still appears.
 **All checks, warnings, and notices must be resolved before the PR can be accepted.**
 This includes low-severity notices from automated tools.
 
-**Loop until the check clears:**
+**Wait for checks, then fail if feedback remains:**
 ```bash
-while true; do
-    gh pr checks <N> --repo <owner>/<repo>
+gh pr checks <N> --repo <owner>/<repo> --watch --fail-fast --interval 30
+
+feedback="$(
     uv run --directory "$extract_tool" \
         -m extract_unresolved_issues issues <owner>/<repo>#<N>
-    sleep 90
-done
+)"
+printf '%s\n' "$feedback"
+if ! printf '%s\n' "$feedback" | rg -q 'NOT RESOLVED: 0'; then
+    exit 1
+fi
 ```
-Stop only when `gh pr checks` shows all green and `issues` reports `NOT RESOLVED: 0`.
+If the feedback scan exits nonzero, triage the listed review/check items before waiting
+again.
 
 ## Publish review guidance before submission
 
