@@ -105,7 +105,7 @@ They are not automatic findings. They are prompts to ask:
 
 ## **[TESTING-RED-FLAGS]** Testing Red Flags
 
-This section belongs in [test-guidelines](file:///home/dzack/ai/opencode/skills/test-guidelines/SKILL.md) and the pattern catalog.
+This section belongs in [test-guidelines](../../test-guidelines/SKILL.md) and the pattern catalog.
 
 | Pattern | Red flag |
 | :--- | :--- |
@@ -498,7 +498,7 @@ raise confidence in repository-owned behavior:
 - **[LA-NO-THROW]** no-throw assertions;
 - **[LA-STRING]** exact string assertions;
 - **[LA-SOURCE-TEXT]** source-text / AST / implementation-shape assertions;
-- **[LA-SOURCE-TEXT]** assertions for absence of banned constructs;
+- **[LA-BANNED-CONSTRUCT-ABSENCE]** assertions for absence of banned constructs;
 - **[LA-HELPER-BRANCH]** helper-only branch assertions;
 - **[LA-BOOLEAN-FORCING]** boolean branch-forcing tests;
 - **[LA-MOCK-COUNT]** mock/spies/call-count assertions;
@@ -517,7 +517,7 @@ For every such assertion, require one of:
 2. move to global QC if it is code-shape policing;
 3. record the proof burden as unresolved.
 
-For the canonical inventory of these banned patterns and their allowed replacements, see the [Test Proof Rules](file:///home/dzack/ai/opencode/skills/policy-index/references/test-proof-rules.md).
+For the canonical inventory of these banned patterns and their allowed replacements, see the [Test Proof Rules](test-proof-rules.md).
 
 ---
 

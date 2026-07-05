@@ -6,7 +6,10 @@
     "lib/**/*.ts",
     "src/**/*.css",
     "app.css",
-    "index.css"
+    "index.css",
+    "src/**/*.tsx",
+    "extension/**/*.{js,ts,tsx}",
+    "extension/**/*.css"
   ],
   "project": [
     "src/**/*.ts",
@@ -18,14 +21,15 @@
     "app.tsx",
     "src/**/*.css",
     "app.css",
-    "index.css"
+    "index.css",
+    "extension/**/*.{js,ts,tsx}",
+    "extension/**/*.css"
   ],
   "ignore": [
     "**/*.test.ts",
     "**/*.spec.ts",
     "**/__tests__/**",
     "**/env.d.ts",
-    "**/*.tsx",
     "**/node_modules/**",
     "**/.venv/**",
     "**/.pytest_cache/**",
@@ -55,12 +59,19 @@
     "@girs",
     "@logtape/logtape",
     "@ags/shared",
-    "ags"
+    "ags",
+    "@tailwindcss/cli",
+    "@tailwindcss/typography",
+    "tailwindcss",
+    "tw-animate-css"
   ],
   "ignoreBinaries": [
     "ags",
     "xdg-open",
     "direnv"
   ],
-  "ignoreExportsUsedInFile": true
+  "ignoreExportsUsedInFile": true,
+  "ignoreUnresolved": [
+    "./vendor/backend.js"
+  ]
 }

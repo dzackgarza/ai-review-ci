@@ -84,6 +84,56 @@ def commit_without_hooks(project: pathlib.Path, message: str) -> None:
     assert result.returncode == 0, result.stdout + result.stderr
 
 
+def top_level_skill_dirs() -> list[pathlib.Path]:
+    return sorted(path for path in (ROOT / "skills").iterdir() if path.is_dir() and (path / "SKILL.md").is_file())
+
+
+def test_install_skills_symlinks_every_top_level_skill(tmp_path: pathlib.Path) -> None:
+    skills_dir = tmp_path / "skills-hub"
+    env = os.environ.copy()
+    env["AI_SKILLS_DIR"] = str(skills_dir)
+
+    result = run_just(ROOT / "justfile", ROOT, "install-skills", env=env)
+
+    output = result.stdout + result.stderr
+    assert result.returncode == 0, output
+    expected_skills = top_level_skill_dirs()
+    assert expected_skills
+    assert sorted(path.name for path in skills_dir.iterdir()) == [path.name for path in expected_skills]
+    for source in expected_skills:
+        target = skills_dir / source.name
+        assert target.is_symlink(), f"{target} should be a symlink"
+        assert target.resolve() == source.resolve()
+
+
+def test_install_skills_requires_ai_skills_dir(tmp_path: pathlib.Path) -> None:
+    env = os.environ.copy()
+    env.pop("AI_SKILLS_DIR", None)
+
+    result = run_just(ROOT / "justfile", tmp_path, "install-skills", env=env)
+
+    output = result.stdout + result.stderr
+    assert result.returncode != 0, output
+    assert "AI_SKILLS_DIR must be set" in output
+
+
+def test_install_skills_refuses_to_replace_non_symlink(tmp_path: pathlib.Path) -> None:
+    skills_dir = tmp_path / "skills-hub"
+    blocking_skill = top_level_skill_dirs()[0]
+    blocking_target = skills_dir / blocking_skill.name
+    blocking_target.mkdir(parents=True)
+    env = os.environ.copy()
+    env["AI_SKILLS_DIR"] = str(skills_dir)
+
+    result = run_just(ROOT / "justfile", ROOT, "install-skills", env=env)
+
+    output = result.stdout + result.stderr
+    assert result.returncode != 0, output
+    assert "refusing to replace non-symlink skill" in output
+    assert blocking_target.is_dir()
+    assert not blocking_target.is_symlink()
+
+
 def project_with_sage_file(tmp_path: pathlib.Path) -> pathlib.Path:
     project = tmp_path / "sage-project"
     project.mkdir()
@@ -1464,6 +1514,8 @@ def test_deptry_accepts_declared_distributions_with_different_import_names(
                 'version = "0.1.0"',
                 'requires-python = ">=3.14"',
                 "dependencies = [",
+                '    "markdown-it-py>=3",',
+                '    "python-frontmatter>=1.3",',
                 '    "python-slugify>=8",',
                 '    "PyYAML>=6",',
                 '    "types-PyYAML>=6",',
@@ -1475,10 +1527,12 @@ def test_deptry_accepts_declared_distributions_with_different_import_names(
     (package_dir / "__init__.py").write_text(
         "\n".join(
             [
+                "import frontmatter",
                 "import yaml",
+                "from markdown_it import MarkdownIt",
                 "from slugify import slugify",
                 "",
-                'VALUE = yaml.safe_dump({"slug": slugify("A B")})',
+                'VALUE = yaml.safe_dump({"html": MarkdownIt().render("# A"), "metadata": frontmatter.Post("").metadata, "slug": slugify("A B")})',
                 "",
             ]
         )

@@ -7,7 +7,7 @@ Note: if you are working with a PR, read the adjacent pr-guide.md file.
 # HIGH-QUALITY TESTING STANDARDS (GUIDELINES)
 
 Before writing, reviewing, or modifying tests or Quality Control configurations, consult the central policy index:
-[policy-index](file:///home/dzack/ai/opencode/skills/policy-index/SKILL.md)
+[policy-index](../policy-index/SKILL.md)
 
 **MANDATORY FIRST STEP: You MUST read this entire file before taking ANY action.
 This is the source of truth for all test work.**
@@ -412,7 +412,7 @@ Global QC enforces code-shape policy.
 Issues record unresolved proof burdens.
 Nothing else belongs in the test suite.
 
-For the canonical catalog of banned test shapes and their allowed replacements, see the [Banned Test Shapes Catalog](file:///home/dzack/ai/opencode/skills/policy-index/references/test-proof-rules.md).
+For the canonical catalog of banned test shapes and their allowed replacements, see the [Banned Test Shapes Catalog](../policy-index/references/test-proof-rules.md).
 
 ## Try/Catch Ban
 
@@ -962,10 +962,10 @@ The important move is to stop treating this as a case-by-case review problem. Ag
 
 The recurring pattern is that an agent first tries to satisfy checking/validation surfaces (such as the compiler/typechecker, QC gates, PR review, or user queries) by manipulating the validation surface (e.g. by adding fallbacks, defaults, mocks, try/except blocks, or bypass comments) instead of reconstructing the original obligation and solving it. The policy answer is to remove the vocabulary that enables that manipulation.
 
-Adhering to the [Bridge-Burning Policies](file:///home/dzack/ai/opencode/skills/policy-index/SKILL.md#policy-registry) defined in `policy-index/SKILL.md` is a non-negotiable hard constraint for all development. These rules eliminate common agent validation-evasion pathways (such as runtime defaults, fallbacks, mocks, and diagnostic smoke tests in proof paths). Refer to them as hard boundaries.
+Adhering to the [Bridge-Burning Policies](../policy-index/SKILL.md#policy-registry) defined in `policy-index/SKILL.md` is a non-negotiable hard constraint for all development. These rules eliminate common agent validation-evasion pathways (such as runtime defaults, fallbacks, mocks, and diagnostic smoke tests in proof paths). Refer to them as hard boundaries.
 
 > [!IMPORTANT]
-> **Bridge-Burning Red Flags:** If the original review concern is boundary-level, helper-level tests cannot resolve it. They may supplement proof, but they do not close the burden. If a construct would let an agent preserve the appearance of correctness while weakening the obligation, treat it as a red flag even if the code currently works. For a detailed list of testing red flags (such as mock/fake/stub/simulation usage, smoke tests in the suite, exact string assertions, etc.), see the [Bridge-Burning Red Flags Reference Catalog](file:///home/dzack/ai/opencode/skills/policy-index/references/red-flags.md) and the [Runtime Control-Flow Red Flags Catalog](file:///home/dzack/ai/opencode/skills/policy-index/references/runtime-control-flow.md).
+> **Bridge-Burning Red Flags:** If the original review concern is boundary-level, helper-level tests cannot resolve it. They may supplement proof, but they do not close the burden. If a construct would let an agent preserve the appearance of correctness while weakening the obligation, treat it as a red flag even if the code currently works. For a detailed list of testing red flags (such as mock/fake/stub/simulation usage, smoke tests in the suite, exact string assertions, etc.), see the [Bridge-Burning Red Flags Reference Catalog](../policy-index/references/red-flags.md) and the [Runtime Control-Flow Red Flags Catalog](../policy-index/references/runtime-control-flow.md).
 
 ---
 

@@ -352,7 +352,7 @@ If you cannot identify the live goal and proof loop, you are not ready to analyz
 **Establish external reality before adopting the artifact's frame.** Agent-generated work
 drifts toward an internally coherent, self-referential frame, and a reviewer who reads the
 project's preferred documentation first gets captured by it (`V1`–`V9` in the
-[agent-distortion-index](file:///home/dzack/ai/opencode/skills/llm-failure-modes/references/agent-distortion-index.md)).
+`llm-failure-modes/references/agent-distortion-index.md`).
 Hold a skeptical, distance-keeping posture; keep the *findings* in ordinary engineering
 language.
 
@@ -659,7 +659,7 @@ is justified by internal documents rather than an observable need.
 
 For agent-generated documents specifically (READMEs, architecture docs, roadmaps), the
 concrete patterns and forcing questions live in
-[llm-failure-modes/documentation-failures.md](file:///home/dzack/ai/opencode/skills/llm-failure-modes/documentation-failures.md).
+`llm-failure-modes/documentation-failures.md`.
 When a structural artifact's whole frame is contaminated, the remediation is a
 fresh-context greenfield rebuild, not in-place editing — see `fixing-slop` →
 **Contaminated Artifacts Cannot Be Repaired In Place**.
@@ -759,7 +759,7 @@ A remediation is incomplete if the artifact is gone but the burden has no owner.
 ## Bridge-Burning Policies
 
 The canonical bridge-burning policy registry has moved to
-[policy-index/SKILL.md#policy-registry](file:///home/dzack/ai/opencode/skills/policy-index/SKILL.md#policy-registry).
+[policy-index/SKILL.md#policy-registry](../policy-index/SKILL.md#policy-registry).
 
 This skill no longer owns the enumerated policy text. Use `policy-index` for
 `POLICY.*` codes and the exception protocol. Anti-slop review uses those policies to
@@ -770,7 +770,7 @@ belong to the fixer-side reference under `policy-index/references/`.
 ## Policy Exception Protocol
 
 The canonical policy exception protocol lives in
-[policy-index/SKILL.md#exception-protocol](file:///home/dzack/ai/opencode/skills/policy-index/SKILL.md#exception-protocol).
+[policy-index/SKILL.md#exception-protocol](../policy-index/SKILL.md#exception-protocol).
 
 Anti-slop findings may identify that an exception would be required, but this skill does
 not grant exceptions or maintain a separate exception checklist.
@@ -817,4 +817,4 @@ Skills must not seed:
 ### Cross-References (Source-of-Truth Skills)
 
 Rather than repeating policy in every skill, consult the central policy index to locate the canonical source-of-truth skill:
-[policy-index](file:///home/dzack/ai/opencode/skills/policy-index/SKILL.md)
+[policy-index](../policy-index/SKILL.md)
