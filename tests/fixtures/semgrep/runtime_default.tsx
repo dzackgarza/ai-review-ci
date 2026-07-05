@@ -1,11 +1,23 @@
 // JSX positions: a value-render default backfills a missing value and MUST
 // flag; a boolean JSX prop is logical, not a default, and MUST NOT flag.
-export function Card({ content, posting, body, repo }: any) {
+export function Card({ content, posting, body, repo, title, enabled }: any) {
   return (
     <div>
       {
         // ruleid: ts-no-or-default
         content || "*No description*"
+      }
+      {
+        // ruleid: ts-no-or-default
+        repo.optionalFooter || ""
+      }
+      {
+        // ruleid: no-nullish-coalescing
+        title ?? null
+      }
+      {
+        // ruleid: no-nullish-coalescing
+        enabled ?? true
       }
       <button
         disabled={
@@ -21,10 +33,6 @@ export function Card({ content, posting, body, repo }: any) {
           repo.a || repo.b
         }
       />
-      {
-        // ok: ts-no-or-default
-        repo.optionalFooter || ""
-      }
     </div>
   );
 }
