@@ -1,6 +1,6 @@
-"""Load the vendored bridge-burning policy index.
+"""Load the canonical bridge-burning policy index.
 
-The Markdown files under ``reviews/vendor/policy-index`` are the canonical
+The Markdown files under ``skills/policy-index`` are the canonical
 database. This module parses only the stable ID-bearing contract in those
 files; detector configs and report renderers must resolve policy text here
 instead of copying local remediation prose.
@@ -9,12 +9,11 @@ instead of copying local remediation prose.
 from __future__ import annotations
 
 import re
-import tomllib
 from dataclasses import dataclass
 from pathlib import Path
 from typing import NoReturn
 
-POLICY_INDEX_RELATIVE = Path("reviews/vendor/policy-index")
+POLICY_INDEX_RELATIVE = Path("skills/policy-index")
 POLICIES_FILE = "references/policies.md"
 REMEDIATIONS_FILE = "references/remediations.md"
 
@@ -25,7 +24,7 @@ CODE_RE = re.compile(r"`(POLICY\.[A-Z0-9_]+|REMEDIATE\.[A-Z0-9_]+)`")
 
 
 class PolicyIndexError(ValueError):
-    """Raised when the vendored policy index or detector metadata is invalid."""
+    """Raised when the policy index or detector metadata is invalid."""
 
 
 @dataclass(frozen=True)
@@ -86,7 +85,7 @@ def _fail(message: str) -> NoReturn:
 
 def _read_required(path: Path) -> str:
     if not path.is_file():
-        _fail(f"missing vendored policy-index file: {path}")
+        _fail(f"missing policy-index file: {path}")
     return path.read_text()
 
 
@@ -145,7 +144,7 @@ def parse_policies(text: str) -> dict[str, PolicyRecord]:
     if current_code is not None:
         policies[current_code] = _parse_policy_block(current_code, current_name, block)
     if not policies:
-        _fail("vendored policies.md contained no POLICY records")
+        _fail("policies.md contained no POLICY records")
     return policies
 
 
@@ -167,7 +166,7 @@ def parse_remediations(text: str) -> dict[str, RemediationRecord]:
             required_remediation=required_remediation,
         )
     if not remediations:
-        _fail("vendored remediations.md contained no REMEDIATE records")
+        _fail("remediations.md contained no REMEDIATE records")
     return remediations
 
 
@@ -182,14 +181,6 @@ def load_policy_index(root: Path | None = None) -> PolicyIndex:
         if policy.code not in remediation.applies_to and "Any slop finding" not in remediation.applies_to:
             _fail(f"{policy.remediation_code} does not apply to {policy.code}")
     return PolicyIndex(policies=policies, remediations=remediations)
-
-
-def load_vendor_manifest(root: Path | None = None) -> dict[str, object]:
-    index_root = root or default_policy_index_root()
-    manifest_path = index_root / "VENDOR.toml"
-    if not manifest_path.is_file():
-        _fail(f"missing vendored policy-index manifest: {manifest_path}")
-    return tomllib.loads(manifest_path.read_text())
 
 
 def canonical_guidance(policy_code: str, remediation_code: str | None = None, *, index: PolicyIndex | None = None) -> str:

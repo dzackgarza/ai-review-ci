@@ -52,7 +52,7 @@ def test_pick_anchor_prefers_reported_line_when_visible() -> None:
     assert pick_anchor(finding, {"src/example.py": {10, 12, 13}}) == 12
 
 
-def test_partition_findings_surfaces_existing_fingerprint_for_disposition() -> None:
+def test_partition_findings_skips_existing_fingerprint_threads() -> None:
     finding = {
         "tier": "tier2",
         "label": "Duplicate-shaped finding",
@@ -77,14 +77,15 @@ def test_partition_findings_surfaces_existing_fingerprint_for_disposition() -> N
             }
         ],
     }
-    seen = {finding_fingerprint("DOC_CONSISTENCY", "src/example.py")}
+    fingerprint = finding_fingerprint("DOC_CONSISTENCY", "src/example.py")
+    seen = {fingerprint}
 
     comments, off_diff, possible_duplicates = partition_findings([finding], {"src/example.py": {12}}, seen, "General Review")
 
-    assert len(comments) == 1
+    assert not comments
     assert not off_diff
     assert possible_duplicates == 1
-    assert "Possible duplicate disposition required" in comments[0]["body"]
+    assert seen == {fingerprint}
 
 
 def test_render_thread_body_appends_canonical_policy_guidance() -> None:
@@ -116,3 +117,30 @@ def test_render_thread_body_appends_canonical_policy_guidance() -> None:
     assert "#### Canonical policy guidance" in body
     assert "Policy: `POLICY.NO_MOCK_PROOF`" in body
     assert "Remediation: `REMEDIATE.REAL_PROOF_LOOP`" in body
+
+
+def test_render_thread_body_includes_structured_reviewer_identity() -> None:
+    finding = {
+        "tier": "tier1",
+        "label": "SLOP",
+        "category": "bridge-burning",
+        "location": {
+            "path": "src/example.py",
+            "start_line": 12,
+            "end_line": 13,
+        },
+        "violated_invariant": "Review feedback needs a routable reviewer identity.",
+        "proof_command": "inspect rendered review thread body",
+        "evidence": [
+            {
+                "path": "src/example.py",
+                "lines": [12, 13],
+                "kind": "primary",
+            }
+        ],
+    }
+
+    body = render_thread_body(finding, "Slop Review", "b" * 64)
+
+    assert '<!-- ai-review-reviewer: {"agent": "opencode-ai", "prompt_id": "reviews/slop", "prompt_version": "1.0.0", "type": "slop"} -->' in body
+    assert "**Reviewer identity:** `type=slop; agent=opencode-ai; prompt_id=reviews/slop; prompt_version=1.0.0`" in body

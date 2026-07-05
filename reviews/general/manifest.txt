@@ -2,16 +2,16 @@
 # Paths relative to the reviews/ directory (this file's parent's parent).
 # A directory entry inlines all of its top-level *.md files, sorted by name.
 # Missing entries are fatal.
-vendor/common.md
-vendor/source-coverage.md
-vendor/decay-risks.md
-vendor/ci-sweep-protocol.md
-vendor/policy-index/SKILL.md
-vendor/policy-index/references/policies.md
-vendor/policy-index/references/red-flags.md
-vendor/policy-index/references/runtime-control-flow.md
-vendor/policy-index/references/test-proof-rules.md
-vendor/bespoke-software-policy.md
-vendor/test-guidelines.md
-vendor/tool-provisioning-and-environment-hygiene.md
-vendor/pr-review-guide.md
+../skills/ci-review-protocol/SKILL.md
+../skills/ci-review-protocol/references/source-coverage.md
+../skills/ci-review-protocol/references/decay-risks.md
+../skills/ci-review-protocol/references/ci-sweep-protocol.md
+../skills/policy-index/SKILL.md
+../skills/policy-index/references/policies.md
+../skills/policy-index/references/red-flags.md
+../skills/policy-index/references/runtime-control-flow.md
+../skills/policy-index/references/test-proof-rules.md
+../skills/bespoke-software-policy/SKILL.md
+../skills/test-guidelines/SKILL.md
+../skills/tool-provisioning-and-environment-hygiene/SKILL.md
+../skills/ci-review-protocol/references/pr-review-guide.md

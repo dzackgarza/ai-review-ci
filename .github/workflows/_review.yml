@@ -78,12 +78,10 @@ jobs:
           python-version: '3.14'
 
       - name: Install just
-        run: |
-          mkdir -p "$RUNNER_TEMP/bin"
-          VERSION=$(curl -sL https://api.github.com/repos/casey/just/releases/latest | jq -r '.tag_name')
-          curl -sL "https://github.com/casey/just/releases/download/${VERSION}/just-${VERSION}-x86_64-unknown-linux-musl.tar.gz" \
-            | tar -xzf - -C "$RUNNER_TEMP/bin" just
-          echo "$RUNNER_TEMP/bin" >> "$GITHUB_PATH"
+        # Authenticated install via the maintained action. Mirrors _qc.yml.
+        uses: extractions/setup-just@v4
+        with:
+          github-token: ${{ github.token }}
 
       - name: Install tools
         run: just -f "$INFRA/ci/runner.just" install-tools
@@ -106,6 +104,15 @@ jobs:
       - name: Collect review output
         run: just -f "$INFRA/ci/runner.just" collect-output
 
+      - name: Write structured review state
+        run: just -f "$INFRA/ci/runner.just" write-review-state
+
+      - name: Upload structured review state
+        uses: actions/upload-artifact@v4
+        with:
+          name: ai-${{ inputs.report_type }}-review-state
+          path: .review-findings.json
+
       - name: Convert report to SARIF
         run: just -f "$INFRA/ci/runner.just" convert-sarif "ai-$REVIEW_REPORT_TYPE-review"
 
@@ -120,3 +127,6 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: just -f "$INFRA/ci/runner.just" post-threads "$REVIEW_PR_NUMBER"
+
+      - name: Enforce review status
+        run: just -f "$INFRA/ci/runner.just" enforce-review-status

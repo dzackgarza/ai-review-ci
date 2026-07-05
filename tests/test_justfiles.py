@@ -1,6 +1,7 @@
 import json
 import os
 import pathlib
+import re
 import shlex
 import shutil
 import subprocess
@@ -49,11 +50,138 @@ def path_with_only(tmp_path: pathlib.Path, *commands: str) -> str:
     return str(bin_dir)
 
 
+def run_git(workdir: pathlib.Path, *args: str) -> subprocess.CompletedProcess[str]:
+    env = os.environ.copy()
+    for key in (
+        "GIT_DIR",
+        "GIT_INDEX_FILE",
+        "GIT_WORK_TREE",
+        "GIT_PREFIX",
+        "GIT_OBJECT_DIRECTORY",
+        "GIT_ALTERNATE_OBJECT_DIRECTORIES",
+        "GIT_COMMON_DIR",
+    ):
+        env.pop(key, None)
+    return subprocess.run(
+        ["git", "-C", str(workdir), *args],
+        text=True,
+        capture_output=True,
+        check=False,
+        env=env,
+    )
+
+
+def init_git_repo(project: pathlib.Path) -> None:
+    assert run_git(project, "init").returncode == 0
+    assert (
+        run_git(project, "config", "user.email", "test@example.invalid").returncode == 0
+    )
+    assert run_git(project, "config", "user.name", "Test User").returncode == 0
+
+
+def commit_without_hooks(project: pathlib.Path, message: str) -> None:
+    result = run_git(project, "-c", "core.hooksPath=/dev/null", "commit", "-m", message)
+    assert result.returncode == 0, result.stdout + result.stderr
+
+
+def top_level_skill_dirs() -> list[pathlib.Path]:
+    return sorted(path for path in (ROOT / "skills").iterdir() if path.is_dir() and (path / "SKILL.md").is_file())
+
+
+def test_install_skills_symlinks_every_top_level_skill(tmp_path: pathlib.Path) -> None:
+    skills_dir = tmp_path / "skills-hub"
+    env = os.environ.copy()
+    env["AI_SKILLS_DIR"] = str(skills_dir)
+
+    result = run_just(ROOT / "justfile", ROOT, "install-skills", env=env)
+
+    output = result.stdout + result.stderr
+    assert result.returncode == 0, output
+    expected_skills = top_level_skill_dirs()
+    assert expected_skills
+    assert sorted(path.name for path in skills_dir.iterdir()) == [path.name for path in expected_skills]
+    for source in expected_skills:
+        target = skills_dir / source.name
+        assert target.is_symlink(), f"{target} should be a symlink"
+        assert target.resolve() == source.resolve()
+
+
+def test_install_skills_requires_ai_skills_dir(tmp_path: pathlib.Path) -> None:
+    env = os.environ.copy()
+    env.pop("AI_SKILLS_DIR", None)
+
+    result = run_just(ROOT / "justfile", tmp_path, "install-skills", env=env)
+
+    output = result.stdout + result.stderr
+    assert result.returncode != 0, output
+    assert "AI_SKILLS_DIR must be set" in output
+
+
+def test_install_skills_refuses_to_replace_non_symlink(tmp_path: pathlib.Path) -> None:
+    skills_dir = tmp_path / "skills-hub"
+    blocking_skill = top_level_skill_dirs()[0]
+    blocking_target = skills_dir / blocking_skill.name
+    blocking_target.mkdir(parents=True)
+    env = os.environ.copy()
+    env["AI_SKILLS_DIR"] = str(skills_dir)
+
+    result = run_just(ROOT / "justfile", ROOT, "install-skills", env=env)
+
+    output = result.stdout + result.stderr
+    assert result.returncode != 0, output
+    assert "refusing to replace non-symlink skill" in output
+    assert blocking_target.is_dir()
+    assert not blocking_target.is_symlink()
+
+
 def project_with_sage_file(tmp_path: pathlib.Path) -> pathlib.Path:
     project = tmp_path / "sage-project"
     project.mkdir()
     (project / "example.sage").write_text("x = 1\n")
     return project
+
+
+def test_no_bypass_ignores_preexisting_markers_when_staging_other_changes(
+    tmp_path: pathlib.Path,
+) -> None:
+    project = tmp_path / "git-project"
+    project.mkdir()
+    source = project / "app.py"
+    coverage_marker = "# pragma: no cov" + "er"
+    source.write_text(f"def legacy() -> None:\n    pass  {coverage_marker}\n")
+    init_git_repo(project)
+    assert run_git(project, "add", "app.py").returncode == 0
+    commit_without_hooks(project, "baseline")
+    source.write_text(
+        f"def legacy() -> None:\n    pass  {coverage_marker}\n\nVALUE = 1\n"
+    )
+    assert run_git(project, "add", "app.py").returncode == 0
+
+    result = run_just(ROOT / "justfiles" / "shared.just", project, "_no-bypass")
+
+    output = result.stdout + result.stderr
+    assert result.returncode == 0, output
+    assert "No bypass comments detected" in output
+
+
+def test_no_bypass_blocks_newly_staged_markers(tmp_path: pathlib.Path) -> None:
+    project = tmp_path / "git-project"
+    project.mkdir()
+    source = project / "app.py"
+    coverage_marker = "# pragma: no cov" + "er"
+    source.write_text("def clean() -> None:\n    pass\n")
+    init_git_repo(project)
+    assert run_git(project, "add", "app.py").returncode == 0
+    commit_without_hooks(project, "baseline")
+    source.write_text(f"def clean() -> None:\n    pass  {coverage_marker}\n")
+    assert run_git(project, "add", "app.py").returncode == 0
+
+    result = run_just(ROOT / "justfiles" / "shared.just", project, "_no-bypass")
+
+    output = result.stdout + result.stderr
+    assert result.returncode != 0, output
+    assert "coverage bypass marker" in output
+    assert TRIAGE_MARKER in output
 
 
 @pytest.mark.parametrize("recipe", ["_sage-syntax", "_vulture"])
@@ -82,7 +210,9 @@ def test_tsc_requires_ags_when_tsconfig_declares_ags(tmp_path: pathlib.Path) -> 
     project = tmp_path / "ags-project"
     project.mkdir()
     (project / "package.json").write_text(json.dumps({"scripts": {}}) + "\n")
-    (project / "tsconfig.json").write_text(json.dumps({"compilerOptions": {"jsxImportSource": "ags/gtk4"}}) + "\n")
+    (project / "tsconfig.json").write_text(
+        json.dumps({"compilerOptions": {"jsxImportSource": "ags/gtk4"}}) + "\n"
+    )
     env = os.environ | {"PATH": path_with_only(tmp_path, "bash", "cat", "jq", "just")}
 
     result = run_just(ROOT / "justfiles" / "bun.just", project, "_tsc", env=env)
@@ -92,7 +222,9 @@ def test_tsc_requires_ags_when_tsconfig_declares_ags(tmp_path: pathlib.Path) -> 
     assert TRIAGE_MARKER in output
 
 
-def test_install_global_hooks_requires_env_only_inside_recipe(tmp_path: pathlib.Path) -> None:
+def test_install_global_hooks_requires_env_only_inside_recipe(
+    tmp_path: pathlib.Path,
+) -> None:
     home = tmp_path / "home"
     home.mkdir()
     env = os.environ | {
@@ -413,17 +545,85 @@ def test_semgrep_autofix_defers_unfixed_findings_to_push_tier(
     project = tmp_path / "semgrep-project"
     project.mkdir()
     source = project / "app.ts"
-    source.write_text('const API_URL = "https://example.test";\nconsole.log(API_URL);\n')
+    source.write_text(
+        'const API_URL = "https://example.test";\nconsole.log(API_URL);\n'
+    )
 
-    commit_tier = run_just(ROOT / "justfiles" / "shared.just", project, "_semgrep-autofix")
+    commit_tier = run_just(
+        ROOT / "justfiles" / "shared.just", project, "_semgrep-autofix"
+    )
     push_tier = run_just(ROOT / "justfiles" / "shared.just", project, "_semgrep")
 
     assert commit_tier.returncode == 0, commit_tier.stdout + commit_tier.stderr
-    assert source.read_text() == 'const API_URL = "https://example.test";\nconsole.log(API_URL);\n'
+    assert (
+        source.read_text()
+        == 'const API_URL = "https://example.test";\nconsole.log(API_URL);\n'
+    )
     assert push_tier.returncode != 0, push_tier.stdout + push_tier.stderr
 
 
-def write_fake_npx_slop_scan(tmp_path: pathlib.Path, payload: dict[str, Any]) -> pathlib.Path:
+def test_semgrep_blocks_typescript_value_defaults(tmp_path: pathlib.Path) -> None:
+    project = tmp_path / "semgrep-value-default-project"
+    project.mkdir()
+    (project / "app.ts").write_text(
+        "\n".join(
+            [
+                "export function pickLabel(maybeLabel: string | null): string {",
+                "  return maybeLabel || 'fallback';",
+                "}",
+                "",
+            ]
+        )
+    )
+
+    result = run_just(ROOT / "justfiles" / "shared.just", project, "_semgrep")
+
+    output = result.stdout + result.stderr
+    assert result.returncode != 0, output
+    assert "ts-no-or-default" in output
+    assert "maybeLabel || 'fallback'" in output
+    assert "Review the Semgrep finding snippets above" in output
+    assert "Route POLICY.RUNTIME_DEFAULT and other POLICY.* findings" in output
+
+
+def test_semgrep_allows_fail_loud_typescript_guards(tmp_path: pathlib.Path) -> None:
+    project = tmp_path / "semgrep-guard-project"
+    project.mkdir()
+    (project / "guards.ts").write_text(
+        "\n".join(
+            [
+                "export function requireString(value: string | null): string {",
+                '  if (!value || value.trim() === "") {',
+                '    throw new Error("missing value");',
+                "  }",
+                "  return value;",
+                "}",
+                "",
+                "export function keepNonEmpty(values: Array<string | null>): string[] {",
+                "  let result: string[] = [];",
+                "  for (let i = 0; i < values.length; i += 1) {",
+                "    let cleaned = values[i]?.trim();",
+                '    if (!cleaned || cleaned === "") {',
+                "      continue;",
+                "    }",
+                "    result.push(cleaned);",
+                "  }",
+                "  return result;",
+                "}",
+                "",
+            ]
+        )
+    )
+
+    result = run_just(ROOT / "justfiles" / "shared.just", project, "_semgrep")
+
+    output = result.stdout + result.stderr
+    assert result.returncode == 0, output
+
+
+def write_fake_npx_slop_scan(
+    tmp_path: pathlib.Path, payload: dict[str, Any]
+) -> pathlib.Path:
     bin_dir = tmp_path / "fake-bin"
     bin_dir.mkdir()
     npx = bin_dir / "npx"
@@ -451,7 +651,10 @@ def write_fake_uvx_vibecheck(
 
 
 def vibecheck_payload(*findings: dict[str, Any]) -> dict[str, Any]:
-    severity_counts = {severity: sum(1 for finding in findings if finding["severity"] == severity) for severity in ("critical", "high", "medium", "low")}
+    severity_counts = {
+        severity: sum(1 for finding in findings if finding["severity"] == severity)
+        for severity in ("critical", "high", "medium", "low")
+    }
     return {
         "version": "0.1.0",
         "passed": severity_counts["critical"] + severity_counts["high"] == 0,
@@ -478,13 +681,54 @@ def test_vibecheck_ignores_g141_non_comment_matches(tmp_path: pathlib.Path) -> N
             "co_occurrence": False,
         },
     )
-    env = os.environ | {"PATH": f"{write_fake_uvx_vibecheck(tmp_path, payload, exit_code=1)}:{os.environ['PATH']}"}
+    env = os.environ | {
+        "PATH": f"{write_fake_uvx_vibecheck(tmp_path, payload, exit_code=1)}:{os.environ['PATH']}"
+    }
 
-    result = run_just(ROOT / "justfiles" / "shared.just", project, "_vibecheck", env=env)
+    result = run_just(
+        ROOT / "justfiles" / "shared.just", project, "_vibecheck", env=env
+    )
 
     output = result.stdout + result.stderr
     assert result.returncode == 0, output
     assert "ignored 1 G141 non-comment false-positive finding(s)" in output
+    assert "vibecheck: 0 findings" in output
+
+
+def test_vibecheck_ignores_g22_non_empty_except_handlers(
+    tmp_path: pathlib.Path,
+) -> None:
+    project = tmp_path / "vibe-project"
+    project.mkdir()
+    source = project / "app.py"
+    source.write_text(
+        "try:\n    raise KeyError\nexcept KeyError:\n    raise ValueError('handled')\n"
+    )
+    payload = vibecheck_payload(
+        {
+            "rule_id": "G22",
+            "name": "Empty except block",
+            "severity": "high",
+            "category": "ai-slop",
+            "file": str(source),
+            "line": 3,
+            "content": "except KeyError:",
+            "notes": "Empty except blocks hide failures",
+            "two_pass": False,
+            "co_occurrence": False,
+        },
+    )
+    env = os.environ | {
+        "PATH": f"{write_fake_uvx_vibecheck(tmp_path, payload, exit_code=1)}:{os.environ['PATH']}"
+    }
+
+    result = run_just(
+        ROOT / "justfiles" / "shared.just", project, "_vibecheck", env=env
+    )
+
+    output = result.stdout + result.stderr
+    assert result.returncode == 0, output
+    assert "ignored 1 G22 non-empty except-handler false-positive finding(s)" in output
     assert "vibecheck: 0 findings" in output
 
 
@@ -505,9 +749,13 @@ def test_vibecheck_still_blocks_g141_comment_matches(tmp_path: pathlib.Path) -> 
             "co_occurrence": False,
         },
     )
-    env = os.environ | {"PATH": f"{write_fake_uvx_vibecheck(tmp_path, payload, exit_code=1)}:{os.environ['PATH']}"}
+    env = os.environ | {
+        "PATH": f"{write_fake_uvx_vibecheck(tmp_path, payload, exit_code=1)}:{os.environ['PATH']}"
+    }
 
-    result = run_just(ROOT / "justfiles" / "shared.just", project, "_vibecheck", env=env)
+    result = run_just(
+        ROOT / "justfiles" / "shared.just", project, "_vibecheck", env=env
+    )
 
     output = result.stdout + result.stderr
     assert result.returncode != 0, output
@@ -515,19 +763,36 @@ def test_vibecheck_still_blocks_g141_comment_matches(tmp_path: pathlib.Path) -> 
     assert TRIAGE_MARKER in output
 
 
-def test_slop_scan_ignores_non_gating_structural_heuristics(tmp_path: pathlib.Path) -> None:
+def test_slop_scan_ignores_non_gating_structural_heuristics(
+    tmp_path: pathlib.Path,
+) -> None:
     project = tmp_path / "slop-project"
     project.mkdir()
     (project / "app.ts").write_text("export const value = 1;\n")
-    shutil.copy(ROOT / "tool-configs" / "slop-scan.config.json", project / "slop-scan.config.json")
+    shutil.copy(
+        ROOT / "tool-configs" / "slop-scan.config.json",
+        project / "slop-scan.config.json",
+    )
     payload = {
         "summary": {"findingCount": 2},
         "findings": [
-            {"ruleId": "structure.pass-through-wrappers", "severity": "strong", "path": "app.ts", "location": {"line": 1}},
-            {"ruleId": "structure.directory-fanout-hotspot", "severity": "medium", "path": "src", "location": {"line": 1}},
+            {
+                "ruleId": "structure.pass-through-wrappers",
+                "severity": "strong",
+                "path": "app.ts",
+                "location": {"line": 1},
+            },
+            {
+                "ruleId": "structure.directory-fanout-hotspot",
+                "severity": "medium",
+                "path": "src",
+                "location": {"line": 1},
+            },
         ],
     }
-    env = os.environ | {"PATH": f"{write_fake_npx_slop_scan(tmp_path, payload)}:{os.environ['PATH']}"}
+    env = os.environ | {
+        "PATH": f"{write_fake_npx_slop_scan(tmp_path, payload)}:{os.environ['PATH']}"
+    }
 
     result = run_just(ROOT / "justfiles" / "bun.just", project, "_slop-scan", env=env)
 
@@ -540,15 +805,30 @@ def test_slop_scan_still_blocks_concrete_slop_findings(tmp_path: pathlib.Path) -
     project = tmp_path / "slop-project"
     project.mkdir()
     (project / "app.ts").write_text("export const value = 1;\n")
-    shutil.copy(ROOT / "tool-configs" / "slop-scan.config.json", project / "slop-scan.config.json")
+    shutil.copy(
+        ROOT / "tool-configs" / "slop-scan.config.json",
+        project / "slop-scan.config.json",
+    )
     payload = {
         "summary": {"findingCount": 2},
         "findings": [
-            {"ruleId": "structure.pass-through-wrappers", "severity": "strong", "path": "app.ts", "location": {"line": 1}},
-            {"ruleId": "errors.swallowed", "severity": "strong", "path": "app.ts", "location": {"line": 2}},
+            {
+                "ruleId": "structure.pass-through-wrappers",
+                "severity": "strong",
+                "path": "app.ts",
+                "location": {"line": 1},
+            },
+            {
+                "ruleId": "errors.swallowed",
+                "severity": "strong",
+                "path": "app.ts",
+                "location": {"line": 2},
+            },
         ],
     }
-    env = os.environ | {"PATH": f"{write_fake_npx_slop_scan(tmp_path, payload)}:{os.environ['PATH']}"}
+    env = os.environ | {
+        "PATH": f"{write_fake_npx_slop_scan(tmp_path, payload)}:{os.environ['PATH']}"
+    }
 
     result = run_just(ROOT / "justfiles" / "bun.just", project, "_slop-scan", env=env)
 
@@ -603,6 +883,81 @@ def test_envrc_check_accepts_root_envrc_and_rejects_dotenv_files(
     )
 
     assert rejected.returncode != 0, rejected.stdout + rejected.stderr
+
+
+def test_python_scaffold_bare_just_test_reaches_downstream_preflight_without_working_directory_env(
+    tmp_path: pathlib.Path,
+) -> None:
+    project = tmp_path / "python-scaffold-project"
+    project.mkdir()
+    shutil.copy(ROOT / "scaffolds" / "python" / "justfile", project / "justfile")
+    (project / "pyproject.toml").write_text(
+        "\n".join(
+            [
+                "[project]",
+                'name = "scaffold-python-target"',
+                'version = "0.1.0"',
+                'requires-python = ">=3.14"',
+                "",
+            ]
+        )
+    )
+    (project / ".envrc").write_text("source_up\n")
+    env = os.environ | {"DIRENV_CONFIGURED_CORRECTLY": "1"}
+
+    result = subprocess.run(
+        ["just", "test"],
+        cwd=project,
+        env=env,
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+
+    output = result.stdout + result.stderr
+    assert result.returncode != 0, output
+    assert "Python project must have tests" in output
+    assert "the following required arguments were not provided" not in output
+
+
+def test_python_scaffold_bare_just_test_breaks_when_just_working_directory_is_exported(
+    tmp_path: pathlib.Path,
+) -> None:
+    project = tmp_path / "python-scaffold-project"
+    project.mkdir()
+    shutil.copy(ROOT / "scaffolds" / "python" / "justfile", project / "justfile")
+    (project / "pyproject.toml").write_text(
+        "\n".join(
+            [
+                "[project]",
+                'name = "scaffold-python-target"',
+                'version = "0.1.0"',
+                'requires-python = ">=3.14"',
+                "",
+            ]
+        )
+    )
+    (project / ".envrc").write_text(
+        'source_up\nexport JUST_WORKING_DIRECTORY="$(pwd -P)"\n'
+    )
+    env = os.environ | {
+        "DIRENV_CONFIGURED_CORRECTLY": "1",
+        "JUST_WORKING_DIRECTORY": str(project),
+    }
+
+    result = subprocess.run(
+        ["just", "test"],
+        cwd=project,
+        env=env,
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+
+    output = result.stdout + result.stderr
+    assert result.returncode != 0, output
+    assert "the following required arguments were not provided" in output
+    assert "--justfile <JUSTFILE>" in output
 
 
 def test_eslint_flat_config_imports_with_declared_tool_config_deps(
@@ -778,7 +1133,9 @@ def test_scaffolds_delegate_qc_in_project_directory(
         assert wrong_root_error not in output
 
 
-def test_bun_playwright_scaffold_delegates_app_boot_to_global_qc(tmp_path: pathlib.Path) -> None:
+def test_bun_playwright_scaffold_delegates_app_boot_to_global_qc(
+    tmp_path: pathlib.Path,
+) -> None:
     project = tmp_path / "bun-playwright-project"
     project.mkdir()
 
@@ -943,7 +1300,9 @@ def test_language_qc_delegates_nested_global_recipes_in_project_directory(
 
         output = result.stdout + result.stderr
         assert result.returncode == 0, output
-        delegated_lines = [line.strip() for line in output.splitlines() if "just -f " in line]
+        delegated_lines = [
+            line.strip() for line in output.splitlines() if "just -f " in line
+        ]
         assert delegated_lines, output
         for line in delegated_lines:
             assert " -d . " in f" {line} ", line
@@ -954,7 +1313,9 @@ def test_tsc_removes_temp_output_on_success(tmp_path: pathlib.Path) -> None:
     project.mkdir()
     tmpdir = tmp_path / "tmp"
     tmpdir.mkdir()
-    (project / "package.json").write_text(json.dumps({"scripts": {"typecheck": "printf typecheck-ok"}}) + "\n")
+    (project / "package.json").write_text(
+        json.dumps({"scripts": {"typecheck": "printf typecheck-ok"}}) + "\n"
+    )
 
     result = subprocess.run(
         [
@@ -977,7 +1338,56 @@ def test_tsc_removes_temp_output_on_success(tmp_path: pathlib.Path) -> None:
     assert sorted(ROOT.glob(".tsc-output.*")) == []
 
 
-def test_pytest_with_coverage_fails_when_threshold_fails(
+def test_pytest_installs_dependency_group_requirements(
+    tmp_path: pathlib.Path,
+) -> None:
+    project = tmp_path / "python-project"
+    package_dir = project / "src" / "dependency_group_project"
+    tests_dir = project / "tests"
+    package_dir.mkdir(parents=True)
+    tests_dir.mkdir()
+    (project / "pyproject.toml").write_text(
+        "\n".join(
+            [
+                "[project]",
+                'name = "dependency-group-project"',
+                'version = "0.1.0"',
+                'requires-python = ">=3.14"',
+                "",
+                "[dependency-groups]",
+                'dev = ["PyYAML"]',
+                "",
+                "[build-system]",
+                'requires = ["setuptools"]',
+                'build-backend = "setuptools.build_meta"',
+                "",
+                "[tool.setuptools.packages.find]",
+                'where = ["src"]',
+                "",
+            ]
+        )
+    )
+    (package_dir / "__init__.py").write_text("VALUE = 1\n")
+    (tests_dir / "test_dependency_group.py").write_text(
+        "\n".join(
+            [
+                "import yaml",
+                "",
+                "",
+                "def test_dependency_group_requirement_is_available() -> None:",
+                '    assert yaml.safe_load("value: 1") == {"value": 1}',
+                "",
+            ]
+        )
+    )
+
+    result = run_just(ROOT / "justfiles" / "python.just", project, "_pytest")
+
+    output = result.stdout + result.stderr
+    assert result.returncode == 0, output
+
+
+def test_pytest_with_coverage_generates_xml_without_total_threshold(
     tmp_path: pathlib.Path,
 ) -> None:
     project = tmp_path / "python-project"
@@ -1029,22 +1439,144 @@ def test_pytest_with_coverage_fails_when_threshold_fails(
         )
     )
 
-    result = subprocess.run(
-        [
-            "just",
-            "--justfile",
-            str(ROOT / "justfiles" / "python.just"),
-            "-d",
-            str(project),
-            "_pytest_with_coverage",
-        ],
-        cwd=project,
-        text=True,
-        capture_output=True,
-        check=False,
+    cache_home = tmp_path / "cache"
+    result = run_just(
+        ROOT / "justfiles" / "python.just",
+        project,
+        "_pytest_with_coverage",
+        env=os.environ | {"XDG_CACHE_HOME": str(cache_home)},
     )
 
-    assert result.returncode != 0, result.stdout + result.stderr
+    output = result.stdout + result.stderr
+    project_slug = re.sub(r"[^A-Za-z0-9._-]", "_", str(project.resolve()))
+    coverage_xml = (
+        cache_home / "quality-control" / "coverage" / project_slug / "coverage.xml"
+    )
+    assert result.returncode == 0, output
+    assert coverage_xml.exists()
+    assert "Coverage XML report:" in output
+
+
+def write_import_linter_project(
+    project: pathlib.Path,
+    *,
+    import_sibling: bool = False,
+    local_importlinter_override: bool = False,
+) -> None:
+    package_a = project / "src" / "import_linter_a"
+    package_b = project / "src" / "import_linter_b"
+    tests_dir = project / "tests"
+    package_a.mkdir(parents=True)
+    package_b.mkdir(parents=True)
+    tests_dir.mkdir()
+    pyproject_lines = [
+        "[project]",
+        'name = "import-linter-project"',
+        'version = "0.1.0"',
+        'requires-python = ">=3.14"',
+        "",
+        "[build-system]",
+        'requires = ["setuptools"]',
+        'build-backend = "setuptools.build_meta"',
+        "",
+        "[tool.setuptools.packages.find]",
+        'where = ["src"]',
+        "",
+    ]
+    if local_importlinter_override:
+        pyproject_lines.extend(
+            [
+                "[tool.importlinter]",
+                'root_packages = ["import_linter_a"]',
+                "",
+            ]
+        )
+    (project / "pyproject.toml").write_text("\n".join(pyproject_lines))
+    package_a_init = (
+        "from import_linter_b import VALUE as SIBLING_VALUE\nVALUE = SIBLING_VALUE\n"
+        if import_sibling
+        else "VALUE = 1\n"
+    )
+    (package_a / "__init__.py").write_text(package_a_init)
+    (package_b / "__init__.py").write_text("VALUE = 2\n")
+    (tests_dir / "test_import_linter_project.py").write_text(
+        "\n".join(
+            [
+                "from import_linter_a import VALUE",
+                "",
+                "",
+                "def test_value() -> None:",
+                "    assert VALUE",
+                "",
+            ]
+        )
+    )
+
+
+def test_python_preflight_rejects_local_importlinter_pyproject_override(
+    tmp_path: pathlib.Path,
+) -> None:
+    project = tmp_path / "local-importlinter-project"
+    project.mkdir()
+    write_import_linter_project(project, local_importlinter_override=True)
+
+    result = run_just(
+        ROOT / "justfiles" / "python.just", project, "_check-python-project"
+    )
+    output = result.stdout + result.stderr
+
+    assert result.returncode != 0, output
+    assert r"\[tool\.importlinter" in output
+    assert TRIAGE_MARKER in output
+
+
+def test_import_linter_uses_central_config_without_downstream_override(
+    tmp_path: pathlib.Path,
+) -> None:
+    project = tmp_path / "central-importlinter-project"
+    project.mkdir()
+    write_import_linter_project(project)
+
+    result = run_just(ROOT / "justfiles" / "python.just", project, "_import-linter")
+    output = result.stdout + result.stderr
+
+    assert result.returncode == 0, output
+    assert "First-party packages are independent KEPT" in output
+
+
+def test_import_linter_blocks_sibling_imports_without_local_override(
+    tmp_path: pathlib.Path,
+) -> None:
+    project = tmp_path / "central-importlinter-failure-project"
+    project.mkdir()
+    write_import_linter_project(project, import_sibling=True)
+
+    result = run_just(ROOT / "justfiles" / "python.just", project, "_import-linter")
+    output = result.stdout + result.stderr
+
+    assert result.returncode != 0, output
+    assert "First-party packages are independent BROKEN" in output
+    assert "import_linter_a is not allowed to import import_linter_b" in output
+    assert TRIAGE_MARKER in output
+
+
+def test_import_linter_ignores_local_override_when_recipe_is_called_directly(
+    tmp_path: pathlib.Path,
+) -> None:
+    project = tmp_path / "ignored-local-importlinter-project"
+    project.mkdir()
+    write_import_linter_project(
+        project,
+        import_sibling=True,
+        local_importlinter_override=True,
+    )
+
+    result = run_just(ROOT / "justfiles" / "python.just", project, "_import-linter")
+    output = result.stdout + result.stderr
+
+    assert result.returncode != 0, output
+    assert "First-party packages are independent BROKEN" in output
+    assert "import_linter_a is not allowed to import import_linter_b" in output
 
 
 def test_deptry_accepts_declared_distributions_with_different_import_names(
@@ -1061,6 +1593,8 @@ def test_deptry_accepts_declared_distributions_with_different_import_names(
                 'version = "0.1.0"',
                 'requires-python = ">=3.14"',
                 "dependencies = [",
+                '    "markdown-it-py>=3",',
+                '    "python-frontmatter>=1.3",',
                 '    "python-slugify>=8",',
                 '    "PyYAML>=6",',
                 '    "types-PyYAML>=6",',
@@ -1072,10 +1606,12 @@ def test_deptry_accepts_declared_distributions_with_different_import_names(
     (package_dir / "__init__.py").write_text(
         "\n".join(
             [
+                "import frontmatter",
                 "import yaml",
+                "from markdown_it import MarkdownIt",
                 "from slugify import slugify",
                 "",
-                'VALUE = yaml.safe_dump({"slug": slugify("A B")})',
+                'VALUE = yaml.safe_dump({"html": MarkdownIt().render("# A"), "metadata": frontmatter.Post("").metadata, "slug": slugify("A B")})',
                 "",
             ]
         )
@@ -1097,6 +1633,87 @@ def test_deptry_accepts_declared_distributions_with_different_import_names(
     )
 
     assert result.returncode == 0, result.stdout + result.stderr
+
+
+def test_deptry_allows_framework_required_import_invisible_dependencies(
+    tmp_path: pathlib.Path,
+) -> None:
+    project = tmp_path / "framework-runtime-dependency-project"
+    package_dir = project / "src" / "framework_runtime_dependency_project"
+    package_dir.mkdir(parents=True)
+    (project / "pyproject.toml").write_text(
+        "\n".join(
+            [
+                "[project]",
+                'name = "framework-runtime-dependency-project"',
+                'version = "0.1.0"',
+                'requires-python = ">=3.14"',
+                "dependencies = [",
+                '    "fastapi>=0.115",',
+                '    "python-multipart>=0.0.20",',
+                "]",
+                "",
+            ]
+        )
+    )
+    (package_dir / "__init__.py").write_text(
+        "\n".join(
+            [
+                "from fastapi import FastAPI, File",
+                "",
+                "app = FastAPI()",
+                "",
+                '@app.post("/upload")',
+                "async def upload(payload: bytes = File(...)) -> int:",
+                "    return len(payload)",
+                "",
+            ]
+        )
+    )
+
+    result = run_just(ROOT / "justfiles" / "python.just", project, "_deptry")
+    output = result.stdout + result.stderr
+
+    assert result.returncode == 0, output
+    assert "DEP002" not in output
+
+
+def test_deptry_still_blocks_missing_import_dependencies(
+    tmp_path: pathlib.Path,
+) -> None:
+    project = tmp_path / "missing-dependency-project"
+    package_dir = project / "src" / "missing_dependency_project"
+    package_dir.mkdir(parents=True)
+    (project / "pyproject.toml").write_text(
+        "\n".join(
+            [
+                "[project]",
+                'name = "missing-dependency-project"',
+                'version = "0.1.0"',
+                'requires-python = ">=3.14"',
+                "dependencies = []",
+                "",
+            ]
+        )
+    )
+    (package_dir / "__init__.py").write_text(
+        "\n".join(
+            [
+                "import requests",
+                "",
+                'VALUE = requests.get("https://example.com", timeout=1).status_code',
+                "",
+            ]
+        )
+    )
+
+    result = run_just(ROOT / "justfiles" / "python.just", project, "_deptry")
+    output = result.stdout + result.stderr
+
+    assert result.returncode != 0, output
+    assert "DEP001" in output
+    assert "missing/import dependency issues" in output
+    assert TRIAGE_MARKER in output
 
 
 def test_deptry_accepts_first_party_imports_in_src_layout(
@@ -1453,7 +2070,10 @@ def test_mypy_uses_pep723_script_dependencies(
 
     output = result.stdout + result.stderr
     assert result.returncode == 0, output
-    assert 'Cannot find implementation or library stub for module named "requests"' not in output
+    assert (
+        'Cannot find implementation or library stub for module named "requests"'
+        not in output
+    )
     assert 'Library stubs not installed for "requests"' not in output
 
 
@@ -1599,3 +2219,65 @@ def test_rust_normalization_formats_nested_manifest_project(
     output = result.stdout + result.stderr
     assert result.returncode == 0, output
     assert (source_dir / "lib.rs").read_text() == "pub fn value() -> u8 {\n    42\n}\n"
+
+
+# Regression for #17: just >= 1.46 binds JUST_WORKING_DIRECTORY to
+# -d/--working-directory, which then requires --justfile — so any consumer that
+# exported JUST_WORKING_DIRECTORY (the old delegated-gate routing hint) could no
+# longer run a bare `just test`. The scaffolds resolve this by routing with an
+# explicit `-d .` and never exporting JUST_WORKING_DIRECTORY, so the bare
+# entrypoint keeps working. These tests lock both halves of that contract.
+
+SCAFFOLD_DELEGATES = {
+    "python": "python.just",
+    "rust": "rust.just",
+    "bun": "bun.just",
+    "bun-playwright": "bun.just",
+    "sage": "sage.just",
+}
+
+
+@pytest.mark.parametrize("language", sorted(SCAFFOLD_DELEGATES))
+@pytest.mark.parametrize("recipe", ["test", "test-ci"])
+def test_scaffold_bare_just_entrypoint_survives_working_directory_binding(
+    tmp_path: pathlib.Path,
+    language: str,
+    recipe: str,
+) -> None:
+    """A bare `just <recipe>` in a scaffold consumer parses and routes under
+    just >= 1.46 without a JUST_WORKING_DIRECTORY export (#17)."""
+    project = tmp_path / f"{language}-project"
+    project.mkdir()
+    (project / "justfile").write_text(
+        (ROOT / "scaffolds" / language / "justfile").read_text()
+    )
+
+    clean_env = {k: v for k, v in os.environ.items() if k != "JUST_WORKING_DIRECTORY"}
+    result = subprocess.run(
+        ["just", "--dry-run", recipe],
+        cwd=project,
+        env=clean_env,
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+    output = result.stdout + result.stderr
+    # The bug manifested as a just arg-parse failure ("required ... --justfile")
+    # before any recipe ran; a clean parse + route is the fix.
+    assert result.returncode == 0, output
+    assert f"-f ~/ai-review-ci/justfiles/{SCAFFOLD_DELEGATES[language]}" in output
+    assert "-d ." in output
+    assert recipe in output
+
+
+@pytest.mark.parametrize("language", sorted(SCAFFOLD_DELEGATES))
+def test_scaffold_does_not_export_working_directory_routing_hint(language: str) -> None:
+    """No scaffold may reintroduce a JUST_WORKING_DIRECTORY export: under just
+    >= 1.46 that env var alone breaks bare `just` argument parsing (#17)."""
+    scaffold = (ROOT / "scaffolds" / language / "justfile").read_text()
+    assert "JUST_WORKING_DIRECTORY" not in scaffold
+
+
+# The collision itself (JUST_WORKING_DIRECTORY set -> bare `just` fails at
+# arg-parse) is covered with the real delegated chain by
+# test_python_scaffold_bare_just_test_breaks_when_just_working_directory_is_exported.

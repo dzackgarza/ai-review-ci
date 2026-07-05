@@ -105,6 +105,8 @@ copy-reviewer-repo:
     sudo rsync -a --delete \
       --exclude '.git' \
       --exclude '.github' \
+      --exclude '.agents' \
+      --exclude '.hermes' \
       --exclude '.review-report-artifact.json' \
       --exclude '.review-report.sarif' \
       {{control_repo}}/ {{reviewer_repo}}/
@@ -136,6 +138,30 @@ check-delegation profile:
       --target "{{control_repo}}" \
       --profile "{{profile}}"
 
+check-qc-doctor:
+    #!/usr/bin/env bash
+    set -euo pipefail
+
+    doctor_payload="{{control_repo}}/.ai-review-ci-doctor.json"
+    if uv run --project {{infra}} ai-review-ci doctor \
+      --target "{{control_repo}}" \
+      --json > "$doctor_payload"; then
+        doctor_status=0
+    else
+        doctor_status=$?
+    fi
+
+    printf '```ai-review-ci-doctor-json\n'
+    cat "$doctor_payload"
+    printf '\n```\n'
+    exit "$doctor_status"
+
+check-pr-description pr_number:
+    uv run --project {{infra}} ai-review-ci check-pr-description \
+      --repo "${GITHUB_REPOSITORY}" \
+      --pr-number "{{pr_number}}" \
+      --repo-root "{{control_repo}}"
+
 check-app-boot profile:
     uv run --project {{infra}} ai-review-ci check-app-boot \
       --target "{{control_repo}}" \
@@ -165,6 +191,15 @@ run-review report_type scope:
 
 collect-output:
     cp {{reviewer_repo}}/.review-report-artifact.json {{control_repo}}/.review-report-artifact.json
+
+write-review-state:
+    uv run --project {{infra}} ai-review-ci report-metadata \
+      --path "{{control_repo}}/.review-report-artifact.json" \
+      > "{{control_repo}}/.review-findings.json"
+
+enforce-review-status:
+    uv run --project {{infra}} ai-review-ci enforce-report-status \
+      --path "{{control_repo}}/.review-report-artifact.json"
 
 convert-sarif category:
     uv run --project {{infra}} ai-review-ci to-sarif \

@@ -2,6 +2,7 @@
 
 import json
 import re
+import shlex
 import subprocess
 import sys
 from dataclasses import dataclass
@@ -56,6 +57,8 @@ PROJECT_PROFILES = {
 BASE_REQUIRED_CHECK_CONTEXTS = (
     "deterministic-diff / deterministic-diff",
     "delegation-conformance / delegation-conformance",
+    "qc-doctor / qc-doctor",
+    "pr-description-checklist / pr-description-checklist",
     "general / review",
     "slop / review",
     "thread-resolution / thread-resolution",
@@ -163,6 +166,14 @@ query($owner: String!, $name: String!, $number: Int!, $cursor: String) {
 _COMMIT_EVIDENCE = re.compile(r"(?:commit|commits/|[/-])\s*[0-9a-f]{7,40}\b|\b[0-9a-f]{12,40}\b", re.IGNORECASE)
 _LEDGER_EVIDENCE = re.compile(r"disposition[- ]ledger|resolution[- ]ledger", re.IGNORECASE)
 _DIRECT_PLAYWRIGHT = re.compile(r"\b(?:bunx|npx|npm|pnpm|yarn)\s+(?:exec\s+)?playwright\b|\bplaywright\s+test\b")
+_PROOF_COMMAND = re.compile(r"\*\*Proof:\*\*\s*`([^`]+)`")
+_RESOLVE_THREAD_MUTATION = """
+mutation($threadId: ID!) {
+  resolveReviewThread(input: {threadId: $threadId}) {
+    thread { id isResolved }
+  }
+}
+"""
 
 
 def _fail(message: str) -> NoReturn:
@@ -295,6 +306,36 @@ def check_app_boot(target: Path, profile: str) -> None:
     print(f"App boot gate passed for {target}.")
 
 
+_UNCHECKED_CHECKLIST_ITEM = re.compile(r"^\s*[-*+]\s*\[\s*\]\s+\S", re.MULTILINE)
+
+
+def unchecked_checklist_lines(body: str) -> list[int]:
+    """Return 1-indexed PR body lines containing unchecked markdown checklist items."""
+    return [line_no for line_no, line in enumerate(body.splitlines(), start=1) if _UNCHECKED_CHECKLIST_ITEM.search(line)]
+
+
+# Machine marker embedded in the distributed PR template's Policy Alignment Gate
+# section. A repo "opts in" to gate enforcement by installing that template; the
+# gate then requires the marker in every PR body so the section cannot be deleted
+# to bypass the affirmation. See AGENTS.md -> Policy Alignment Gate and #154.
+POLICY_GATE_MARKER = "<!-- policy-alignment-gate -->"
+
+
+def gate_template_requires_marker(repo_root: Path) -> bool:
+    """True when the repo has installed the policy-alignment PR template.
+
+    Enforcement is opt-in by installation: only when the repo's own PR template
+    carries the marker do we require PR bodies to carry it too. Repos without the
+    template keep the lenient unchecked-items-only behavior, so distributing the
+    gate does not break repos that have not installed the template.
+    """
+    template = repo_root / ".github" / "pull_request_template.md"
+    # The template carries non-ASCII glyphs; the gate runs in CI where the locale
+    # is not guaranteed UTF-8, so read_text() without an explicit encoding could
+    # raise. Pin UTF-8 (the template's actual encoding).
+    return template.is_file() and POLICY_GATE_MARKER in template.read_text(encoding="utf-8")
+
+
 def _gh_json(args: list[str], body: JsonDict | None = None) -> JsonDict:
     result = subprocess.run(
         ["gh", *args],
@@ -306,6 +347,36 @@ def _gh_json(args: list[str], body: JsonDict | None = None) -> JsonDict:
         _fail(f"gh {' '.join(args[:3])} failed: {result.stderr.strip()}")
     data: JsonDict = json.loads(result.stdout)
     return data
+
+
+def check_pr_description(repo: str, pr_number: int, repo_root: Path = Path(".")) -> None:
+    """Fail if the PR description omits the policy-alignment gate or has unchecked items.
+
+    When the repo has installed the policy-alignment PR template (opt-in), the PR body
+    must carry the gate marker: the affirmation section cannot be deleted to bypass the
+    gate. The unchecked-checklist-item check always applies.
+    """
+    pr = _gh_json(["api", f"repos/{repo}/pulls/{pr_number}"])
+    body = pr.get("body")
+    if body is None:
+        body = ""
+    if not isinstance(body, str):
+        _fail("pull request body was not a string")
+    if gate_template_requires_marker(repo_root) and POLICY_GATE_MARKER not in body:
+        print(
+            "PR description is missing the required policy-alignment gate section "
+            f"(marker {POLICY_GATE_MARKER!r}). This repo installs the gate template; "
+            "restore the section from .github/pull_request_template.md and affirm it.",
+            file=sys.stderr,
+        )
+        sys.exit(1)
+    unchecked = unchecked_checklist_lines(body)
+    if unchecked:
+        print("PR description contains unchecked markdown checklist items:", file=sys.stderr)
+        for line_no in unchecked:
+            print(f"- PR body line {line_no}: unchecked checklist item", file=sys.stderr)
+        sys.exit(1)
+    print("PR description checklist gate found no unchecked items.")
 
 
 def _thread_nodes(repo: str, pr_number: int) -> list[JsonDict]:
@@ -341,8 +412,69 @@ def _comments(node: JsonDict) -> list[JsonDict]:
     return comments
 
 
-def _is_ai_review_thread(node: JsonDict) -> bool:
-    return any(FINGERPRINT_MARKER in str(comment["body"]) for comment in _comments(node))
+def _first_ai_review_proof(node: JsonDict) -> str | None:
+    """Proof command from an ai-review thread body, if the body uses our marker."""
+    for comment in _comments(node):
+        body = str(comment["body"])
+        if FINGERPRINT_MARKER not in body:
+            continue
+        match = _PROOF_COMMAND.search(body)
+        if match is not None:
+            return match.group(1)
+    return None
+
+
+def _safe_proof_args(proof_command: str) -> list[str] | None:
+    """Return argv for safe grep/rg proof commands; reject shell features."""
+    try:
+        args = shlex.split(proof_command)
+    except ValueError:
+        return None
+    if not args or args[0] not in {"grep", "rg"}:
+        return None
+    if any(token in {";", "&&", "||", "|", ">", "<"} for token in args):
+        return None
+    if args[0] == "grep":
+        # grep proofs must name at least a pattern and a target path. Recursive
+        # project scans are too broad to auto-resolve safely.
+        operands = [arg for arg in args[1:] if not arg.startswith("-")]
+        if len(operands) < 2:
+            return None
+    return args
+
+
+def _proof_is_stale(proof_command: str) -> bool:
+    args = _safe_proof_args(proof_command)
+    if args is None:
+        return False
+    result = subprocess.run(args, capture_output=True, text=True, check=False)
+    # grep/rg exit 1 means no matches. Any other non-zero status is an
+    # execution error and must not auto-resolve the thread.
+    return result.returncode == 1
+
+
+def _resolve_review_thread(thread_id: str) -> None:
+    _gh_json(
+        [
+            "api",
+            "graphql",
+            "-f",
+            f"query={_RESOLVE_THREAD_MUTATION}",
+            "-F",
+            f"threadId={thread_id}",
+        ]
+    )
+
+
+def _auto_resolve_stale_thread(node: JsonDict) -> bool:
+    proof = _first_ai_review_proof(node)
+    if proof is None or not _proof_is_stale(proof):
+        return False
+    thread_id = str(node.get("id", ""))
+    if not thread_id:
+        _fail("cannot auto-resolve stale proof thread without a thread id")
+    _resolve_review_thread(thread_id)
+    return True
 
 
 def _has_resolution_evidence(node: JsonDict) -> bool:
@@ -354,16 +486,16 @@ def _has_resolution_evidence(node: JsonDict) -> bool:
 
 
 def check_review_threads(repo: str, pr_number: int) -> None:
-    """Fail unless all ai-review PR threads are resolved with visible evidence."""
+    """Fail unless every PR review thread is resolved with visible evidence."""
     failures: list[str] = []
     for node in _thread_nodes(repo, pr_number):
-        if not _is_ai_review_thread(node):
-            continue
         path = str(node["path"])
         if not node["isResolved"]:
-            failures.append(f"{path}: unresolved ai-review thread")
+            if _auto_resolve_stale_thread(node):
+                continue
+            failures.append(f"{path}: unresolved review thread")
         elif not _has_resolution_evidence(node):
-            failures.append(f"{path}: resolved ai-review thread lacks commit or disposition-ledger evidence")
+            failures.append(f"{path}: resolved review thread lacks commit or disposition-ledger evidence")
     if failures:
         print("Review thread gate found unresolved or unevidenced threads:", file=sys.stderr)
         for failure in failures:

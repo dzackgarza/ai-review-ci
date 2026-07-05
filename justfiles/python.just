@@ -15,9 +15,9 @@
 # WORKFLOW (two-tier):
 #   just test     — COMMIT gate: correctness + normalization only (preflight,
 #                   normalize/auto-fix, syntax, mypy, plain pytest, bypass check).
-#   just test-ci  — PUSH/CI gate: test + the full style/slop/coverage stack
-#                   (coverage 100% + diff-cover, deptry, import-linter, vulture,
-#                   grain, jscpd, lizard, ast-grep, semgrep, vibecheck, ai-slop).
+#   just test-ci  — PUSH/CI gate: test + changed-line coverage and deterministic
+#                   dependency/import/AST/duplication gates. Broad debt scans
+#                   stay available through _ambient-python-debt.
 #
 # HOOKS: pre-commit blocks on `just test`; pre-push blocks on `just test-ci`.
 #   Run `just install-global-hooks` from ~/ai-review-ci to activate them globally.
@@ -172,7 +172,8 @@ _check-python-project:
 			'\[tool\.coverage' \
 			'\[tool\.deptry' \
 			'\[tool\.vulture' \
-			'\[tool\.import-linter'; do
+			'\[tool\.import-linter' \
+			'\[tool\.importlinter'; do
 			if grep -qP "$section" pyproject.toml 2>/dev/null; then
 				echo "ERROR: pyproject.toml contains section matching '$section' — global QC owns this tool config."
 				echo "       DELETE this section from pyproject.toml. The global config for this tool"
@@ -253,7 +254,15 @@ _pytest: _install-tools
 		"{{artifacts}}/scripts/emit-triage-directive.sh"
 		exit 1
 	fi
-	if uvx --python 3.14 --from pytest --with-editable . pytest; then
+	with_args=(--with-editable .)
+	dependency_requirements_output="$(uv run --no-project python "{{artifacts}}/scripts/python_qc_metadata.py" dependency-group-requirements .)"
+	if [ -n "$dependency_requirements_output" ]; then
+		mapfile -t dependency_requirements <<<"$dependency_requirements_output"
+		for requirement in "${dependency_requirements[@]}"; do
+			with_args+=(--with "$requirement")
+		done
+	fi
+	if uvx --python 3.14 --from pytest "${with_args[@]}" pytest; then
 		:
 	else
 		ec=$?
@@ -267,7 +276,7 @@ _pytest_with_coverage: _install-tools
 	set -euo pipefail
 	echo "============================="
 	echo "=== Running: pytest with coverage measurement ==="
-	echo "# Runs pytest with coverage.py to enforce 100% line/branch coverage and generate coverage.xml"
+	echo "# Runs pytest with coverage.py and generates coverage.xml for diff-cover"
 	if ! rg --files tests -g 'test_*.py' -g '*_test.py' >/dev/null 2>&1; then
 		echo "ERROR: pytest/coverage: no test files found in a Python project."
 		"{{artifacts}}/scripts/emit-test-writing-directive.sh"
@@ -287,7 +296,15 @@ _pytest_with_coverage: _install-tools
 	mkdir -p "$coverage_root"
 	export COVERAGE_FILE="$coverage_data"
 	export COVERAGE_RCFILE="$coverage_config"
-	if uvx --python 3.14 --from coverage --with pytest --with-editable . coverage run -m pytest; then
+	with_args=(--with pytest --with-editable .)
+	dependency_requirements_output="$(uv run --no-project python "{{artifacts}}/scripts/python_qc_metadata.py" dependency-group-requirements .)"
+	if [ -n "$dependency_requirements_output" ]; then
+		mapfile -t dependency_requirements <<<"$dependency_requirements_output"
+		for requirement in "${dependency_requirements[@]}"; do
+			with_args+=(--with "$requirement")
+		done
+	fi
+	if uvx --python 3.14 --from coverage "${with_args[@]}" coverage run -m pytest; then
 		:
 	else
 		ec=$?
@@ -295,11 +312,11 @@ _pytest_with_coverage: _install-tools
 		"{{artifacts}}/scripts/emit-triage-directive.sh"
 		exit $ec
 	fi
-	if uvx --from coverage coverage xml --fail-under=100 -o "$coverage_xml"; then
+	if uvx --from coverage coverage xml -o "$coverage_xml"; then
 		:
 	else
 		ec=$?
-		echo "ERROR: coverage below 100% threshold."
+		echo "ERROR: coverage XML generation failed."
 		"{{artifacts}}/scripts/emit-triage-directive.sh"
 		exit $ec
 	fi
@@ -358,8 +375,8 @@ _deptry: _install-tools
 	#!/usr/bin/env bash
 	set -euo pipefail
 	echo "============================="
-	echo "=== Running: deptry dependency linting ==="
-	echo "# Checks for unused/missing dependencies in pyproject.toml, detects transitive deps, and verifies type checking"
+	echo "=== Running: deptry import dependency linting ==="
+	echo "# Checks for missing/import dependency failures in pyproject.toml; unused declared dependencies are maintenance-only and do not block global QC"
 	if [ ! -f pyproject.toml ]; then
 		echo "ERROR: deptry: no pyproject.toml found — Python project must have one."
 		"{{artifacts}}/scripts/emit-triage-directive.sh"
@@ -371,7 +388,7 @@ _deptry: _install-tools
 		mapfile -t python_files <<<"$python_files_output"
 	fi
 	package_module_name_map="$(uv run --no-project python "{{artifacts}}/scripts/deptry_package_module_name_map.py" "{{configs}}/pyproject.toml")"
-	deptry_args=(. --package-module-name-map "$package_module_name_map")
+	deptry_args=(. --package-module-name-map "$package_module_name_map" --ignore DEP002)
 	first_party_modules_output="$(uv run --no-project python "{{artifacts}}/scripts/python_qc_metadata.py" first-party-modules .)"
 	if [ -n "$first_party_modules_output" ]; then
 		mapfile -t first_party_modules <<<"$first_party_modules_output"
@@ -390,7 +407,7 @@ _deptry: _install-tools
 		:
 	else
 		ec=$?
-		echo "ERROR: deptry found dependency issues in project."
+		echo "ERROR: deptry found missing/import dependency issues in project."
 		"{{artifacts}}/scripts/emit-triage-directive.sh"
 		exit $ec
 	fi
@@ -468,19 +485,14 @@ _import-linter: _install-tools
 	echo "============================="
 	echo "=== Running: import-linter dependency rules ==="
 	echo "# Enforces layer-based import rules (e.g., core cannot import from plugins, data cannot import from domain)"
-	config=""
-	if [ -f .importlinter ]; then
-		config=".importlinter"
-	elif [ -f pyproject.toml ] && python -c 'import pathlib, sys, tomllib; data = tomllib.loads(pathlib.Path("pyproject.toml").read_text(encoding="utf-8")); tool_section = data.get("tool", {}); sys.exit(0 if ("import-linter" in tool_section or "importlinter" in tool_section) else 1)'
-	then
-		config="pyproject.toml"
-	fi
-	if [ -z "$config" ]; then
-		echo "ERROR: import-linter: no project-specific import-linter config found. Add [tool.import-linter] to pyproject.toml or create .importlinter."
+	config="$(mktemp "${TMPDIR:-/tmp}/ai-review-ci-importlinter.XXXXXX.toml")"
+	trap 'rm -f "$config"' EXIT
+	if ! uv run --no-project python "{{artifacts}}/scripts/python_qc_metadata.py" import-linter-config . > "$config"; then
+		echo "ERROR: import-linter could not build the central config for this project."
 		"{{artifacts}}/scripts/emit-triage-directive.sh"
 		exit 1
 	fi
-	if uvx --from import-linter --with-editable . lint-imports --config "$config"; then
+	if uvx --python 3.14 --from import-linter --with-editable . lint-imports --config "$config"; then
 		:
 	else
 		ec=$?
@@ -504,12 +516,12 @@ _grain:
 		:
 	else
 		ec=$?
-		[ -e .grain.toml ] && gio trash .grain.toml
+		[ -e .grain.toml ] && rm -f -- .grain.toml
 		echo "ERROR: grain found unused code in project."
 		"{{artifacts}}/scripts/emit-triage-directive.sh"
 		exit $ec
 	fi
-	[ -e .grain.toml ] && gio trash .grain.toml
+	[ -e .grain.toml ] && rm -f -- .grain.toml
 
 _codeql:
 	#!/usr/bin/env bash
@@ -586,8 +598,11 @@ test: _check-python-project _normalize-common _normalize _python-syntax _mypy _p
 	just -f {{justfiles}}/shared.just -d . _no-bypass
 	echo "Commit-tier quality checks completed"
 
-# public: PUSH/CI gate — test + the full style/slop/coverage stack
-test-ci: test _pytest_with_coverage _diff-cover _deptry _import-linter _ast-grep _jscpd-python _lizard-python _vulture _grain
+# private: ambient broad-debt audit — not push-blocking for unrelated diffs
+_ambient-python-debt: _lizard-python _vulture _grain
+
+# public: PUSH/CI gate — test + changed-line coverage and deterministic project gates
+test-ci: test _pytest_with_coverage _diff-cover _deptry _import-linter _ast-grep _jscpd-python
 	#!/usr/bin/env bash
 	set -euo pipefail
 	just -f {{justfiles}}/shared.just -d . _global-qc

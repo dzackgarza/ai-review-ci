@@ -24,6 +24,10 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import Any, NoReturn
 
+from pydantic import ValidationError
+
+from ai_review_ci.github_api import CodeScanningAlert, ReviewThread
+
 JsonDict = dict[str, Any]
 
 DEFAULT_TOOL_NAMES = "ai-review/general,ai-review/slop"
@@ -34,30 +38,22 @@ def _fail(msg: str) -> NoReturn:
     sys.exit(1)
 
 
-def _required_value(mapping: JsonDict, key: str, label: str) -> object:
-    if key not in mapping:
-        _fail(f"missing required {label}.{key}")
-    return mapping[key]
-
-
 def _mapping(value: object, label: str) -> JsonDict:
     if not isinstance(value, dict):
         _fail(f"missing or invalid object at {label}")
     return value
 
 
-def _string(mapping: JsonDict, key: str, label: str) -> str:
-    value = _required_value(mapping, key, label)
-    if not isinstance(value, str) or not value:
-        _fail(f"missing or invalid string at {label}.{key}")
-    return value
+def _parse[_ModelT: (CodeScanningAlert, ReviewThread)](model: type[_ModelT], value: object, label: str) -> _ModelT:
+    """Validate a GitHub API object into a typed model, failing loudly.
 
-
-def _integer(mapping: JsonDict, key: str, label: str) -> int:
-    value = _required_value(mapping, key, label)
-    if not isinstance(value, int):
-        _fail(f"missing or invalid integer at {label}.{key}")
-    return value
+    Converts pydantic's ValidationError into the module's fail-loud boundary
+    (exit 1 with a message) rather than an uncaught traceback.
+    """
+    try:
+        return model.model_validate(value)
+    except ValidationError as exc:
+        _fail(f"invalid {label}: {exc}")
 
 
 def _alerts_query_params(tool_name: str, ref: str | None, state: str | None) -> dict[str, str]:
@@ -81,6 +77,11 @@ def _no_analysis_found(stderr: str) -> bool:
     return "no analysis found" in stderr
 
 
+def _code_scanning_disabled(stderr: str) -> bool:
+    lowered = stderr.lower()
+    return "code scanning is not enabled" in lowered and "http 403" in lowered
+
+
 def _validated_alert_page(stdout: str, path: str) -> list[JsonDict]:
     page_alerts = json.loads(stdout)
     if not isinstance(page_alerts, list):
@@ -91,7 +92,7 @@ def _validated_alert_page(stdout: str, path: str) -> list[JsonDict]:
 def _fetch_alert_page(path: str, params: dict[str, str], page: int) -> list[JsonDict]:
     result = subprocess.run(_alerts_api_args(path, params, page), capture_output=True, text=True)
     if result.returncode != 0:
-        if _no_analysis_found(result.stderr):
+        if _no_analysis_found(result.stderr) or _code_scanning_disabled(result.stderr):
             return []
         _fail(f"gh api GET {path} failed: {result.stderr.strip()}")
     return _validated_alert_page(result.stdout, path)
@@ -157,22 +158,7 @@ def _thread_page(owner: str, name: str, pr_number: int, cursor: str | None) -> J
 
 
 def _thread_digest(node: JsonDict) -> JsonDict | None:
-    comments_value = _mapping(_required_value(node, "comments", "review_thread"), "review_thread.comments")
-    comments = _required_value(comments_value, "nodes", "review_thread.comments")
-    if not isinstance(comments, list):
-        _fail("missing or invalid array at review_thread.comments.nodes")
-    if not comments:
-        return None
-    first_comment = _mapping(comments[0], "review_thread.comments.nodes[0]")
-    body = _string(first_comment, "body", "review_thread.comments.nodes[0]")
-    resolved = _required_value(node, "isResolved", "review_thread")
-    if not isinstance(resolved, bool):
-        _fail("missing or invalid boolean at review_thread.isResolved")
-    return {
-        "path": _string(node, "path", "review_thread"),
-        "headline": body.splitlines()[0],
-        "resolved": resolved,
-    }
+    return _parse(ReviewThread, node, "review_thread").digest()
 
 
 def _fetch_pr_threads(repo: str, pr_number: int) -> list[JsonDict]:
@@ -192,37 +178,9 @@ def _fetch_pr_threads(repo: str, pr_number: int) -> list[JsonDict]:
     return threads
 
 
-def _alert_label(alert: JsonDict) -> str:
-    """Extract finding label from GitHub's required rule metadata."""
-    rule = _mapping(_required_value(alert, "rule", "alert"), "alert.rule")
-    if "name" in rule:
-        return _string(rule, "name", "alert.rule")
-    return _string(rule, "id", "alert.rule")
-
-
-def _alert_location(alert: JsonDict) -> str:
-    instance = _mapping(
-        _required_value(alert, "most_recent_instance", "alert"),
-        "alert.most_recent_instance",
-    )
-    loc = _mapping(
-        _required_value(instance, "location", "alert.most_recent_instance"),
-        "alert.most_recent_instance.location",
-    )
-    path = _string(loc, "path", "alert.most_recent_instance.location")
-    start_line = _integer(loc, "start_line", "alert.most_recent_instance.location")
-    return f"{path}:{start_line}"
-
-
-def _alert_url(alert: JsonDict) -> str:
-    return _string(alert, "html_url", "alert")
-
-
 def _format_alert(alert: JsonDict) -> str:
-    label = _alert_label(alert)
-    loc = _alert_location(alert)
-    url = _alert_url(alert)
-    return f"- **{label}** at `{loc}`  \n  Alert: {url}"
+    parsed = _parse(CodeScanningAlert, alert, "alert")
+    return f"- **{parsed.rule.label}** at `{parsed.location}`  \n  Alert: {parsed.html_url}"
 
 
 def _open_lines(alerts: list[JsonDict]) -> list[str]:
@@ -236,14 +194,10 @@ def _dismissed_lines(alerts: list[JsonDict]) -> list[str]:
         return []
     lines = ["", "**Dismissed / rejected findings:**"]
     for alert in alerts:
-        reason = _string(alert, "dismissed_reason", "alert")
-        comment_value = _required_value(alert, "dismissed_comment", "alert")
-        if comment_value is None:
-            extra = f" ({reason})"
-        elif isinstance(comment_value, str):
-            extra = f" ({reason}: {comment_value})" if comment_value else f" ({reason})"
-        else:
-            _fail("missing or invalid string at alert.dismissed_comment")
+        parsed = _parse(CodeScanningAlert, alert, "alert")
+        reason = parsed.dismissed_reason or ""
+        comment = parsed.dismissed_comment
+        extra = f" ({reason}: {comment})" if comment else f" ({reason})"
         lines.append(_format_alert(alert) + extra)
     return lines
 

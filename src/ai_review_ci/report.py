@@ -22,7 +22,7 @@ from typing import Literal
 
 from pydantic import ValidationError
 
-from ai_review_ci.models import MODEL_BY_TYPE
+from ai_review_ci.models import MODEL_BY_TYPE, finding_fingerprint
 
 ReportType = Literal["general", "slop"]
 
@@ -75,23 +75,67 @@ def report_schema(report_type: ReportType) -> None:
     print(json.dumps(MODEL_BY_TYPE[report_type].model_json_schema(), indent=2))
 
 
+def _review_state(path: Path) -> dict[str, object]:
+    """Machine-readable review state from a validated artifact."""
+    if not path.is_file():
+        print(f"Error: file not found: {path}", file=sys.stderr)
+        sys.exit(1)
+
+    data = json.loads(path.read_text())
+    findings = data["findings"]
+    report_type = data["report_type"]
+    structured_findings = []
+    for finding in findings:
+        loc = finding["location"]
+        category = finding["category"]
+        path_text = str(loc["path"])
+        structured_findings.append(
+            {
+                "fingerprint": finding_fingerprint(category, path_text),
+                "tier": finding["tier"],
+                "type": report_type,
+                "category": category,
+                "label": finding["label"],
+                "path": path_text,
+                "line": loc["start_line"],
+                "end_line": loc["end_line"],
+                "status": "open",
+            }
+        )
+
+    return {
+        "report_type": report_type,
+        "finding_count": len(findings),
+        "tier1_count": sum(1 for f in findings if f["tier"] == "tier1"),
+        "tier2_count": sum(1 for f in findings if f["tier"] == "tier2"),
+        "findings": structured_findings,
+    }
+
+
 def report_metadata(path: Path) -> None:
     """Print machine-parseable metadata from a validated artifact.
 
     Args:
         path: Path to the validated artifact JSON file.
     """
-    if not path.is_file():
-        print(f"Error: file not found: {path}", file=sys.stderr)
+    print(json.dumps(_review_state(path)))
+
+
+def enforce_report_status(path: Path) -> None:
+    """Fail when a validated report contains actionable tier1 findings.
+
+    Args:
+        path: Path to the validated artifact JSON file.
+    """
+    state = _review_state(path)
+    tier1_count = state["tier1_count"]
+    if not isinstance(tier1_count, int):
+        print("Error: review state tier1_count was not an integer", file=sys.stderr)
         sys.exit(1)
-
-    data = json.loads(path.read_text())
-
-    findings = data["findings"]
-    result = {
-        "report_type": data["report_type"],
-        "finding_count": len(findings),
-        "tier1_count": sum(1 for f in findings if f["tier"] == "tier1"),
-        "tier2_count": sum(1 for f in findings if f["tier"] == "tier2"),
-    }
-    print(json.dumps(result))
+    if tier1_count:
+        print(
+            f"Review report contains {tier1_count} actionable tier1 finding(s).",
+            file=sys.stderr,
+        )
+        sys.exit(1)
+    print("Review report contains no actionable tier1 findings.")

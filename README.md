@@ -1,6 +1,11 @@
 # ai-review-ci
 
-Centrally-managed, OpenCode-powered review CI. Target repositories carry only three thin trigger workflows; everything else — the reusable workflow, the review runner, the validator, the reviewer home template, the prompt corpus — lives here and is cloned inside the CI runner at execution time.
+## Doctrine
+
+The durable doctrine for global QC and review behavior lives in the [Global QC and Review Doctrine](https://github.com/dzackgarza/ai-review-ci/wiki/Global-QC-and-Review-Doctrine) wiki page.
+Use it when changing gates, scaffolds, review runners, reviewer state, or downstream enforcement contracts.
+
+Centrally-managed, OpenCode-powered review CI. Target repositories carry three thin trigger workflows plus a root `.ai-review-ci.toml` declaration; everything else — the reusable workflow, the review runner, the validator, the reviewer home template, the prompt corpus — lives here and is cloned inside the CI runner at execution time.
 Updating this repo updates every consumer on their next run.
 
 Two review types:
@@ -9,6 +14,25 @@ Two review types:
 - **Slop review** — AI-generated-code audit: bridge-burning violations, runtime control-flow defects, test/text antipatterns, validation-evasion constructs, defaults/fallbacks/mocks/skips.
 
 Each type runs in two scopes: **repo** (full-repository sweep) and **diff** (PR review focused on the diff against the base branch).
+
+## Installing the skills
+
+This repo is the canonical home of the skills under `skills/` — each top-level
+directory there is one skill. Install them by cloning this repo and symlinking
+every skill into your skills directory:
+
+```bash
+# In ~/.envrc (direnv): point at your harness's skills directory
+export AI_SKILLS_DIR="$HOME/ai/opencode/skills"
+
+cd /path/to/clone/of/ai-review-ci
+just install-skills
+```
+
+Each `skills/<name>` becomes a symlink `$AI_SKILLS_DIR/<name>` pointing into
+the clone, so `git pull` updates every installed skill in place. The recipe
+refuses to replace a non-symlink (a real directory already at that name) and
+is idempotent otherwise.
 
 ## Installing into a repo
 
@@ -19,7 +43,7 @@ uvx --from git+https://github.com/dzackgarza/ai-review-ci ai-review-ci install -
 
 Pass `--profile <profile>` with one of `python`, `bun`, `bun-playwright`, `rust`, or `sage`. The profile is the enforced project bin: it selects the required project shape, the central justfile delegation target, the installed PR gates, and the branch-protection checks.
 
-This installs the complete QC enforcement surface: it writes the three trigger workflows and applies branch protection requiring the installed PR gate jobs for the declared profile.
+This installs the complete QC enforcement surface: it writes the root manifest, writes the three trigger workflows, and applies branch protection requiring the installed PR gate jobs for the declared profile.
 
 | File | Triggers |
 | --- | --- |
@@ -59,6 +83,48 @@ The canonical templates live in [`src/ai_review_ci/templates/`](src/ai_review_ci
 
 Requirements in the target repo: GitHub code scanning enabled (free for public repos), GitHub CLI auth with permission to edit branch protection, the target branch named in `--branch`, and a repo shape that satisfies the declared `--profile`. LLM review jobs are signal-only process checks: they upload SARIF and post review threads, but they do not compute or fail on a health score.
 The merge gate is deterministic QC plus evidence-backed resolution of reviewer-authored PR threads.
+
+### QC manifest and doctor
+
+Each installed target repo carries `.ai-review-ci.toml` at repository root.
+The manifest is the dashboard and gate declaration of record:
+
+```toml
+schema_version = 1
+profile = "bun-playwright"
+installed_ref = "main"
+release_channel = "main"
+workflow_template_version = 1
+local_delegation = "global-justfile"
+default_branch = "main"
+exceptions = []
+```
+
+`schema_version`, `profile`, `installed_ref`, `release_channel`, `workflow_template_version`, `local_delegation`, and `default_branch` are required.
+`exceptions` may list explicit active exceptions with `id`, `surface`, `reason`, and `active = true`. Exceptions do not make the repo current; they map only matching active findings to `intentional_exception`.
+
+Inspect a target repo with:
+
+```bash
+uvx --from git+https://github.com/dzackgarza/ai-review-ci ai-review-ci version
+uvx --from git+https://github.com/dzackgarza/ai-review-ci ai-review-ci doctor --target /path/to/repo --json
+uvx --from git+https://github.com/dzackgarza/ai-review-ci ai-review-ci doctor-schema
+```
+
+The doctor reports the tool and schema version, target root, origin remote, HEAD, declaration hash, declared and effective profile, required and observed workflow refs, required and observed justfile delegation, branch-protection requirements and observations, profile proof requirements, findings, remediation commands, invalidation inputs, installation state, and dashboard `global_status`. Consumers should use `global_status` rather than re-infer status from workflow filenames.
+
+Status mapping is fixed:
+
+| Doctor observation | `installation_state` | Dashboard `global_status` |
+| --- | --- | --- |
+| manifest, workflows, delegation, profile proof, and branch protection satisfy the declared contract | `compliant` | `current` |
+| installed workflow refs differ from the manifest's required ref | `outdated` | `stale` |
+| manifest missing, required workflow missing, wrong profile, wrong delegation, missing `bun-playwright` app boot, or missing branch-protection contexts | `uninstalled` or `noncompliant` | `misconfigured` |
+| branch protection cannot be verified from the target remote/API state | `unknown` | `unverifiable` |
+| every active finding is covered by a matching active manifest exception | `noncompliant` or `outdated` | `intentional_exception` |
+
+`current` and `intentional_exception` exit zero.
+All other statuses fail the command and the `qc-doctor` PR gate.
 
 ## Installing QC Surfaces
 
@@ -234,7 +300,7 @@ target repo                          this repo (cloned at CI time)
                                        ai_review_ci.sarif    artifact -> SARIF
                                        ai_review_ci.context  alert/thread context
                                        ai_review_ci.threads  PR review poster
-                                       reviews/              templates, manifests, scopes, vendor/
+                                       reviews/              templates, manifests, scopes
 ```
 
 ## QC Layout
@@ -249,9 +315,9 @@ The non-CI quality-control stack is split by operational concern:
 | `tool-configs/` | Static tool configuration and QC planning notes. |
 | `tool-artifacts/` | Scripts, generated model artifacts, and helper code consumed by QC recipes. |
 | `justfiles/` | Shared and language-specific QC recipe hierarchy. |
-| `skills/` | Agent-facing QC operating instructions owned by this repo. |
+| `skills/` | Canonical skills owned by this repo, symlink-installed via `just install-skills`. |
 | `ci/` | Review CI runner, reviewer home, and private validator surface. |
-| `reviews/` | Review prompt templates, manifests, scopes, and vendored policy text. |
+| `reviews/` | Review prompt templates, manifests, and scopes (policy text is inlined from `skills/`). |
 
 Use the migrated quality gate directly from a target repo:
 
@@ -313,4 +379,4 @@ Resolved PR threads and dismissed/fixed code-scanning alerts are dispositions, n
 ## Developing
 
 Edit here, push to `main`, and every consumer's next run uses the new behavior (consumers that pinned a different `@ref` in their trigger files update on their chosen ref).
-The reusable workflow and the runner recipes take all paths from the CI-time clone, so downstream repos contain nothing but their three trigger files.
+The reusable workflow and the runner recipes take all paths from the CI-time clone, so downstream repos contain only their trigger files and root `.ai-review-ci.toml` declaration.

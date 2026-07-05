@@ -32,11 +32,13 @@ from unidiff import PatchSet
 
 from ai_review_ci.models import finding_fingerprint
 from ai_review_ci.policy_index import canonical_guidance
+from ai_review_ci.reviewer_identity import reviewer_identity
 
 JsonDict = dict[str, Any]
 
 FINGERPRINT_MARKER = "ai-review-fingerprint:"
 REVIEW_LABELS = {"general": "General Review", "slop": "Slop Review"}
+REVIEW_IDENTITY_MARKER = "ai-review-reviewer:"
 
 THREADS_QUERY = """
 query($owner: String!, $name: String!, $number: Int!, $cursor: String) {
@@ -142,11 +144,15 @@ def pick_anchor(finding: JsonDict, commentable: dict[str, set[int]]) -> int | No
 
 def _thread_body_lines(finding: JsonDict, review_label: str, fp: str) -> list[str]:
     loc = finding["location"]
+    review_type = next((key for key, label in REVIEW_LABELS.items() if label == review_label), "general")
+    identity = reviewer_identity(review_type)
     lines = [
         f"### [{review_label}][{finding['tier']}] {finding['label']}",
         f"<!-- {FINGERPRINT_MARKER} {fp} -->",
+        f"<!-- {REVIEW_IDENTITY_MARKER} {json.dumps(identity, sort_keys=True)} -->",
         "",
         f"**Location:** `{loc['path']}:{loc['start_line']}-{loc['end_line']}`",
+        (f"**Reviewer identity:** `type={review_type}; agent={identity['agent']}; prompt_id=reviews/{review_type}; prompt_version={identity['prompt_version']}`"),
         f"**Violated invariant:** {finding['violated_invariant']}",
         f"**Proof:** `{finding['proof_command']}`",
     ]
@@ -171,20 +177,6 @@ def _thread_body_lines(finding: JsonDict, review_label: str, fp: str) -> list[st
 
 def render_thread_body(finding: JsonDict, review_label: str, fp: str) -> str:
     return "\n".join(_thread_body_lines(finding, review_label, fp))
-
-
-def render_duplicate_thread_body(finding: JsonDict, review_label: str, fp: str) -> str:
-    lines = _thread_body_lines(finding, review_label, fp)
-    lines.extend(
-        [
-            "",
-            "**Possible duplicate disposition required:** a prior PR thread "
-            "has this category/path fingerprint. Compare invariant, source, "
-            "consequence, and evidence before resolving; do not suppress this "
-            "finding by similarity alone.",
-        ]
-    )
-    return "\n".join(lines)
 
 
 def render_review_body(
@@ -225,18 +217,19 @@ def partition_findings(
     seen: set[str],
     review_label: str,
 ) -> tuple[list[JsonDict], list[JsonDict], int]:
-    """Split findings into inline comments, off-diff entries, and duplicate flags."""
+    """Split findings into new inline comments, off-diff entries, and skipped duplicates."""
+    seen = set(seen)
     comments: list[JsonDict] = []
     off_diff: list[JsonDict] = []
     possible_duplicates = 0
     for finding in findings:
         loc = finding["location"]
         fp = finding_fingerprint(finding["category"], str(loc["path"]))
-        thread_body = render_thread_body(finding, review_label, fp)
         if fp in seen:
             possible_duplicates += 1
-            thread_body = render_duplicate_thread_body(finding, review_label, fp)
+            continue
         seen.add(fp)
+        thread_body = render_thread_body(finding, review_label, fp)
         anchor = pick_anchor(finding, commentable)
         if anchor is None:
             off_diff.append(finding)

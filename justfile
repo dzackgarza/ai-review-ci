@@ -1,10 +1,9 @@
-qc-type := "python"
+qc-type := "qc-tooling"
 repo := justfile_directory()
 global_hooks_source_dir := repo / "global-hooks"
 repo_hooks_source_dir := repo / "repo-hooks"
 scaffold_source_dir := repo / "scaffolds"
-policy_index_source := "/home/dzack/gitclones/ai"
-policy_index_ref := "0c1d9cbd79818286fe686795995f99ddb5789652"
+skills_source_dir := repo / "skills"
 
 # Normalize infrastructure files before parse checks inspect them
 _normalize:
@@ -17,6 +16,7 @@ check: _normalize
     just -f ci/runner.just --list >/dev/null
     just -f justfiles/shared.just --list >/dev/null
     just -f justfiles/python.just --list >/dev/null
+    just -f justfiles/qc-tooling.just --list >/dev/null
     just -f justfiles/bun.just --list >/dev/null
     just -f justfiles/rust.just --list >/dev/null
     just -f justfiles/sage.just --list >/dev/null
@@ -28,20 +28,21 @@ check: _normalize
     sh -n repo-hooks/pre-commit
     sh -n repo-hooks/pre-push
 
-# Sync vendored policy/remediation index from the pinned dzackgarza/ai ref.
-sync-policy-index:
-    python3 tool-artifacts/scripts/sync-policy-index.py \
-      --source-root {{policy_index_source}} \
-      --vendor-root reviews/vendor/policy-index \
-      --ref {{policy_index_ref}}
-
-# Commit gate (correctness + normalization): routes through the Python QC chain
+# Commit gate: this repo is QC tooling, so it runs the qc-tooling profile
+# (correctness + normalization, without the product-only slop/style gates it
+# ships for downstream). Same standardized recipe shape as every other repo.
 test:
-    just -f {{repo}}/justfiles/python.just -d . test
+    just -f {{repo}}/justfiles/qc-tooling.just -d . test
 
-# Push/CI gate (full style/slop/coverage stack): routes through the Python QC chain
+# Push/CI gate: qc-tooling profile + changed-line coverage / dependency / import
+# boundary checks. Still no self-applied slop/style stack.
 test-ci:
-    just -f {{repo}}/justfiles/python.just -d . test-ci
+    just -f {{repo}}/justfiles/qc-tooling.just -d . test-ci
+
+# Ambient gate: full-repo deferred-debt audit, run on a schedule (ambient.yml),
+# never in the PR/push gate. Delegates to the qc-tooling profile.
+ambient:
+    just -f {{repo}}/justfiles/qc-tooling.just -d . ambient
 
 # Install the complete QC enforcement surface into a target repo.
 install repo branch profile target=".":
@@ -79,6 +80,29 @@ install-global-hooks:
 
     git config --global core.hooksPath "$global_hooks_dir"
     git config --global core.hooksPath
+
+# Symlink every skill in skills/ into the user's skills directory (AI_SKILLS_DIR).
+install-skills:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    if [[ "${AI_SKILLS_DIR+x}" != x ]]; then
+        echo "ERROR: AI_SKILLS_DIR must be set to your skills directory (e.g. ~/ai/opencode/skills). Set it in ~/.envrc."
+        exit 1
+    fi
+    skills_dir="$AI_SKILLS_DIR"
+    mkdir -p "$skills_dir"
+
+    for skill in "{{ skills_source_dir }}"/*/; do
+        skill="${skill%/}"
+        name="$(basename "$skill")"
+        target="$skills_dir/$name"
+        if [[ -e "$target" && ! -L "$target" ]]; then
+            echo "Error: refusing to replace non-symlink skill: $target"
+            exit 1
+        fi
+        ln -snf "$skill" "$target"
+        echo "$target -> $skill"
+    done
 
 # Install repo-local hook symlinks into a target repository.
 install-repo-hooks target=".":
