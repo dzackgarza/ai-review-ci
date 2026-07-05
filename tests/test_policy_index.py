@@ -100,6 +100,34 @@ def test_test_semgrep_fixture_uses_policy_id_metadata() -> None:
         index.remediation_for_policy(rule["metadata"]["policy_code"], rule["metadata"]["remediation_code"])
 
 
+def test_detector_policy_and_remediation_ids_resolve_for_all_policy_surfaces() -> None:
+    index = load_policy_index()
+    detector_pairs: list[tuple[Path, str, str]] = []
+
+    for path in (Path("tool-configs/semgrep.yml"), Path("tool-configs/test-semgrep.yml")):
+        for rule in yaml.safe_load(path.read_text())["rules"]:
+            detector_pairs.append((path, rule["metadata"]["policy_code"], rule["metadata"]["remediation_code"]))
+
+    for path in Path("tool-configs/ast-grep/rules").glob("*.yml"):
+        rule = yaml.safe_load(path.read_text())
+        detector_pairs.append((path, rule["metadata"]["policy_code"], rule["metadata"]["remediation_code"]))
+
+    assert detector_pairs, "expected policy-bearing detector metadata"
+    for path, policy_code, remediation_code in detector_pairs:
+        assert policy_code.startswith("POLICY."), f"{path}: non-policy id {policy_code}"
+        assert remediation_code.startswith("REMEDIATE."), f"{path}: non-remediation id {remediation_code}"
+        index.remediation_for_policy(policy_code, remediation_code)
+
+
+def test_remediation_catalog_contains_before_after_examples() -> None:
+    text = Path("reviews/vendor/policy-index/references/remediations.md").read_text()
+
+    for heading in ("[FALLBACK-HEDGE]", "[SWALLOW-CATCH]", "[PARTIAL-RESULT]"):
+        section = text.split(f"### {heading}", 1)[1].split("\n### ", 1)[0]
+        assert "BAD:" in section, f"{heading} is missing a bad example"
+        assert "Remediation:" in section, f"{heading} is missing a remediation example"
+
+
 def test_review_manifests_do_not_reference_flattened_policy_index() -> None:
     for path in (Path("reviews/general/manifest.txt"), Path("reviews/slop/manifest.txt")):
         manifest = path.read_text()
