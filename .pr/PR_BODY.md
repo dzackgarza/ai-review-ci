@@ -25,9 +25,9 @@ Downstream Python repositories can run the centrally delegated `just test` and `
 ## Claim map
 - [ ] **#167 - Python `test-ci` import-linter contradiction is removed**
   - Proof obligations claimed: red fixture, fixed central recipe, caller-root regression.
-  - Partial / not claimed: broad import-linter policy redesign.
-  - Evidence required: fixture fails before/fails for the right reason, then passes after the central fix.
-  - Current evidence: issue reproduction only.
+  - Partial / not claimed: per-downstream import-linter registries or local downstream QC overrides.
+  - Evidence required: downstream fixture passes without local import-linter config, local override spellings are rejected/ignored, and a real central import-linter rule still fails loudly on a violating caller project.
+  - Current evidence: commit `8d7fe2e680aac7047333f15a305c71e7494f89f8`; targeted tests passed for `test_python_preflight_rejects_local_importlinter_pyproject_override`, `test_import_linter_uses_central_config_without_downstream_override`, `test_import_linter_blocks_sibling_imports_without_local_override`, and `test_import_linter_ignores_local_override_when_recipe_is_called_directly`; `just -f justfiles/python.just -d . _import-linter` runs from generated central config; PR feedback scan reports `NOT RESOLVED: 0`.
 - [ ] **#162 - deptry package-module maps preserve target project semantics**
   - Proof obligations claimed: target map repro using mismatched package/module names, central recipe fix, no false DEP001/DEP002.
   - Partial / not claimed: downstream agent-memory remediation commits.
