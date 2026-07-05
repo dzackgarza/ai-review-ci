@@ -39,17 +39,29 @@ def _append_call(fixture_dir: Path, payload: dict[str, object]) -> None:
 
 
 def _matches_no_analysis(entry: dict[str, object], fields: dict[str, str]) -> bool:
-    return entry["tool_name"] == fields["tool_name"] and entry.get("state") == fields.get("state") and entry.get("ref", "") == fields.get("ref", "")
+    return (
+        entry["tool_name"] == fields["tool_name"]
+        and entry.get("state") == fields.get("state")
+        and entry.get("ref", "") == fields.get("ref", "")
+    )
 
 
 def _request_matches(path: Path, fields: dict[str, str]) -> bool:
-    return path.exists() and any(_matches_no_analysis(entry, fields) for entry in _json_object_list(path))
+    return path.exists() and any(
+        _matches_no_analysis(entry, fields) for entry in _json_object_list(path)
+    )
 
 
-def _matching_alerts(entries: list[dict[str, object]], fields: dict[str, str]) -> list[dict[str, object]]:
+def _matching_alerts(
+    entries: list[dict[str, object]], fields: dict[str, str]
+) -> list[dict[str, object]]:
     alerts: list[dict[str, object]] = []
     for entry in entries:
-        if entry["tool_name"] == fields["tool_name"] and entry["state"] == fields["state"] and entry.get("ref", "") == fields.get("ref", ""):
+        if (
+            entry["tool_name"] == fields["tool_name"]
+            and entry["state"] == fields["state"]
+            and entry.get("ref", "") == fields.get("ref", "")
+        ):
             alerts.append(_json_object(entry["alert"]))
     return alerts
 
@@ -93,7 +105,10 @@ def _emit_graphql_page(argv: list[str], fixture_dir: Path) -> None:
         raise SystemExit(2)
     threads_path = fixture_dir / "threads.json"
     if not threads_path.exists():
-        page: object = {"nodes": [], "pageInfo": {"hasNextPage": False, "endCursor": None}}
+        page: object = {
+            "nodes": [],
+            "pageInfo": {"hasNextPage": False, "endCursor": None},
+        }
     else:
         data = _read_json(threads_path)
         if isinstance(data, list):
@@ -101,7 +116,9 @@ def _emit_graphql_page(argv: list[str], fixture_dir: Path) -> None:
             page = pages[0] if "cursor" not in fields else pages[1]
         else:
             page = _json_object(data)
-    print(json.dumps({"data": {"repository": {"pullRequest": {"reviewThreads": page}}}}))
+    print(
+        json.dumps({"data": {"repository": {"pullRequest": {"reviewThreads": page}}}})
+    )
 
 
 def main() -> None:

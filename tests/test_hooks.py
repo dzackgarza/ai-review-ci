@@ -82,7 +82,9 @@ def test_ai_review_ci_hooks_skip_linked_ai_review_ci_worktrees(
     )
     (worktree / "justfile").write_text(f"{recipe}:\n    @echo should-not-run\n")
 
-    env = git_test_env(PATH=path_with_only(tmp_path, "sh", "git", "readlink", "dirname"))
+    env = git_test_env(
+        PATH=path_with_only(tmp_path, "sh", "git", "readlink", "dirname")
+    )
     result = subprocess.run(
         [str(hook_source_repo / hook_dir / hook)],
         cwd=worktree,
@@ -114,7 +116,9 @@ def test_ai_review_ci_hooks_still_run_in_downstream_repos(
 ) -> None:
     downstream = tmp_path / "downstream"
     downstream.mkdir()
-    subprocess.run(["git", "init", "-q"], cwd=downstream, env=git_test_env(), check=True)
+    subprocess.run(
+        ["git", "init", "-q"], cwd=downstream, env=git_test_env(), check=True
+    )
     (downstream / "justfile").write_text(f"{recipe}:\n    @echo downstream-ran\n")
 
     result = subprocess.run(

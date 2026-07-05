@@ -20,7 +20,9 @@ def test_load_policy_index_resolves_policy_to_canonical_remediation() -> None:
 
     assert policy.name == "No hidden behavioral config in code"
     assert policy.remediation_code == "REMEDIATE.TOTAL_CONFIG_MODEL"
-    assert remediation.required_remediation.startswith("Put required configuration in the declared config surface")
+    assert remediation.required_remediation.startswith(
+        "Put required configuration in the declared config surface"
+    )
 
 
 def test_canonical_guidance_uses_policy_and_remediation_records() -> None:
@@ -100,11 +102,16 @@ def test_test_semgrep_fixture_uses_policy_id_metadata() -> None:
 
     for rule in data["rules"]:
         assert rule["message"] == rule["metadata"]["policy_code"]
-        index.remediation_for_policy(rule["metadata"]["policy_code"], rule["metadata"]["remediation_code"])
+        index.remediation_for_policy(
+            rule["metadata"]["policy_code"], rule["metadata"]["remediation_code"]
+        )
 
 
 def test_review_manifests_reference_canonical_skills_policy_index() -> None:
-    for path in (Path("reviews/general/manifest.txt"), Path("reviews/slop/manifest.txt")):
+    for path in (
+        Path("reviews/general/manifest.txt"),
+        Path("reviews/slop/manifest.txt"),
+    ):
         manifest = path.read_text()
         assert "vendor/" not in manifest
         assert "../skills/policy-index/SKILL.md" in manifest

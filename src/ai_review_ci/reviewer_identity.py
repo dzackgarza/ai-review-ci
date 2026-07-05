@@ -17,7 +17,9 @@ def review_agent(environ: Mapping[str, str] | None = None) -> str:
     return configured or DEFAULT_REVIEW_AGENT
 
 
-def reviewer_identity(report_type: str, environ: Mapping[str, str] | None = None) -> JsonDict:
+def reviewer_identity(
+    report_type: str, environ: Mapping[str, str] | None = None
+) -> JsonDict:
     """Structured reviewer identity used by every review publication surface."""
     return {
         "type": report_type,

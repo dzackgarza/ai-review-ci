@@ -8,10 +8,17 @@ from pathlib import Path
 
 import pytest
 
-from ai_review_ci.context import _format_alert, _thread_digest, _validated_alert_page, fetch_context
+from ai_review_ci.context import (
+    _format_alert,
+    _thread_digest,
+    _validated_alert_page,
+    fetch_context,
+)
 
 
-def _alert(number: int, state: str, label: str, path: str, line: int) -> dict[str, object]:
+def _alert(
+    number: int, state: str, label: str, path: str, line: int
+) -> dict[str, object]:
     return {
         "number": number,
         "state": state,
@@ -32,7 +39,9 @@ def gh_fixture(tmp_path: Path) -> Iterator[Path]:
     fixture_dir.mkdir()
     bin_dir.mkdir()
     gh_path = bin_dir / "gh"
-    shutil.copyfile(Path(__file__).parent / "fixtures" / "gh_context_fixture.py", gh_path)
+    shutil.copyfile(
+        Path(__file__).parent / "fixtures" / "gh_context_fixture.py", gh_path
+    )
     gh_path.chmod(0o755)
 
     original_path = os.environ["PATH"]
@@ -54,7 +63,10 @@ def test_alert_format_uses_github_rule_name_without_location_properties() -> Non
         "most_recent_instance": {"location": {"path": "src/app.py", "start_line": 7}},
     }
 
-    assert _format_alert(alert) == "- **Bridge Burning** at `src/app.py:7`  \n  Alert: https://github.com/owner/repo/security/code-scanning/1"
+    assert (
+        _format_alert(alert)
+        == "- **Bridge Burning** at `src/app.py:7`  \n  Alert: https://github.com/owner/repo/security/code-scanning/1"
+    )
 
 
 def test_alert_format_uses_github_rule_id_when_name_is_absent() -> None:
@@ -64,7 +76,10 @@ def test_alert_format_uses_github_rule_id_when_name_is_absent() -> None:
         "most_recent_instance": {"location": {"path": "src/app.py", "start_line": 8}},
     }
 
-    assert _format_alert(alert) == "- **bridge-burning** at `src/app.py:8`  \n  Alert: https://github.com/owner/repo/security/code-scanning/2"
+    assert (
+        _format_alert(alert)
+        == "- **bridge-burning** at `src/app.py:8`  \n  Alert: https://github.com/owner/repo/security/code-scanning/2"
+    )
 
 
 def test_alert_format_rejects_missing_rule_name_and_id() -> None:
@@ -87,7 +102,9 @@ def test_alert_format_rejects_invalid_rule_and_location_shapes() -> None:
     string_line = {
         "html_url": "https://github.com/owner/repo/security/code-scanning/5",
         "rule": {"id": "bridge-burning"},
-        "most_recent_instance": {"location": {"path": "src/app.py", "start_line": "10"}},
+        "most_recent_instance": {
+            "location": {"path": "src/app.py", "start_line": "10"}
+        },
     }
 
     with pytest.raises(SystemExit):
@@ -100,10 +117,14 @@ def test_alert_page_validation_rejects_invalid_payload_shapes() -> None:
     with pytest.raises(SystemExit):
         _validated_alert_page("{}", "repos/owner/repo/code-scanning/alerts")
     with pytest.raises(SystemExit):
-        _validated_alert_page('["not an alert object"]', "repos/owner/repo/code-scanning/alerts")
+        _validated_alert_page(
+            '["not an alert object"]', "repos/owner/repo/code-scanning/alerts"
+        )
 
 
-def test_fetch_context_renders_alert_states_threads_and_carry_forward(tmp_path: Path, gh_fixture: Path) -> None:
+def test_fetch_context_renders_alert_states_threads_and_carry_forward(
+    tmp_path: Path, gh_fixture: Path
+) -> None:
     open_alert = _alert(10, "open", "Open Finding", "src/app.py", 12)
     dismissed_alert = _alert(11, "dismissed", "Rejected Finding", "src/rejected.py", 4)
     dismissed_alert["dismissed_reason"] = "false positive"
@@ -113,7 +134,11 @@ def test_fetch_context_renders_alert_states_threads_and_carry_forward(tmp_path: 
         gh_fixture / "alerts.json",
         [
             {"tool_name": "ai-review/slop", "state": "open", "alert": open_alert},
-            {"tool_name": "ai-review/slop", "state": "dismissed", "alert": dismissed_alert},
+            {
+                "tool_name": "ai-review/slop",
+                "state": "dismissed",
+                "alert": dismissed_alert,
+            },
             {"tool_name": "ai-review/slop", "state": "fixed", "alert": fixed_alert},
         ],
     )
@@ -181,13 +206,21 @@ def test_fetch_context_renders_alert_states_threads_and_carry_forward(tmp_path: 
     }
 
 
-def test_fetch_context_renders_resolved_paginated_threads_and_empty_open_group(tmp_path: Path, gh_fixture: Path) -> None:
+def test_fetch_context_renders_resolved_paginated_threads_and_empty_open_group(
+    tmp_path: Path, gh_fixture: Path
+) -> None:
     dismissed_alert = _alert(31, "dismissed", "Rejected Finding", "src/rejected.py", 4)
     dismissed_alert["dismissed_reason"] = "false positive"
     dismissed_alert["dismissed_comment"] = None
     _write_json(
         gh_fixture / "alerts.json",
-        [{"tool_name": "ai-review/slop", "state": "dismissed", "alert": dismissed_alert}],
+        [
+            {
+                "tool_name": "ai-review/slop",
+                "state": "dismissed",
+                "alert": dismissed_alert,
+            }
+        ],
     )
     _write_json(
         gh_fixture / "threads.json",
@@ -246,14 +279,22 @@ def test_fetch_context_rejects_invalid_dismissal_comment(gh_fixture: Path) -> No
     dismissed_alert["dismissed_comment"] = {"not": "a string"}
     _write_json(
         gh_fixture / "alerts.json",
-        [{"tool_name": "ai-review/slop", "state": "dismissed", "alert": dismissed_alert}],
+        [
+            {
+                "tool_name": "ai-review/slop",
+                "state": "dismissed",
+                "alert": dismissed_alert,
+            }
+        ],
     )
 
     with pytest.raises(SystemExit):
         fetch_context("owner/repo", tool_names="ai-review/slop")
 
 
-def test_fetch_context_fails_loudly_on_gh_rest_and_graphql_errors(gh_fixture: Path) -> None:
+def test_fetch_context_fails_loudly_on_gh_rest_and_graphql_errors(
+    gh_fixture: Path,
+) -> None:
     _write_json(
         gh_fixture / "failures.json",
         [{"tool_name": "ai-review/general", "state": "open"}],
@@ -267,7 +308,9 @@ def test_fetch_context_fails_loudly_on_gh_rest_and_graphql_errors(gh_fixture: Pa
         fetch_context("owner/repo", tool_names="ai-review/general", pr_number=9)
 
 
-def test_fetch_context_carries_repo_and_pr_alerts_without_duplicate_numbers(tmp_path: Path, gh_fixture: Path) -> None:
+def test_fetch_context_carries_repo_and_pr_alerts_without_duplicate_numbers(
+    tmp_path: Path, gh_fixture: Path
+) -> None:
     repo_alert = _alert(21, "open", "Repo Finding", "src/repo.py", 2)
     duplicate_pr_alert = _alert(21, "open", "Duplicate PR Finding", "src/pr.py", 3)
     pr_alert = _alert(22, "open", "PR Finding", "src/pr.py", 5)
@@ -291,7 +334,12 @@ def test_fetch_context_carries_repo_and_pr_alerts_without_duplicate_numbers(tmp_
     )
     carry_forward = tmp_path / "carry-forward.json"
 
-    fetch_context("owner/repo", tool_names="ai-review/general", alerts_output=carry_forward, pr_number=8)
+    fetch_context(
+        "owner/repo",
+        tool_names="ai-review/general",
+        alerts_output=carry_forward,
+        pr_number=8,
+    )
 
     payload = json.loads(carry_forward.read_text(encoding="utf-8"))
     assert payload == {
@@ -303,7 +351,9 @@ def test_fetch_context_carries_repo_and_pr_alerts_without_duplicate_numbers(tmp_
     }
 
 
-def test_fetch_context_treats_no_analysis_as_empty_context(tmp_path: Path, gh_fixture: Path) -> None:
+def test_fetch_context_treats_no_analysis_as_empty_context(
+    tmp_path: Path, gh_fixture: Path
+) -> None:
     _write_json(
         gh_fixture / "no_analysis.json",
         [
@@ -315,7 +365,12 @@ def test_fetch_context_treats_no_analysis_as_empty_context(tmp_path: Path, gh_fi
     output = tmp_path / "context.md"
     carry_forward = tmp_path / "carry-forward.json"
 
-    fetch_context("owner/repo", tool_names="ai-review/general", output=output, alerts_output=carry_forward)
+    fetch_context(
+        "owner/repo",
+        tool_names="ai-review/general",
+        output=output,
+        alerts_output=carry_forward,
+    )
 
     assert output.read_text(encoding="utf-8") == (
         "## Existing repo-wide review findings\n"
@@ -350,7 +405,12 @@ def test_fetch_context_treats_code_scanning_disabled_as_empty_context(
     output = tmp_path / "context.md"
     carry_forward = tmp_path / "carry-forward.json"
 
-    fetch_context("owner/repo", tool_names="ai-review/general", output=output, alerts_output=carry_forward)
+    fetch_context(
+        "owner/repo",
+        tool_names="ai-review/general",
+        output=output,
+        alerts_output=carry_forward,
+    )
 
     assert output.read_text(encoding="utf-8") == (
         "## Existing repo-wide review findings\n"
@@ -370,20 +430,32 @@ def test_fetch_context_treats_code_scanning_disabled_as_empty_context(
     }
 
 
-def test_fetch_context_reads_alert_pages_until_short_page(tmp_path: Path, gh_fixture: Path) -> None:
-    alerts = [_alert(number, "open", f"Finding {number}", f"src/file_{number}.py", number) for number in range(1, 102)]
+def test_fetch_context_reads_alert_pages_until_short_page(
+    tmp_path: Path, gh_fixture: Path
+) -> None:
+    alerts = [
+        _alert(number, "open", f"Finding {number}", f"src/file_{number}.py", number)
+        for number in range(1, 102)
+    ]
     _write_json(
         gh_fixture / "alerts.json",
-        [{"tool_name": "ai-review/general", "state": "open", "alert": alert} for alert in alerts],
+        [
+            {"tool_name": "ai-review/general", "state": "open", "alert": alert}
+            for alert in alerts
+        ],
     )
     carry_forward = tmp_path / "carry-forward.json"
 
-    fetch_context("owner/repo", tool_names="ai-review/general", alerts_output=carry_forward)
+    fetch_context(
+        "owner/repo", tool_names="ai-review/general", alerts_output=carry_forward
+    )
 
     payload = json.loads(carry_forward.read_text(encoding="utf-8"))
     assert payload == {
         "schema_version": 1,
-        "alerts": [{"tool_name": "ai-review/general", "alert": alert} for alert in alerts],
+        "alerts": [
+            {"tool_name": "ai-review/general", "alert": alert} for alert in alerts
+        ],
     }
 
 

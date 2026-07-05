@@ -116,7 +116,9 @@ def test_install_writes_trigger_workflows(tmp_path: pathlib.Path) -> None:
     assert sorted(p.name for p in wf.iterdir()) == sorted(TEMPLATES)
     for name in TEMPLATES:
         text = (wf / name).read_text()
-        assert "uses: dzackgarza/ai-review-ci/.github/workflows/_review.yml@main" in text
+        assert (
+            "uses: dzackgarza/ai-review-ci/.github/workflows/_review.yml@main" in text
+        )
     general = (wf / "review-general.yml").read_text()
     assert "report_type: general" in general
     assert "scope: repo" in general
@@ -158,32 +160,42 @@ def test_install_writes_profile_scaffold(tmp_path: pathlib.Path) -> None:
 
     _write_scaffold(repo, "rust")
 
-    assert (repo / "justfile").read_text() == (ROOT / "scaffolds" / "rust" / "justfile").read_text()
+    assert (repo / "justfile").read_text() == (
+        ROOT / "scaffolds" / "rust" / "justfile"
+    ).read_text()
 
 
 def test_install_local_files_finalize_with_doctor(tmp_path: pathlib.Path) -> None:
     repo = _git_repo(tmp_path)
-    (repo / "pyproject.toml").write_text('[project]\nname = "target"\nversion = "0.1.0"\n')
+    (repo / "pyproject.toml").write_text(
+        '[project]\nname = "target"\nversion = "0.1.0"\n'
+    )
 
     _write_scaffold(repo, "python")
     _write_trigger_workflows(repo, "python")
     _write_manifest(repo, "python", "main", "main", "main")
     _prove_installation(repo)
 
-    assert (repo / "justfile").read_text() == (ROOT / "scaffolds" / "python" / "justfile").read_text()
+    assert (repo / "justfile").read_text() == (
+        ROOT / "scaffolds" / "python" / "justfile"
+    ).read_text()
 
 
 def test_cli_install_uses_real_gh_and_fails_before_final_doctor_for_unavailable_branch_target(
     tmp_path: pathlib.Path,
 ) -> None:
     repo = _git_repo(tmp_path)
-    (repo / "pyproject.toml").write_text('[project]\nname = "target"\nversion = "0.1.0"\n')
+    (repo / "pyproject.toml").write_text(
+        '[project]\nname = "target"\nversion = "0.1.0"\n'
+    )
 
     result = _run_cli_install(repo)
 
     assert result.returncode == 1
     assert "FATAL: gh api --method PUT failed:" in result.stderr
-    assert (repo / "justfile").read_text() == (ROOT / "scaffolds" / "python" / "justfile").read_text()
+    assert (repo / "justfile").read_text() == (
+        ROOT / "scaffolds" / "python" / "justfile"
+    ).read_text()
     assert (repo / ".github" / "workflows" / "review-pr.yml").exists()
     assert (repo / ".ai-review-ci.toml").exists()
     assert "doctor final proof" not in result.stdout
@@ -202,14 +214,19 @@ def test_install_final_doctor_rejects_target_without_profile_shape(
     with pytest.raises(SystemExit):
         _prove_installation(repo)
 
-    assert "FATAL: ai-review-ci doctor final proof failed with status misconfigured" in capsys.readouterr().err
+    assert (
+        "FATAL: ai-review-ci doctor final proof failed with status misconfigured"
+        in capsys.readouterr().err
+    )
 
 
 def test_install_final_doctor_rejects_broken_local_delegation(
     tmp_path: pathlib.Path,
 ) -> None:
     repo = _git_repo(tmp_path)
-    (repo / "pyproject.toml").write_text('[project]\nname = "target"\nversion = "0.1.0"\n')
+    (repo / "pyproject.toml").write_text(
+        '[project]\nname = "target"\nversion = "0.1.0"\n'
+    )
     (repo / "justfile").write_text("test:\n    @true\n\ntest-ci:\n    @true\n")
     _write_trigger_workflows(repo, "python")
     _write_manifest(repo, "python", "main", "main", "main")
@@ -239,10 +256,19 @@ def test_review_workflow_uploads_structured_state_before_enforcing_status() -> N
     steps = _workflow_jobs("_review.yml")["review"]["steps"]
     names = [step.get("name") for step in steps if isinstance(step, dict)]
 
-    assert names.index("Write structured review state") < names.index("Upload structured review state")
-    assert names.index("Upload structured review state") < names.index("Enforce review status")
+    assert names.index("Write structured review state") < names.index(
+        "Upload structured review state"
+    )
+    assert names.index("Upload structured review state") < names.index(
+        "Enforce review status"
+    )
 
-    upload_step = next(step for step in steps if isinstance(step, dict) and step.get("name") == "Upload structured review state")
+    upload_step = next(
+        step
+        for step in steps
+        if isinstance(step, dict)
+        and step.get("name") == "Upload structured review state"
+    )
     assert upload_step["uses"] == "actions/upload-artifact@v4"
     assert upload_step["with"] == {
         "name": "ai-${{ inputs.report_type }}-review-state",
@@ -268,9 +294,17 @@ def test_reusable_workflows_install_just_with_maintained_authenticated_action() 
     for workflow_file in ("_qc.yml", "_review.yml", "_gates.yml"):
         for job_name, job in _workflow_jobs(workflow_file).items():
             steps = job.get("steps")
-            assert isinstance(steps, list), f"{workflow_file} job {job_name!r} has no steps"
-            install_steps = [step for step in steps if isinstance(step, dict) and step.get("name") == "Install just"]
-            assert install_steps, f"{workflow_file} job {job_name!r} has no Install just step"
+            assert isinstance(steps, list), (
+                f"{workflow_file} job {job_name!r} has no steps"
+            )
+            install_steps = [
+                step
+                for step in steps
+                if isinstance(step, dict) and step.get("name") == "Install just"
+            ]
+            assert install_steps, (
+                f"{workflow_file} job {job_name!r} has no Install just step"
+            )
             for step in install_steps:
                 assert step.get("uses") == "extractions/setup-just@v4"
                 assert step.get("with", {}).get("github-token") == "${{ github.token }}"
@@ -279,7 +313,9 @@ def test_reusable_workflows_install_just_with_maintained_authenticated_action() 
 
 @pytest.mark.parametrize("profile", SUPPORTED_PROFILES)
 @pytest.mark.parametrize("template", TEMPLATES)
-def test_trigger_inputs_are_declared_by_reusable_workflow(template: str, profile: str) -> None:
+def test_trigger_inputs_are_declared_by_reusable_workflow(
+    template: str, profile: str
+) -> None:
     """Every input an installed trigger passes must be declared by the
     reusable workflow it calls.
 
@@ -309,7 +345,9 @@ def test_trigger_inputs_are_declared_by_reusable_workflow(template: str, profile
             f"GitHub fails such a run at startup before any review step runs."
         )
 
-    assert checked_a_reusable_call, f"{template} (profile={profile}) calls no in-repo reusable workflow"
+    assert checked_a_reusable_call, (
+        f"{template} (profile={profile}) calls no in-repo reusable workflow"
+    )
 
 
 def test_install_refuses_overwriting_repo_owned_scaffold(

@@ -7,7 +7,9 @@ MARKDOWN_LINK = re.compile(r"(?<!!)\[[^\]\n]+\]\(([^)\s]+)(?:\s+\"[^\"]*\")?\)")
 
 
 def iter_skill_markdown_files() -> list[Path]:
-    return sorted((ROOT / "skills").rglob("*.md")) + [ROOT / ".github" / "pull_request_template.md"]
+    return sorted((ROOT / "skills").rglob("*.md")) + [
+        ROOT / ".github" / "pull_request_template.md"
+    ]
 
 
 def iter_links(path: Path) -> list[tuple[int, str]]:
@@ -32,7 +34,9 @@ def test_skill_markdown_links_are_checkout_relative() -> None:
                 continue
             parsed = urlparse(href)
             if parsed.scheme == "file":
-                failures.append(f"{path.relative_to(ROOT)}:{lineno}: machine-local file URL: {href}")
+                failures.append(
+                    f"{path.relative_to(ROOT)}:{lineno}: machine-local file URL: {href}"
+                )
                 continue
             if parsed.scheme:
                 continue
@@ -40,10 +44,14 @@ def test_skill_markdown_links_are_checkout_relative() -> None:
             if not target_path:
                 continue
             if target_path.startswith("/"):
-                failures.append(f"{path.relative_to(ROOT)}:{lineno}: absolute local path link: {href}")
+                failures.append(
+                    f"{path.relative_to(ROOT)}:{lineno}: absolute local path link: {href}"
+                )
                 continue
             target = (path.parent / unquote(target_path)).resolve(strict=False)
             if not target.exists():
-                failures.append(f"{path.relative_to(ROOT)}:{lineno}: broken relative link: {href}")
+                failures.append(
+                    f"{path.relative_to(ROOT)}:{lineno}: broken relative link: {href}"
+                )
 
     assert not failures, "\n".join(failures)

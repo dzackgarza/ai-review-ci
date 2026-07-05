@@ -12,7 +12,12 @@ class ArtifactLocation(BaseModel):
     ) -> None: ...
 
 class Location(BaseModel):
-    def __init__(self, *, physicalLocation: PhysicalLocation | None = ..., properties: dict[str, Any] | None = ...) -> None: ...
+    def __init__(
+        self,
+        *,
+        physicalLocation: PhysicalLocation | None = ...,
+        properties: dict[str, Any] | None = ...,
+    ) -> None: ...
 
 class Message(BaseModel):
     def __init__(
@@ -33,10 +38,18 @@ class PhysicalLocation(BaseModel):
     ) -> None: ...
 
 class Region(BaseModel):
-    def __init__(self, *, startLine: int | None = ..., endLine: int | None = ..., properties: dict[str, Any] | None = ...) -> None: ...
+    def __init__(
+        self,
+        *,
+        startLine: int | None = ...,
+        endLine: int | None = ...,
+        properties: dict[str, Any] | None = ...,
+    ) -> None: ...
 
 class ReportingConfiguration(BaseModel):
-    def __init__(self, *, level: str | None = ..., properties: dict[str, Any] | None = ...) -> None: ...
+    def __init__(
+        self, *, level: str | None = ..., properties: dict[str, Any] | None = ...
+    ) -> None: ...
 
 class ReportingDescriptor(BaseModel):
     id: str
@@ -91,7 +104,9 @@ class Sarif(BaseModel):
     ) -> None: ...
 
 class Tool(BaseModel):
-    def __init__(self, *, driver: ToolDriver, properties: dict[str, Any] | None = ...) -> None: ...
+    def __init__(
+        self, *, driver: ToolDriver, properties: dict[str, Any] | None = ...
+    ) -> None: ...
 
 class ToolDriver(BaseModel):
     def __init__(

@@ -197,7 +197,12 @@ class SlopCleaner:
         text = re.sub(r"^Moreover,\s", "", text, flags=re.MULTILINE)
 
         # Remove "It is X that" constructions
-        text = re.sub(r"\bIt is (?:important|crucial|essential|vital) (?:that|to)\b", "", text, flags=re.IGNORECASE)
+        text = re.sub(
+            r"\bIt is (?:important|crucial|essential|vital) (?:that|to)\b",
+            "",
+            text,
+            flags=re.IGNORECASE,
+        )
 
         self.changes_made.append("Applied aggressive cleanup")
         return text
@@ -214,7 +219,9 @@ class SlopCleaner:
         text = re.sub(r"\n{3,}", "\n\n", text)
 
         # Fix spaces at start of sentences after deletions
-        text = re.sub(r"([.!?])\s+([a-z])", lambda m: m.group(1) + " " + m.group(2).upper(), text)
+        text = re.sub(
+            r"([.!?])\s+([a-z])", lambda m: m.group(1) + " " + m.group(2).upper(), text
+        )
 
         # Fix orphaned commas
         text = re.sub(r",\s*,", ",", text)

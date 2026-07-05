@@ -30,12 +30,18 @@ _ANNOTATION = re.compile(r"//\s*(ruleid|ok):\s*([\w-]+)")
 
 
 def _rules_subset(ids: tuple[str, ...]) -> list[dict[str, object]]:
-    rules = [r for r in yaml.safe_load(SEMGREP_CONFIG.read_text())["rules"] if r["id"] in ids]
-    assert {r["id"] for r in rules} == set(ids), f"missing rules in {SEMGREP_CONFIG}: {set(ids) - {r['id'] for r in rules}}"
+    rules = [
+        r for r in yaml.safe_load(SEMGREP_CONFIG.read_text())["rules"] if r["id"] in ids
+    ]
+    assert {r["id"] for r in rules} == set(ids), (
+        f"missing rules in {SEMGREP_CONFIG}: {set(ids) - {r['id'] for r in rules}}"
+    )
     return rules
 
 
-def _expected(files: list[pathlib.Path]) -> tuple[set[tuple[str, int]], set[tuple[str, int]]]:
+def _expected(
+    files: list[pathlib.Path],
+) -> tuple[set[tuple[str, int]], set[tuple[str, int]]]:
     """(expected-match, expected-clean) line sets, keyed by (filename, line).
 
     Each annotation refers to the line immediately below the comment.
@@ -50,7 +56,9 @@ def _expected(files: list[pathlib.Path]) -> tuple[set[tuple[str, int]], set[tupl
     return flag, clean
 
 
-def _semgrep_matches(rules: list[dict[str, object]], files: list[pathlib.Path]) -> set[tuple[str, int]]:
+def _semgrep_matches(
+    rules: list[dict[str, object]], files: list[pathlib.Path]
+) -> set[tuple[str, int]]:
     with tempfile.NamedTemporaryFile("w", suffix=".yml", delete=False) as tmp:
         yaml.safe_dump({"rules": rules}, tmp)
         config = tmp.name
@@ -70,7 +78,9 @@ def _semgrep_matches(rules: list[dict[str, object]], files: list[pathlib.Path]) 
         text=True,
         check=False,
     )
-    assert proc.stdout, f"semgrep produced no output (rc={proc.returncode}):\n{proc.stderr}"
+    assert proc.stdout, (
+        f"semgrep produced no output (rc={proc.returncode}):\n{proc.stderr}"
+    )
     results = json.loads(proc.stdout)["results"]
     return {(pathlib.Path(r["path"]).name, r["start"]["line"]) for r in results}
 
@@ -80,14 +90,18 @@ def _assert_rules_match_annotations(rule_ids: tuple[str, ...], glob: str) -> Non
     assert fixtures, f"no fixtures match {glob} in {FIXTURES}"
 
     expected_flag, expected_clean = _expected(fixtures)
-    assert expected_flag and expected_clean, f"{glob}: fixtures must annotate both ruleid and ok cases"
+    assert expected_flag and expected_clean, (
+        f"{glob}: fixtures must annotate both ruleid and ok cases"
+    )
 
     matched = _semgrep_matches(_rules_subset(rule_ids), fixtures)
 
     false_negatives = sorted(expected_flag - matched)
     false_positives = sorted(matched - expected_flag)
     assert not false_negatives, f"expected-flag line(s) not flagged: {false_negatives}"
-    assert not false_positives, f"expected-clean line(s) wrongly flagged: {false_positives}"
+    assert not false_positives, (
+        f"expected-clean line(s) wrongly flagged: {false_positives}"
+    )
 
 
 def test_runtime_default_rules_flag_only_value_default_positions() -> None:
@@ -99,4 +113,6 @@ def test_no_double_cast_requires_explicit_boundary_assertion_form() -> None:
     """#46: arbitrary double casts are blocked, while the sanctioned boundary
     assertion form is allowed only with runtime evidence and source-backed
     justification."""
-    _assert_rules_match_annotations(("no-double-cast", "no-unproven-boundary-cast"), "no_double_cast.ts")
+    _assert_rules_match_annotations(
+        ("no-double-cast", "no-unproven-boundary-cast"), "no_double_cast.ts"
+    )

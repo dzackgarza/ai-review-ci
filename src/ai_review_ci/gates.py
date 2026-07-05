@@ -163,9 +163,15 @@ query($owner: String!, $name: String!, $number: Int!, $cursor: String) {
 }
 """
 
-_COMMIT_EVIDENCE = re.compile(r"(?:commit|commits/|[/-])\s*[0-9a-f]{7,40}\b|\b[0-9a-f]{12,40}\b", re.IGNORECASE)
-_LEDGER_EVIDENCE = re.compile(r"disposition[- ]ledger|resolution[- ]ledger", re.IGNORECASE)
-_DIRECT_PLAYWRIGHT = re.compile(r"\b(?:bunx|npx|npm|pnpm|yarn)\s+(?:exec\s+)?playwright\b|\bplaywright\s+test\b")
+_COMMIT_EVIDENCE = re.compile(
+    r"(?:commit|commits/|[/-])\s*[0-9a-f]{7,40}\b|\b[0-9a-f]{12,40}\b", re.IGNORECASE
+)
+_LEDGER_EVIDENCE = re.compile(
+    r"disposition[- ]ledger|resolution[- ]ledger", re.IGNORECASE
+)
+_DIRECT_PLAYWRIGHT = re.compile(
+    r"\b(?:bunx|npx|npm|pnpm|yarn)\s+(?:exec\s+)?playwright\b|\bplaywright\s+test\b"
+)
 _PROOF_COMMAND = re.compile(r"\*\*Proof:\*\*\s*`([^`]+)`")
 _RESOLVE_THREAD_MUTATION = """
 mutation($threadId: ID!) {
@@ -185,24 +191,35 @@ def _profile(profile: str) -> ProjectProfile:
     try:
         return PROJECT_PROFILES[profile]
     except KeyError:
-        _fail(f"unsupported project profile {profile!r}; expected one of: {', '.join(SUPPORTED_PROFILES)}")
+        _fail(
+            f"unsupported project profile {profile!r}; expected one of: {', '.join(SUPPORTED_PROFILES)}"
+        )
 
 
 def _has_sage_file(target: Path) -> bool:
-    return any(path.suffix == ".sage" and ".git" not in path.parts for path in target.rglob("*.sage"))
+    return any(
+        path.suffix == ".sage" and ".git" not in path.parts
+        for path in target.rglob("*.sage")
+    )
 
 
 def check_profile(target: Path, profile: str) -> None:
     """Fail if the target repository does not match its curated project profile."""
     target = target.resolve()
     project_profile = _profile(profile)
-    missing = [path for path in project_profile.required_paths if not (target / path).exists()]
-    if project_profile.requires_bun_lock and not ((target / "bun.lock").exists() or (target / "bun.lockb").exists()):
+    missing = [
+        path for path in project_profile.required_paths if not (target / path).exists()
+    ]
+    if project_profile.requires_bun_lock and not (
+        (target / "bun.lock").exists() or (target / "bun.lockb").exists()
+    ):
         missing.append("bun.lock or bun.lockb")
     if project_profile.requires_sage_file and not _has_sage_file(target):
         missing.append("at least one .sage file")
     if missing:
-        _fail(f"{target} does not satisfy {profile} profile; missing: {', '.join(missing)}")
+        _fail(
+            f"{target} does not satisfy {profile} profile; missing: {', '.join(missing)}"
+        )
     print(f"Project profile {profile} passed for {target}.")
 
 
@@ -233,7 +250,9 @@ def diff_findings(diff_text: str) -> list[str]:
                 text = line.value.rstrip("\n")
                 for rule in DIFF_RULES:
                     if _rule_applies(file_path, rule) and rule.pattern.search(text):
-                        findings.append(f"{file_path}:{line.target_line_no}: {rule.rule_id}: {rule.message}")
+                        findings.append(
+                            f"{file_path}:{line.target_line_no}: {rule.rule_id}: {rule.message}"
+                        )
     return findings
 
 
@@ -252,7 +271,9 @@ def _justfile_for(target: Path) -> Path:
     candidates = (target / "justfile", target / "Justfile")
     existing = [candidate for candidate in candidates if candidate.exists()]
     if len(existing) != 1:
-        _fail(f"expected exactly one justfile or Justfile in {target}, found {len(existing)}")
+        _fail(
+            f"expected exactly one justfile or Justfile in {target}, found {len(existing)}"
+        )
     return existing[0]
 
 
@@ -268,7 +289,10 @@ def _dry_run_recipe(target: Path, justfile: Path, recipe: str) -> str:
 
 
 def _delegates_to_global_qc(output: str, project_profile: ProjectProfile) -> bool:
-    return f"ai-review-ci/justfiles/{project_profile.justfile_name}" in output and " -d . " in f" {output} "
+    return (
+        f"ai-review-ci/justfiles/{project_profile.justfile_name}" in output
+        and " -d . " in f" {output} "
+    )
 
 
 def check_delegation(target: Path, profile: str) -> None:
@@ -283,7 +307,9 @@ def check_delegation(target: Path, profile: str) -> None:
         if not _delegates_to_global_qc(output, project_profile):
             failed.append(recipe)
     if failed:
-        _fail(f"{target} does not delegate {profile} recipe(s) through ~/ai-review-ci/justfiles/{project_profile.justfile_name} with -d .: {', '.join(failed)}")
+        _fail(
+            f"{target} does not delegate {profile} recipe(s) through ~/ai-review-ci/justfiles/{project_profile.justfile_name} with -d .: {', '.join(failed)}"
+        )
     print(f"Delegation conformance passed for {target} profile {profile}.")
 
 
@@ -297,10 +323,16 @@ def check_app_boot(target: Path, profile: str) -> None:
     justfile = _justfile_for(target)
     output = _dry_run_recipe(target, justfile, "app-boot")
     if not _delegates_to_global_qc(output, project_profile):
-        _fail(f"{target} app-boot must delegate through ~/ai-review-ci/justfiles/{project_profile.justfile_name} with -d .")
+        _fail(
+            f"{target} app-boot must delegate through ~/ai-review-ci/justfiles/{project_profile.justfile_name} with -d ."
+        )
     if _DIRECT_PLAYWRIGHT.search(output):
-        _fail(f"{target} app-boot must not invoke Playwright directly; delegate to ~/ai-review-ci/justfiles/bun.just")
-    result = subprocess.run(["just", "--justfile", str(justfile), "-d", str(target), "app-boot"])
+        _fail(
+            f"{target} app-boot must not invoke Playwright directly; delegate to ~/ai-review-ci/justfiles/bun.just"
+        )
+    result = subprocess.run(
+        ["just", "--justfile", str(justfile), "-d", str(target), "app-boot"]
+    )
     if result.returncode != 0:
         _fail(f"app-boot gate failed for {target}")
     print(f"App boot gate passed for {target}.")
@@ -311,7 +343,11 @@ _UNCHECKED_CHECKLIST_ITEM = re.compile(r"^\s*[-*+]\s*\[\s*\]\s+\S", re.MULTILINE
 
 def unchecked_checklist_lines(body: str) -> list[int]:
     """Return 1-indexed PR body lines containing unchecked markdown checklist items."""
-    return [line_no for line_no, line in enumerate(body.splitlines(), start=1) if _UNCHECKED_CHECKLIST_ITEM.search(line)]
+    return [
+        line_no
+        for line_no, line in enumerate(body.splitlines(), start=1)
+        if _UNCHECKED_CHECKLIST_ITEM.search(line)
+    ]
 
 
 # Machine marker embedded in the distributed PR template's Policy Alignment Gate
@@ -333,7 +369,9 @@ def gate_template_requires_marker(repo_root: Path) -> bool:
     # The template carries non-ASCII glyphs; the gate runs in CI where the locale
     # is not guaranteed UTF-8, so read_text() without an explicit encoding could
     # raise. Pin UTF-8 (the template's actual encoding).
-    return template.is_file() and POLICY_GATE_MARKER in template.read_text(encoding="utf-8")
+    return template.is_file() and POLICY_GATE_MARKER in template.read_text(
+        encoding="utf-8"
+    )
 
 
 def _gh_json(args: list[str], body: JsonDict | None = None) -> JsonDict:
@@ -349,7 +387,9 @@ def _gh_json(args: list[str], body: JsonDict | None = None) -> JsonDict:
     return data
 
 
-def check_pr_description(repo: str, pr_number: int, repo_root: Path = Path(".")) -> None:
+def check_pr_description(
+    repo: str, pr_number: int, repo_root: Path = Path(".")
+) -> None:
     """Fail if the PR description omits the policy-alignment gate or has unchecked items.
 
     When the repo has installed the policy-alignment PR template (opt-in), the PR body
@@ -372,9 +412,14 @@ def check_pr_description(repo: str, pr_number: int, repo_root: Path = Path("."))
         sys.exit(1)
     unchecked = unchecked_checklist_lines(body)
     if unchecked:
-        print("PR description contains unchecked markdown checklist items:", file=sys.stderr)
+        print(
+            "PR description contains unchecked markdown checklist items:",
+            file=sys.stderr,
+        )
         for line_no in unchecked:
-            print(f"- PR body line {line_no}: unchecked checklist item", file=sys.stderr)
+            print(
+                f"- PR body line {line_no}: unchecked checklist item", file=sys.stderr
+            )
         sys.exit(1)
     print("PR description checklist gate found no unchecked items.")
 
@@ -495,9 +540,14 @@ def check_review_threads(repo: str, pr_number: int) -> None:
                 continue
             failures.append(f"{path}: unresolved review thread")
         elif not _has_resolution_evidence(node):
-            failures.append(f"{path}: resolved review thread lacks commit or disposition-ledger evidence")
+            failures.append(
+                f"{path}: resolved review thread lacks commit or disposition-ledger evidence"
+            )
     if failures:
-        print("Review thread gate found unresolved or unevidenced threads:", file=sys.stderr)
+        print(
+            "Review thread gate found unresolved or unevidenced threads:",
+            file=sys.stderr,
+        )
         for failure in failures:
             print(f"- {failure}", file=sys.stderr)
         sys.exit(1)
@@ -508,7 +558,11 @@ def required_check_contexts(profile: str) -> tuple[str, ...]:
     """Required branch-protection check contexts for a curated project profile."""
     project_profile = _profile(profile)
     if project_profile.requires_app_boot:
-        return BASE_REQUIRED_CHECK_CONTEXTS[:2] + (APP_BOOT_CHECK_CONTEXT,) + BASE_REQUIRED_CHECK_CONTEXTS[2:]
+        return (
+            BASE_REQUIRED_CHECK_CONTEXTS[:2]
+            + (APP_BOOT_CHECK_CONTEXT,)
+            + BASE_REQUIRED_CHECK_CONTEXTS[2:]
+        )
     return BASE_REQUIRED_CHECK_CONTEXTS
 
 
@@ -541,4 +595,6 @@ def protect_branch(repo: str, branch: str, profile: str) -> None:
         ],
         body=branch_protection_payload(profile),
     )
-    print(f"Applied branch protection for {repo}@{branch}: {', '.join(required_check_contexts(profile))}")
+    print(
+        f"Applied branch protection for {repo}@{branch}: {', '.join(required_check_contexts(profile))}"
+    )

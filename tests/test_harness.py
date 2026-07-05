@@ -14,7 +14,9 @@ def test_diff_scope_prompt_inlines_diff_and_skips_repo_docs(tmp_path: Path) -> N
     repo.mkdir()
     (repo / "README.md").write_text("irrelevant repository overview\n")
     (repo / "AGENTS.md").write_text("run tree before every local exploration\n")
-    (repo / ".reviewer-diff.patch").write_text("diff --git a/src/app.py b/src/app.py\n--- a/src/app.py\n+++ b/src/app.py\n@@ -1 +1 @@\n-old\n+new\n")
+    (repo / ".reviewer-diff.patch").write_text(
+        "diff --git a/src/app.py b/src/app.py\n--- a/src/app.py\n+++ b/src/app.py\n@@ -1 +1 @@\n-old\n+new\n"
+    )
 
     scope = tmp_path / "scope-diff.md"
     scope.write_text("Read the diff first.\n")
@@ -133,7 +135,9 @@ def test_check_pr_description_reads_target_checkout_not_infra() -> None:
     assert '--repo-root "{{control_repo}}"' in recipe
 
 
-def test_qc_doctor_runner_emits_fenced_payload_and_preserves_failure(tmp_path: Path) -> None:
+def test_qc_doctor_runner_emits_fenced_payload_and_preserves_failure(
+    tmp_path: Path,
+) -> None:
     target = tmp_path / "target"
     target.mkdir()
     subprocess.run(["git", "init", "-q", str(target)], check=True)
@@ -157,10 +161,14 @@ def test_qc_doctor_runner_emits_fenced_payload_and_preserves_failure(tmp_path: P
 
 
 def test_qc_doctor_upload_runs_after_failed_gate_without_weakening_gate() -> None:
-    workflow = yaml.safe_load((ROOT / ".github" / "workflows" / "_gates.yml").read_text())
+    workflow = yaml.safe_load(
+        (ROOT / ".github" / "workflows" / "_gates.yml").read_text()
+    )
     steps = workflow["jobs"]["qc-doctor"]["steps"]
     check_step = next(step for step in steps if step.get("name") == "Check QC doctor")
-    upload_step = next(step for step in steps if step.get("name") == "Upload QC doctor payload")
+    upload_step = next(
+        step for step in steps if step.get("name") == "Upload QC doctor payload"
+    )
 
     assert "continue-on-error" not in check_step
     assert upload_step["if"] == "${{ always() }}"

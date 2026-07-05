@@ -99,11 +99,6 @@ def _line_count(path: Path) -> int:
     return len((Path.cwd() / path).read_text(errors="replace").splitlines())
 
 
-# ---------------------------------------------------------------------------
-# Shared validator logic (parameterized by the per-report-type FIX guidance)
-# ---------------------------------------------------------------------------
-
-
 def reject_blanket_invariant(value: str, *, good_example: str) -> str:
     """Reject violated_invariant text that names nothing specific."""
     for pat in _INVARIANT_REJECT:
@@ -131,7 +126,9 @@ def reject_clean_report_language(value: str) -> str:
     return value
 
 
-def require_tier2_for_low_signal(tier: str, category: str, *, fix_examples: str) -> None:
+def require_tier2_for_low_signal(
+    tier: str, category: str, *, fix_examples: str
+) -> None:
     """Force low-signal categories to tier2."""
     if category.lower() in LOW_SIGNAL_CATEGORIES and tier == "tier1":
         raise ValueError(
@@ -197,7 +194,9 @@ def _check_evidence_paths(i: int, j: int, ev: Evidence) -> None:
         )
 
 
-def validate_checkout_paths(review_scope: Sequence[Path], findings: Sequence[ReportFinding]) -> None:
+def validate_checkout_paths(
+    review_scope: Sequence[Path], findings: Sequence[ReportFinding]
+) -> None:
     """Every cited path must exist in the checkout."""
     for i, p in enumerate(review_scope):
         if not _path_in_checkout(p):
@@ -208,9 +207,14 @@ def validate_checkout_paths(review_scope: Sequence[Path], findings: Sequence[Rep
         _check_finding_paths(i, finding)
 
 
-def require_substantive_finding(findings: Sequence[ReportFinding], *, fix_tail: str) -> None:
+def require_substantive_finding(
+    findings: Sequence[ReportFinding], *, fix_tail: str
+) -> None:
     """At least one finding must be Tier 1 or carry a non-low-signal category."""
-    if not any(f.tier == "tier1" or f.category.lower() not in LOW_SIGNAL_CATEGORIES for f in findings):
+    if not any(
+        f.tier == "tier1" or f.category.lower() not in LOW_SIGNAL_CATEGORIES
+        for f in findings
+    ):
         raise ValueError(
             "REJECTED: at least one finding must be substantive "
             "(Tier 1 or non-low-signal category). "
@@ -221,38 +225,47 @@ def require_substantive_finding(findings: Sequence[ReportFinding], *, fix_tail: 
         )
 
 
-def validate_policy_reference(policy_code: str | None, remediation_code: str | None) -> None:
+def validate_policy_reference(
+    policy_code: str | None, remediation_code: str | None
+) -> None:
     """Validate optional policy/remediation IDs against the vendored index."""
     if policy_code is None:
         if remediation_code is not None:
-            raise ValueError("REJECTED: remediation_code requires policy_code. FIX: cite the POLICY.* code that owns the remediation.")
+            raise ValueError(
+                "REJECTED: remediation_code requires policy_code. FIX: cite the POLICY.* code that owns the remediation."
+            )
         return
     try:
         load_policy_index().remediation_for_policy(policy_code, remediation_code)
     except PolicyIndexError as exc:
-        raise ValueError(f"REJECTED: invalid policy/remediation reference. FIX: cite existing vendored POLICY.* and REMEDIATE.* IDs. {exc}") from exc
-
-
-# ---------------------------------------------------------------------------
-# Shared leaf types
-# ---------------------------------------------------------------------------
+        raise ValueError(
+            f"REJECTED: invalid policy/remediation reference. FIX: cite existing vendored POLICY.* and REMEDIATE.* IDs. {exc}"
+        ) from exc
 
 
 class Location(BaseModel):
-    path: Path = Field(description="File path relative to repo root. Must exist in the reviewed checkout.")
+    path: Path = Field(
+        description="File path relative to repo root. Must exist in the reviewed checkout."
+    )
     start_line: int = Field(ge=1, description="Finding start line (1-indexed).")
     end_line: int = Field(ge=1, description="Finding end line (1-indexed).")
 
     @model_validator(mode="after")
     def _ordered_lines(self) -> Self:
         if self.start_line > self.end_line:
-            raise ValueError(f"REJECTED: start_line {self.start_line} > end_line {self.end_line}. FIX: start_line must not exceed end_line.")
+            raise ValueError(
+                f"REJECTED: start_line {self.start_line} > end_line {self.end_line}. FIX: start_line must not exceed end_line."
+            )
         return self
 
 
 class Evidence(BaseModel):
-    kind: str = Field(description="Evidence type: file-read, diff-snippet, command-output.")
-    path: Path = Field(description="Evidence file path relative to repo root. Must exist in the reviewed checkout.")
+    kind: str = Field(
+        description="Evidence type: file-read, diff-snippet, command-output."
+    )
+    path: Path = Field(
+        description="Evidence file path relative to repo root. Must exist in the reviewed checkout."
+    )
     lines: list[Annotated[int, Field(ge=1)]] = Field(
         min_length=2,
         max_length=2,
@@ -262,13 +275,17 @@ class Evidence(BaseModel):
     @model_validator(mode="after")
     def _ordered_lines(self) -> Self:
         if self.lines[0] > self.lines[1]:
-            raise ValueError(f"REJECTED: evidence lines {self.lines} are not an ascending [start, end] range. FIX: start must not exceed end.")
+            raise ValueError(
+                f"REJECTED: evidence lines {self.lines} are not an ascending [start, end] range. FIX: start must not exceed end."
+            )
         return self
 
 
 class CheckedSurface(BaseModel):
     path: Path = Field(description="File path examined during review.")
-    reason: str = Field(description="Why this surface was selected: high-churn, diff-context, dependency-graph.")
+    reason: str = Field(
+        description="Why this surface was selected: high-churn, diff-context, dependency-graph."
+    )
     lines_read: list[Annotated[int, Field(ge=1)]] = Field(
         min_length=2,
         max_length=2,
@@ -277,12 +294,10 @@ class CheckedSurface(BaseModel):
     result: str = Field(description="Outcome: finding, clean, needs-attention.")
 
 
-# ---------------------------------------------------------------------------
-# General review
-# ---------------------------------------------------------------------------
-
 _GENERAL_TIER_EXAMPLES = "'semantic-regression', 'test-quality'"
-_GENERAL_INVARIANT_GOOD = "The CI runner silently swallows diff-retrieval failures instead of aborting"
+_GENERAL_INVARIANT_GOOD = (
+    "The CI runner silently swallows diff-retrieval failures instead of aborting"
+)
 
 
 class GeneralFinding(BaseModel):
@@ -329,7 +344,9 @@ class GeneralFinding(BaseModel):
     remediation_code: str | None = Field(
         description="Explicit REMEDIATE.* code, or null to use the policy's canonical related remediation.",
     )
-    location: Location = Field(description="File and line range where the finding occurs.")
+    location: Location = Field(
+        description="File and line range where the finding occurs."
+    )
     violated_invariant: str = Field(
         min_length=20,
         description="A specific, verifiable contract or behavior that is violated. "
@@ -356,7 +373,9 @@ class GeneralFinding(BaseModel):
         "Example: 'grep -rn get_diff src/ai_review_ci/harness.py'",
     )
     symptom: str = Field(description="Observable symptom of the defect.")
-    source: str = Field(description="Root cause: what code or pattern produces the symptom.")
+    source: str = Field(
+        description="Root cause: what code or pattern produces the symptom."
+    )
     consequence: str = Field(description="What breaks or degrades due to this defect.")
     evidence: list[Evidence] = Field(
         min_length=1,
@@ -365,7 +384,9 @@ class GeneralFinding(BaseModel):
 
     @model_validator(mode="after")
     def _tier_category_consistency(self) -> Self:
-        require_tier2_for_low_signal(self.tier, self.category, fix_examples=_GENERAL_TIER_EXAMPLES)
+        require_tier2_for_low_signal(
+            self.tier, self.category, fix_examples=_GENERAL_TIER_EXAMPLES
+        )
         return self
 
     @model_validator(mode="after")
@@ -432,10 +453,6 @@ class GeneralReport(BaseModel):
         return self
 
 
-# ---------------------------------------------------------------------------
-# Slop review
-# ---------------------------------------------------------------------------
-
 _SLOP_TIER_EXAMPLES = "'bridge-burning', 'validation-evasion'"
 _SLOP_INVARIANT_GOOD = "The agent suppresses stderr to construct synthetic fallback results instead of failing on missing files"
 
@@ -481,7 +498,9 @@ class SlopFinding(BaseModel):
     remediation_code: str | None = Field(
         description="Explicit REMEDIATE.* code, or null to use the policy's canonical related remediation.",
     )
-    location: Location = Field(description="File and line range where the slop pattern occurs.")
+    location: Location = Field(
+        description="File and line range where the slop pattern occurs."
+    )
     violated_invariant: str = Field(
         min_length=20,
         description="A specific engineering invariant that is violated by the slop "
@@ -546,7 +565,9 @@ class SlopFinding(BaseModel):
 
     @model_validator(mode="after")
     def _tier_category_consistency(self) -> Self:
-        require_tier2_for_low_signal(self.tier, self.category, fix_examples=_SLOP_TIER_EXAMPLES)
+        require_tier2_for_low_signal(
+            self.tier, self.category, fix_examples=_SLOP_TIER_EXAMPLES
+        )
         return self
 
     @model_validator(mode="after")

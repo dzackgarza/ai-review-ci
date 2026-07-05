@@ -18,7 +18,14 @@ carry-forward payload still forwards the *raw* alert dict verbatim
 
 from typing import Self
 
-from pydantic import BaseModel, ConfigDict, Field, StrictBool, StrictInt, model_validator
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    Field,
+    StrictBool,
+    StrictInt,
+    model_validator,
+)
 
 
 class _ApiModel(BaseModel):

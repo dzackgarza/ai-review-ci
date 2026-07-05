@@ -1,5 +1,10 @@
 from ai_review_ci.models import finding_fingerprint
-from ai_review_ci.threads import parse_diff, partition_findings, pick_anchor, render_thread_body
+from ai_review_ci.threads import (
+    parse_diff,
+    partition_findings,
+    pick_anchor,
+    render_thread_body,
+)
 
 
 def test_parse_diff_maps_new_side_commentable_lines() -> None:
@@ -80,7 +85,9 @@ def test_partition_findings_skips_existing_fingerprint_threads() -> None:
     fingerprint = finding_fingerprint("DOC_CONSISTENCY", "src/example.py")
     seen = {fingerprint}
 
-    comments, off_diff, possible_duplicates = partition_findings([finding], {"src/example.py": {12}}, seen, "General Review")
+    comments, off_diff, possible_duplicates = partition_findings(
+        [finding], {"src/example.py": {12}}, seen, "General Review"
+    )
 
     assert not comments
     assert not off_diff
@@ -142,5 +149,11 @@ def test_render_thread_body_includes_structured_reviewer_identity() -> None:
 
     body = render_thread_body(finding, "Slop Review", "b" * 64)
 
-    assert '<!-- ai-review-reviewer: {"agent": "opencode-ai", "prompt_id": "reviews/slop", "prompt_version": "1.0.0", "type": "slop"} -->' in body
-    assert "**Reviewer identity:** `type=slop; agent=opencode-ai; prompt_id=reviews/slop; prompt_version=1.0.0`" in body
+    assert (
+        '<!-- ai-review-reviewer: {"agent": "opencode-ai", "prompt_id": "reviews/slop", "prompt_version": "1.0.0", "type": "slop"} -->'
+        in body
+    )
+    assert (
+        "**Reviewer identity:** `type=slop; agent=opencode-ai; prompt_id=reviews/slop; prompt_version=1.0.0`"
+        in body
+    )

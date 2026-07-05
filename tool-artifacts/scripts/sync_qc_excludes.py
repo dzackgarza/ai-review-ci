@@ -118,7 +118,9 @@ def find_config() -> Path:
         candidate = parent / "qc-excludes.toml"
         if candidate.is_file():
             return candidate.resolve()
-    print("ERROR: qc-excludes.toml not found in any ancestor directory.", file=sys.stderr)
+    print(
+        "ERROR: qc-excludes.toml not found in any ancestor directory.", file=sys.stderr
+    )
     sys.exit(1)
 
 

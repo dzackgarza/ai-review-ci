@@ -144,7 +144,10 @@ def pick_anchor(finding: JsonDict, commentable: dict[str, set[int]]) -> int | No
 
 def _thread_body_lines(finding: JsonDict, review_label: str, fp: str) -> list[str]:
     loc = finding["location"]
-    review_type = next((key for key, label in REVIEW_LABELS.items() if label == review_label), "general")
+    review_type = next(
+        (key for key, label in REVIEW_LABELS.items() if label == review_label),
+        "general",
+    )
     identity = reviewer_identity(review_type)
     lines = [
         f"### [{review_label}][{finding['tier']}] {finding['label']}",
@@ -152,7 +155,9 @@ def _thread_body_lines(finding: JsonDict, review_label: str, fp: str) -> list[st
         f"<!-- {REVIEW_IDENTITY_MARKER} {json.dumps(identity, sort_keys=True)} -->",
         "",
         f"**Location:** `{loc['path']}:{loc['start_line']}-{loc['end_line']}`",
-        (f"**Reviewer identity:** `type={review_type}; agent={identity['agent']}; prompt_id=reviews/{review_type}; prompt_version={identity['prompt_version']}`"),
+        (
+            f"**Reviewer identity:** `type={review_type}; agent={identity['agent']}; prompt_id=reviews/{review_type}; prompt_version={identity['prompt_version']}`"
+        ),
         f"**Violated invariant:** {finding['violated_invariant']}",
         f"**Proof:** `{finding['proof_command']}`",
     ]
@@ -165,12 +170,17 @@ def _thread_body_lines(finding: JsonDict, review_label: str, fp: str) -> list[st
     ]:
         if finding.get(key):
             lines.append(f"**{title}:** {finding[key]}")
-    ev_parts = [f"`{e['path']}:{e['lines'][0]}-{e['lines'][1]}` ({e['kind']})" for e in finding["evidence"]]
+    ev_parts = [
+        f"`{e['path']}:{e['lines'][0]}-{e['lines'][1]}` ({e['kind']})"
+        for e in finding["evidence"]
+    ]
     lines.append(f"**Evidence:** {', '.join(ev_parts)}")
     policy_code = finding.get("policy_code")
     if isinstance(policy_code, str):
         remediation_code = finding.get("remediation_code")
-        guidance = canonical_guidance(policy_code, remediation_code if isinstance(remediation_code, str) else None)
+        guidance = canonical_guidance(
+            policy_code, remediation_code if isinstance(remediation_code, str) else None
+        )
         lines.extend(["", "#### Canonical policy guidance", guidance])
     return lines
 
@@ -207,7 +217,9 @@ def render_review_body(
         )
         for f in off_diff:
             loc = f["location"]
-            lines.append(f"- `{loc['path']}:{loc['start_line']}-{loc['end_line']}` — [{f['tier']}] {f['label']}: {f['violated_invariant']}")
+            lines.append(
+                f"- `{loc['path']}:{loc['start_line']}-{loc['end_line']}` — [{f['tier']}] {f['label']}: {f['violated_invariant']}"
+            )
     return "\n".join(lines)
 
 
@@ -262,15 +274,21 @@ def post_threads(artifact: Path, diff: Path, repo: str, pr_number: int) -> None:
     commentable = parse_diff(diff.read_text())
     seen = existing_fingerprints(repo, pr_number)
 
-    comments, off_diff, possible_duplicates = partition_findings(findings, commentable, seen, review_label)
+    comments, off_diff, possible_duplicates = partition_findings(
+        findings, commentable, seen, review_label
+    )
 
     if not comments and not off_diff:
-        print(f"All {len(findings)} finding(s) already have threads on PR #{pr_number}; nothing to post.")
+        print(
+            f"All {len(findings)} finding(s) already have threads on PR #{pr_number}; nothing to post."
+        )
         return
 
     payload = {
         "event": "COMMENT",
-        "body": render_review_body(review_label, findings, len(comments), possible_duplicates, off_diff),
+        "body": render_review_body(
+            review_label, findings, len(comments), possible_duplicates, off_diff
+        ),
         "comments": comments,
     }
     _gh_json(
@@ -284,4 +302,6 @@ def post_threads(artifact: Path, diff: Path, repo: str, pr_number: int) -> None:
         ],
         body=payload,
     )
-    print(f"Posted review to PR #{pr_number}: {len(comments)} thread(s), {possible_duplicates} possible duplicate(s), {len(off_diff)} off-diff.")
+    print(
+        f"Posted review to PR #{pr_number}: {len(comments)} thread(s), {possible_duplicates} possible duplicate(s), {len(off_diff)} off-diff."
+    )

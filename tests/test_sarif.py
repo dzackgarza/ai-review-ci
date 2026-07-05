@@ -15,12 +15,20 @@ from ai_review_ci.sarif import (
     build_sarif,
     to_sarif,
 )
-from tests.conftest import APP_FILE, general_candidate, general_finding, slop_candidate, slop_finding
+from tests.conftest import (
+    APP_FILE,
+    general_candidate,
+    general_finding,
+    slop_candidate,
+    slop_finding,
+)
 
 JsonDict = dict[str, Any]
 
 
-def existing_alert(*, category: str = "carried-forward", path: str = APP_FILE, state: str = "open") -> JsonDict:
+def existing_alert(
+    *, category: str = "carried-forward", path: str = APP_FILE, state: str = "open"
+) -> JsonDict:
     return {
         "tool_name": "ai-review/general",
         "alert": {
@@ -44,7 +52,10 @@ def existing_alert(*, category: str = "carried-forward", path: str = APP_FILE, s
 
 
 def result_fingerprints(sarif: JsonDict) -> list[str]:
-    return [result["partialFingerprints"]["reviewFindingKey"] for result in sarif["runs"][0]["results"]]
+    return [
+        result["partialFingerprints"]["reviewFindingKey"]
+        for result in sarif["runs"][0]["results"]
+    ]
 
 
 def configure_github_env() -> None:
@@ -75,7 +86,9 @@ def test_build_sarif_carries_existing_open_alerts(checkout: Path) -> None:
 
     fingerprints = result_fingerprints(sarif)
     assert finding_fingerprint("carried-forward", APP_FILE) in fingerprints
-    assert finding_fingerprint("new-review-finding", "tests/test_app.py") in fingerprints
+    assert (
+        finding_fingerprint("new-review-finding", "tests/test_app.py") in fingerprints
+    )
 
 
 def test_build_sarif_results_reference_rule_table_indexes(checkout: Path) -> None:
@@ -103,12 +116,16 @@ def test_build_sarif_results_reference_rule_table_indexes(checkout: Path) -> Non
     )
 
     run = sarif["runs"][0]
-    rule_index_by_id = {rule["id"]: index for index, rule in enumerate(run["tool"]["driver"]["rules"])}
+    rule_index_by_id = {
+        rule["id"]: index for index, rule in enumerate(run["tool"]["driver"]["rules"])
+    }
     for result in run["results"]:
         assert result["ruleIndex"] == rule_index_by_id[result["ruleId"]]
 
 
-def test_build_sarif_resolves_policy_guidance_from_vendored_index(checkout: Path) -> None:
+def test_build_sarif_resolves_policy_guidance_from_vendored_index(
+    checkout: Path,
+) -> None:
     configure_github_env()
 
     artifact = general_candidate(
@@ -139,7 +156,9 @@ def test_build_sarif_resolves_policy_guidance_from_vendored_index(checkout: Path
     }
 
 
-def test_build_sarif_embeds_structured_reviewer_identity(checkout: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_build_sarif_embeds_structured_reviewer_identity(
+    checkout: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     configure_github_env()
     monkeypatch.setenv("AI_REVIEW_AGENT", "codex-reviewer")
 
@@ -257,8 +276,12 @@ def test_to_sarif_writes_artifact_with_optional_carried_alert_sidecar(
     second_sarif = json.loads(second_output.read_text())
     assert first_sarif["runs"][0]["results"] == []
     carried_result = second_sarif["runs"][0]["results"][0]
-    assert carried_result["partialFingerprints"]["reviewFindingKey"] == (finding_fingerprint("carried-forward", APP_FILE))
-    assert carried_result["locations"][0]["physicalLocation"]["region"] == {"startLine": 2}
+    assert carried_result["partialFingerprints"]["reviewFindingKey"] == (
+        finding_fingerprint("carried-forward", APP_FILE)
+    )
+    assert carried_result["locations"][0]["physicalLocation"]["region"] == {
+        "startLine": 2
+    }
 
 
 def test_build_sarif_carries_github_rest_alert_without_location_properties(

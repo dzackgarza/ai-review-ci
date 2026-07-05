@@ -15,7 +15,12 @@ import yaml
 from cyclopts import Parameter
 from pydantic import BaseModel, ConfigDict, Field, TypeAdapter
 
-from ai_review_ci.gates import PROJECT_PROFILES, SUPPORTED_PROFILES, ProjectProfile, required_check_contexts
+from ai_review_ci.gates import (
+    PROJECT_PROFILES,
+    SUPPORTED_PROFILES,
+    ProjectProfile,
+    required_check_contexts,
+)
 from ai_review_ci.install import TEMPLATES
 
 MANIFEST_NAME = ".ai-review-ci.toml"
@@ -27,8 +32,12 @@ MISSING_JUSTFILE_NAME = ".ai-review-ci-missing-justfile"
 
 ProfileName = Literal["python", "bun", "bun-playwright", "rust", "sage"]
 ObservedProfile = Literal["python", "bun", "bun-playwright", "rust", "sage", "unknown"]
-InstallationState = Literal["compliant", "outdated", "noncompliant", "uninstalled", "unknown"]
-GlobalStatus = Literal["current", "stale", "misconfigured", "unverifiable", "intentional_exception"]
+InstallationState = Literal[
+    "compliant", "outdated", "noncompliant", "uninstalled", "unknown"
+]
+GlobalStatus = Literal[
+    "current", "stale", "misconfigured", "unverifiable", "intentional_exception"
+]
 FindingSeverity = Literal["error", "warning"]
 FindingSurface = Literal[
     "manifest",
@@ -39,7 +48,9 @@ FindingSurface = Literal[
     "justfile_conformance",
     "branch_protection",
 ]
-BranchProtectionState = Literal["not_applicable", "compliant", "missing", "missing_contexts", "unverifiable"]
+BranchProtectionState = Literal[
+    "not_applicable", "compliant", "missing", "missing_contexts", "unverifiable"
+]
 
 JsonDict = dict[str, Any]
 ProfileAdapter: TypeAdapter[ProfileName] = TypeAdapter(ProfileName)
@@ -205,7 +216,9 @@ def manifest_text(
     return "\n".join(lines) + "\n"
 
 
-def doctor(target: Path, *, json: Annotated[int, Parameter(name="--json", count=True)] = 0) -> None:
+def doctor(
+    target: Path, *, json: Annotated[int, Parameter(name="--json", count=True)] = 0
+) -> None:
     """Evaluate the target repository's declared ai-review-ci contract."""
     report = doctor_report(target)
     if json > 0:
@@ -221,7 +234,11 @@ def doctor(target: Path, *, json: Annotated[int, Parameter(name="--json", count=
 def check_justfile(target: Path) -> None:
     """Fail if the target justfile violates the baseline public justfile contract."""
     report = doctor_report(target)
-    findings = [finding for finding in report.findings if finding.surface in ("justfile_conformance", "justfile_delegation")]
+    findings = [
+        finding
+        for finding in report.findings
+        if finding.surface in ("justfile_conformance", "justfile_delegation")
+    ]
     if findings:
         for finding in findings:
             print(f"{finding.surface}: {finding.evidence}", file=sys.stderr)
@@ -243,8 +260,14 @@ def doctor_report(target: Path) -> DoctorReport:
     """Build a machine-readable doctor report for a target repository."""
     target_root = _target_root(target)
     manifest_path = target_root / MANIFEST_NAME
-    manifest = _load_manifest(manifest_path) if manifest_path.is_file() else MissingManifest(present=False, reason="manifest file is missing")
-    declared_profile: ObservedProfile = manifest.profile if isinstance(manifest, QcManifest) else UNKNOWN_PROFILE
+    manifest = (
+        _load_manifest(manifest_path)
+        if manifest_path.is_file()
+        else MissingManifest(present=False, reason="manifest file is missing")
+    )
+    declared_profile: ObservedProfile = (
+        manifest.profile if isinstance(manifest, QcManifest) else UNKNOWN_PROFILE
+    )
     effective_profile = _effective_profile(target_root, declared_profile)
     report_profile = _report_profile(manifest, effective_profile)
     profile_proof = _profile_proofs(target_root)
@@ -272,7 +295,9 @@ def doctor_report(target: Path) -> DoctorReport:
             remote=_remote(target_root),
             head=_head(target_root),
         ),
-        declaration=DeclarationObservation(path=str(manifest_path), sha256=declaration_hash, manifest=manifest),
+        declaration=DeclarationObservation(
+            path=str(manifest_path), sha256=declaration_hash, manifest=manifest
+        ),
         declaration_hash=declaration_hash,
         declared_profile=declared_profile,
         effective_profile=effective_profile,
@@ -304,8 +329,14 @@ def _load_manifest(path: Path) -> QcManifest:
     return QcManifest.model_validate(data)
 
 
-def _effective_profile(target: Path, declared_profile: ObservedProfile) -> ObservedProfile:
-    matches = [profile for profile in SUPPORTED_PROFILES if not _profile_missing_paths(target, PROJECT_PROFILES[profile])]
+def _effective_profile(
+    target: Path, declared_profile: ObservedProfile
+) -> ObservedProfile:
+    matches = [
+        profile
+        for profile in SUPPORTED_PROFILES
+        if not _profile_missing_paths(target, PROJECT_PROFILES[profile])
+    ]
     if declared_profile in matches:
         return ProfileAdapter.validate_python(declared_profile)
     if len(matches) == 1:
@@ -313,7 +344,9 @@ def _effective_profile(target: Path, declared_profile: ObservedProfile) -> Obser
     return UNKNOWN_PROFILE
 
 
-def _report_profile(manifest: ManifestDeclaration, effective_profile: ObservedProfile) -> ProfileName:
+def _report_profile(
+    manifest: ManifestDeclaration, effective_profile: ObservedProfile
+) -> ProfileName:
     if isinstance(manifest, QcManifest):
         return manifest.profile
     if effective_profile != UNKNOWN_PROFILE:
@@ -321,11 +354,20 @@ def _report_profile(manifest: ManifestDeclaration, effective_profile: ObservedPr
     return "python"
 
 
-def _profile_missing_paths(target: Path, project_profile: ProjectProfile) -> tuple[str, ...]:
-    missing = [path for path in project_profile.required_paths if not (target / path).exists()]
-    if project_profile.requires_bun_lock and not ((target / "bun.lock").exists() or (target / "bun.lockb").exists()):
+def _profile_missing_paths(
+    target: Path, project_profile: ProjectProfile
+) -> tuple[str, ...]:
+    missing = [
+        path for path in project_profile.required_paths if not (target / path).exists()
+    ]
+    if project_profile.requires_bun_lock and not (
+        (target / "bun.lock").exists() or (target / "bun.lockb").exists()
+    ):
         missing.append("bun.lock or bun.lockb")
-    if project_profile.requires_sage_file and not any(path.suffix == ".sage" and ".git" not in path.parts for path in target.rglob("*.sage")):
+    if project_profile.requires_sage_file and not any(
+        path.suffix == ".sage" and ".git" not in path.parts
+        for path in target.rglob("*.sage")
+    ):
         missing.append("at least one .sage file")
     return tuple(missing)
 
@@ -341,7 +383,9 @@ def _profile_proofs(target: Path) -> dict[str, ProfileProofObservation]:
     }
 
 
-def _workflow_refs(target: Path, manifest: ManifestDeclaration, profile: ProfileName) -> dict[str, WorkflowRefObservation]:
+def _workflow_refs(
+    target: Path, manifest: ManifestDeclaration, profile: ProfileName
+) -> dict[str, WorkflowRefObservation]:
     workflows: dict[str, WorkflowRefObservation] = {}
     required_ref = manifest.installed_ref if isinstance(manifest, QcManifest) else ""
     for name in TEMPLATES:
@@ -350,13 +394,19 @@ def _workflow_refs(target: Path, manifest: ManifestDeclaration, profile: Profile
         gates: set[str] = set()
         if path.is_file():
             data = _yaml_mapping(path)
-            jobs = TypeAdapter(dict[str, dict[str, Any]]).validate_python(data["jobs"] if "jobs" in data else {})
+            jobs = TypeAdapter(dict[str, dict[str, Any]]).validate_python(
+                data["jobs"] if "jobs" in data else {}
+            )
             for job in jobs.values():
                 uses = str(job["uses"]) if "uses" in job else ""
                 if "dzackgarza/ai-review-ci/.github/workflows/" in uses and "@" in uses:
                     refs.add(uses.rsplit("@", 1)[1])
                 if "dzackgarza/ai-review-ci/.github/workflows/_gates.yml" in uses:
-                    with_block = TypeAdapter(dict[str, Any]).validate_python(job["with"]) if "with" in job else {}
+                    with_block = (
+                        TypeAdapter(dict[str, Any]).validate_python(job["with"])
+                        if "with" in job
+                        else {}
+                    )
                     gate = with_block["gate"] if "gate" in with_block else ""
                     if isinstance(gate, str):
                         gates.add(gate)
@@ -392,13 +442,18 @@ def _required_workflow_gates(name: str, profile: ProfileName) -> tuple[str, ...]
     return gates
 
 
-def _justfile_delegation(target: Path, profile: ProfileName) -> dict[str, DelegationObservation]:
+def _justfile_delegation(
+    target: Path, profile: ProfileName
+) -> dict[str, DelegationObservation]:
     project_profile = PROJECT_PROFILES[profile]
     recipes = ["test", "test-ci"]
     if project_profile.requires_app_boot:
         recipes.append("app-boot")
     justfile = _justfile_path(target)
-    return {recipe: _recipe_delegation(target, justfile, project_profile, recipe) for recipe in recipes}
+    return {
+        recipe: _recipe_delegation(target, justfile, project_profile, recipe)
+        for recipe in recipes
+    }
 
 
 def _justfile_path(target: Path) -> Path:
@@ -409,7 +464,9 @@ def _justfile_path(target: Path) -> Path:
     return target / MISSING_JUSTFILE_NAME
 
 
-def _recipe_delegation(target: Path, justfile: Path, project_profile: ProjectProfile, recipe: str) -> DelegationObservation:
+def _recipe_delegation(
+    target: Path, justfile: Path, project_profile: ProjectProfile, recipe: str
+) -> DelegationObservation:
     if not justfile.is_file():
         return DelegationObservation(
             required_justfile=project_profile.justfile_name,
@@ -431,13 +488,16 @@ def _recipe_delegation(target: Path, justfile: Path, project_profile: ProjectPro
         observed=DelegationCommandObservation(
             present=result.returncode == 0,
             command=command,
-            delegates_to_global_qc=f"ai-review-ci/justfiles/{project_profile.justfile_name}" in command,
+            delegates_to_global_qc=f"ai-review-ci/justfiles/{project_profile.justfile_name}"
+            in command,
             caller_root_preserved=" -d . " in f" {command} ",
         ),
     )
 
 
-def _branch_protection(target: Path, manifest: ManifestDeclaration, profile: ProfileName) -> BranchProtectionObservation:
+def _branch_protection(
+    target: Path, manifest: ManifestDeclaration, profile: ProfileName
+) -> BranchProtectionObservation:
     required = required_check_contexts(profile)
     remote = _remote(target)
     if remote == "":
@@ -462,7 +522,9 @@ def _branch_protection(target: Path, manifest: ManifestDeclaration, profile: Pro
         capture_output=True,
     )
     if result.returncode != 0:
-        state: BranchProtectionState = "missing" if "Branch not protected" in result.stderr else "unverifiable"
+        state: BranchProtectionState = (
+            "missing" if "Branch not protected" in result.stderr else "unverifiable"
+        )
         return BranchProtectionObservation(
             required_contexts=required,
             observed_contexts=(),
@@ -488,9 +550,19 @@ def _branch_protection(target: Path, manifest: ManifestDeclaration, profile: Pro
 
 
 def _observed_contexts(data: JsonDict) -> list[str]:
-    status_checks = TypeAdapter(dict[str, Any]).validate_python(data["required_status_checks"])
-    contexts = [str(context) for context in TypeAdapter(list[Any]).validate_python(status_checks["contexts"])]
-    checks = [str(check["context"]) for check in TypeAdapter(list[dict[str, Any]]).validate_python(status_checks["checks"])]
+    status_checks = TypeAdapter(dict[str, Any]).validate_python(
+        data["required_status_checks"]
+    )
+    contexts = [
+        str(context)
+        for context in TypeAdapter(list[Any]).validate_python(status_checks["contexts"])
+    ]
+    checks = [
+        str(check["context"])
+        for check in TypeAdapter(list[dict[str, Any]]).validate_python(
+            status_checks["checks"]
+        )
+    ]
     return contexts + checks
 
 
@@ -540,7 +612,9 @@ def _findings(
                     f"declared profile {declared} does not match observed target shape {effective_profile}; "
                     f"missing for declared profile: {', '.join(profile_proof[declared].missing_paths)}"
                 ),
-                remediation_commands=(f"just install-qc-scaffold {declared} <target-repo>",),
+                remediation_commands=(
+                    f"just install-qc-scaffold {declared} <target-repo>",
+                ),
             )
         )
     for workflow in workflow_refs.values():
@@ -550,38 +624,57 @@ def _findings(
                     severity="error",
                     surface="workflow",
                     evidence=f"{workflow.path} is missing",
-                    remediation_commands=("ai-review-ci install --target <target-repo> --repo owner/repo --branch main --profile <profile>",),
+                    remediation_commands=(
+                        "ai-review-ci install --target <target-repo> --repo owner/repo --branch main --profile <profile>",
+                    ),
                 )
             )
             continue
-        missing_gates = tuple(gate for gate in workflow.required_gates if gate not in workflow.observed_gates)
+        missing_gates = tuple(
+            gate
+            for gate in workflow.required_gates
+            if gate not in workflow.observed_gates
+        )
         if missing_gates:
             findings.append(
                 DoctorFinding(
                     severity="error",
                     surface="workflow",
                     evidence=f"{workflow.path} missing gate(s): {', '.join(missing_gates)}",
-                    remediation_commands=("ai-review-ci install --target <target-repo> --repo owner/repo --branch main --profile <profile>",),
+                    remediation_commands=(
+                        "ai-review-ci install --target <target-repo> --repo owner/repo --branch main --profile <profile>",
+                    ),
                 )
             )
-        if workflow.required_ref != "" and workflow.observed_ref != workflow.required_ref:
+        if (
+            workflow.required_ref != ""
+            and workflow.observed_ref != workflow.required_ref
+        ):
             findings.append(
                 DoctorFinding(
                     severity="warning",
                     surface="workflow_ref",
                     evidence=f"{workflow.path} uses {workflow.observed_ref}; manifest requires {workflow.required_ref}",
-                    remediation_commands=(f"edit {workflow.path} to use dzackgarza/ai-review-ci reusable workflows at @{workflow.required_ref}",),
+                    remediation_commands=(
+                        f"edit {workflow.path} to use dzackgarza/ai-review-ci reusable workflows at @{workflow.required_ref}",
+                    ),
                 )
             )
     for recipe, observation in justfile_delegation.items():
         observed = observation.observed
-        if not observed.present or not observed.delegates_to_global_qc or not observed.caller_root_preserved:
+        if (
+            not observed.present
+            or not observed.delegates_to_global_qc
+            or not observed.caller_root_preserved
+        ):
             findings.append(
                 DoctorFinding(
                     severity="error",
                     surface="justfile_delegation",
                     evidence=f"{recipe} must delegate through ~/ai-review-ci/justfiles/{observation.required_justfile} with -d .",
-                    remediation_commands=(f"just install-qc-scaffold {declared} <target-repo>",),
+                    remediation_commands=(
+                        f"just install-qc-scaffold {declared} <target-repo>",
+                    ),
                 )
             )
     findings.extend(_justfile_conformance_findings(target_root, declared))
@@ -591,7 +684,9 @@ def _findings(
                 severity="error",
                 surface="branch_protection",
                 evidence=branch_protection.evidence,
-                remediation_commands=(f"ai-review-ci protect-branch --repo owner/repo --branch {manifest.default_branch} --profile {manifest.profile}",),
+                remediation_commands=(
+                    f"ai-review-ci protect-branch --repo owner/repo --branch {manifest.default_branch} --profile {manifest.profile}",
+                ),
             )
         )
     if branch_protection.observed_state == "unverifiable":
@@ -600,13 +695,17 @@ def _findings(
                 severity="warning",
                 surface="branch_protection",
                 evidence=branch_protection.evidence,
-                remediation_commands=("run doctor with GitHub branch protection API access",),
+                remediation_commands=(
+                    "run doctor with GitHub branch protection API access",
+                ),
             )
         )
     return findings
 
 
-def _justfile_conformance_findings(target: Path, profile: ProfileName) -> list[DoctorFinding]:
+def _justfile_conformance_findings(
+    target: Path, profile: ProfileName
+) -> list[DoctorFinding]:
     justfile = _justfile_path(target)
     if not justfile.is_file():
         return [
@@ -614,7 +713,9 @@ def _justfile_conformance_findings(target: Path, profile: ProfileName) -> list[D
                 severity="error",
                 surface="justfile_conformance",
                 evidence=f"{target} must contain exactly one justfile or Justfile",
-                remediation_commands=(f"just install-qc-scaffold {profile} <target-repo>",),
+                remediation_commands=(
+                    f"just install-qc-scaffold {profile} <target-repo>",
+                ),
             )
         ]
     lines = justfile.read_text(encoding="utf-8").splitlines()
@@ -625,7 +726,9 @@ def _justfile_conformance_findings(target: Path, profile: ProfileName) -> list[D
                 severity="error",
                 surface="justfile_conformance",
                 evidence=f"{justfile}:1 header-comment: justfile must begin with a comment block",
-                remediation_commands=(f"just install-qc-scaffold {profile} <target-repo>",),
+                remediation_commands=(
+                    f"just install-qc-scaffold {profile} <target-repo>",
+                ),
             )
         )
     recipes = _justfile_recipes(lines)
@@ -636,26 +739,39 @@ def _justfile_conformance_findings(target: Path, profile: ProfileName) -> list[D
                 severity="error",
                 surface="justfile_conformance",
                 evidence=f"{justfile} default-recipe: no default recipe; bare just must list recipes",
-                remediation_commands=(f"just install-qc-scaffold {profile} <target-repo>",),
+                remediation_commands=(
+                    f"just install-qc-scaffold {profile} <target-repo>",
+                ),
             )
         )
-    elif "just --list" not in _recipe_delegation(target, justfile, PROJECT_PROFILES[profile], "default").observed.command:
+    elif (
+        "just --list"
+        not in _recipe_delegation(
+            target, justfile, PROJECT_PROFILES[profile], "default"
+        ).observed.command
+    ):
         findings.append(
             DoctorFinding(
                 severity="error",
                 surface="justfile_conformance",
                 evidence=f"{justfile}:{default} default-recipe: default must resolve to just --list",
-                remediation_commands=(f"just install-qc-scaffold {profile} <target-repo>",),
+                remediation_commands=(
+                    f"just install-qc-scaffold {profile} <target-repo>",
+                ),
             )
         )
     for recipe, line_no in recipes.items():
-        if not _has_private_attribute(lines, line_no) and not _has_immediate_doc_comment(lines, line_no):
+        if not _has_private_attribute(
+            lines, line_no
+        ) and not _has_immediate_doc_comment(lines, line_no):
             findings.append(
                 DoctorFinding(
                     severity="error",
                     surface="justfile_conformance",
                     evidence=f"{justfile}:{line_no} public-recipe-doc: recipe `{recipe}` has no immediate # doc comment",
-                    remediation_commands=(f"just install-qc-scaffold {profile} <target-repo>",),
+                    remediation_commands=(
+                        f"just install-qc-scaffold {profile} <target-repo>",
+                    ),
                 )
             )
     return findings
@@ -665,7 +781,11 @@ def _justfile_recipes(lines: list[str]) -> dict[str, int]:
     recipes: dict[str, int] = {}
     for index, line in enumerate(lines, start=1):
         stripped = line.strip()
-        if line.startswith((" ", "\t")) or stripped.startswith(("#", "[")) or ":=" in line:
+        if (
+            line.startswith((" ", "\t"))
+            or stripped.startswith(("#", "["))
+            or ":=" in line
+        ):
             continue
         clean_line = re.sub(r'"[^"]*"|\'[^\']*\'', "", line)
         if "=" in clean_line and ":" not in clean_line:
@@ -692,16 +812,27 @@ def _has_private_attribute(lines: list[str], line_no: int) -> bool:
     return False
 
 
-def _classify(manifest: ManifestDeclaration, findings: list[DoctorFinding]) -> tuple[InstallationState, GlobalStatus]:
+def _classify(
+    manifest: ManifestDeclaration, findings: list[DoctorFinding]
+) -> tuple[InstallationState, GlobalStatus]:
     if not isinstance(manifest, QcManifest):
         return "uninstalled", "misconfigured"
-    exception_surfaces = {exception.surface for exception in manifest.exceptions if exception.active}
+    exception_surfaces = {
+        exception.surface for exception in manifest.exceptions if exception.active
+    }
     if findings and all(finding.surface in exception_surfaces for finding in findings):
-        state: InstallationState = "outdated" if any(finding.surface == "workflow_ref" for finding in findings) else "noncompliant"
+        state: InstallationState = (
+            "outdated"
+            if any(finding.surface == "workflow_ref" for finding in findings)
+            else "noncompliant"
+        )
         return state, "intentional_exception"
     if not findings:
         return "compliant", "current"
-    if any(finding.surface == "branch_protection" and finding.severity == "warning" for finding in findings):
+    if any(
+        finding.surface == "branch_protection" and finding.severity == "warning"
+        for finding in findings
+    ):
         return "unknown", "unverifiable"
     if any(finding.surface == "workflow_ref" for finding in findings):
         return "outdated", "stale"

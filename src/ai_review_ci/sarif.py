@@ -125,7 +125,9 @@ def _rule_for(finding: JsonDict) -> ReportingDescriptor:
             id=finding["category"],
             name=finding["label"],
             shortDescription=Message(text=f"{policy.code}: {policy.name}"[:200]),
-            defaultConfiguration=ReportingConfiguration(level=_tier_to_level(finding["tier"])),
+            defaultConfiguration=ReportingConfiguration(
+                level=_tier_to_level(finding["tier"])
+            ),
             properties={
                 "policy_code": policy.code,
                 "remediation_code": policy.remediation_code,
@@ -135,7 +137,9 @@ def _rule_for(finding: JsonDict) -> ReportingDescriptor:
         id=finding["category"],
         name=finding["label"],
         shortDescription=Message(text=finding["violated_invariant"][:200]),
-        defaultConfiguration=ReportingConfiguration(level=_tier_to_level(finding["tier"])),
+        defaultConfiguration=ReportingConfiguration(
+            level=_tier_to_level(finding["tier"])
+        ),
     )
 
 
@@ -145,12 +149,16 @@ def _rule_for_alert(alert: JsonDict) -> ReportingDescriptor:
         id=_string(rule, "id", "alert.rule"),
         name=_string(rule, "name", "alert.rule"),
         shortDescription=Message(text=_string(rule, "description", "alert.rule")[:200]),
-        defaultConfiguration=ReportingConfiguration(level=_string(rule, "severity", "alert.rule")),
+        defaultConfiguration=ReportingConfiguration(
+            level=_string(rule, "severity", "alert.rule")
+        ),
     )
 
 
 def _region(start_line: int, end_line: int) -> Region:
-    return Region(startLine=start_line, endLine=end_line if end_line != start_line else None)
+    return Region(
+        startLine=start_line, endLine=end_line if end_line != start_line else None
+    )
 
 
 def _result_properties(finding: JsonDict, report_type: str) -> JsonDict:
@@ -165,7 +173,11 @@ def _result_properties(finding: JsonDict, report_type: str) -> JsonDict:
         policy = load_policy_index().policy(policy_code)
         properties["policy_code"] = policy.code
         remediation_code = finding.get("remediation_code")
-        properties["remediation_code"] = remediation_code if isinstance(remediation_code, str) else policy.remediation_code
+        properties["remediation_code"] = (
+            remediation_code
+            if isinstance(remediation_code, str)
+            else policy.remediation_code
+        )
     for key, prop_name in _OPTIONAL_PROPERTY_KEYS:
         if prop_name in properties:
             continue
@@ -197,7 +209,9 @@ def _sarif_result(finding: JsonDict, rule_index: int, report_type: str) -> Resul
                 )
             )
         ],
-        partialFingerprints={"reviewFindingKey": finding_fingerprint(finding["category"], loc["path"])},
+        partialFingerprints={
+            "reviewFindingKey": finding_fingerprint(finding["category"], loc["path"])
+        },
         properties=_result_properties(finding, report_type),
     )
 
@@ -235,7 +249,9 @@ def _sarif_result_for_alert(alert: JsonDict, rule_index: int) -> Result:
         ruleId=category,
         ruleIndex=rule_index,
         level=level,
-        message=Message(text=_string(message, "text", "alert.most_recent_instance.message")),
+        message=Message(
+            text=_string(message, "text", "alert.most_recent_instance.message")
+        ),
         locations=[
             Location(
                 physicalLocation=PhysicalLocation(
@@ -276,7 +292,9 @@ def _append_result(
     results.append(result)
 
 
-def _carried_open_alerts(carried_alerts: list[JsonDict], report_type: str) -> list[JsonDict]:
+def _carried_open_alerts(
+    carried_alerts: list[JsonDict], report_type: str
+) -> list[JsonDict]:
     target_tool = _tool_name(report_type)
     alerts: list[JsonDict] = []
     for entry in carried_alerts:

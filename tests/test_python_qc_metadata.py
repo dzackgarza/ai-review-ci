@@ -48,7 +48,9 @@ def test_first_party_modules_dedupes_preserving_order(tmp_path: pathlib.Path) ->
     assert result == ["alpha", "beta"], result  # duplicate 'alpha' removed, order kept
 
 
-def test_dependency_group_requirements_dedupes_preserving_order(tmp_path: pathlib.Path) -> None:
+def test_dependency_group_requirements_dedupes_preserving_order(
+    tmp_path: pathlib.Path,
+) -> None:
     (tmp_path / "pyproject.toml").write_text(
         "\n".join(
             [

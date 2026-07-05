@@ -28,7 +28,9 @@ def find_config() -> Path:
         candidate = parent / "qc-excludes.toml"
         if candidate.is_file():
             return candidate.resolve()
-    print("ERROR: qc-excludes.toml not found in any ancestor directory.", file=sys.stderr)
+    print(
+        "ERROR: qc-excludes.toml not found in any ancestor directory.", file=sys.stderr
+    )
     sys.exit(1)
 
 
@@ -96,7 +98,9 @@ def _print_rg_globs(dirs: list[str]) -> None:
 
 def _print_codeql(dirs: list[str]) -> None:
     for directory in dirs:
-        print(f"--search-path=/dev/null --additional-packs=/dev/null  # excludes {directory}")
+        print(
+            f"--search-path=/dev/null --additional-packs=/dev/null  # excludes {directory}"
+        )
 
 
 _FORMAT_RENDERERS = {

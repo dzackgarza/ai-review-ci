@@ -62,12 +62,19 @@ class PolicyIndex:
         except KeyError as exc:
             raise PolicyIndexError(f"unknown remediation code: {code}") from exc
 
-    def remediation_for_policy(self, policy_code: str, remediation_code: str | None = None) -> RemediationRecord:
+    def remediation_for_policy(
+        self, policy_code: str, remediation_code: str | None = None
+    ) -> RemediationRecord:
         policy = self.policy(policy_code)
         code = remediation_code or policy.remediation_code
         remediation = self.remediation(code)
-        if policy_code not in remediation.applies_to and "Any slop finding" not in remediation.applies_to:
-            raise PolicyIndexError(f"remediation {code} does not apply to {policy_code}")
+        if (
+            policy_code not in remediation.applies_to
+            and "Any slop finding" not in remediation.applies_to
+        ):
+            raise PolicyIndexError(
+                f"remediation {code} does not apply to {policy_code}"
+            )
         return remediation
 
 
@@ -135,7 +142,9 @@ def parse_policies(text: str) -> dict[str, PolicyRecord]:
         match = POLICY_RE.match(line)
         if match:
             if current_code is not None:
-                policies[current_code] = _parse_policy_block(current_code, current_name, block)
+                policies[current_code] = _parse_policy_block(
+                    current_code, current_name, block
+                )
             current_code, current_name = match.groups()
             block = []
             continue
@@ -176,14 +185,24 @@ def load_policy_index(root: Path | None = None) -> PolicyIndex:
     remediations = parse_remediations(_read_required(index_root / REMEDIATIONS_FILE))
     for policy in policies.values():
         if policy.remediation_code not in remediations:
-            _fail(f"{policy.code} references missing remediation {policy.remediation_code}")
+            _fail(
+                f"{policy.code} references missing remediation {policy.remediation_code}"
+            )
         remediation = remediations[policy.remediation_code]
-        if policy.code not in remediation.applies_to and "Any slop finding" not in remediation.applies_to:
+        if (
+            policy.code not in remediation.applies_to
+            and "Any slop finding" not in remediation.applies_to
+        ):
             _fail(f"{policy.remediation_code} does not apply to {policy.code}")
     return PolicyIndex(policies=policies, remediations=remediations)
 
 
-def canonical_guidance(policy_code: str, remediation_code: str | None = None, *, index: PolicyIndex | None = None) -> str:
+def canonical_guidance(
+    policy_code: str,
+    remediation_code: str | None = None,
+    *,
+    index: PolicyIndex | None = None,
+) -> str:
     policy_index = index or load_policy_index()
     policy = policy_index.policy(policy_code)
     remediation = policy_index.remediation_for_policy(policy_code, remediation_code)

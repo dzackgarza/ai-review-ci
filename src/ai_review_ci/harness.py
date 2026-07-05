@@ -110,7 +110,9 @@ def diff_prompt_section(repo_root: Path) -> str:
     """Inline the staged PR diff; diff scope is invalid without it."""
     diff_path = repo_root / DIFF_PATH
     if not diff_path.is_file() or diff_path.stat().st_size == 0:
-        print(f"FATAL: diff-scope review requires non-empty {DIFF_PATH}", file=sys.stderr)
+        print(
+            f"FATAL: diff-scope review requires non-empty {DIFF_PATH}", file=sys.stderr
+        )
         sys.exit(1)
     return "## Pull Request Unified Diff\n\n```diff\n" + diff_path.read_text() + "\n```"
 
@@ -186,7 +188,9 @@ def _require_files(*paths: Path) -> None:
             sys.exit(1)
 
 
-def run_review(template: Path, scope: Path, manifest: Path, reviewer_context: Path) -> None:
+def run_review(
+    template: Path, scope: Path, manifest: Path, reviewer_context: Path
+) -> None:
     """Assemble the reviewer prompt and loop opencode until an artifact exists.
 
     Args:
@@ -202,7 +206,9 @@ def run_review(template: Path, scope: Path, manifest: Path, reviewer_context: Pa
     candidates_dir.mkdir(parents=True, exist_ok=True)
     task_path = run_dir / "task.md"
 
-    initial_prompt = build_initial_prompt(template, scope, manifest, reviewer_context, Path.cwd())
+    initial_prompt = build_initial_prompt(
+        template, scope, manifest, reviewer_context, Path.cwd()
+    )
 
     submitted_path = candidates_dir / SUBMITTED_CANDIDATE
 

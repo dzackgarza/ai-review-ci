@@ -47,7 +47,11 @@ def _git_repo_root(target: pathlib.Path) -> pathlib.Path:
 
 
 def _template_text(name: str, profile: str, ref: str = DEFAULT_INFRA_REF) -> str:
-    source_name = "review-pr-bun-playwright.yml" if name == "review-pr.yml" and profile == "bun-playwright" else name
+    source_name = (
+        "review-pr-bun-playwright.yml"
+        if name == "review-pr.yml" and profile == "bun-playwright"
+        else name
+    )
     text = (files("ai_review_ci") / "templates" / source_name).read_text()
     return text.replace("{{ profile }}", profile).replace("{{ ref }}", ref)
 
@@ -73,7 +77,9 @@ def _write_scaffold(target: pathlib.Path, profile: str) -> None:
         print(f"installed {name}")
 
 
-def _write_trigger_workflows(target: pathlib.Path, profile: str, ref: str = DEFAULT_INFRA_REF) -> None:
+def _write_trigger_workflows(
+    target: pathlib.Path, profile: str, ref: str = DEFAULT_INFRA_REF
+) -> None:
     """Write the repo-owned trigger workflow files."""
     _validate_profile(profile)
     target = _git_repo_root(target)
@@ -116,8 +122,14 @@ def _write_pr_template(target: pathlib.Path) -> None:
     print(f"installed .github/{PR_TEMPLATE}")
 
 
-def _write_manifest(target: pathlib.Path, profile: str, branch: str, ref: str, release_channel: str) -> None:
-    from ai_review_ci.doctor import LOCAL_DELEGATION_MODE, WORKFLOW_TEMPLATE_VERSION, manifest_text
+def _write_manifest(
+    target: pathlib.Path, profile: str, branch: str, ref: str, release_channel: str
+) -> None:
+    from ai_review_ci.doctor import (
+        LOCAL_DELEGATION_MODE,
+        WORKFLOW_TEMPLATE_VERSION,
+        manifest_text,
+    )
 
     manifest = target / ".ai-review-ci.toml"
     if manifest.exists():

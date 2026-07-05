@@ -7,7 +7,13 @@ from typing import Any
 
 import pytest
 
-from ai_review_ci.doctor import DoctorReport, _has_private_attribute, _justfile_recipes, doctor_report, manifest_text
+from ai_review_ci.doctor import (
+    DoctorReport,
+    _has_private_attribute,
+    _justfile_recipes,
+    doctor_report,
+    manifest_text,
+)
 from ai_review_ci.install import _write_trigger_workflows
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
@@ -26,11 +32,18 @@ def run_git(workdir: pathlib.Path, *args: str) -> subprocess.CompletedProcess[st
 
 def init_git_repo(project: pathlib.Path) -> None:
     assert run_git(project, "init", "-q").returncode == 0
-    assert run_git(project, "config", "user.email", "doctor-test@example.invalid").returncode == 0
+    assert (
+        run_git(
+            project, "config", "user.email", "doctor-test@example.invalid"
+        ).returncode
+        == 0
+    )
     assert run_git(project, "config", "user.name", "Doctor Test").returncode == 0
     (project / "README.md").write_text("# target\n")
     assert run_git(project, "add", "README.md").returncode == 0
-    commit = run_git(project, "-c", "core.hooksPath=/dev/null", "commit", "-m", "baseline")
+    commit = run_git(
+        project, "-c", "core.hooksPath=/dev/null", "commit", "-m", "baseline"
+    )
     assert commit.returncode == 0, commit.stdout + commit.stderr
 
 
@@ -39,7 +52,9 @@ def create_target(tmp_path: pathlib.Path, profile: str) -> pathlib.Path:
     project.mkdir()
     init_git_repo(project)
     write_profile_shape(project, profile)
-    (project / "justfile").write_text((ROOT / "scaffolds" / profile / "justfile").read_text())
+    (project / "justfile").write_text(
+        (ROOT / "scaffolds" / profile / "justfile").read_text()
+    )
     _write_trigger_workflows(project, profile)
     (project / ".ai-review-ci.toml").write_text(
         manifest_text(
@@ -57,7 +72,9 @@ def create_target(tmp_path: pathlib.Path, profile: str) -> pathlib.Path:
 
 def write_profile_shape(project: pathlib.Path, profile: str) -> None:
     if profile == "python":
-        (project / "pyproject.toml").write_text('[project]\nname = "target"\nversion = "0.1.0"\n')
+        (project / "pyproject.toml").write_text(
+            '[project]\nname = "target"\nversion = "0.1.0"\n'
+        )
     elif profile == "bun":
         (project / "package.json").write_text(json.dumps({"scripts": {}}) + "\n")
         (project / "bun.lock").write_text("")
@@ -66,7 +83,9 @@ def write_profile_shape(project: pathlib.Path, profile: str) -> None:
         (project / "bun.lock").write_text("")
         (project / "playwright.config.ts").write_text("export default {};\n")
     elif profile == "rust":
-        (project / "Cargo.toml").write_text('[package]\nname = "target"\nversion = "0.1.0"\nedition = "2024"\n')
+        (project / "Cargo.toml").write_text(
+            '[package]\nname = "target"\nversion = "0.1.0"\nedition = "2024"\n'
+        )
     elif profile == "sage":
         (project / "example.sage").write_text("x = 1\n")
     else:
@@ -80,7 +99,9 @@ def status_for(project: pathlib.Path) -> tuple[str, dict[str, Any]]:
 
 
 @pytest.mark.parametrize("profile", ["python", "bun", "bun-playwright", "rust", "sage"])
-def test_doctor_reports_current_for_installed_profile_targets(tmp_path: pathlib.Path, profile: str) -> None:
+def test_doctor_reports_current_for_installed_profile_targets(
+    tmp_path: pathlib.Path, profile: str
+) -> None:
     project = create_target(tmp_path, profile)
 
     status, payload = status_for(project)
@@ -92,7 +113,10 @@ def test_doctor_reports_current_for_installed_profile_targets(tmp_path: pathlib.
     assert payload["findings"] == []
     assert payload["branch_protection"]["observed_state"] == "not_applicable"
     assert "qc-doctor / qc-doctor" in payload["branch_protection"]["required_contexts"]
-    assert payload["justfile_delegation"]["test"]["observed"]["caller_root_preserved"] is True
+    assert (
+        payload["justfile_delegation"]["test"]["observed"]["caller_root_preserved"]
+        is True
+    )
     assert payload["workflow_refs"]["review-pr.yml"]["observed_ref"] == "main"
 
 
@@ -172,14 +196,18 @@ def test_doctor_schema_artifact_matches_exported_contract() -> None:
 
 
 def test_doctor_golden_example_validates_against_owned_model() -> None:
-    report = DoctorReport.model_validate_json(DOCTOR_EXAMPLE.read_text(encoding="utf-8"))
+    report = DoctorReport.model_validate_json(
+        DOCTOR_EXAMPLE.read_text(encoding="utf-8")
+    )
 
     assert report.schema_version == 1
     assert report.global_status == "current"
     assert report.effective_profile == "python"
 
 
-def test_doctor_classifies_outdated_workflow_refs_as_stale(tmp_path: pathlib.Path) -> None:
+def test_doctor_classifies_outdated_workflow_refs_as_stale(
+    tmp_path: pathlib.Path,
+) -> None:
     project = create_target(tmp_path, "python")
     (project / ".ai-review-ci.toml").write_text(
         manifest_text(
@@ -202,7 +230,9 @@ def test_doctor_classifies_outdated_workflow_refs_as_stale(tmp_path: pathlib.Pat
     assert payload["workflow_refs"]["review-pr.yml"]["observed_ref"] == "main"
 
 
-def test_doctor_classifies_missing_manifest_as_misconfigured(tmp_path: pathlib.Path) -> None:
+def test_doctor_classifies_missing_manifest_as_misconfigured(
+    tmp_path: pathlib.Path,
+) -> None:
     project = create_target(tmp_path, "python")
     (project / ".ai-review-ci.toml").unlink()
 
@@ -213,7 +243,9 @@ def test_doctor_classifies_missing_manifest_as_misconfigured(tmp_path: pathlib.P
     assert payload["findings"][0]["surface"] == "manifest"
 
 
-def test_doctor_classifies_wrong_profile_shape_as_misconfigured(tmp_path: pathlib.Path) -> None:
+def test_doctor_classifies_wrong_profile_shape_as_misconfigured(
+    tmp_path: pathlib.Path,
+) -> None:
     project = create_target(tmp_path, "python")
     (project / ".ai-review-ci.toml").write_text(
         manifest_text(
@@ -235,7 +267,9 @@ def test_doctor_classifies_wrong_profile_shape_as_misconfigured(tmp_path: pathli
     assert payload["findings"][0]["surface"] == "profile"
 
 
-def test_doctor_classifies_missing_workflow_as_misconfigured(tmp_path: pathlib.Path) -> None:
+def test_doctor_classifies_missing_workflow_as_misconfigured(
+    tmp_path: pathlib.Path,
+) -> None:
     project = create_target(tmp_path, "python")
     (project / ".github" / "workflows" / "review-pr.yml").unlink()
 
@@ -246,9 +280,13 @@ def test_doctor_classifies_missing_workflow_as_misconfigured(tmp_path: pathlib.P
     assert payload["findings"][0]["surface"] == "workflow"
 
 
-def test_doctor_classifies_missing_bun_playwright_app_boot_as_misconfigured(tmp_path: pathlib.Path) -> None:
+def test_doctor_classifies_missing_bun_playwright_app_boot_as_misconfigured(
+    tmp_path: pathlib.Path,
+) -> None:
     project = create_target(tmp_path, "bun-playwright")
-    (project / "justfile").write_text((ROOT / "scaffolds" / "bun" / "justfile").read_text())
+    (project / "justfile").write_text(
+        (ROOT / "scaffolds" / "bun" / "justfile").read_text()
+    )
 
     status, payload = status_for(project)
 
@@ -258,7 +296,9 @@ def test_doctor_classifies_missing_bun_playwright_app_boot_as_misconfigured(tmp_
     assert payload["justfile_delegation"]["app-boot"]["observed"]["present"] is False
 
 
-def test_doctor_classifies_wrong_caller_root_delegation_as_misconfigured(tmp_path: pathlib.Path) -> None:
+def test_doctor_classifies_wrong_caller_root_delegation_as_misconfigured(
+    tmp_path: pathlib.Path,
+) -> None:
     project = create_target(tmp_path, "python")
     (project / "justfile").write_text(
         "\n".join(
@@ -277,8 +317,13 @@ def test_doctor_classifies_wrong_caller_root_delegation_as_misconfigured(tmp_pat
 
     assert status == "misconfigured"
     assert payload["installation_state"] == "noncompliant"
-    assert payload["justfile_delegation"]["test"]["observed"]["caller_root_preserved"] is False
-    assert payload["findings"][0]["remediation_commands"] == ["just install-qc-scaffold python <target-repo>"]
+    assert (
+        payload["justfile_delegation"]["test"]["observed"]["caller_root_preserved"]
+        is False
+    )
+    assert payload["findings"][0]["remediation_commands"] == [
+        "just install-qc-scaffold python <target-repo>"
+    ]
 
 
 def test_doctor_reports_justfile_baseline_violations(tmp_path: pathlib.Path) -> None:
@@ -300,7 +345,11 @@ def test_doctor_reports_justfile_baseline_violations(tmp_path: pathlib.Path) -> 
     status, payload = status_for(project)
 
     assert status == "misconfigured"
-    justfile_findings = [finding for finding in payload["findings"] if finding["surface"] == "justfile_conformance"]
+    justfile_findings = [
+        finding
+        for finding in payload["findings"]
+        if finding["surface"] == "justfile_conformance"
+    ]
     assert [finding["evidence"].split(" ", 1)[1] for finding in justfile_findings] == [
         "header-comment: justfile must begin with a comment block",
         "default-recipe: no default recipe; bare just must list recipes",
@@ -328,7 +377,14 @@ def test_check_justfile_cli_reports_baseline_violations(tmp_path: pathlib.Path) 
     )
 
     result = subprocess.run(
-        [sys.executable, "-m", "ai_review_ci.cli", "check-justfile", "--target", str(project)],
+        [
+            sys.executable,
+            "-m",
+            "ai_review_ci.cli",
+            "check-justfile",
+            "--target",
+            str(project),
+        ],
         text=True,
         capture_output=True,
         check=False,
@@ -339,7 +395,9 @@ def test_check_justfile_cli_reports_baseline_violations(tmp_path: pathlib.Path) 
     assert "default-recipe" in result.stderr
 
 
-def test_doctor_justfile_parser_accepts_parameter_defaults_and_recipe_attributes(tmp_path: pathlib.Path) -> None:
+def test_doctor_justfile_parser_accepts_parameter_defaults_and_recipe_attributes(
+    tmp_path: pathlib.Path,
+) -> None:
     project = create_target(tmp_path, "python")
     (project / "justfile").write_text(
         "\n".join(
@@ -371,7 +429,9 @@ def test_doctor_justfile_parser_accepts_parameter_defaults_and_recipe_attributes
     assert payload["findings"] == []
 
 
-def test_justfile_parser_accepts_trailing_dash_recipe_names_and_indented_private_attributes() -> None:
+def test_justfile_parser_accepts_trailing_dash_recipe_names_and_indented_private_attributes() -> (
+    None
+):
     lines = [
         "# Example justfile.",
         "test-recipe-:",
@@ -386,9 +446,16 @@ def test_justfile_parser_accepts_trailing_dash_recipe_names_and_indented_private
     assert _has_private_attribute(lines, 6)
 
 
-def test_doctor_classifies_non_github_remote_branch_protection_as_unverifiable(tmp_path: pathlib.Path) -> None:
+def test_doctor_classifies_non_github_remote_branch_protection_as_unverifiable(
+    tmp_path: pathlib.Path,
+) -> None:
     project = create_target(tmp_path, "python")
-    assert run_git(project, "remote", "add", "origin", str(tmp_path / "not-github.git")).returncode == 0
+    assert (
+        run_git(
+            project, "remote", "add", "origin", str(tmp_path / "not-github.git")
+        ).returncode
+        == 0
+    )
 
     status, payload = status_for(project)
 
@@ -398,9 +465,13 @@ def test_doctor_classifies_non_github_remote_branch_protection_as_unverifiable(t
     assert payload["findings"][0]["surface"] == "branch_protection"
 
 
-def test_active_manifest_exception_maps_matching_findings_to_intentional_exception(tmp_path: pathlib.Path) -> None:
+def test_active_manifest_exception_maps_matching_findings_to_intentional_exception(
+    tmp_path: pathlib.Path,
+) -> None:
     project = create_target(tmp_path, "bun-playwright")
-    (project / "justfile").write_text((ROOT / "scaffolds" / "bun" / "justfile").read_text())
+    (project / "justfile").write_text(
+        (ROOT / "scaffolds" / "bun" / "justfile").read_text()
+    )
     (project / ".ai-review-ci.toml").write_text(
         "\n".join(
             [

@@ -95,7 +95,14 @@ class SlopDetector:
             for pattern in patterns:
                 matches = re.finditer(pattern, line, re.IGNORECASE)
                 for match in matches:
-                    self.findings[category].append({"line": i, "text": line.strip(), "match": match.group(), "position": match.start()})
+                    self.findings[category].append(
+                        {
+                            "line": i,
+                            "text": line.strip(),
+                            "match": match.group(),
+                            "position": match.start(),
+                        }
+                    )
 
     def analyze(self) -> dict[str, Any]:
         """Run all analyses and return findings."""
@@ -112,7 +119,11 @@ class SlopDetector:
         # Calculate overall score
         score = self._calculate_slop_score()
 
-        return {"findings": dict(self.findings), "score": score, "summary": self._generate_summary(score)}
+        return {
+            "findings": dict(self.findings),
+            "score": score,
+            "summary": self._generate_summary(score),
+        }
 
     def _analyze_structure(self) -> None:
         """Analyze document-level structure for slop patterns."""
@@ -120,11 +131,24 @@ class SlopDetector:
         if len(self.lines) > 0:
             first_para = " ".join(self.lines[:5])
             if re.search(r"in this .+ (?:will|we)", first_para, re.IGNORECASE):
-                self.findings["structure"].append({"issue": "Opening meta-commentary", "description": "Document starts with meta-commentary instead of content"})
+                self.findings["structure"].append(
+                    {
+                        "issue": "Opening meta-commentary",
+                        "description": "Document starts with meta-commentary instead of content",
+                    }
+                )
 
         # Check for excessive transition words at paragraph starts
         transition_starters = 0
-        transitions = ["however", "furthermore", "moreover", "additionally", "nevertheless", "consequently", "therefore"]
+        transitions = [
+            "however",
+            "furthermore",
+            "moreover",
+            "additionally",
+            "nevertheless",
+            "consequently",
+            "therefore",
+        ]
 
         for line in self.lines:
             line = line.strip()
@@ -132,9 +156,16 @@ class SlopDetector:
                 transition_starters += 1
 
         if len(self.lines) > 0:
-            transition_ratio = transition_starters / len([l for l in self.lines if l.strip()])
+            transition_ratio = transition_starters / len(
+                [l for l in self.lines if l.strip()]
+            )
             if transition_ratio > 0.3:
-                self.findings["structure"].append({"issue": "Excessive transitions", "description": f"{transition_ratio:.0%} of paragraphs start with transition words"})
+                self.findings["structure"].append(
+                    {
+                        "issue": "Excessive transitions",
+                        "description": f"{transition_ratio:.0%} of paragraphs start with transition words",
+                    }
+                )
 
     def _calculate_slop_score(self) -> int:
         """Calculate overall slop score (0-100, higher is worse)."""
@@ -193,7 +224,9 @@ class SlopDetector:
                 unique_buzzwords = set(f["match"] for f in findings["buzzwords"])
                 print(f"  {', '.join(list(unique_buzzwords)[:10])}")
                 if len(unique_buzzwords) > 10:
-                    print(f"  ... and {len(unique_buzzwords) - 10} more unique buzzwords")
+                    print(
+                        f"  ... and {len(unique_buzzwords) - 10} more unique buzzwords"
+                    )
             else:
                 for f in findings["buzzwords"]:
                     print(f"  Line {f['line']}: '{f['match']}'")
@@ -216,7 +249,9 @@ class SlopDetector:
         if findings["hedging"]:
             print(f"🤔 EXCESSIVE HEDGING ({len(findings['hedging'])} found)")
             if not verbose:
-                print(f"  Found in {len(set(f['line'] for f in findings['hedging']))} lines")
+                print(
+                    f"  Found in {len(set(f['line'] for f in findings['hedging']))} lines"
+                )
             else:
                 for f in findings["hedging"][:5]:
                     print(f"  Line {f['line']}: '{f['match']}'")

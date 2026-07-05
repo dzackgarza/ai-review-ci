@@ -85,7 +85,11 @@ def commit_without_hooks(project: pathlib.Path, message: str) -> None:
 
 
 def top_level_skill_dirs() -> list[pathlib.Path]:
-    return sorted(path for path in (ROOT / "skills").iterdir() if path.is_dir() and (path / "SKILL.md").is_file())
+    return sorted(
+        path
+        for path in (ROOT / "skills").iterdir()
+        if path.is_dir() and (path / "SKILL.md").is_file()
+    )
 
 
 def test_install_skills_symlinks_every_top_level_skill(tmp_path: pathlib.Path) -> None:
@@ -99,7 +103,9 @@ def test_install_skills_symlinks_every_top_level_skill(tmp_path: pathlib.Path) -
     assert result.returncode == 0, output
     expected_skills = top_level_skill_dirs()
     assert expected_skills
-    assert sorted(path.name for path in skills_dir.iterdir()) == [path.name for path in expected_skills]
+    assert sorted(path.name for path in skills_dir.iterdir()) == [
+        path.name for path in expected_skills
+    ]
     for source in expected_skills:
         target = skills_dir / source.name
         assert target.is_symlink(), f"{target} should be a symlink"
