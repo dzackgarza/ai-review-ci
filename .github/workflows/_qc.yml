@@ -69,16 +69,19 @@ jobs:
         with:
           github-token: ${{ github.token }}
 
-      - name: Install ripgrep
+      - name: Install system QC tools
         # The QC file-discovery recipes (_python-qc-files etc.) shell out to `rg`.
-        # Dev machines have it on PATH; a bare runner does not, so install it
-        # explicitly — same contract for downstream consumers of this workflow.
-        run: sudo apt-get update && sudo apt-get install -y ripgrep
+        # Hook proof also exercises real direnv loading; a bare runner has neither.
+        run: sudo apt-get update && sudo apt-get install -y direnv ripgrep
 
       - name: Install bun
         # Some QC profiles (and ai-review-ci's own suite) drive JS tooling
         # configs through bun; node ships on the runner, bun does not.
         uses: oven-sh/setup-bun@v2
+
+      - name: Install Playwright browser dependencies
+        # Real app-boot proof runs browser-backed Playwright fixtures.
+        run: bunx playwright install --with-deps chromium
 
       - name: Run QC tier
         run: just "$QC_TIER"

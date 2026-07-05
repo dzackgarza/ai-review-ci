@@ -1,7 +1,6 @@
 import os
 import pathlib
 import shutil
-import shlex
 import subprocess
 
 import pytest
@@ -117,13 +116,35 @@ def test_ai_review_ci_hooks_still_run_in_downstream_repos(
     downstream.mkdir()
     subprocess.run(["git", "init", "-q"], cwd=downstream, env=git_test_env(), check=True)
     (downstream / "justfile").write_text(f"{recipe}:\n    @echo downstream-ran\n")
+    (downstream / ".envrc").write_text("export AI_REVIEW_CI_HOOK_SENTINEL=loaded\n")
 
-    bin_dir = pathlib.Path(path_with_only(tmp_path, "sh", "git", "readlink", "dirname", "just"))
-    write_fake_direnv(bin_dir / "direnv", tmp_path / "direnv-argv")
+    bin_dir = pathlib.Path(
+        path_with_only(
+            tmp_path,
+            "bash",
+            "sh",
+            "git",
+            "readlink",
+            "dirname",
+            "just",
+            "direnv",
+        )
+    )
+    direnv_config = tmp_path / "direnv-config"
+    allow = subprocess.run(
+        ["direnv", "allow", str(downstream)],
+        cwd=downstream,
+        env=git_test_env(PATH=str(bin_dir), DIRENV_CONFIG=str(direnv_config)),
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+    assert allow.returncode == 0, allow.stdout + allow.stderr
+
     result = subprocess.run(
         [str(hook_source_repo / hook_dir / hook)],
         cwd=downstream,
-        env=git_test_env(PATH=str(bin_dir)),
+        env=git_test_env(PATH=str(bin_dir), DIRENV_CONFIG=str(direnv_config)),
         text=True,
         capture_output=True,
         check=False,
@@ -152,19 +173,43 @@ def test_ai_review_ci_hooks_load_target_direnv_before_running_gate(
     downstream = tmp_path / "downstream"
     downstream.mkdir()
     subprocess.run(["git", "init", "-q"], cwd=downstream, env=git_test_env(), check=True)
+    (downstream / ".envrc").write_text("export AI_REVIEW_CI_HOOK_SENTINEL=loaded\n")
+    (downstream / "justfile").write_text(
+        "\n".join(
+            [
+                "test:",
+                '    @test "$AI_REVIEW_CI_HOOK_SENTINEL" = loaded',
+                "",
+                "test-ci: test",
+                "",
+            ]
+        )
+    )
 
-    bin_dir = tmp_path / "bin"
-    bin_dir.mkdir()
-    direnv_log = tmp_path / "direnv-argv"
-    just_log = tmp_path / "just-argv"
-    write_fake_direnv(bin_dir / "direnv", direnv_log)
-    write_fake_just(bin_dir / "just", just_log)
-    for command in ("sh", "git", "readlink", "dirname"):
-        target = shutil.which(command)
-        assert target is not None, f"required command missing for test setup: {command}"
-        (bin_dir / command).symlink_to(target)
+    bin_dir = pathlib.Path(
+        path_with_only(
+            tmp_path,
+            "bash",
+            "sh",
+            "git",
+            "readlink",
+            "dirname",
+            "just",
+            "direnv",
+        )
+    )
+    direnv_config = tmp_path / "direnv-config"
+    allow = subprocess.run(
+        ["direnv", "allow", str(downstream)],
+        cwd=downstream,
+        env=git_test_env(PATH=str(bin_dir), DIRENV_CONFIG=str(direnv_config)),
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+    assert allow.returncode == 0, allow.stdout + allow.stderr
 
-    env = git_test_env(PATH=str(bin_dir))
+    env = git_test_env(PATH=str(bin_dir), DIRENV_CONFIG=str(direnv_config))
     result = subprocess.run(
         [str(hook_source_repo / hook_dir / hook)],
         cwd=downstream,
@@ -175,8 +220,6 @@ def test_ai_review_ci_hooks_load_target_direnv_before_running_gate(
     )
 
     assert result.returncode == 0, result.stdout + result.stderr
-    assert direnv_log.read_text() == f"exec . just {recipe}\n"
-    assert just_log.read_text() == f"{recipe}\n"
 
 
 def path_with_only(tmp_path: pathlib.Path, *commands: str) -> str:
@@ -187,36 +230,3 @@ def path_with_only(tmp_path: pathlib.Path, *commands: str) -> str:
         assert target is not None, f"required command missing for test setup: {command}"
         (bin_dir / command).symlink_to(target)
     return str(bin_dir)
-
-
-def write_fake_direnv(path: pathlib.Path, log_path: pathlib.Path) -> None:
-    path.write_text(
-        "\n".join(
-            [
-                "#!/usr/bin/env sh",
-                "set -e",
-                f"printf '%s\\n' \"$*\" > {shlex.quote(str(log_path))}",
-                'if [ "$1" != "exec" ] || [ "$2" != "." ]; then',
-                "  exit 64",
-                "fi",
-                "shift 2",
-                'exec "$@"',
-                "",
-            ]
-        ),
-    )
-    path.chmod(0o755)
-
-
-def write_fake_just(path: pathlib.Path, log_path: pathlib.Path) -> None:
-    path.write_text(
-        "\n".join(
-            [
-                "#!/usr/bin/env sh",
-                "set -e",
-                f"printf '%s\\n' \"$*\" > {shlex.quote(str(log_path))}",
-                "",
-            ]
-        )
-    )
-    path.chmod(0o755)
