@@ -73,7 +73,9 @@ def run_git(workdir: pathlib.Path, *args: str) -> subprocess.CompletedProcess[st
 
 def init_git_repo(project: pathlib.Path) -> None:
     assert run_git(project, "init").returncode == 0
-    assert run_git(project, "config", "user.email", "test@example.invalid").returncode == 0
+    assert (
+        run_git(project, "config", "user.email", "test@example.invalid").returncode == 0
+    )
     assert run_git(project, "config", "user.name", "Test User").returncode == 0
 
 
@@ -139,7 +141,9 @@ def project_with_sage_file(tmp_path: pathlib.Path) -> pathlib.Path:
     return project
 
 
-def test_no_bypass_ignores_preexisting_markers_when_staging_other_changes(tmp_path: pathlib.Path) -> None:
+def test_no_bypass_ignores_preexisting_markers_when_staging_other_changes(
+    tmp_path: pathlib.Path,
+) -> None:
     project = tmp_path / "git-project"
     project.mkdir()
     source = project / "app.py"
@@ -148,7 +152,9 @@ def test_no_bypass_ignores_preexisting_markers_when_staging_other_changes(tmp_pa
     init_git_repo(project)
     assert run_git(project, "add", "app.py").returncode == 0
     commit_without_hooks(project, "baseline")
-    source.write_text(f"def legacy() -> None:\n    pass  {coverage_marker}\n\nVALUE = 1\n")
+    source.write_text(
+        f"def legacy() -> None:\n    pass  {coverage_marker}\n\nVALUE = 1\n"
+    )
     assert run_git(project, "add", "app.py").returncode == 0
 
     result = run_just(ROOT / "justfiles" / "shared.just", project, "_no-bypass")
@@ -204,7 +210,9 @@ def test_tsc_requires_ags_when_tsconfig_declares_ags(tmp_path: pathlib.Path) -> 
     project = tmp_path / "ags-project"
     project.mkdir()
     (project / "package.json").write_text(json.dumps({"scripts": {}}) + "\n")
-    (project / "tsconfig.json").write_text(json.dumps({"compilerOptions": {"jsxImportSource": "ags/gtk4"}}) + "\n")
+    (project / "tsconfig.json").write_text(
+        json.dumps({"compilerOptions": {"jsxImportSource": "ags/gtk4"}}) + "\n"
+    )
     env = os.environ | {"PATH": path_with_only(tmp_path, "bash", "cat", "jq", "just")}
 
     result = run_just(ROOT / "justfiles" / "bun.just", project, "_tsc", env=env)
@@ -214,7 +222,9 @@ def test_tsc_requires_ags_when_tsconfig_declares_ags(tmp_path: pathlib.Path) -> 
     assert TRIAGE_MARKER in output
 
 
-def test_install_global_hooks_requires_env_only_inside_recipe(tmp_path: pathlib.Path) -> None:
+def test_install_global_hooks_requires_env_only_inside_recipe(
+    tmp_path: pathlib.Path,
+) -> None:
     home = tmp_path / "home"
     home.mkdir()
     env = os.environ | {
@@ -535,13 +545,20 @@ def test_semgrep_autofix_defers_unfixed_findings_to_push_tier(
     project = tmp_path / "semgrep-project"
     project.mkdir()
     source = project / "app.ts"
-    source.write_text('const API_URL = "https://example.test";\nconsole.log(API_URL);\n')
+    source.write_text(
+        'const API_URL = "https://example.test";\nconsole.log(API_URL);\n'
+    )
 
-    commit_tier = run_just(ROOT / "justfiles" / "shared.just", project, "_semgrep-autofix")
+    commit_tier = run_just(
+        ROOT / "justfiles" / "shared.just", project, "_semgrep-autofix"
+    )
     push_tier = run_just(ROOT / "justfiles" / "shared.just", project, "_semgrep")
 
     assert commit_tier.returncode == 0, commit_tier.stdout + commit_tier.stderr
-    assert source.read_text() == 'const API_URL = "https://example.test";\nconsole.log(API_URL);\n'
+    assert (
+        source.read_text()
+        == 'const API_URL = "https://example.test";\nconsole.log(API_URL);\n'
+    )
     assert push_tier.returncode != 0, push_tier.stdout + push_tier.stderr
 
 
@@ -604,7 +621,9 @@ def test_semgrep_allows_fail_loud_typescript_guards(tmp_path: pathlib.Path) -> N
     assert result.returncode == 0, output
 
 
-def write_fake_npx_slop_scan(tmp_path: pathlib.Path, payload: dict[str, Any]) -> pathlib.Path:
+def write_fake_npx_slop_scan(
+    tmp_path: pathlib.Path, payload: dict[str, Any]
+) -> pathlib.Path:
     bin_dir = tmp_path / "fake-bin"
     bin_dir.mkdir()
     npx = bin_dir / "npx"
@@ -632,7 +651,10 @@ def write_fake_uvx_vibecheck(
 
 
 def vibecheck_payload(*findings: dict[str, Any]) -> dict[str, Any]:
-    severity_counts = {severity: sum(1 for finding in findings if finding["severity"] == severity) for severity in ("critical", "high", "medium", "low")}
+    severity_counts = {
+        severity: sum(1 for finding in findings if finding["severity"] == severity)
+        for severity in ("critical", "high", "medium", "low")
+    }
     return {
         "version": "0.1.0",
         "passed": severity_counts["critical"] + severity_counts["high"] == 0,
@@ -659,9 +681,13 @@ def test_vibecheck_ignores_g141_non_comment_matches(tmp_path: pathlib.Path) -> N
             "co_occurrence": False,
         },
     )
-    env = os.environ | {"PATH": f"{write_fake_uvx_vibecheck(tmp_path, payload, exit_code=1)}:{os.environ['PATH']}"}
+    env = os.environ | {
+        "PATH": f"{write_fake_uvx_vibecheck(tmp_path, payload, exit_code=1)}:{os.environ['PATH']}"
+    }
 
-    result = run_just(ROOT / "justfiles" / "shared.just", project, "_vibecheck", env=env)
+    result = run_just(
+        ROOT / "justfiles" / "shared.just", project, "_vibecheck", env=env
+    )
 
     output = result.stdout + result.stderr
     assert result.returncode == 0, output
@@ -669,11 +695,15 @@ def test_vibecheck_ignores_g141_non_comment_matches(tmp_path: pathlib.Path) -> N
     assert "vibecheck: 0 findings" in output
 
 
-def test_vibecheck_ignores_g22_non_empty_except_handlers(tmp_path: pathlib.Path) -> None:
+def test_vibecheck_ignores_g22_non_empty_except_handlers(
+    tmp_path: pathlib.Path,
+) -> None:
     project = tmp_path / "vibe-project"
     project.mkdir()
     source = project / "app.py"
-    source.write_text("try:\n    raise KeyError\nexcept KeyError:\n    raise ValueError('handled')\n")
+    source.write_text(
+        "try:\n    raise KeyError\nexcept KeyError:\n    raise ValueError('handled')\n"
+    )
     payload = vibecheck_payload(
         {
             "rule_id": "G22",
@@ -688,9 +718,13 @@ def test_vibecheck_ignores_g22_non_empty_except_handlers(tmp_path: pathlib.Path)
             "co_occurrence": False,
         },
     )
-    env = os.environ | {"PATH": f"{write_fake_uvx_vibecheck(tmp_path, payload, exit_code=1)}:{os.environ['PATH']}"}
+    env = os.environ | {
+        "PATH": f"{write_fake_uvx_vibecheck(tmp_path, payload, exit_code=1)}:{os.environ['PATH']}"
+    }
 
-    result = run_just(ROOT / "justfiles" / "shared.just", project, "_vibecheck", env=env)
+    result = run_just(
+        ROOT / "justfiles" / "shared.just", project, "_vibecheck", env=env
+    )
 
     output = result.stdout + result.stderr
     assert result.returncode == 0, output
@@ -715,9 +749,13 @@ def test_vibecheck_still_blocks_g141_comment_matches(tmp_path: pathlib.Path) -> 
             "co_occurrence": False,
         },
     )
-    env = os.environ | {"PATH": f"{write_fake_uvx_vibecheck(tmp_path, payload, exit_code=1)}:{os.environ['PATH']}"}
+    env = os.environ | {
+        "PATH": f"{write_fake_uvx_vibecheck(tmp_path, payload, exit_code=1)}:{os.environ['PATH']}"
+    }
 
-    result = run_just(ROOT / "justfiles" / "shared.just", project, "_vibecheck", env=env)
+    result = run_just(
+        ROOT / "justfiles" / "shared.just", project, "_vibecheck", env=env
+    )
 
     output = result.stdout + result.stderr
     assert result.returncode != 0, output
@@ -725,19 +763,36 @@ def test_vibecheck_still_blocks_g141_comment_matches(tmp_path: pathlib.Path) -> 
     assert TRIAGE_MARKER in output
 
 
-def test_slop_scan_ignores_non_gating_structural_heuristics(tmp_path: pathlib.Path) -> None:
+def test_slop_scan_ignores_non_gating_structural_heuristics(
+    tmp_path: pathlib.Path,
+) -> None:
     project = tmp_path / "slop-project"
     project.mkdir()
     (project / "app.ts").write_text("export const value = 1;\n")
-    shutil.copy(ROOT / "tool-configs" / "slop-scan.config.json", project / "slop-scan.config.json")
+    shutil.copy(
+        ROOT / "tool-configs" / "slop-scan.config.json",
+        project / "slop-scan.config.json",
+    )
     payload = {
         "summary": {"findingCount": 2},
         "findings": [
-            {"ruleId": "structure.pass-through-wrappers", "severity": "strong", "path": "app.ts", "location": {"line": 1}},
-            {"ruleId": "structure.directory-fanout-hotspot", "severity": "medium", "path": "src", "location": {"line": 1}},
+            {
+                "ruleId": "structure.pass-through-wrappers",
+                "severity": "strong",
+                "path": "app.ts",
+                "location": {"line": 1},
+            },
+            {
+                "ruleId": "structure.directory-fanout-hotspot",
+                "severity": "medium",
+                "path": "src",
+                "location": {"line": 1},
+            },
         ],
     }
-    env = os.environ | {"PATH": f"{write_fake_npx_slop_scan(tmp_path, payload)}:{os.environ['PATH']}"}
+    env = os.environ | {
+        "PATH": f"{write_fake_npx_slop_scan(tmp_path, payload)}:{os.environ['PATH']}"
+    }
 
     result = run_just(ROOT / "justfiles" / "bun.just", project, "_slop-scan", env=env)
 
@@ -750,15 +805,30 @@ def test_slop_scan_still_blocks_concrete_slop_findings(tmp_path: pathlib.Path) -
     project = tmp_path / "slop-project"
     project.mkdir()
     (project / "app.ts").write_text("export const value = 1;\n")
-    shutil.copy(ROOT / "tool-configs" / "slop-scan.config.json", project / "slop-scan.config.json")
+    shutil.copy(
+        ROOT / "tool-configs" / "slop-scan.config.json",
+        project / "slop-scan.config.json",
+    )
     payload = {
         "summary": {"findingCount": 2},
         "findings": [
-            {"ruleId": "structure.pass-through-wrappers", "severity": "strong", "path": "app.ts", "location": {"line": 1}},
-            {"ruleId": "errors.swallowed", "severity": "strong", "path": "app.ts", "location": {"line": 2}},
+            {
+                "ruleId": "structure.pass-through-wrappers",
+                "severity": "strong",
+                "path": "app.ts",
+                "location": {"line": 1},
+            },
+            {
+                "ruleId": "errors.swallowed",
+                "severity": "strong",
+                "path": "app.ts",
+                "location": {"line": 2},
+            },
         ],
     }
-    env = os.environ | {"PATH": f"{write_fake_npx_slop_scan(tmp_path, payload)}:{os.environ['PATH']}"}
+    env = os.environ | {
+        "PATH": f"{write_fake_npx_slop_scan(tmp_path, payload)}:{os.environ['PATH']}"
+    }
 
     result = run_just(ROOT / "justfiles" / "bun.just", project, "_slop-scan", env=env)
 
@@ -867,7 +937,9 @@ def test_python_scaffold_bare_just_test_breaks_when_just_working_directory_is_ex
             ]
         )
     )
-    (project / ".envrc").write_text('source_up\nexport JUST_WORKING_DIRECTORY="$(pwd -P)"\n')
+    (project / ".envrc").write_text(
+        'source_up\nexport JUST_WORKING_DIRECTORY="$(pwd -P)"\n'
+    )
     env = os.environ | {
         "DIRENV_CONFIGURED_CORRECTLY": "1",
         "JUST_WORKING_DIRECTORY": str(project),
@@ -1061,7 +1133,9 @@ def test_scaffolds_delegate_qc_in_project_directory(
         assert wrong_root_error not in output
 
 
-def test_bun_playwright_scaffold_delegates_app_boot_to_global_qc(tmp_path: pathlib.Path) -> None:
+def test_bun_playwright_scaffold_delegates_app_boot_to_global_qc(
+    tmp_path: pathlib.Path,
+) -> None:
     project = tmp_path / "bun-playwright-project"
     project.mkdir()
 
@@ -1147,7 +1221,9 @@ def test_language_qc_delegates_nested_global_recipes_in_project_directory(
 
         output = result.stdout + result.stderr
         assert result.returncode == 0, output
-        delegated_lines = [line.strip() for line in output.splitlines() if "just -f " in line]
+        delegated_lines = [
+            line.strip() for line in output.splitlines() if "just -f " in line
+        ]
         assert delegated_lines, output
         for line in delegated_lines:
             assert " -d . " in f" {line} ", line
@@ -1158,7 +1234,9 @@ def test_tsc_removes_temp_output_on_success(tmp_path: pathlib.Path) -> None:
     project.mkdir()
     tmpdir = tmp_path / "tmp"
     tmpdir.mkdir()
-    (project / "package.json").write_text(json.dumps({"scripts": {"typecheck": "printf typecheck-ok"}}) + "\n")
+    (project / "package.json").write_text(
+        json.dumps({"scripts": {"typecheck": "printf typecheck-ok"}}) + "\n"
+    )
 
     result = subprocess.run(
         [
@@ -1292,10 +1370,134 @@ def test_pytest_with_coverage_generates_xml_without_total_threshold(
 
     output = result.stdout + result.stderr
     project_slug = re.sub(r"[^A-Za-z0-9._-]", "_", str(project.resolve()))
-    coverage_xml = cache_home / "quality-control" / "coverage" / project_slug / "coverage.xml"
+    coverage_xml = (
+        cache_home / "quality-control" / "coverage" / project_slug / "coverage.xml"
+    )
     assert result.returncode == 0, output
     assert coverage_xml.exists()
     assert "Coverage XML report:" in output
+
+
+def write_import_linter_project(
+    project: pathlib.Path,
+    *,
+    import_sibling: bool = False,
+    local_importlinter_override: bool = False,
+) -> None:
+    package_a = project / "src" / "import_linter_a"
+    package_b = project / "src" / "import_linter_b"
+    tests_dir = project / "tests"
+    package_a.mkdir(parents=True)
+    package_b.mkdir(parents=True)
+    tests_dir.mkdir()
+    pyproject_lines = [
+        "[project]",
+        'name = "import-linter-project"',
+        'version = "0.1.0"',
+        'requires-python = ">=3.14"',
+        "",
+        "[build-system]",
+        'requires = ["setuptools"]',
+        'build-backend = "setuptools.build_meta"',
+        "",
+        "[tool.setuptools.packages.find]",
+        'where = ["src"]',
+        "",
+    ]
+    if local_importlinter_override:
+        pyproject_lines.extend(
+            [
+                "[tool.importlinter]",
+                'root_packages = ["import_linter_a"]',
+                "",
+            ]
+        )
+    (project / "pyproject.toml").write_text("\n".join(pyproject_lines))
+    package_a_init = (
+        "from import_linter_b import VALUE as SIBLING_VALUE\nVALUE = SIBLING_VALUE\n"
+        if import_sibling
+        else "VALUE = 1\n"
+    )
+    (package_a / "__init__.py").write_text(package_a_init)
+    (package_b / "__init__.py").write_text("VALUE = 2\n")
+    (tests_dir / "test_import_linter_project.py").write_text(
+        "\n".join(
+            [
+                "from import_linter_a import VALUE",
+                "",
+                "",
+                "def test_value() -> None:",
+                "    assert VALUE",
+                "",
+            ]
+        )
+    )
+
+
+def test_python_preflight_rejects_local_importlinter_pyproject_override(
+    tmp_path: pathlib.Path,
+) -> None:
+    project = tmp_path / "local-importlinter-project"
+    project.mkdir()
+    write_import_linter_project(project, local_importlinter_override=True)
+
+    result = run_just(
+        ROOT / "justfiles" / "python.just", project, "_check-python-project"
+    )
+    output = result.stdout + result.stderr
+
+    assert result.returncode != 0, output
+    assert r"\[tool\.importlinter" in output
+    assert TRIAGE_MARKER in output
+
+
+def test_import_linter_uses_central_config_without_downstream_override(
+    tmp_path: pathlib.Path,
+) -> None:
+    project = tmp_path / "central-importlinter-project"
+    project.mkdir()
+    write_import_linter_project(project)
+
+    result = run_just(ROOT / "justfiles" / "python.just", project, "_import-linter")
+    output = result.stdout + result.stderr
+
+    assert result.returncode == 0, output
+    assert "First-party packages are independent KEPT" in output
+
+
+def test_import_linter_blocks_sibling_imports_without_local_override(
+    tmp_path: pathlib.Path,
+) -> None:
+    project = tmp_path / "central-importlinter-failure-project"
+    project.mkdir()
+    write_import_linter_project(project, import_sibling=True)
+
+    result = run_just(ROOT / "justfiles" / "python.just", project, "_import-linter")
+    output = result.stdout + result.stderr
+
+    assert result.returncode != 0, output
+    assert "First-party packages are independent BROKEN" in output
+    assert "import_linter_a is not allowed to import import_linter_b" in output
+    assert TRIAGE_MARKER in output
+
+
+def test_import_linter_ignores_local_override_when_recipe_is_called_directly(
+    tmp_path: pathlib.Path,
+) -> None:
+    project = tmp_path / "ignored-local-importlinter-project"
+    project.mkdir()
+    write_import_linter_project(
+        project,
+        import_sibling=True,
+        local_importlinter_override=True,
+    )
+
+    result = run_just(ROOT / "justfiles" / "python.just", project, "_import-linter")
+    output = result.stdout + result.stderr
+
+    assert result.returncode != 0, output
+    assert "First-party packages are independent BROKEN" in output
+    assert "import_linter_a is not allowed to import import_linter_b" in output
 
 
 def test_deptry_accepts_declared_distributions_with_different_import_names(
@@ -1789,7 +1991,10 @@ def test_mypy_uses_pep723_script_dependencies(
 
     output = result.stdout + result.stderr
     assert result.returncode == 0, output
-    assert 'Cannot find implementation or library stub for module named "requests"' not in output
+    assert (
+        'Cannot find implementation or library stub for module named "requests"'
+        not in output
+    )
     assert 'Library stubs not installed for "requests"' not in output
 
 
@@ -1964,7 +2169,9 @@ def test_scaffold_bare_just_entrypoint_survives_working_directory_binding(
     just >= 1.46 without a JUST_WORKING_DIRECTORY export (#17)."""
     project = tmp_path / f"{language}-project"
     project.mkdir()
-    (project / "justfile").write_text((ROOT / "scaffolds" / language / "justfile").read_text())
+    (project / "justfile").write_text(
+        (ROOT / "scaffolds" / language / "justfile").read_text()
+    )
 
     clean_env = {k: v for k, v in os.environ.items() if k != "JUST_WORKING_DIRECTORY"}
     result = subprocess.run(

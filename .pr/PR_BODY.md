@@ -1,56 +1,57 @@
-## Implementation PR — own QC/enforcement skills here; fix inverted policy-index sync (#163)
+<!-- policy-alignment-gate -->
 
-Closes #163. Refs #63, #164, and #178.
+## Intended result
+Downstream Python repositories can run the centrally delegated `just test` and `test-ci`
+recipes without contradictory local QC configuration or central-map blind spots.
 
-`ai-review-ci` is the source of truth for integration-time QC/enforcement skills.
-`~/ai` is an install target, not the upstream source for those enforced policies.
+## Scope
+- Included: Python central QC recipes for import-linter and deptry, caller-root behavior,
+  and fixture-backed downstream proof for #167 and #162.
+- Excluded: unrelated Python QC tools, downstream workaround commits, and broad policy
+  changes to allow local QC overrides.
+- Preserved behavior: downstream justfiles remain thin delegators; nested central calls
+  preserve `-d .`; true dependency/import violations still fail loudly.
 
-## Boundary
+## GitHub tracking
+- Target issue set / subtree: #167 and #162
+- Milestone: Delegated QC rule precision
+- Closes on merge:
+  - Closes #167
+  - Closes #162
+- References only: none
 
-- **Owned enforcement surface** — authored in this checkout under `skills/<name>/`.
-- **Install target** — `just install-skills` symlinks the repo-owned skills into
-  `$AI_SKILLS_DIR`.
-- **Reviewer bundle** — review manifests reference `../skills/policy-index/...`
-  directly; there is no `reviews/vendor` policy copy to sync or rebuild.
-- **External advisory skills** — skills not owned here are named as external skills,
-  not linked through machine-local `file://` paths.
+## Implementation plan
+1. Add red downstream-target fixtures that reproduce both failures from a caller repo
+   boundary.
+2. Fix `_import-linter` so config isolation and push-tier import-linter can both be
+   satisfied without project-owned QC overrides.
+3. Fix `_deptry` map handling so target package-module maps are honored or merged without
+   overriding central policy.
+4. Prove both recipes scan the caller repository, not `~/ai-review-ci` implementation
+   files.
 
-## Implemented behavior
+## Claim map
+- [x] **#167 - Python `test-ci` import-linter contradiction is removed**
+  - Proof obligations claimed: red fixture, fixed central recipe, caller-root regression.
+  - Partial / not claimed: per-downstream import-linter registries or local downstream QC
+    overrides.
+  - Evidence required: downstream fixture passes without local import-linter config, local
+    override spellings are rejected/ignored, and a real central import-linter rule still
+    fails loudly on a violating caller project.
+  - Current evidence: commit `8d7fe2e680aac7047333f15a305c71e7494f89f8`; targeted tests
+    passed for `test_python_preflight_rejects_local_importlinter_pyproject_override`,
+    `test_import_linter_uses_central_config_without_downstream_override`,
+    `test_import_linter_blocks_sibling_imports_without_local_override`, and
+    `test_import_linter_ignores_local_override_when_recipe_is_called_directly`;
+    `just -f justfiles/python.just -d . _import-linter` runs from generated central config;
+    PR feedback scan reports `NOT RESOLVED: 0`.
+- [ ] **#162 - deptry package-module maps preserve target project semantics**
+  - Proof obligations claimed: target map repro using mismatched package/module names,
+    central recipe fix, no false DEP001/DEP002.
+  - Partial / not claimed: downstream agent-memory remediation commits.
+  - Evidence required: canonical target fixture and central recipe run with `-d .`.
+  - Current evidence: issue reproduction only.
 
-- Reconciles the PR with the current `origin/main` ownership model: `skills/` is the
-  canonical enforcement source and the stale `reviews/vendor` build/refresh/publish
-  machinery is removed.
-- Adds `skills/git-integration-workflow` for the GitHub-boundary workflow: issue tree,
-  draft PR, TDD proof, ready-for-review, automated review trigger, feedback disposition,
-  and merge gates.
-- Keeps review judgment and policy catalogs centralized by routing to repo-owned
-  `policy-index`, `anti-slop`, `reviewing-llm-code`, and `test-guidelines` instead of
-  duplicating their contents in the git integration skill.
-- Adds compatibility references for the old `reviewing-llm-code` red-flag filenames that
-  point to the canonical `policy-index` catalogs.
-- Fixes broken machine-local skill references and stale vendor references in the PR
-  template and skill documentation.
-
-## Deliverables
-
-- **D1 ownership inventory** — satisfied by the repo-owned `skills/` directory plus direct
-  review-manifest references to `skills/policy-index`; the duplicate vendored inventory
-  is intentionally removed.
-- **D2 install mechanism** — satisfied by `just install-skills`, which installs every
-  repo-owned skill into `$AI_SKILLS_DIR`.
-- **D3 update/versioning model** — no vendored policy copy remains to pin; policy freshness
-  is the checked-out git source itself, and link integrity is now tested.
-- **Git integration split** — the enforced GitHub integration workflow is owned here as
-  `skills/git-integration-workflow`; during-writing git hygiene remains in the external
-  `git-guidelines` skill.
-
-## Evidence
-
-- `python -m pytest tests/test_skill_references.py -q` — passed.
-- `tests/test_justfiles.py` proves `just install-skills` treats each top-level
-  `skills/*/SKILL.md` folder as an installable skill, requires `$AI_SKILLS_DIR`,
-  and refuses to replace non-symlink targets.
-- `just test-ci` — passed after final merge reconciliation: 246 tests in the
-  commit-tier pytest leg, 246 tests in the coverage leg, diff-cover reported no
-  coverage-bearing lines in the final diff, and deptry/import-linter/bypass checks
-  passed.
+## Automated gates
+Keep draft until red/green fixture proof exists and `just test` plus relevant targeted
+recipe tests are green.
