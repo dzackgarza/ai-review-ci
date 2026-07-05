@@ -1,0 +1,16 @@
+{
+  "title": "QC Agent Configuration",
+  "type": "object",
+  "properties": {
+    "lint": {
+      "type": "boolean"
+    },
+    "rules": {
+      "type": "object",
+      "additionalProperties": {
+        "enum": ["off", "warn", "error"]
+      }
+    }
+  },
+  "additionalProperties": false
+}
