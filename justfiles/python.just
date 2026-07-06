@@ -312,7 +312,7 @@ _pytest_with_coverage: _install-tools
 		"{{artifacts}}/scripts/emit-triage-directive.sh"
 		exit $ec
 	fi
-	if uvx --from coverage coverage xml -o "$coverage_xml"; then
+	if uvx --python 3.14 --from coverage coverage xml -o "$coverage_xml"; then
 		:
 	else
 		ec=$?
