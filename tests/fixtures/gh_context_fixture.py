@@ -104,6 +104,22 @@ def _emit_graphql_page(argv: list[str], fixture_dir: Path) -> None:
     print(json.dumps({"data": {"repository": {"pullRequest": {"reviewThreads": page}}}}))
 
 
+def _emit_rest_get(argv: list[str], fixture_dir: Path) -> None:
+    """Handle `gh api repos/.../pulls/N` (REST GET without --method flag)."""
+    path = argv[argv.index("api") + 1]
+    fields = _field_values(argv)
+    _append_call(fixture_dir, {"kind": "rest", "path": path, "fields": fields})
+
+    # Check for custom response files keyed by path
+    response_file = fixture_dir / f"rest_{path.replace('/', '_')}.json"
+    if response_file.exists():
+        print(response_file.read_text(encoding="utf-8"))
+        return
+
+    # If no fixture file exists, fail loudly so tests don't silently pass
+    raise AssertionError(f"no fixture file for gh api path: {path}")
+
+
 def main() -> None:
     fixture_dir = Path(os.environ["AI_REVIEW_CI_CONTEXT_FIXTURE_DIR"])
     argv = sys.argv[1:]
@@ -111,6 +127,9 @@ def main() -> None:
         _emit_graphql_page(argv, fixture_dir)
     elif argv[:3] == ["api", "--method", "GET"]:
         _emit_rest_page(argv, fixture_dir)
+    elif "api" in argv and "graphql" not in argv and "--method" not in argv:
+        # REST GET without --method flag (e.g. `gh api repos/owner/repo/pulls/12`)
+        _emit_rest_get(argv, fixture_dir)
     else:
         raise AssertionError(f"unsupported gh fixture invocation: {argv}")
 

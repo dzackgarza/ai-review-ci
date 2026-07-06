@@ -34,8 +34,9 @@ def test_canonical_guidance_uses_policy_and_remediation_records() -> None:
 def test_unknown_policy_code_fails_loudly() -> None:
     index = load_policy_index()
 
-    with pytest.raises(PolicyIndexError, match="unknown policy code"):
+    with pytest.raises(PolicyIndexError) as exc_info:
         index.policy("POLICY.DOES_NOT_EXIST")
+    assert exc_info.value.error_code == "UNKNOWN_POLICY"
 
 
 def test_policy_parser_rejects_missing_related_remediation() -> None:
@@ -50,23 +51,27 @@ Invalid local fixes: Copying prose into detector messages.
 Detection handles: `BAD-HANDLE`
 """
 
-    with pytest.raises(PolicyIndexError, match="Related remediation"):
+    with pytest.raises(PolicyIndexError) as exc_info:
         parse_policies(text)
+    assert exc_info.value.error_code == "MISSING_FIELDS"
 
 
 def test_load_policy_index_rejects_missing_canonical_file(tmp_path: Path) -> None:
-    with pytest.raises(PolicyIndexError, match="missing policy-index file"):
+    with pytest.raises(PolicyIndexError) as exc_info:
         load_policy_index(tmp_path)
+    assert exc_info.value.error_code == "MISSING_INDEX_FILE"
 
 
 def test_policy_parser_rejects_empty_policy_source() -> None:
-    with pytest.raises(PolicyIndexError, match="contained no POLICY records"):
+    with pytest.raises(PolicyIndexError) as exc_info:
         parse_policies("# No policies here\n")
+    assert exc_info.value.error_code == "EMPTY_SOURCE"
 
 
 def test_remediation_parser_rejects_empty_remediation_source() -> None:
-    with pytest.raises(PolicyIndexError, match="contained no REMEDIATE records"):
+    with pytest.raises(PolicyIndexError) as exc_info:
         parse_remediations("# No remediation rows here\n")
+    assert exc_info.value.error_code == "EMPTY_SOURCE"
 
 
 def test_semgrep_rules_use_id_only_messages_and_valid_metadata() -> None:

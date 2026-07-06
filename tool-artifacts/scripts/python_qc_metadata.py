@@ -40,9 +40,7 @@ def _string_list(value: object, qualified_name: str) -> list[str]:
     assert isinstance(value, list), f"{qualified_name} must be a TOML array"
     strings: list[str] = []
     for index, item in enumerate(value):
-        assert isinstance(item, str) and item, (
-            f"{qualified_name}[{index}] must be a non-empty string"
-        )
+        assert isinstance(item, str) and item, f"{qualified_name}[{index}] must be a non-empty string"
         strings.append(item)
     return strings
 
@@ -76,9 +74,7 @@ def _hatch_wheel_packages(pyproject: dict[str, object]) -> list[str]:
     return [Path(package_path).name for package_path in package_paths]
 
 
-def _setuptools_package_roots(
-    project_root: Path, pyproject: dict[str, object]
-) -> list[Path]:
+def _setuptools_package_roots(project_root: Path, pyproject: dict[str, object]) -> list[Path]:
     tool = _optional_table(pyproject, "tool", "tool")
     setuptools = _optional_table(tool, "setuptools", "tool.setuptools")
     packages = _optional_table(setuptools, "packages", "tool.setuptools.packages")
@@ -87,10 +83,7 @@ def _setuptools_package_roots(
     if where is None:
         return []
 
-    return [
-        project_root / path
-        for path in _string_list(where, "tool.setuptools.packages.find.where")
-    ]
+    return [project_root / path for path in _string_list(where, "tool.setuptools.packages.find.where")]
 
 
 def _setuptools_py_modules(pyproject: dict[str, object]) -> list[str]:
@@ -144,9 +137,7 @@ def dependency_group_requirements(project_root: Path) -> list[str]:
     dependency_groups = cast("dict[str, object]", groups)
 
     def collect(group_name: str, stack: tuple[str, ...]) -> list[str]:
-        assert group_name not in stack, (
-            f"dependency-groups contains an include cycle at {group_name}"
-        )
+        assert group_name not in stack, f"dependency-groups contains an include cycle at {group_name}"
         group = _required_list(
             dependency_groups,
             group_name,
@@ -155,24 +146,16 @@ def dependency_group_requirements(project_root: Path) -> list[str]:
         requirements: list[str] = []
         for index, item in enumerate(group):
             if isinstance(item, str):
-                assert item, (
-                    f"dependency-groups.{group_name}[{index}] must be non-empty"
-                )
+                assert item, f"dependency-groups.{group_name}[{index}] must be non-empty"
                 requirements.append(item)
             elif isinstance(item, dict):
                 include = cast("dict[str, object]", item)
-                assert set(include) == {"include-group"}, (
-                    f"dependency-groups.{group_name}[{index}] must be an include-group table"
-                )
+                assert set(include) == {"include-group"}, f"dependency-groups.{group_name}[{index}] must be an include-group table"
                 include_group = include["include-group"]
-                assert isinstance(include_group, str) and include_group, (
-                    f"dependency-groups.{group_name}[{index}].include-group must be a non-empty string"
-                )
+                assert isinstance(include_group, str) and include_group, f"dependency-groups.{group_name}[{index}].include-group must be a non-empty string"
                 requirements.extend(collect(include_group, (*stack, group_name)))
             else:
-                raise AssertionError(
-                    f"dependency-groups.{group_name}[{index}] must be a requirement string or include-group table"
-                )
+                raise AssertionError(f"dependency-groups.{group_name}[{index}] must be a requirement string or include-group table")
         return requirements
 
     requirements: list[str] = []
@@ -189,9 +172,7 @@ def _has_pep723_script_metadata(path: Path) -> bool:
         for metadata_line in lines[index + 1 :]:
             if metadata_line.strip() == "# ///":
                 return True
-        raise AssertionError(
-            f"{path} has an unterminated PEP 723 script metadata block"
-        )
+        raise AssertionError(f"{path} has an unterminated PEP 723 script metadata block")
     return False
 
 
@@ -206,13 +187,9 @@ def _pep723_metadata(path: Path) -> dict[str, object] | None:
                 raw = "\n".join(block)
                 return cast("dict[str, object]", tomllib.loads(raw)) if raw else {}
             if not metadata_line.startswith("#"):
-                raise AssertionError(
-                    f"{path} has a malformed PEP 723 script metadata line"
-                )
+                raise AssertionError(f"{path} has a malformed PEP 723 script metadata line")
             block.append(metadata_line[1:].removeprefix(" "))
-        raise AssertionError(
-            f"{path} has an unterminated PEP 723 script metadata block"
-        )
+        raise AssertionError(f"{path} has an unterminated PEP 723 script metadata block")
     return None
 
 

@@ -24,7 +24,16 @@ CODE_RE = re.compile(r"`(POLICY\.[A-Z0-9_]+|REMEDIATE\.[A-Z0-9_]+)`")
 
 
 class PolicyIndexError(ValueError):
-    """Raised when the policy index or detector metadata is invalid."""
+    """Raised when the policy index or detector metadata is invalid.
+
+    Attributes:
+        error_code: Machine-readable error classification for structured
+            assertion in tests (e.g. ``"UNKNOWN_POLICY"``).
+    """
+
+    def __init__(self, message: str, *, error_code: str = "UNKNOWN") -> None:
+        super().__init__(message)
+        self.error_code = error_code
 
 
 @dataclass(frozen=True)
@@ -54,20 +63,20 @@ class PolicyIndex:
         try:
             return self.policies[code]
         except KeyError as exc:
-            raise PolicyIndexError(f"unknown policy code: {code}") from exc
+            raise PolicyIndexError(f"unknown policy code: {code}", error_code="UNKNOWN_POLICY") from exc
 
     def remediation(self, code: str) -> RemediationRecord:
         try:
             return self.remediations[code]
         except KeyError as exc:
-            raise PolicyIndexError(f"unknown remediation code: {code}") from exc
+            raise PolicyIndexError(f"unknown remediation code: {code}", error_code="UNKNOWN_REMEDIATION") from exc
 
     def remediation_for_policy(self, policy_code: str, remediation_code: str | None = None) -> RemediationRecord:
         policy = self.policy(policy_code)
         code = remediation_code or policy.remediation_code
         remediation = self.remediation(code)
         if policy_code not in remediation.applies_to and "Any slop finding" not in remediation.applies_to:
-            raise PolicyIndexError(f"remediation {code} does not apply to {policy_code}")
+            raise PolicyIndexError(f"remediation {code} does not apply to {policy_code}", error_code="REMEDIATION_MISMATCH")
         return remediation
 
 
@@ -79,20 +88,20 @@ def default_policy_index_root() -> Path:
     return repo_root() / POLICY_INDEX_RELATIVE
 
 
-def _fail(message: str) -> NoReturn:
-    raise PolicyIndexError(message)
+def _fail(message: str, *, error_code: str = "UNKNOWN") -> NoReturn:
+    raise PolicyIndexError(message, error_code=error_code)
 
 
 def _read_required(path: Path) -> str:
     if not path.is_file():
-        _fail(f"missing policy-index file: {path}")
+        _fail(f"missing policy-index file: {path}", error_code="MISSING_INDEX_FILE")
     return path.read_text()
 
 
 def _parse_detection_handles(value: str) -> tuple[str, ...]:
     handles = tuple(re.findall(r"`([^`]+)`", value))
     if not handles:
-        _fail("policy record missing detection handles")
+        _fail("policy record missing detection handles", error_code="INVALID_DETECTION_HANDLES")
     return handles
 
 
@@ -111,10 +120,10 @@ def _parse_policy_block(code: str, name: str, block: list[str]) -> PolicyRecord:
     }
     missing = sorted(required - fields.keys())
     if missing:
-        _fail(f"{code} missing required fields: {', '.join(missing)}")
+        _fail(f"{code} missing required fields: {', '.join(missing)}", error_code="MISSING_FIELDS")
     remediation_codes = CODE_RE.findall(fields["Related remediation"])
     if len(remediation_codes) != 1 or not remediation_codes[0].startswith("REMEDIATE."):
-        _fail(f"{code} must name exactly one related remediation code")
+        _fail(f"{code} must name exactly one related remediation code", error_code="MISSING_REMEDIATION")
     return PolicyRecord(
         code=code,
         name=name,
@@ -144,7 +153,7 @@ def parse_policies(text: str) -> dict[str, PolicyRecord]:
     if current_code is not None:
         policies[current_code] = _parse_policy_block(current_code, current_name, block)
     if not policies:
-        _fail("policies.md contained no POLICY records")
+        _fail("policies.md contained no POLICY records", error_code="EMPTY_SOURCE")
     return policies
 
 
@@ -166,7 +175,7 @@ def parse_remediations(text: str) -> dict[str, RemediationRecord]:
             required_remediation=required_remediation,
         )
     if not remediations:
-        _fail("remediations.md contained no REMEDIATE records")
+        _fail("remediations.md contained no REMEDIATE records", error_code="EMPTY_SOURCE")
     return remediations
 
 
@@ -176,10 +185,10 @@ def load_policy_index(root: Path | None = None) -> PolicyIndex:
     remediations = parse_remediations(_read_required(index_root / REMEDIATIONS_FILE))
     for policy in policies.values():
         if policy.remediation_code not in remediations:
-            _fail(f"{policy.code} references missing remediation {policy.remediation_code}")
+            _fail(f"{policy.code} references missing remediation {policy.remediation_code}", error_code="MISSING_REMEDIATION")
         remediation = remediations[policy.remediation_code]
         if policy.code not in remediation.applies_to and "Any slop finding" not in remediation.applies_to:
-            _fail(f"{policy.remediation_code} does not apply to {policy.code}")
+            _fail(f"{policy.remediation_code} does not apply to {policy.code}", error_code="REMEDIATION_MISMATCH")
     return PolicyIndex(policies=policies, remediations=remediations)
 
 

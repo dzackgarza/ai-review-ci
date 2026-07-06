@@ -28,6 +28,10 @@ check: _normalize
     sh -n repo-hooks/pre-commit
     sh -n repo-hooks/pre-push
 
+# Check that skill markdown links are checkout-relative and resolvable.
+check-skill-links:
+    uv run tool-artifacts/scripts/check_skill_links.py
+
 # Commit gate: this repo is QC tooling, so it runs the qc-tooling profile
 # (correctness + normalization, without the product-only slop/style gates it
 # ships for downstream). Same standardized recipe shape as every other repo.
