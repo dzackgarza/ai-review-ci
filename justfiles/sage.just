@@ -176,13 +176,90 @@ _vulture: _sage-qc-files
 		"${generated_sage_python_files[@]}" \
 		"$whitelist_file"
 
+_sage-pytest:
+	#!/usr/bin/env bash
+	set -euo pipefail
+	echo "============================="
+	echo "=== Running: pytest on Sage test files (preparsed) ==="
+	echo "# Preparses .sage test files so integer literals become Sage Integer/Rational,"
+	echo "# then runs pytest on the generated .py files."
+	sage_bin="$(just --justfile {{justfile()}} -d . _sage-bin)"
+
+	# Collect .sage test files
+	mapfile -t sage_test_files < <(rg --files -g 'test_*.sage' -g '*_test.sage' 2>/dev/null || true)
+	# Also collect any .py test files (mixed projects)
+	mapfile -t py_test_files < <(rg --files tests -g 'test_*.py' -g '*_test.py' 2>/dev/null || true)
+
+	if [ "${#sage_test_files[@]}" -eq 0 ] && [ "${#py_test_files[@]}" -eq 0 ]; then
+		echo "ERROR: pytest: no test files found (.sage or .py)."
+		"{{artifacts}}/scripts/emit-test-writing-directive.sh"
+		exit 1
+	fi
+	if [ ! -f pyproject.toml ]; then
+		echo "ERROR: pytest: no pyproject.toml found — cannot install project."
+		"{{artifacts}}/scripts/emit-triage-directive.sh"
+		exit 1
+	fi
+
+	with_args=(--with-editable .)
+	dependency_requirements_output="$(uv run --no-project python "{{artifacts}}/scripts/python_qc_metadata.py" dependency-group-requirements .)"
+	if [ -n "$dependency_requirements_output" ]; then
+		mapfile -t dependency_requirements <<<"$dependency_requirements_output"
+		for requirement in "${dependency_requirements[@]}"; do
+			with_args+=(--with "$requirement")
+		done
+	fi
+
+	pytest_args=()
+	cleanup_files=()
+
+	if [ "${#sage_test_files[@]}" -gt 0 ]; then
+		sage_preparse_dir="$(mktemp -d "${TMPDIR:-/tmp}/qc-sage-pytest.XXXXXX")"
+		trap 'if [ -e "$sage_preparse_dir" ]; then gio trash "$sage_preparse_dir"; fi' EXIT
+
+		echo "# Preparsing ${#sage_test_files[@]} .sage test file(s)"
+		for sage_file in "${sage_test_files[@]}"; do
+			target="$sage_preparse_dir/$sage_file"
+			mkdir -p "$(dirname "$target")"
+			cp "$sage_file" "$target"
+		done
+		(
+			cd "$sage_preparse_dir"
+			"$sage_bin" --preparse "${sage_test_files[@]}" >/dev/null
+		)
+		for sage_file in "${sage_test_files[@]}"; do
+			generated="$sage_preparse_dir/${sage_file}.py"
+			if [ ! -f "$generated" ]; then
+				echo "ERROR: sage --preparse did not produce $generated for $sage_file"
+				"{{artifacts}}/scripts/emit-triage-directive.sh"
+				exit 1
+			fi
+			pytest_args+=("$generated")
+		done
+	fi
+
+	# Add .py test files directly
+	for py_file in "${py_test_files[@]:-}"; do
+		[ -n "$py_file" ] && pytest_args+=("$py_file")
+	done
+
+	if uvx --python 3.14 --from pytest "${with_args[@]}" pytest "${pytest_args[@]}"; then
+		:
+	else
+		ec=$?
+		echo "ERROR: pytest failed."
+		"{{artifacts}}/scripts/emit-triage-directive.sh"
+		exit $ec
+	fi
+
 # public: COMMIT gate — Sage syntax + Python correctness/normalization
 test: _normalize-common _sage-syntax
 	#!/usr/bin/env bash
 	set -euo pipefail
 	python_qc_repo="{{justfiles}}/python.just"
-	python_qc_recipes=(_normalize _python-syntax _mypy _pytest)
+	python_qc_recipes=(_normalize _python-syntax _mypy)
 	just -f "$python_qc_repo" -d . "${python_qc_recipes[@]}"
+	just --justfile {{justfile()}} -d . _sage-pytest
 	just -f {{justfiles}}/shared.just -d . _no-bypass
 	echo "Sage commit-tier quality checks completed"
 
