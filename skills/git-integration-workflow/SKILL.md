@@ -45,25 +45,32 @@ Each arrow is a gate, not a suggestion.
 
 ## Traversal and issue tree management (itree)
 
-For repositories that represent planned work as a single rooted ordered tree, use the `itree` tool to manage the issue tree and discover task ordering.
+For repositories that represent planned work as a single rooted ordered tree, use the `itree` tool located at `/home/dzack/ai-review-ci/tools/itree` to manage the issue tree and discover task ordering.
+
+### How to invoke the tool via uv
+
+Run the tool by pointing `uv` directly to the `itree` project directory:
+```bash
+uv run --project /home/dzack/ai-review-ci/tools/itree itree [subcommand]
+```
 
 ### When to use itree
 
-- **Before implementing**: Run `itree next OWNER/REPO` to discover the next open task and its enclosing work unit.
+- **Before implementing**: Run `uv run --project /home/dzack/ai-review-ci/tools/itree itree next OWNER/REPO` to discover the next open task and its enclosing work unit.
   Focus development on the returned task, and open/use the branch corresponding to the enclosing work unit.
-- **Before claiming completion**: Run `itree doctor OWNER/REPO` to verify that the issue tree is well-formed (no unreachable issues, no singletons without justification, correct milestones, etc.). If doctor warnings exist, resolve them.
-- **When creating a repository workspace**: Initialize the root ledger with `itree root create OWNER/REPO --title "Ledger: OWNER/REPO"`.
+- **Before claiming completion**: Run `uv run --project /home/dzack/ai-review-ci/tools/itree itree doctor OWNER/REPO` to verify that the issue tree is well-formed (no unreachable issues, no singletons without justification, correct milestones, etc.). If doctor warnings exist, resolve them.
+- **When creating a repository workspace**: Initialize the root ledger with `uv run --project /home/dzack/ai-review-ci/tools/itree itree root create OWNER/REPO --title "Ledger: OWNER/REPO"`.
 - **When structuring work**: Attach issues with `itree attach` and move/reorder them with `itree move`.
 
 ### Key Commands
 
-- `itree next OWNER/REPO`: Find the next open leaf issue in preorder.
-- `itree doctor OWNER/REPO`: Verify the tree structure and list any warnings or errors.
-  Use `--explain CODE` (e.g. `itree doctor OWNER/REPO --explain E010`) to see detailed remediation steps.
-- `itree root create OWNER/REPO --title "..."`: Create a new root ledger issue.
-- `itree root declare OWNER/REPO --issue N`: Mark issue #N as the root ledger by appending the required marker.
-- `itree attach OWNER/REPO#PARENT OWNER/REPO#CHILD`: Attach an existing child issue under a parent.
-- `itree move OWNER/REPO#CHILD --under OWNER/REPO#PARENT [--before SIBLING | --after SIBLING]`: Reparent or reorder an issue.
+- `uv run --project /home/dzack/ai-review-ci/tools/itree itree next OWNER/REPO`: Find the next open leaf issue in preorder.
+- `uv run --project /home/dzack/ai-review-ci/tools/itree itree doctor OWNER/REPO`: Verify the tree structure and list any warnings or errors.
+  Use `--explain CODE` (e.g. `uv run --project /home/dzack/ai-review-ci/tools/itree itree doctor OWNER/REPO --explain E010`) to see detailed remediation steps.
+- `uv run --project /home/dzack/ai-review-ci/tools/itree itree root create OWNER/REPO --title "..."`: Create a new root ledger issue.
+- `uv run --project /home/dzack/ai-review-ci/tools/itree itree root declare OWNER/REPO --issue N`: Mark issue #N as the root ledger by appending the required marker.
+- `uv run --project /home/dzack/ai-review-ci/tools/itree itree attach OWNER/REPO#PARENT OWNER/REPO#CHILD`: Attach an existing child issue under a parent.
+- `uv run --project /home/dzack/ai-review-ci/tools/itree itree move OWNER/REPO#CHILD --under OWNER/REPO#PARENT [--before SIBLING | --after SIBLING]`: Reparent or reorder an issue.
 
 ## Hard gates
 
