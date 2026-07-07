@@ -8,7 +8,12 @@ from pathlib import Path
 
 import pytest
 
-from ai_review_ci.context import _format_alert, _thread_digest, _validated_alert_page, fetch_context
+from ai_review_ci.context import (
+    _format_alert,
+    _thread_digest,
+    _validated_alert_page,
+    fetch_context,
+)
 
 
 def _alert(number: int, state: str, label: str, path: str, line: int) -> dict[str, object]:
@@ -113,7 +118,11 @@ def test_fetch_context_renders_alert_states_threads_and_carry_forward(tmp_path: 
         gh_fixture / "alerts.json",
         [
             {"tool_name": "ai-review/slop", "state": "open", "alert": open_alert},
-            {"tool_name": "ai-review/slop", "state": "dismissed", "alert": dismissed_alert},
+            {
+                "tool_name": "ai-review/slop",
+                "state": "dismissed",
+                "alert": dismissed_alert,
+            },
             {"tool_name": "ai-review/slop", "state": "fixed", "alert": fixed_alert},
         ],
     )
@@ -187,7 +196,13 @@ def test_fetch_context_renders_resolved_paginated_threads_and_empty_open_group(t
     dismissed_alert["dismissed_comment"] = None
     _write_json(
         gh_fixture / "alerts.json",
-        [{"tool_name": "ai-review/slop", "state": "dismissed", "alert": dismissed_alert}],
+        [
+            {
+                "tool_name": "ai-review/slop",
+                "state": "dismissed",
+                "alert": dismissed_alert,
+            }
+        ],
     )
     _write_json(
         gh_fixture / "threads.json",
@@ -246,14 +261,22 @@ def test_fetch_context_rejects_invalid_dismissal_comment(gh_fixture: Path) -> No
     dismissed_alert["dismissed_comment"] = {"not": "a string"}
     _write_json(
         gh_fixture / "alerts.json",
-        [{"tool_name": "ai-review/slop", "state": "dismissed", "alert": dismissed_alert}],
+        [
+            {
+                "tool_name": "ai-review/slop",
+                "state": "dismissed",
+                "alert": dismissed_alert,
+            }
+        ],
     )
 
     with pytest.raises(SystemExit):
         fetch_context("owner/repo", tool_names="ai-review/slop")
 
 
-def test_fetch_context_fails_loudly_on_gh_rest_and_graphql_errors(gh_fixture: Path) -> None:
+def test_fetch_context_fails_loudly_on_gh_rest_and_graphql_errors(
+    gh_fixture: Path,
+) -> None:
     _write_json(
         gh_fixture / "failures.json",
         [{"tool_name": "ai-review/general", "state": "open"}],
@@ -291,7 +314,12 @@ def test_fetch_context_carries_repo_and_pr_alerts_without_duplicate_numbers(tmp_
     )
     carry_forward = tmp_path / "carry-forward.json"
 
-    fetch_context("owner/repo", tool_names="ai-review/general", alerts_output=carry_forward, pr_number=8)
+    fetch_context(
+        "owner/repo",
+        tool_names="ai-review/general",
+        alerts_output=carry_forward,
+        pr_number=8,
+    )
 
     payload = json.loads(carry_forward.read_text(encoding="utf-8"))
     assert payload == {
@@ -315,7 +343,12 @@ def test_fetch_context_treats_no_analysis_as_empty_context(tmp_path: Path, gh_fi
     output = tmp_path / "context.md"
     carry_forward = tmp_path / "carry-forward.json"
 
-    fetch_context("owner/repo", tool_names="ai-review/general", output=output, alerts_output=carry_forward)
+    fetch_context(
+        "owner/repo",
+        tool_names="ai-review/general",
+        output=output,
+        alerts_output=carry_forward,
+    )
 
     assert output.read_text(encoding="utf-8") == (
         "## Existing repo-wide review findings\n"
@@ -350,7 +383,12 @@ def test_fetch_context_treats_code_scanning_disabled_as_empty_context(
     output = tmp_path / "context.md"
     carry_forward = tmp_path / "carry-forward.json"
 
-    fetch_context("owner/repo", tool_names="ai-review/general", output=output, alerts_output=carry_forward)
+    fetch_context(
+        "owner/repo",
+        tool_names="ai-review/general",
+        output=output,
+        alerts_output=carry_forward,
+    )
 
     assert output.read_text(encoding="utf-8") == (
         "## Existing repo-wide review findings\n"
@@ -415,3 +453,90 @@ def test_thread_digest_skips_threads_without_comments() -> None:
     }
 
     assert _thread_digest(node) is None
+
+
+# --- #185: proof-laundering / fake-boundary reviewer context ----------------
+#
+# Regression fixture modeled on the #110 / #177 failure class: a PR body claims
+# a real downstream boundary (Bun Playwright app boot) is satisfied, but the
+# cited evidence is developer-controlled (fake bunx shell script recording argv,
+# empty Playwright configs). The LLM reviewer cannot detect this claim-vs-evidence
+# mismatch unless fetch_context injects the PR body's claim map into the reviewer
+# prompt. On main, fetch_context never fetches the PR body, so this test is RED.
+
+
+_PR_110_BODY = """<!-- policy-alignment-gate -->
+
+## Intended result
+
+Bun Playwright downstream repos exercise actual app boot behavior through ai-review-ci's central QC path.
+
+## GitHub tracking
+
+- Target issue set / subtree: #177
+- Closes on merge:
+  - Closes #177
+
+## Claim map
+
+- [x] **#177 - actual app boot configs run through global QC**
+  - Central Bun `app-boot` runs the primary `playwright.config.ts`.
+  - A repo-owned downstream fixture carries a real `package.json`, Bun lockfile, Playwright configs, app source, and browser tests.
+  - The fixed branch's test suite proves the actual app boots through real Playwright/browser/app sentinel behavior.
+
+## Evidence
+
+- Commit: `55edef6487a300610b6ca5c55bc84d05b4f21aa0`.
+- Focused test: `tests/test_justfiles.py::test_bun_push_gate_runs_actual_app_boot_when_config_exists`
+  - writes empty `playwright.config.ts` / `playwright.actual.config.ts` files;
+  - writes a fake `bunx` executable that only records argv;
+  - asserts recorded command-line arguments.
+"""
+
+
+def test_fetch_context_injects_pr_claim_map_for_proof_laundering_detection(tmp_path: Path, gh_fixture: Path) -> None:
+    """The reviewer must see the PR body's claim map to detect fake-boundary evidence.
+
+    Models the #110 failure: the PR claims #177 (real app boot) satisfied, but the
+    evidence path is a fake bunx + argv recorder. Without the PR body in the reviewer
+    context, the LLM cannot compare the *claimed boundary* against the *evidence shape*.
+    """
+    _write_json(gh_fixture / "alerts.json", [])
+    _write_json(
+        gh_fixture / "threads.json",
+        {"nodes": [], "pageInfo": {"hasNextPage": False, "endCursor": None}},
+    )
+    _write_json(
+        gh_fixture / "rest_repos_owner_repo_pulls_110.json",
+        {
+            "number": 110,
+            "title": "Bun Playwright app boot through global QC",
+            "body": _PR_110_BODY,
+        },
+    )
+    output = tmp_path / "context.md"
+
+    fetch_context("owner/repo", tool_names="ai-review/slop", output=output, pr_number=110)
+
+    text = output.read_text(encoding="utf-8")
+    # The reviewer context must carry a dedicated claim-map section so the LLM can
+    # cross-reference the PR's claimed boundary obligation against the diff evidence.
+    assert "## PR claim map" in text
+    # The claim map content must be present: the claimed boundary and the linked issue.
+    assert "#177" in text
+    assert "actual app boot" in text
+    # The evidence section — which names the fake-bunx/argv-recorder proof — must be
+    # visible so the reviewer can judge whether the evidence crosses the claimed boundary.
+    assert "fake `bunx`" in text
+    assert "records argv" in text
+
+
+def test_fetch_context_omits_pr_claim_map_when_not_a_pr_run(tmp_path: Path, gh_fixture: Path) -> None:
+    """Repo-sweep runs (pr_number=0) have no PR body; the claim-map section is omitted."""
+    _write_json(gh_fixture / "alerts.json", [])
+    output = tmp_path / "context.md"
+
+    fetch_context("owner/repo", tool_names="ai-review/slop", output=output, pr_number=0)
+
+    text = output.read_text(encoding="utf-8")
+    assert "## PR claim map" not in text
