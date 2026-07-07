@@ -1,11 +1,10 @@
 # Policy Database
 
-This file is the canonical database of named bridge-burning policies. Other skills
-may teach review, testing, debugging, or remediation workflows, but policy identity
-and policy text live here.
+This file is the canonical database of named bridge-burning policies.
+Other skills may teach review, testing, debugging, or remediation workflows, but policy identity and policy text live here.
 
-Detector and reviewer agents may load this file. Fixer agents load
-`remediations.md` only after triage assigns a `POLICY.*` code.
+Detector and reviewer agents may load this file.
+Fixer agents load `remediations.md` only after triage assigns a `POLICY.*` code.
 
 ## Record Schema
 
@@ -15,8 +14,7 @@ Each policy record contains:
 - `Rule`: the canonical obligation.
 - `Invalid local fixes`: local edits that preserve the violation.
 - `Detection handles`: red-flag or banned-shape labels that map to the policy.
-- `Related remediation`: the fixer-side remediation code, loaded only from
-  `remediations.md` after triage.
+- `Related remediation`: the fixer-side remediation code, loaded only from `remediations.md` after triage.
 
 ## Category Index
 
@@ -37,7 +35,8 @@ Each policy record contains:
 
 Category: Runtime, Config, and State
 
-Rule: Runtime values must be supplied explicitly and validated at the owned boundary. Config, env, CLI, schema, serde, Pydantic, dict, and option defaults are banned when they let missing data become success-shaped execution.
+Rule: Runtime values must be supplied explicitly and validated at the owned boundary.
+Config, env, CLI, schema, serde, Pydantic, dict, and option defaults are banned when they let missing data become success-shaped execution.
 
 Invalid local fixes: Replacing one default syntax with another; moving the default to a constant; adding a comment that the default is harmless.
 
@@ -49,7 +48,8 @@ Related remediation: `REMEDIATE.TOTAL_CONFIG_MODEL`
 
 Category: Runtime, Config, and State
 
-Rule: Normalize required state once at the boundary. Inside owned core logic, required data is total and non-optional.
+Rule: Normalize required state once at the boundary.
+Inside owned core logic, required data is total and non-optional.
 
 Invalid local fixes: Sprinkling null checks; using `Optional`, `Partial`, `Any`, sentinel fields, or "maybe initialized" state in core paths.
 
@@ -85,7 +85,8 @@ Related remediation: `REMEDIATE.FAIL_LOUD_BOUNDARY`
 
 Category: Runtime, Config, and State
 
-Rule: Validate once at the owned boundary, then use total types internally. Core code should not repeatedly defend against impossible malformed state.
+Rule: Validate once at the owned boundary, then use total types internally.
+Core code should not repeatedly defend against impossible malformed state.
 
 Invalid local fixes: Every function checking null/missing/impossible variants; tests for impossible branches; defensive guards in trusted core paths.
 
@@ -99,7 +100,8 @@ Related remediation: `REMEDIATE.FAIL_LOUD_BOUNDARY`
 
 Category: Fail-Loud Execution
 
-Rule: Required work fails loudly. Do not continue with substitute data, empty collections, placeholder output, cached guesses, "best effort", or alternate branches that preserve a success signal after the obligation failed.
+Rule: Required work fails loudly.
+Do not continue with substitute data, empty collections, placeholder output, cached guesses, "best effort", or alternate branches that preserve a success signal after the obligation failed.
 
 Invalid local fixes: Catching and logging; returning `None`, `[]`, `{}`, `false`, or a placeholder; adding another fallback layer.
 
@@ -111,7 +113,8 @@ Related remediation: `REMEDIATE.FAIL_LOUD_BOUNDARY`
 
 Category: Fail-Loud Execution
 
-Rule: A dependency, binary, service, model, config file, or generated artifact required for the operation is mandatory. Its absence is a setup error, not a branch in product logic.
+Rule: A dependency, binary, service, model, config file, or generated artifact required for the operation is mandatory.
+Its absence is a setup error, not a branch in product logic.
 
 Invalid local fixes: `try import`; `command -v` fallback; "skip if missing"; vendoring a weaker substitute.
 
@@ -123,7 +126,8 @@ Related remediation: `REMEDIATE.FAIL_LOUD_BOUNDARY`
 
 Category: Fail-Loud Execution
 
-Rule: Owned operations either complete the claimed operation or fail with a hard error. Do not return success-shaped results with warnings, missing fields, skipped substeps, or hidden data loss.
+Rule: Owned operations either complete the claimed operation or fail with a hard error.
+Do not return success-shaped results with warnings, missing fields, skipped substeps, or hidden data loss.
 
 Invalid local fixes: Returning `ok: true` with warnings; empty arrays on error; rendering with missing pieces; best-effort modes.
 
@@ -135,7 +139,8 @@ Related remediation: `REMEDIATE.FAIL_LOUD_BOUNDARY`
 
 Category: Fail-Loud Execution
 
-Rule: Errors and failed results must be propagated, handled immediately as a real domain alternative, or converted into structured failure. They must not be discarded.
+Rule: Errors and failed results must be propagated, handled immediately as a real domain alternative, or converted into structured failure.
+They must not be discarded.
 
 Invalid local fixes: `.ok()`, `let _ =`, `filter_map(Result::ok)`, `except: pass`, `catch(() => default)`, `|| true`, stderr suppression.
 
@@ -149,7 +154,8 @@ Related remediation: `REMEDIATE.FAIL_LOUD_BOUNDARY`
 
 Category: Proof and Test Integrity
 
-Rule: Tests and QC paths must prove owned behavior through real boundaries. Smoke, diagnostic, import, constructor, coverage-only, no-crash, and status-only checks carry no proof burden.
+Rule: Tests and QC paths must prove owned behavior through real boundaries.
+Smoke, diagnostic, import, constructor, coverage-only, no-crash, and status-only checks carry no proof burden.
 
 Invalid local fixes: Renaming a fake test to smoke; keeping non-proof checks in proof paths; citing coverage as correctness.
 
@@ -185,7 +191,8 @@ Related remediation: `REMEDIATE.REAL_PROOF_LOOP`
 
 Category: Proof and Test Integrity
 
-Rule: A finding about startup, config, persistence, IPC, subprocess, API, or UI behavior must be proved at that boundary. Helper tests are supplementary and cannot resolve boundary feedback.
+Rule: A finding about startup, config, persistence, IPC, subprocess, API, or UI behavior must be proved at that boundary.
+Helper tests are supplementary and cannot resolve boundary feedback.
 
 Invalid local fixes: Extracting a helper after review; testing branch behavior instead of product behavior; proving code the app may stop calling.
 
@@ -197,7 +204,8 @@ Related remediation: `REMEDIATE.REAL_PROOF_LOOP`
 
 Category: Proof and Test Integrity
 
-Rule: Tests assert structured error kinds, semantic values, or public text contracts. Exact string assertions on internal diagnostics usually prove only the test's copied literal.
+Rule: Tests assert structured error kinds, semantic values, or public text contracts.
+Exact string assertions on internal diagnostics usually prove only the test's copied literal.
 
 Invalid local fixes: Asserting copied error messages; matching implementation wording; replacing string errors with different strings.
 
@@ -211,7 +219,8 @@ Related remediation: `REMEDIATE.REAL_PROOF_LOOP`
 
 Category: Type and Interface Integrity
 
-Rule: Boolean parameters that select behavior hide multiple operations behind one call surface. Use separate functions or an explicit domain variant with exhaustive dispatch.
+Rule: Boolean parameters that select behavior hide multiple operations behind one call surface.
+Use separate functions or an explicit domain variant with exhaustive dispatch.
 
 Invalid local fixes: Renaming `flag` to `mode`; replacing `bool` with an enum without splitting obligations; testing both branches directly instead of constructing real state.
 
@@ -235,7 +244,8 @@ Related remediation: `REMEDIATE.STRUCTURED_TYPES`
 
 Category: Type and Interface Integrity
 
-Rule: Untyped third-party libraries may not leak `Any` into owned code. A mypy `import-untyped` diagnostic means the dependency boundary lacks stubs or a `py.typed` marker; owned code must restore a typed boundary before using that library broadly.
+Rule: Untyped third-party libraries may not leak `Any` into owned code.
+A mypy `import-untyped` diagnostic means the dependency boundary lacks stubs or a `py.typed` marker; owned code must restore a typed boundary before using that library broadly.
 
 Invalid local fixes: Replacing the library solely to satisfy mypy; hand-rolling library behavior; adding `ignore_missing_imports`; adding `# type: ignore[import-untyped]`; casting imported values to expected types; exposing untyped library objects from a wrapper; adding local QC config or excludes.
 
@@ -289,7 +299,8 @@ Related remediation: `REMEDIATE.TRACK_STATIC_ARTIFACT`
 
 Category: Migration and Remediation Integrity
 
-Rule: Replace wrong paths, migrate callers, and remove old interfaces after transferring their burden. Do not preserve legacy branches without external consumers.
+Rule: Replace wrong paths, migrate callers, and remove old interfaces after transferring their burden.
+Do not preserve legacy branches without external consumers.
 
 Invalid local fixes: Deprecated wrappers; compat mode; old parser retained "just in case"; feature flags for obsolete paths.
 
@@ -301,7 +312,8 @@ Related remediation: `REMEDIATE.REPLACE_LEGACY_PATH`
 
 Category: Migration and Remediation Integrity
 
-Rule: Quarantine labels such as smoke, non-proof, legacy, diagnostic-only, temporary, compatibility, fallback, scaffold, or out-of-scope require burden disposition. They do not make slop acceptable.
+Rule: Quarantine labels such as smoke, non-proof, legacy, diagnostic-only, temporary, compatibility, fallback, scaffold, or out-of-scope require burden disposition.
+They do not make slop acceptable.
 
 Invalid local fixes: Keeping proof-shaped artifacts under disclaimer labels; moving slop to "future-owned"; renaming rather than resolving burden.
 
@@ -325,7 +337,8 @@ Related remediation: `REMEDIATE.BURDEN_DISPOSITION`
 
 Category: Migration and Remediation Integrity
 
-Rule: Slop artifacts are forensic evidence of an unmet need. Removing or renaming them is valid only after the original burden is solved, invalidated, transferred, or recorded unresolved.
+Rule: Slop artifacts are forensic evidence of an unmet need.
+Removing or renaming them is valid only after the original burden is solved, invalidated, transferred, or recorded unresolved.
 
 Invalid local fixes: Deleting the evidence; renaming to smoke/basic/legacy; "cleaning up" without reconstructing intent.
 
@@ -339,7 +352,11 @@ Related remediation: `REMEDIATE.BURDEN_DISPOSITION`
 
 Category: Anti-Speculation
 
-Rule: Do not add branches for failure modes that have not been observed, tested, or reported. Assert invariants now; handle real incidents when they exist. Converting an existing `assert` into `if/raise` to defend against `python -O` stripping assertions is itself a hypothetical-path fix: `-O` is an unobserved failure mode in bespoke software that is never run with it. Keep the assertion. See `POLICY.PREFER_ASSERTION`.
+Rule: Do not add branches for failure modes that have not been observed, tested, or reported.
+Assert invariants now; handle real incidents when they exist.
+Converting an existing `assert` into `if/raise` to defend against `python -O` stripping assertions is itself a hypothetical-path fix: `-O` is an unobserved failure mode in bespoke software that is never run with it.
+Keep the assertion.
+See `POLICY.PREFER_ASSERTION`.
 
 Invalid local fixes: "What if" guards; speculative fallback code; enterprise deployment branches for bespoke local tools; replacing `assert` with `if/raise` on a generic "asserts are disabled under `-O`" argument that names no observed failure.
 
@@ -351,7 +368,14 @@ Related remediation: `REMEDIATE.OBSERVE_BEFORE_BRANCHING`
 
 Category: Anti-Speculation
 
-Rule: Assertions are the strongly-preferred idiom for invariants, preconditions, and type-narrowing in owned code. An `assert` records what the author believes must be provably true at that point — it forces the writer to engage with the data, enumerate real (observed) failure modes, name them, narrow types for the checker, and short-circuit early so later logic can rely on a proven condition. Code should be littered with assertions. Catching `AssertionError` is the same category error in the other direction: it turns a provable claim about code state into runtime logic, error handling, retry behavior, or product contract. Assertions are claims to preserve and strengthen, not exceptions to recover from. `if/raise` (especially `raise ValueError`/`RuntimeError`) on what is actually an invariant is the red flag, not the assertion: it is adjacent to timid, fail-open, splat-guessing slop and removes the auditable proof an assertion provides. The threat model is slop and unproven logic, not someone running the app under `-O`; protecting downstream users who pass optimization flags is not an owned obligation. If assertion cost ever becomes a real measured problem, the fix is a dedicated optimization pass (cython/rust/library change), never pre-emptively swapping asserts for raises.
+Rule: Assertions are the strongly-preferred idiom for invariants, preconditions, and type-narrowing in owned code.
+An `assert` records what the author believes must be provably true at that point — it forces the writer to engage with the data, enumerate real (observed) failure modes, name them, narrow types for the checker, and short-circuit early so later logic can rely on a proven condition.
+Code should be littered with assertions.
+Catching `AssertionError` is the same category error in the other direction: it turns a provable claim about code state into runtime logic, error handling, retry behavior, or product contract.
+Assertions are claims to preserve and strengthen, not exceptions to recover from.
+`if/raise` (especially `raise ValueError`/`RuntimeError`) on what is actually an invariant is the red flag, not the assertion: it is adjacent to timid, fail-open, splat-guessing slop and removes the auditable proof an assertion provides.
+The threat model is slop and unproven logic, not someone running the app under `-O`; protecting downstream users who pass optimization flags is not an owned obligation.
+If assertion cost ever becomes a real measured problem, the fix is a dedicated optimization pass (cython/rust/library change), never pre-emptively swapping asserts for raises.
 
 Invalid local fixes: Replacing an `assert` with `if/raise`/`ValueError`/`RuntimeError` to satisfy a reviewer or a `python -O` argument; adding a raise-based guard where an assertion would document the precondition; weakening an assertion into a tolerant branch; catching `AssertionError` or an equivalent invariant-failure exception; converting assertion failure into fallback, retry, warning, user-facing error, or partial success.
 

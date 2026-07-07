@@ -1,8 +1,9 @@
 # Decay Risk Reference
 
-Six patterns that cause software to degrade. Apply the Iron Law to each finding.
+Six patterns that cause software to degrade.
+Apply the Iron Law to each finding.
 
----
+* * *
 
 ## Risk 1: Cognitive Overload
 
@@ -20,18 +21,14 @@ Cognitive load beyond working memory causes mistakes, avoidance, and blocks the 
 - Boolean expressions with 3 or more conditions combined
 - Train-wreck chains: `a.getB().getC().doD()`
 - Code names that do not match what the business calls the same concept
-- Flag Arguments: a boolean parameter that makes the function do two fundamentally different
-  things depending on its value — a sign the function has two responsibilities
-- Primitive Obsession: domain concepts represented as primitive types (`String email`,
-  `int orderId`, `double money`) rather than purpose-built value types — forces callers to know
-  which string is an email and which is a name
-- Shallow module: the interface or documentation of a component is more complex relative to
-  the functionality it provides
+- Flag Arguments: a boolean parameter that makes the function do two fundamentally different things depending on its value — a sign the function has two responsibilities
+- Primitive Obsession: domain concepts represented as primitive types (`String email`, `int orderId`, `double money`) rather than purpose-built value types — forces callers to know which string is an email and which is a name
+- Shallow module: the interface or documentation of a component is more complex relative to the functionality it provides
 
 ### Sources
 
 | Symptom | Book | Principle / Smell |
-|---------|------|-------------------|
+| --- | --- | --- |
 | Long Method | Fowler — Refactoring | Long Method |
 | Long Parameter List | Fowler — Refactoring | Long Parameter List |
 | Message Chains | Fowler — Refactoring | Message Chains |
@@ -55,7 +52,7 @@ Cognitive load beyond working memory causes mistakes, avoidance, and blocks the 
 - Internal implementation detail hidden behind a deep, simple module boundary is not a shallow-module problem
 - Domain-specific terminology should not be flagged if it matches how experts actually speak
 
----
+* * *
 
 ## Risk 2: Change Propagation
 
@@ -66,26 +63,18 @@ Each change ripples to unrelated modules, slowing velocity and multiplying regre
 ### Symptoms
 
 - Modifying one feature requires touching more than 3 files in unrelated modules
-- One class changes for multiple different business reasons (e.g., `UserService` changes for
-  billing logic AND notification logic AND profile logic)
+- One class changes for multiple different business reasons (e.g., `UserService` changes for billing logic AND notification logic AND profile logic)
 - A method uses more data from another class than from its own class
 - Two classes know each other's internal state directly
 - Changing one module requires recompiling or retesting many unrelated modules
-- **Hyrum's Law**: with sufficient callers, every observable behavior — including
-  implementation details, error message text, coincidental call ordering, and undocumented
-  side effects — becomes an implicit contract that callers depend on, even though it was
-  never guaranteed by the declared API
-- **Orthogonality violation**: changing one dimension of a feature forces edits in
-  unrelated dimensions — adding a new payment type should not require touching logging,
-  caching, or notification code, but in a non-orthogonal design it does
-- Information Leakage: a design decision (e.g., a file format, protocol detail, or data
-  shape) is encoded in more than one module, so changing it requires coordinated edits
-  in multiple places even though only one module "owns" the concept
+- **Hyrum's Law**: with sufficient callers, every observable behavior — including implementation details, error message text, coincidental call ordering, and undocumented side effects — becomes an implicit contract that callers depend on, even though it was never guaranteed by the declared API
+- **Orthogonality violation**: changing one dimension of a feature forces edits in unrelated dimensions — adding a new payment type should not require touching logging, caching, or notification code, but in a non-orthogonal design it does
+- Information Leakage: a design decision (e.g., a file format, protocol detail, or data shape) is encoded in more than one module, so changing it requires coordinated edits in multiple places even though only one module "owns" the concept
 
 ### Sources
 
 | Symptom | Book | Principle / Smell |
-|---------|------|-------------------|
+| --- | --- | --- |
 | Shotgun Surgery | Fowler — Refactoring | Shotgun Surgery |
 | Divergent Change | Fowler — Refactoring | Divergent Change |
 | Feature Envy | Fowler — Refactoring | Feature Envy |
@@ -108,28 +97,27 @@ Each change ripples to unrelated modules, slowing velocity and multiplying regre
 - A stable public API with intentionally supported behavior is not automatically Hyrum's Law debt
 - Similar edits inside one bounded context may be normal coordinated change, not shotgun surgery
 
----
+* * *
 
 ## Risk 3: Knowledge Duplication
 
 **Diagnostic question:** Is the same decision expressed in more than one place?
 
-Multiple copies drift apart silently. DRY is about decisions, not code lines.
+Multiple copies drift apart silently.
+DRY is about decisions, not code lines.
 
 ### Symptoms
 
 - Same logic copy-pasted across multiple files or functions
-- Same concept named differently in different parts of the codebase
-  (e.g., `user`, `account`, `member`, `customer` all referring to the same domain entity)
-- Parallel class hierarchies that must change in sync
-  (e.g., adding a new payment type requires adding a class in 3 different hierarchies)
+- Same concept named differently in different parts of the codebase (e.g., `user`, `account`, `member`, `customer` all referring to the same domain entity)
+- Parallel class hierarchies that must change in sync (e.g., adding a new payment type requires adding a class in 3 different hierarchies)
 - Configuration values repeated as literals in multiple places
 - Two modules that implement the same algorithm independently
 
 ### Sources
 
 | Symptom | Book | Principle / Smell |
-|---------|------|-------------------|
+| --- | --- | --- |
 | Code duplication | Fowler — Refactoring | Duplicate Code |
 | Parallel Inheritance | Fowler — Refactoring | Parallel Inheritance Hierarchies |
 | DRY violation | Hunt & Thomas — The Pragmatic Programmer | DRY: Don't Repeat Yourself |
@@ -148,7 +136,7 @@ Multiple copies drift apart silently. DRY is about decisions, not code lines.
 - Temporary duplication during an active extraction or migration is not necessarily debt
 - Shared protocol constants repeated at explicit boundaries may be acceptable when local ownership is clearer
 
----
+* * *
 
 ## Risk 4: Accidental Complexity
 
@@ -158,22 +146,19 @@ Accidental complexity accumulates addition by addition until developers fight sc
 
 ### Symptoms
 
-- Abstractions built "for future use" with no current consumer
-  (e.g., a plugin system for a use case that has only one known implementation)
+- Abstractions built "for future use" with no current consumer (e.g., a plugin system for a use case that has only one known implementation)
 - Classes that barely justify their existence (wrap a single method call)
 - Classes that only delegate to another class without adding behavior (pure middle-men)
-- Second attempt at a system that is significantly more elaborate than the first,
-  adding generality for requirements that do not yet exist
+- Second attempt at a system that is significantly more elaborate than the first, adding generality for requirements that do not yet exist
 - Switch statements that signal missing polymorphism
 - Configuration options that have never been changed from their defaults
 - Framework code larger than the application it powers
-- Code grown under sustained tactical shortcuts: each workaround seemed small, but
-  accumulated shortcuts mean every new feature requires fighting the existing structure
+- Code grown under sustained tactical shortcuts: each workaround seemed small, but accumulated shortcuts mean every new feature requires fighting the existing structure
 
 ### Sources
 
 | Symptom | Book | Principle / Smell |
-|---------|------|-------------------|
+| --- | --- | --- |
 | Speculative Generality | Fowler — Refactoring | Speculative Generality |
 | Lazy Class | Fowler — Refactoring | Lazy Class |
 | Middle Man | Fowler — Refactoring | Middle Man |
@@ -195,35 +180,31 @@ Accidental complexity accumulates addition by addition until developers fight sc
 - Thin wrappers that absorb vendor churn or hide instability may be justified
 - A larger second version is not second-system effect unless the added generality exceeds present needs
 
----
+* * *
 
 ## Risk 5: Dependency Disorder
 
 **Diagnostic question:** Do dependencies flow in a consistent, predictable direction?
 
-When business logic depends on infrastructure, infrastructure changes cascade into domain changes. Cycles prevent isolation.
+When business logic depends on infrastructure, infrastructure changes cascade into domain changes.
+Cycles prevent isolation.
 
 ### Symptoms
 
 - Circular dependencies between modules or packages
-- High-level business logic directly imports from low-level infrastructure
-  (e.g., a domain service imports from a specific database driver)
+- High-level business logic directly imports from low-level infrastructure (e.g., a domain service imports from a specific database driver)
 - Stable, widely-used components depend on unstable, frequently-changing ones
 - Abstract components depending on concrete implementations
 - Law of Demeter violations: `order.getCustomer().getAddress().getCity()`
 - Module fan-out greater than 5 (imports from more than 5 other modules)
-- A module implements an interface but only uses a subset of its methods, or must
-  provide stub implementations for methods it does not need (ISP violation: fat interface
-  forces unwanted dependencies on callers)
-- The system feels like "one mind did not design this" — different modules use
-  incompatible architectural patterns with no clear rule for which to use where
-- Direct version-pinned dependencies on transitive packages (diamond dependency risk);
-  upgrading one library requires coordinating multiple unrelated teams or repositories
+- A module implements an interface but only uses a subset of its methods, or must provide stub implementations for methods it does not need (ISP violation: fat interface forces unwanted dependencies on callers)
+- The system feels like "one mind did not design this" — different modules use incompatible architectural patterns with no clear rule for which to use where
+- Direct version-pinned dependencies on transitive packages (diamond dependency risk); upgrading one library requires coordinating multiple unrelated teams or repositories
 
 ### Sources
 
 | Symptom | Book | Principle / Smell |
-|---------|------|-------------------|
+| --- | --- | --- |
 | Dependency cycles | Martin — Clean Architecture | Acyclic Dependencies Principle (ADP) |
 | DIP violation | Martin — Clean Architecture | Dependency Inversion Principle (DIP) |
 | Instability direction | Martin — Clean Architecture | Stable Dependencies Principle (SDP) |
@@ -246,33 +227,30 @@ When business logic depends on infrastructure, infrastructure changes cascade in
 - Adapter modules may depend on both domain and infrastructure when they explicitly translate across the boundary
 - A stable facade over many leaf dependencies can be healthy if dependency policy is clear
 
----
+* * *
 
 ## Risk 6: Domain Model Distortion
 
 **Diagnostic question:** Does the code faithfully represent the problem it is solving?
 
-Code that mismatches business language forces mental translation. Over time it models schemas instead of the domain, with logic bleeding into service layers.
+Code that mismatches business language forces mental translation.
+Over time it models schemas instead of the domain, with logic bleeding into service layers.
 
 ### Symptoms
 
-- Business logic scattered across service layers while domain objects have only getters and setters
-  (anemic domain model)
+- Business logic scattered across service layers while domain objects have only getters and setters (anemic domain model)
 - Code variable, class, or method names that do not match what business stakeholders call the concept
 - A class whose only purpose is to hold data with no behavior (pure data bag)
 - A subclass that ignores or overrides most of its parent's behavior (refuses the inheritance)
 - Bounded context boundaries crossed without any translation or anti-corruption layer
-- Methods that are more interested in the data of another class than their own
-  (domain logic in the wrong place)
-- A subclass overrides most parent methods with incompatible behavior or throws exceptions
-  where the parent contract guarantees success (LSP violation: substitution breaks callers)
-- Value Objects treated as Entities: a concept defined entirely by its attributes (e.g., Money,
-  Email, Address) is given a mutable ID and lifecycle instead of being replaced when changed
+- Methods that are more interested in the data of another class than their own (domain logic in the wrong place)
+- A subclass overrides most parent methods with incompatible behavior or throws exceptions where the parent contract guarantees success (LSP violation: substitution breaks callers)
+- Value Objects treated as Entities: a concept defined entirely by its attributes (e.g., Money, Email, Address) is given a mutable ID and lifecycle instead of being replaced when changed
 
 ### Sources
 
 | Symptom | Book | Principle / Smell |
-|---------|------|-------------------|
+| --- | --- | --- |
 | Anemic Domain Model | Evans — Domain-Driven Design | Domain Model pattern |
 | Ubiquitous Language drift | Evans — Domain-Driven Design | Ubiquitous Language |
 | Bounded context violation | Evans — Domain-Driven Design | Bounded Context |

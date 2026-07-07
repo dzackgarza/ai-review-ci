@@ -27,11 +27,19 @@ Slop review has two separable axes:
 - **Implementation quality / standards**: whether the changed code follows this repo's documented standards and the slop-pattern catalog.
 - **Spec-faithfulness**: whether the changed code implements the originating issue, PRD, plan, or user directive without omission or scope creep.
 
-Keep the axes separate. A change can be faithful to the spec and still be slop; a change can be stylistically clean and still implement the wrong thing. Do not let one axis launder the other. When reviewing a diff, pin the fixed point and inspect the commits/diff before sending subagents or writing findings; a bad base ref, empty diff, or missing spec source is a review setup failure, not a finding about the code.
+Keep the axes separate.
+A change can be faithful to the spec and still be slop; a change can be stylistically clean and still implement the wrong thing.
+Do not let one axis launder the other.
+When reviewing a diff, pin the fixed point and inspect the commits/diff before sending subagents or writing findings; a bad base ref, empty diff, or missing spec source is a review setup failure, not a finding about the code.
 
-Generic code smells are heuristics, not hard bridge-burning policy by themselves. Repo standards override the heuristic baseline, and deterministic tooling owns anything it already enforces. Treat names, duplication, data clumps, primitive obsession, repeated switches, shotgun surgery, divergent change, speculative generality, message chains, middle-man wrappers, and inheritance mismatches as prompts to ask whether the implementation is accretive, over-generalized, or missing a deeper owner. Escalate only when the smell maps to a catalog pattern or `POLICY.*` obligation.
+Generic code smells are heuristics, not hard bridge-burning policy by themselves.
+Repo standards override the heuristic baseline, and deterministic tooling owns anything it already enforces.
+Treat names, duplication, data clumps, primitive obsession, repeated switches, shotgun surgery, divergent change, speculative generality, message chains, middle-man wrappers, and inheritance mismatches as prompts to ask whether the implementation is accretive, over-generalized, or missing a deeper owner.
+Escalate only when the smell maps to a catalog pattern or `POLICY.*` obligation.
 
-Scope creep belongs on the spec-faithfulness axis first. If the extra behavior also created abstractions, hooks, modes, wrappers, or generalized pathways the spec did not require, classify the implementation mechanism through the slop catalog as well. Do not report the same issue as a single blended finding; state which part is spec drift and which part is implementation slop.
+Scope creep belongs on the spec-faithfulness axis first.
+If the extra behavior also created abstractions, hooks, modes, wrappers, or generalized pathways the spec did not require, classify the implementation mechanism through the slop catalog as well.
+Do not report the same issue as a single blended finding; state which part is spec drift and which part is implementation slop.
 
 ## Code Patterns
 
@@ -47,19 +55,12 @@ Scope creep belongs on the spec-faithfulness axis first. If the extra behavior a
   **When you see complexity, stop and search for the dependency.
   Do not review the complex code on its own terms first.**
 
-- **[KNOWN-SOLUTION-BYPASS] Known-solution bypass in implementation**: agents write nontrivial code (parsers,
-  adapters, retry mechanisms, file watchers, renderers, API clients, schema validators,
-  markdown transformers, date/time handlers, auth flows, caches, queues, rate limiters,
-  compiler workarounds) without first checking whether a known library, official recipe,
-  or existing upstream pattern solves the task. The code compiles, passes tests, and
-  might even work, but it duplicates effort the ecosystem already owns. The review
-  question is not "does this code look correct" but "why does this code exist when the
-  dependency was available." Before implementing, agents should search for the known
-  solution. If bespoke code is written anyway, the agent or report should state what
-  source ruled out the known solution.
-  This mirrors the debugging half of `known-solution-first` (search public contracts
-  before reverse-engineering) but applied at implementation time: before hand-rolling
-  infrastructure- or integration-layer code, check whether the ecosystem solved it.
+- **[KNOWN-SOLUTION-BYPASS] Known-solution bypass in implementation**: agents write nontrivial code (parsers, adapters, retry mechanisms, file watchers, renderers, API clients, schema validators, markdown transformers, date/time handlers, auth flows, caches, queues, rate limiters, compiler workarounds) without first checking whether a known library, official recipe, or existing upstream pattern solves the task.
+  The code compiles, passes tests, and might even work, but it duplicates effort the ecosystem already owns.
+  The review question is not "does this code look correct" but "why does this code exist when the dependency was available."
+  Before implementing, agents should search for the known solution.
+  If bespoke code is written anyway, the agent or report should state what source ruled out the known solution.
+  This mirrors the debugging half of `known-solution-first` (search public contracts before reverse-engineering) but applied at implementation time: before hand-rolling infrastructure- or integration-layer code, check whether the ecosystem solved it.
 
 - **[ENTERPRISE-BESPOKE] Enterprise patterns in bespoke software**: code that attempts graceful degradation when dependencies are missing, accepts squishy input shapes, over-generalizes to other platforms or users, or handles enterprise-grade edge cases — all inappropriate for one user’s private tool on their own system.
   The correct behavior for bespoke software is: work on the happy path, fail loudly outside of it.
@@ -137,15 +138,16 @@ Scope creep belongs on the spec-faithfulness axis first. If the extra behavior a
 
 - **[NO-GLOBAL-QC] No global QC integration**: tests, scripts, type checks, startup checks, or runtime validation exist but are not part of the standard command that future agents and users will actually run.
 
-- **[HONEST-LABEL] Honest-label laundering (slop upholstery)**:
-  The artifact remains but receives a more accurate label: smoke, harness, diagnostic,
-  scaffold, non-proof, quarantine. The label is now less false, but the artifact still
-  pollutes the validation ecosystem.
-  The rename makes the label match the behavior, destroying the detection signal (the mismatch between label and behavior) that would have flagged the artifact on future review. The artifact's runtime behavior is unchanged. The finding was about **existence**, not labeling, but the relabel retroactively reframes it as a labeling issue. This is proof laundering with better marketing. See `anti-slop/references/code-patterns.md` → **Honest-Label Laundering** for detection heuristics (diff-only-renames, qualifying adjectives like `smoke`/`basic`/`minimal`, disclaimer-style naming, fix applied to name not artifact).
+- **[HONEST-LABEL] Honest-label laundering (slop upholstery)**: The artifact remains but receives a more accurate label: smoke, harness, diagnostic, scaffold, non-proof, quarantine.
+  The label is now less false, but the artifact still pollutes the validation ecosystem.
+  The rename makes the label match the behavior, destroying the detection signal (the mismatch between label and behavior) that would have flagged the artifact on future review.
+  The artifact's runtime behavior is unchanged.
+  The finding was about **existence**, not labeling, but the relabel retroactively reframes it as a labeling issue.
+  This is proof laundering with better marketing.
+  See `anti-slop/references/code-patterns.md` → **Honest-Label Laundering** for detection heuristics (diff-only-renames, qualifying adjectives like `smoke`/`basic`/`minimal`, disclaimer-style naming, fix applied to name not artifact).
 
-- **[DELETION-LAUNDER] Deletion laundering / proof-burden erasure**:
-  A criticized slop artifact is deleted without solving or recording the original problem
-  it attempted to address. The codebase looks cleaner, but the proof burden is now hidden.
+- **[DELETION-LAUNDER] Deletion laundering / proof-burden erasure**: A criticized slop artifact is deleted without solving or recording the original problem it attempted to address.
+  The codebase looks cleaner, but the proof burden is now hidden.
   The next agent is likely to recreate the same fake proof, fallback, wrapper, or harness.
 
   Detection:
@@ -158,10 +160,8 @@ Scope creep belongs on the spec-faithfulness axis first. If the extra behavior a
 
   Correct response after triage: See `policy-index/references/remediations.md` → **Remediation: Deletion Laundering / Proof-Burden Erasure**.
 
-- **[WHACK-A-MOLE] Reviewer-signal whack-a-mole**:
-  The agent treats every evaluator as a layer to appease: typechecker, compiler, test,
-  QC, PR review, user. At each layer it performs the minimum mutation to silence that
-  evaluator, rather than reconstructing the original story and solving the problem.
+- **[WHACK-A-MOLE] Reviewer-signal whack-a-mole**: The agent treats every evaluator as a layer to appease: typechecker, compiler, test, QC, PR review, user.
+  At each layer it performs the minimum mutation to silence that evaluator, rather than reconstructing the original story and solving the problem.
 
 - **[PROOF-LOOP-INVERSION] Broken proof-loop inversion**: recommending new tests, fixtures, inventories, coverage, or cleanup before repairing the canonical command that makes any test meaningful.
   This is especially damaging when the gate runs against stale static output, cached artifacts, hidden services, or a different runtime path than users actually exercise.
@@ -179,13 +179,20 @@ Scope creep belongs on the spec-faithfulness axis first. If the extra behavior a
   The defining characteristic of this failure mode: natural mutations of the feature have huge blast radii — touching core internals, copy-pasting code, reinventing infrastructure — rather than being minor data-driven or configuration-driven extensions to general tools that the original implementation already provided.
   Each feature should REDUCE the blast radius of future mutations, not increase it.
   Diagnostic signals in the code:
-  - **Features hacked into core fundamentals**: user-requested features deeply integrated into app internals instead of added through extension points. The agent added the feature by hacking the core rather than designing a proper integration surface. Intended workflow, unintended architecture.
-  - **Mutating or adding a feature is unsafe**: would an agent have to touch delicate internals to extend a feature? Feature failures should fail in isolation with clear error messages, not as opaque build/compilation/runtime errors elsewhere in the app.
-  - **Murky boundaries and ownership**: no clear separation between highly specific features and generalized components. Schizophrenic designs where unrelated concerns bleed into each other.
-  - **Bizarre tool/framework mixing**: tools or frameworks jammed together in ways clearly at odds with their intended purpose. Bizarre intermediate steps that would not exist in a thought-out greenfield design.
-  - **Accretion without payoff**: layers of feature additions with no corresponding refactoring to absorb them. Tech debt that accrued and was never paid off.
-  Review question: if you were greenfielding this design, would the architecture make sense? If the answer is no, the current shape is overfitting accretion, not intentional design.
-  Observable tells:
+  - **Features hacked into core fundamentals**: user-requested features deeply integrated into app internals instead of added through extension points.
+    The agent added the feature by hacking the core rather than designing a proper integration surface.
+    Intended workflow, unintended architecture.
+  - **Mutating or adding a feature is unsafe**: would an agent have to touch delicate internals to extend a feature?
+    Feature failures should fail in isolation with clear error messages, not as opaque build/compilation/runtime errors elsewhere in the app.
+  - **Murky boundaries and ownership**: no clear separation between highly specific features and generalized components.
+    Schizophrenic designs where unrelated concerns bleed into each other.
+  - **Bizarre tool/framework mixing**: tools or frameworks jammed together in ways clearly at odds with their intended purpose.
+    Bizarre intermediate steps that would not exist in a thought-out greenfield design.
+  - **Accretion without payoff**: layers of feature additions with no corresponding refactoring to absorb them.
+    Tech debt that accrued and was never paid off.
+    Review question: if you were greenfielding this design, would the architecture make sense?
+    If the answer is no, the current shape is overfitting accretion, not intentional design.
+    Observable tells:
   - A component that directly imports a specific data file: `import papers from '../data/papers.json'` — data fused to component, not passed as input
   - Multiple nearly-identical components differing only in label text, field names, or one conditional — should be one component parameterized by config or props
   - Hardcoded data values inside rendering code: `<div class="paper-card">Paper Title Here</div>` instead of `<PaperCard paper={...} />`
@@ -193,9 +200,8 @@ Scope creep belongs on the spec-faithfulness axis first. If the extra behavior a
   - Feature-specific imports in core/general modules: a `renderer.ts` importing `papers.config.ts` directly instead of accepting a generic config interface
   - `git log --stat` showing feature additions that modify core files more than they add new leaf files
   - Feature directories that are flat copies of each other: `papers/` and `preprints/` with near-identical file trees and logic
-  - Config or schema definitions that enumerate specific instances by name instead of defining a type and listing instances as data: `papers: { paper1: ..., paper2: ... }` vs `papers: Paper[]`
-  Equally bad are failed attempts at generalization: unopinionated vague schemas attempting to capture ALL instances (god-object accretion, braindead pursuit of "good design" guidelines that weakens contracts and schema checking), complex inheritance chains, highly non-modular constructions, and broken walls of abstractions where modular core pieces are informed by leaf implementations instead of defining general composable tools.
-  The correct approach follows Unix philosophy: most pieces do one thing well and compose well; most customization is composition, configuration, and trivial extensions.
+  - Config or schema definitions that enumerate specific instances by name instead of defining a type and listing instances as data: `papers: { paper1: ..., paper2: ... }` vs `papers: Paper[]` Equally bad are failed attempts at generalization: unopinionated vague schemas attempting to capture ALL instances (god-object accretion, braindead pursuit of "good design" guidelines that weakens contracts and schema checking), complex inheritance chains, highly non-modular constructions, and broken walls of abstractions where modular core pieces are informed by leaf implementations instead of defining general composable tools.
+    The correct approach follows Unix philosophy: most pieces do one thing well and compose well; most customization is composition, configuration, and trivial extensions.
 
 - **[DATA-ACCRETION] Data accretion / weak schemas**: data structures that show no evidence of top-down design — the shape was accreted feature by feature without ever being revisited.
   OSOT (One Source of Truth) violations are the primary signal: the same logical entity is scattered across multiple data sources because the agent grafted on new tracking rather than revisiting the structure of the data type.
@@ -210,17 +216,43 @@ Scope creep belongs on the spec-faithfulness axis first. If the extra behavior a
   Deep cause: agents treat types as noise to silence, not as a DSL for modeling problems.
   The correct flow: design a complete state machine → understand all finitely many permutations of data the app actually sees → develop abstract interfaces and types that integrate with the state machine → write code with near-zero loose or low-level types.
   The agent's flow: rush to solve a local task → accretion → hack types locally until the checker is silent → propagate the lack of understanding into massive technical debt.
-  Why this matters beyond correctness: agents optimize for reduction of compile-time and runtime errors, treating errors as inherently bad. Errors are not bad — they are an expected state when invalid data enters a system. Pass bad data into an app and it should throw an error. That is minimal user surprise: exactly what the user expects when they've done something wrong. What agents should minimize is user surprise and confusion at app behavior. An app that continues running on bad data creates maximal surprise — the user does not know what happened to the data, whether it was used partially, what fallbacks or defaults were substituted, or even whether the app is broken. A user clicking a link and getting a 404 because the file does not exist is slightly surprising (the content was expected there) but clear: the app works like every app for 30+ years. A user clicking a "Slides" link and silently returning to the same page because it points to `#` is far worse: the user does not know if their click registered, if the website is broken, if their browser is broken, if their computer or hardware is broken. They cannot even tell what the link was supposed to point to, so they cannot handle a 404 intelligently. Fail-loud is the correct default. Fail-silent with fallbacks is the antipattern. Every timid data check that avoids an error is creating the conditions for maximal user confusion later.
-  QC arms race: once a gate has been silenced rather than satisfied (a dead-link check silenced by `#` → a new check detects `#` → agents adopt `/` → a new check detects `/` → agents adopt `about:blank`), the gate is compromised. Adding more QC layers does not restore signal — it opens new silencing fronts. Each round of cat-and-mouse makes bypasses exponentially harder to find, because they accumulate under layers of checks that each create fresh silencing opportunities. The only winning move is to refuse the game entirely: fix the substance the original gate was supposed to prove, rather than adding gates to catch the last silencing technique. Reviewers who respond to slop findings with "add a QC check" are entering a war the QC already lost.
-  Reviewers must not attempt to invent automated procedures that prevent future behaviors. The correct response to finding slop in a QC gate is:
-  - Find and fix the root problem — the missing data, the hollow facade, the semantic gap the gate was supposed to catch. Do not add another QC layer.
-  - Alter the existing QC language so the bypassed failure more carefully states the intended action. A dead-link check that was silenced with `#` should be rewritten to say: "stop immediately, find the original link. If you cannot find the original link, surface this to the user as a blocker — you do not have authority to substitute a placeholder."
-  - Make the expected agent policy explicit in agent memories. For the dead-link example: explain that all links on the site should resolve to their intended targets, that real users expect the advertised data at the target, that the QC exists to help surface gaps and missing or moved files. Explain that some data issues are automatically resolvable (an agent can find or reconstruct original data), but some are complete blockers (a link to a deleted tweet no longer resolves — there is no agent-decidable or automatable solution to this, it is a user decision about how they want to rewrite their post, exclude the tweet, or summarize/reconstruct it; the QC is helping catch this before a website user does and is surprised by the broken link).
+  Why this matters beyond correctness: agents optimize for reduction of compile-time and runtime errors, treating errors as inherently bad.
+  Errors are not bad — they are an expected state when invalid data enters a system.
+  Pass bad data into an app and it should throw an error.
+  That is minimal user surprise: exactly what the user expects when they've done something wrong.
+  What agents should minimize is user surprise and confusion at app behavior.
+  An app that continues running on bad data creates maximal surprise — the user does not know what happened to the data, whether it was used partially, what fallbacks or defaults were substituted, or even whether the app is broken.
+  A user clicking a link and getting a 404 because the file does not exist is slightly surprising (the content was expected there) but clear: the app works like every app for 30+ years.
+  A user clicking a "Slides" link and silently returning to the same page because it points to `#` is far worse: the user does not know if their click registered, if the website is broken, if their browser is broken, if their computer or hardware is broken.
+  They cannot even tell what the link was supposed to point to, so they cannot handle a 404 intelligently.
+  Fail-loud is the correct default.
+  Fail-silent with fallbacks is the antipattern.
+  Every timid data check that avoids an error is creating the conditions for maximal user confusion later.
+  QC arms race: once a gate has been silenced rather than satisfied (a dead-link check silenced by `#` → a new check detects `#` → agents adopt `/` → a new check detects `/` → agents adopt `about:blank`), the gate is compromised.
+  Adding more QC layers does not restore signal — it opens new silencing fronts.
+  Each round of cat-and-mouse makes bypasses exponentially harder to find, because they accumulate under layers of checks that each create fresh silencing opportunities.
+  The only winning move is to refuse the game entirely: fix the substance the original gate was supposed to prove, rather than adding gates to catch the last silencing technique.
+  Reviewers who respond to slop findings with "add a QC check" are entering a war the QC already lost.
+  Reviewers must not attempt to invent automated procedures that prevent future behaviors.
+  The correct response to finding slop in a QC gate is:
+  - Find and fix the root problem — the missing data, the hollow facade, the semantic gap the gate was supposed to catch.
+    Do not add another QC layer.
+  - Alter the existing QC language so the bypassed failure more carefully states the intended action.
+    A dead-link check that was silenced with `#` should be rewritten to say: "stop immediately, find the original link.
+    If you cannot find the original link, surface this to the user as a blocker — you do not have authority to substitute a placeholder."
+  - Make the expected agent policy explicit in agent memories.
+    For the dead-link example: explain that all links on the site should resolve to their intended targets, that real users expect the advertised data at the target, that the QC exists to help surface gaps and missing or moved files.
+    Explain that some data issues are automatically resolvable (an agent can find or reconstruct original data), but some are complete blockers (a link to a deleted tweet no longer resolves — there is no agent-decidable or automatable solution to this, it is a user decision about how they want to rewrite their post, exclude the tweet, or summarize/reconstruct it; the QC is helping catch this before a website user does and is surprised by the broken link).
   - The reviewer's report should focus on: reconstruction of the original task that produced the slop, reversion or correction of the slop, hardening the architecture and style so that future introductions of such slop are more obvious and more difficult to do accidentally (not automatically prevented, not caught in tests, not entering the cat-and-mouse game), understanding what the original agents did not understand about the underlying problem, identifying the point of QC that might have caught it, encoding that understanding as positive forward-facing guidance in repo-local docs, and producing a commit that documents all of this.
-  - The point of this workflow: distilling positive guidelines instead of attempting automated solutions makes it easier for future slop reviews to intelligently see the infinite variations of slop that will exist. You never enter the cat-and-mouse game. You quietly observe the low-level gaming, you do not escalate, you record memories and guidance into the repo. You improve the chances that the infinitely many future variations of slop that will inevitably enter the codebase are not "banned" or "prevented," but rather stand out more and more — easily and identifiably and obviously in opposition to the repo-local documentation trail of intended purposes, guidelines, and policies — so that they are almost immediately caught in review. This is the only winning strategy.
-  Near-certain tell: almost any use of `any`, `unknown`, or `object` at a data boundary means the agent never tried to model the data.
-  Correlated signal: code that is simultaneously lax about data shapes AND never attempts to log, dump, or expose them. The absence of introspection paired with weak schemas is a hotspot for obsequious slop — the agent didn't look, didn't enforce, and didn't even try.
-  Observable tells — what to grep for or recognize in code:
+  - The point of this workflow: distilling positive guidelines instead of attempting automated solutions makes it easier for future slop reviews to intelligently see the infinite variations of slop that will exist.
+    You never enter the cat-and-mouse game.
+    You quietly observe the low-level gaming, you do not escalate, you record memories and guidance into the repo.
+    You improve the chances that the infinitely many future variations of slop that will inevitably enter the codebase are not "banned" or "prevented," but rather stand out more and more — easily and identifiably and obviously in opposition to the repo-local documentation trail of intended purposes, guidelines, and policies — so that they are almost immediately caught in review.
+    This is the only winning strategy.
+    Near-certain tell: almost any use of `any`, `unknown`, or `object` at a data boundary means the agent never tried to model the data.
+    Correlated signal: code that is simultaneously lax about data shapes AND never attempts to log, dump, or expose them.
+    The absence of introspection paired with weak schemas is a hotspot for obsequious slop — the agent didn't look, didn't enforce, and didn't even try.
+    Observable tells — what to grep for or recognize in code:
   - `any`, `unknown`, or `object` at any data boundary
   - Multiple files with the same entity prefix and different suffixes: `papers.json`, `papers-arxiv.json`, `papers-doi.json`
   - Functions named `combine*`, `merge*`, `aggregate*` that stitch data from multiple sources into one shape at runtime
@@ -245,11 +277,18 @@ Scope creep belongs on the spec-faithfulness axis first. If the extra behavior a
 - **[CONSULTANT-TRIAGE] Consultant-shaped triage**: producing generalized freeze/recovery/cleanup advice before identifying the actual in-progress feature, repo-local conventions, and root cause of the bad state.
   This creates plausible prioritization while avoiding the concrete question: what currently prevents the happy path from being proven?
 
-- **[DEBUG-DEBT] Debug-surface debt**: failures are addressed by mutating global code, adding one-off scripts, or repeatedly running opaque whole-system commands instead of creating a reusable isolated reproducer, structured boundary log, artifact dump, schema dump, or canonical diagnostic recipe. The smell is not that debugging took time; it is that the work left future debugging no easier.
+- **[DEBUG-DEBT] Debug-surface debt**: failures are addressed by mutating global code, adding one-off scripts, or repeatedly running opaque whole-system commands instead of creating a reusable isolated reproducer, structured boundary log, artifact dump, schema dump, or canonical diagnostic recipe.
+  The smell is not that debugging took time; it is that the work left future debugging no easier.
 
-- **[PRIOR-PROBES] Prior-shaped probes**: commands encode the expected answer and suppress contrary evidence, e.g. guessed flags with `2>/dev/null`, greps whose failure is treated as absence, `jq` paths run before response-shape inspection, or endpoint guesses treated as API facts. The output is the agent's hypothesis reflected back as fake evidence.
+- **[PRIOR-PROBES] Prior-shaped probes**: commands encode the expected answer and suppress contrary evidence, e.g. guessed flags with `2>/dev/null`, greps whose failure is treated as absence, `jq` paths run before response-shape inspection, or endpoint guesses treated as API facts.
+  The output is the agent's hypothesis reflected back as fake evidence.
 
-- **[AVAILABILITY-FIRST] Availability-first tool reuse**: agents select tools by scanning installed packages or `$PATH` rather than choosing the best tool from public knowledge and installing it if missing. The review question is not "does the chosen tool work" but "was a better tool passed over because it wasn't already installed." Local availability is an applicability check, not the search strategy. When bespoke code or a suboptimal tool appears where a known library or CLI would be cleaner, check whether the agent mentioned, searched for, or rejected the better alternative before settling. The correct expectation: identify the best tool → install/declare it → use it. Only fall back if installation is blocked by credentials, sudo, licensing, network, or policy.
+- **[AVAILABILITY-FIRST] Availability-first tool reuse**: agents select tools by scanning installed packages or `$PATH` rather than choosing the best tool from public knowledge and installing it if missing.
+  The review question is not "does the chosen tool work" but "was a better tool passed over because it wasn't already installed."
+  Local availability is an applicability check, not the search strategy.
+  When bespoke code or a suboptimal tool appears where a known library or CLI would be cleaner, check whether the agent mentioned, searched for, or rejected the better alternative before settling.
+  The correct expectation: identify the best tool → install/declare it → use it.
+  Only fall back if installation is blocked by credentials, sudo, licensing, network, or policy.
 
 ## Test Patterns
 
@@ -283,7 +322,10 @@ Scope creep belongs on the spec-faithfulness axis first. If the extra behavior a
 - **[TESTS-BEFORE-TESTABILITY] Tests before testability**: adding more assertions onto a broken pipeline where the command under review does not produce or serve the artifacts being asserted.
   Such tests can be individually reasonable but collectively useless because the suite is not connected to the current product path.
 
-- **[HELPER-PROOF-SUBSTITUTION] Helper-level proof substitution (Helper-Branch Proof Laundering)**: replacing a substantive boundary-crossing or configuration contract with a local helper unit proof that is easy to satisfy. The agent extracts or tests a small helper function in isolation (proving only that the helper's internal branch logic behaves as written) instead of proving that the actual application workflow, config discovery, parsing, or state-building behavior matches the required semantics. This is a form of proof laundering: the helper-level test passes, but the actual entrypoint remains unverified. It is often accompanied by brittle implementation assertions like matching exact non-public error strings.
+- **[HELPER-PROOF-SUBSTITUTION] Helper-level proof substitution (Helper-Branch Proof Laundering)**: replacing a substantive boundary-crossing or configuration contract with a local helper unit proof that is easy to satisfy.
+  The agent extracts or tests a small helper function in isolation (proving only that the helper's internal branch logic behaves as written) instead of proving that the actual application workflow, config discovery, parsing, or state-building behavior matches the required semantics.
+  This is a form of proof laundering: the helper-level test passes, but the actual entrypoint remains unverified.
+  It is often accompanied by brittle implementation assertions like matching exact non-public error strings.
 
   Detection Heuristics / Red Flags:
   - The helper did not exist before the review (extracted to make the fix look clean).
@@ -303,19 +345,33 @@ Scope creep belongs on the spec-faithfulness axis first. If the extra behavior a
 
 - **[THEORY-MIND-FAILURE] Theory-of-mind failure**: docs that omit the first obvious questions: what is the entrypoint, what proves it works, what owns the data, what fails loudly, what should never be bypassed, and what is intentionally bespoke to this machine.
 
-- **[PRIVATE-ONTOLOGY] Private ontology presented as public context**: docs require the reader to understand project-created terms, pass numbers, status cells, "canonical" roots, invisible prior sessions, or internal labels before the reader can tell what the artifact is. Ask for the ordinary artifact, user task, input, output, data, and executable surface. If the named thing has no external referent, the doc is importing agent context into a public surface.
+- **[PRIVATE-ONTOLOGY] Private ontology presented as public context**: docs require the reader to understand project-created terms, pass numbers, status cells, "canonical" roots, invisible prior sessions, or internal labels before the reader can tell what the artifact is.
+  Ask for the ordinary artifact, user task, input, output, data, and executable surface.
+  If the named thing has no external referent, the doc is importing agent context into a public surface.
 
-- **[META-WORK-COLONIZATION] Agent meta-work colonizes user-facing work**: public docs mix product facts with agent instructions, correction history, anti-hallucination doctrine, review process, prompt residues, internal maturity labels, or live planning state. The fix is boundary restoration, not another disclaimer. Move agent-control material to an agent-owned surface and live work state to issues, PRs, or plan records.
+- **[META-WORK-COLONIZATION] Agent meta-work colonizes user-facing work**: public docs mix product facts with agent instructions, correction history, anti-hallucination doctrine, review process, prompt residues, internal maturity labels, or live planning state.
+  The fix is boundary restoration, not another disclaimer.
+  Move agent-control material to an agent-owned surface and live work state to issues, PRs, or plan records.
 
-- **[NAMING-AS-EXISTENCE] Naming treated as implementation**: docs give names, owners, schemas, lifecycle, or authority to a subsystem before locating running code, data, workflows, or source-backed examples. A named subsystem is a claim to verify. Ask where it runs, what it accepts, what it emits, and what user-visible capability disappears if it is removed.
+- **[NAMING-AS-EXISTENCE] Naming treated as implementation**: docs give names, owners, schemas, lifecycle, or authority to a subsystem before locating running code, data, workflows, or source-backed examples.
+  A named subsystem is a claim to verify.
+  Ask where it runs, what it accepts, what it emits, and what user-visible capability disappears if it is removed.
 
-- **[CONTROL-PAYLOAD-INVERSION] Control system larger than payload**: docs front-load governance, trust, threats, receipts, gates, status, or review machinery while the useful payload is small, missing, hard to find, or not demonstrated. Complexity is not itself a defect; the defect is control machinery that precedes incidents, categories that precede instances, or custom process disproportionate to the data, users, risks, and workflows.
+- **[CONTROL-PAYLOAD-INVERSION] Control system larger than payload**: docs front-load governance, trust, threats, receipts, gates, status, or review machinery while the useful payload is small, missing, hard to find, or not demonstrated.
+  Complexity is not itself a defect; the defect is control machinery that precedes incidents, categories that precede instances, or custom process disproportionate to the data, users, risks, and workflows.
 
-- **[DISCLOSURE-AS-REPAIR] Disclosure substituted for remediation**: a doc responds to criticism by explaining the bad pattern, labeling it non-authoritative, or pointing elsewhere while leaving the contaminated surface in place. "The README is not the source of truth for current status" inside the README is still bad README content. Correct remediation removes volatile status from the README; it does not publish doctrine about why the README should not have contained it.
+- **[DISCLOSURE-AS-REPAIR] Disclosure substituted for remediation**: a doc responds to criticism by explaining the bad pattern, labeling it non-authoritative, or pointing elsewhere while leaving the contaminated surface in place.
+  "The README is not the source of truth for current status" inside the README is still bad README content.
+  Correct remediation removes volatile status from the README; it does not publish doctrine about why the README should not have contained it.
 
-- **[CIRCULAR-DOCTRINE] Internal cross-reference as authority**: generated docs, summaries, policies, or agent reports "confirm" each other without reaching code, data, user-visible behavior, external sources, or contemporaneous issue/PR evidence. Cross-references are pointers, not evidence. Trace every authority claim to an inspected reality surface.
+- **[CIRCULAR-DOCTRINE] Internal cross-reference as authority**: generated docs, summaries, policies, or agent reports "confirm" each other without reaching code, data, user-visible behavior, external sources, or contemporaneous issue/PR evidence.
+  Cross-references are pointers, not evidence.
+  Trace every authority claim to an inspected reality surface.
 
-- **[FRAME-CAPTURE-REVIEW] Reviewer captured by document frame**: the review debates internal constructs instead of asking why they exist. Bad: "Is the seven-gate matrix complete?" Better: "Which externally observable workflow requires a custom gate system instead of ordinary validation, review, access control, or release state?" Translate project terms into ordinary language before accepting them as review objects.
+- **[FRAME-CAPTURE-REVIEW] Reviewer captured by document frame**: the review debates internal constructs instead of asking why they exist.
+  Bad: "Is the seven-gate matrix complete?"
+  Better: "Which externally observable workflow requires a custom gate system instead of ordinary validation, review, access control, or release state?"
+  Translate project terms into ordinary language before accepting them as review objects.
 
 - **[MARKETING-INFLATION] Marketing inflation**: feature lists, achievement language, completion claims, LOC counts, test counts, and confident summaries that do not help operate or audit the system.
 
@@ -323,27 +379,22 @@ Scope creep belongs on the spec-faithfulness axis first. If the extra behavior a
 
 ## Generic PR Review Slop
 
-- Sandbox paranoia in bespoke software:
-  Reviewer imports enterprise threat models into private single-user tools.
+- Sandbox paranoia in bespoke software: Reviewer imports enterprise threat models into private single-user tools.
   Reject unless the repo explicitly owns a containment/security boundary.
 
-- Graceful-fallback remediation:
-  Reviewer identifies a real failure but suggests warnings/defaults/continuation.
+- Graceful-fallback remediation: Reviewer identifies a real failure but suggests warnings/defaults/continuation.
   Accept the concern only if real; replace remediation with fail-loud behavior.
 
-- Micro-optimization laundering:
-  Reviewer proposes a faster API or async conversion without measured/user-visible problem.
+- Micro-optimization laundering: Reviewer proposes a faster API or async conversion without measured/user-visible problem.
   Reject unless it fixes correctness, removes complexity, or has near-zero blast radius.
 
-- Type/QC gap underweighting:
-  Reviewer frames excluded typechecking or `Any` as style. Treat as proof-loop failure.
+- Type/QC gap underweighting: Reviewer frames excluded typechecking or `Any` as style.
+  Treat as proof-loop failure.
 
-- Race-condition minimization:
-  Reviewer or agent treats stale async state as speculative edge-case hardening.
+- Race-condition minimization: Reviewer or agent treats stale async state as speculative edge-case hardening.
   Accept when it can overwrite user-visible current state and fix is small.
 
-- Honest-label smoke laundering:
-  Mocked/fake tests renamed as `smoke`, `basic`, or `harness` are not feature proof.
+- Honest-label smoke laundering: Mocked/fake tests renamed as `smoke`, `basic`, or `harness` are not feature proof.
 
 ## Debugging-Review Gate
 
@@ -357,9 +408,12 @@ When reviewing agent-produced debugging work (failed fix attempts, failed probes
 
 For failures whose meaning is owned by an external tool, compiler, library, API, package manager, provider, or exact error message, additionally reject reports that lack:
 
-4. **External-known-solution evidence** — exact error/version/query searched, authoritative docs or issues read (with citation or URL), known contract or solution found, and what remains local-specific. Local config scanning, CLI probing, or source-tree inspection before public-knowledge search is not debugging — it is local-artifact laundering. The external-known-solution evidence must appear before or alongside local probing, not as retroactive research after the local fix is proposed.
+4. **External-known-solution evidence** — exact error/version/query searched, authoritative docs or issues read (with citation or URL), known contract or solution found, and what remains local-specific.
+   Local config scanning, CLI probing, or source-tree inspection before public-knowledge search is not debugging — it is local-artifact laundering.
+   The external-known-solution evidence must appear before or alongside local probing, not as retroactive research after the local fix is proposed.
 
-A report missing any of the applicable required items has not completed debugging. It has guessed from priors and bypassed the failure surface.
+A report missing any of the applicable required items has not completed debugging.
+It has guessed from priors and bypassed the failure surface.
 
 The canonical statements are: "The raw observation that changed my prior is ____. The smallest surface that reproduces it is ____. The missing observability/isolation surface was ____. The fix is verified by ____ and by the canonical full check ____." For external-owner failures, also: "The exact error/query searched was ____. The authoritative source that established the contract or solution was ____."
 

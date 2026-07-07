@@ -54,24 +54,8 @@
     "**/third_party/**",
     "**/venv/**"
   ],
-  "ignoreDependencies": [
-    "gi",
-    "@girs",
-    "@logtape/logtape",
-    "@ags/shared",
-    "ags",
-    "@tailwindcss/cli",
-    "@tailwindcss/typography",
-    "tailwindcss",
-    "tw-animate-css"
-  ],
-  "ignoreBinaries": [
-    "ags",
-    "xdg-open",
-    "direnv"
-  ],
+  "ignoreDependencies": ["gi", "@girs", "@logtape/logtape", "@ags/shared", "ags", "@tailwindcss/cli", "@tailwindcss/typography", "tailwindcss", "tw-animate-css"],
+  "ignoreBinaries": ["ags", "xdg-open", "direnv"],
   "ignoreExportsUsedInFile": true,
-  "ignoreUnresolved": [
-    "./vendor/backend.js"
-  ]
+  "ignoreUnresolved": ["./vendor/backend.js"]
 }

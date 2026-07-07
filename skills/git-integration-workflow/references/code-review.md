@@ -3,9 +3,7 @@
 Consolidated from the former `github-code-review` skill.
 
 > This skill is for *performing* code reviews and generating review feedback.
-> For consuming, triaging, or acting on existing review comments, use
-> `pr-feedback-triage` instead, and [pr-review-disposition.md](./pr-review-disposition.md)
-> in this skill for the enforced disposition doctrine.
+> For consuming, triaging, or acting on existing review comments, use `pr-feedback-triage` instead, and [pr-review-disposition.md](./pr-review-disposition.md) in this skill for the enforced disposition doctrine.
 
 ## 1. Reviewing Local Changes (Pre-Push)
 
@@ -145,21 +143,17 @@ gh pr review 123 --comment --body "Some suggestions, nothing blocking."
 
 ## 3. Review Delegation
 
-All code evaluation rules, anti-slop guidelines, and validation-evasion auditing are
-delegated to canonical policy skills:
+All code evaluation rules, anti-slop guidelines, and validation-evasion auditing are delegated to canonical policy skills:
 
 - **Code Review Policy & Bridge-Burning**: `reviewing-llm-code` and its red-flag catalogs
 - **PR Guidance & Triage**: `pr-feedback-triage`
 - **Proof & Test Obligations**: `test-guidelines`
 
-Always consult `policy-index` to find the canonical skill for any code review, testing,
-or remediation question.
+Always consult `policy-index` to find the canonical skill for any code review, testing, or remediation question.
 
-When you need "how to review a suspect PR" — the slop field guide, bridge-burning
-red flags, and validation-evasion auditing — do NOT rebuild it here. Load
-[reviewing-llm-code](../../reviewing-llm-code/SKILL.md) and
-[anti-slop](../../anti-slop/SKILL.md). This file owns the
-review *mechanics*; those skills own the review *judgment*.
+When you need "how to review a suspect PR" — the slop field guide, bridge-burning red flags, and validation-evasion auditing — do NOT rebuild it here.
+Load [reviewing-llm-code](../../reviewing-llm-code/SKILL.md) and [anti-slop](../../anti-slop/SKILL.md).
+This file owns the review *mechanics*; those skills own the review *judgment*.
 
 * * *
 
@@ -177,9 +171,11 @@ review *mechanics*; those skills own the review *judgment*.
 ## 5. PR Review Workflow (End-to-End)
 
 ### Step 1: Auth
+
 Ensure authenticated (see `auth.md` in the `git-guidelines` skill, advisory in `~/ai`).
 
 ### Step 2: Gather PR context
+
 ```bash
 gh pr view 123
 gh pr diff 123 --name-only
@@ -187,18 +183,21 @@ gh pr checks 123
 ```
 
 ### Step 3: Check out PR locally
+
 ```bash
 git fetch origin pull/<PR_NUMBER>/head:pr-<PR_NUMBER>
 git checkout pr-<PR_NUMBER>
 ```
 
 ### Step 4: Read the diff
+
 ```bash
 git diff main...HEAD --name-only
 git diff main...HEAD -- path/to/file.py
 ```
 
 ### Step 5: Run automated checks
+
 ```bash
 just test
 ```
@@ -206,6 +205,7 @@ just test
 ### Step 6: Apply review checklist (see Section 3 above)
 
 ### Step 7: Post the review
+
 ```bash
 # If no issues
 gh pr review <PR_NUMBER> --approve --body "Reviewed with no blocking findings."
@@ -215,6 +215,7 @@ gh pr review <PR_NUMBER> --request-changes --body "Blocking findings are recorde
 ```
 
 ### Step 8: Also post a summary comment
+
 ```bash
 gh pr comment <PR_NUMBER> --body "$(cat <<'EOF'
 ## Code Review Summary
@@ -237,6 +238,7 @@ EOF
 ```
 
 ### Step 9: Clean up
+
 ```bash
 git checkout main
 git branch -D pr-<PR_NUMBER>

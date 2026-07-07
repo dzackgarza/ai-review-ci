@@ -5,24 +5,19 @@ description: Use before code review, slop review, PR feedback triage, testing, Q
 
 # Policy Index
 
-Canonical source of truth for bridge-burning policy identity and policy-owned reference
-catalogs.
+Canonical source of truth for bridge-burning policy identity and policy-owned reference catalogs.
 
 Other skills may teach how to review, test, debug, or remediate within their domains.
-They must not define competing bridge-burning policy text. They point here for policy
-codes, red flags, runtime control-flow rules, banned test shapes, exception rules, and
-remediation routing.
+They must not define competing bridge-burning policy text.
+They point here for policy codes, red flags, runtime control-flow rules, banned test shapes, exception rules, and remediation routing.
 
-Remediation instructions are deliberately separated from detector instructions. The
-agent that sees or classifies an issue must not see the preferred remediation, because
-that couples detection to fixing and trains local appeasement. Remediation lives in
-`references/remediations.md` and is loaded only by the remediation agent after triage
-assigns a policy code.
+Remediation instructions are deliberately separated from detector instructions.
+The agent that sees or classifies an issue must not see the preferred remediation, because that couples detection to fixing and trains local appeasement.
+Remediation lives in `references/remediations.md` and is loaded only by the remediation agent after triage assigns a policy code.
 
 ## Use Protocol
 
-- Load this skill before code review, slop review, PR feedback triage, test review, QC
-  changes, or remediation.
+- Load this skill before code review, slop review, PR feedback triage, test review, QC changes, or remediation.
 - Use `POLICY.*` codes from this skill and `references/policies.md` as authoritative.
 - Use `references/red-flags.md` to classify validation-evasion constructs.
 - Use `references/runtime-control-flow.md` to classify runtime branch shapes.
@@ -32,10 +27,8 @@ assigns a policy code.
 - State the weakened obligation before editing.
 - Use a separate reviewer/fixer context when QC triage requires it.
 - If acting as the issue-seeing reviewer, do not open `references/remediations.md`.
-- If acting as the remediation/fixer agent, open `references/remediations.md` only after
-  receiving the policy code from triage.
-- Treat local token replacement as invalid unless the remediation reference explicitly
-  says the finding is mechanical.
+- If acting as the remediation/fixer agent, open `references/remediations.md` only after receiving the policy code from triage.
+- Treat local token replacement as invalid unless the remediation reference explicitly says the finding is mechanical.
 
 ## Database Files
 
@@ -91,8 +84,7 @@ assigns a policy code.
 
 ## QC Finding Contract
 
-Every global QC detector that represents a policy finding should carry these fields in
-tool metadata when the tool supports metadata:
+Every global QC detector that represents a policy finding should carry these fields in tool metadata when the tool supports metadata:
 
 ```yaml
 qc_lane: blocker
@@ -103,7 +95,8 @@ bounce_required: true
 local_fix_forbidden: true
 ```
 
-Detector messages should be short. They identify the code and forbid local patching.
+Detector messages should be short.
+They identify the code and forbid local patching.
 They do not restate the full policy text.
 
 ## Exception Protocol

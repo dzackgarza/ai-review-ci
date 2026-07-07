@@ -1,15 +1,18 @@
 # Test Proof Rules Database
 
-This catalog lists test and assertion shapes that are structurally incapable of proving repository-owned behavior. These are not weak patterns. They are banned.
+This catalog lists test and assertion shapes that are structurally incapable of proving repository-owned behavior.
+These are not weak patterns.
+They are banned.
 
-A test line is admissible only if it excludes a plausible broken implementation at the owned boundary. If the line would pass on a broken, fake, partial, mocked, unwired, or review-appeasing implementation, it does not belong in the test suite.
+A test line is admissible only if it excludes a plausible broken implementation at the owned boundary.
+If the line would pass on a broken, fake, partial, mocked, unwired, or review-appeasing implementation, it does not belong in the test suite.
 
 Project tests prove product behavior.
 Global QC polices code shape.
 Issues record unresolved proof burdens.
 Policy identity lives in `policies.md`; fixer-side restoration details live in `remediations.md`.
 
----
+* * *
 
 ## Banned Shapes Are Not Checklists
 
@@ -29,7 +32,7 @@ The pattern is banned whenever the assertion:
 
 Variable names in examples are intentionally generic: `result`, `items`, `output_path`, `config_path`, `source`, `status`, `payload`, `boundary`, `helper`, `fallback`. They gesture at the general shape.
 
----
+* * *
 
 ## **[TRY-CATCH-BAN]** Try/Catch Ban
 
@@ -43,11 +46,15 @@ Banned:
 - Rust `let _ =`, `.ok()`, `unwrap_or`, `unwrap_or_else`, `match Err(_) => fallback`
 - Catching or expecting assertion failures as the unit under test: Python `except AssertionError` / `pytest.raises(AssertionError)`, JavaScript `toThrow(AssertionError)`, or equivalents
 
-Expected failures must be asserted by structured test-framework mechanisms or structured error values. Unexpected failures must propagate. Assertion failures are not expected product failures; they are failed proof claims about state. A test may contain assertions, but it must not make catching an assertion failure the behavior being proved.
+Expected failures must be asserted by structured test-framework mechanisms or structured error values.
+Unexpected failures must propagate.
+Assertion failures are not expected product failures; they are failed proof claims about state.
+A test may contain assertions, but it must not make catching an assertion failure the behavior being proved.
 
-The only possible exception is an explicitly approved boundary renderer whose sole job is to translate a structured internal error into a user-facing protocol. That boundary must not continue execution, must not default, and must not return partial success.
+The only possible exception is an explicitly approved boundary renderer whose sole job is to translate a structured internal error into a user-facing protocol.
+That boundary must not continue execution, must not default, and must not return partial success.
 
----
+* * *
 
 ## **[REVIEW-RUBRIC]** Per-Assertion Review Rubric
 
@@ -61,7 +68,7 @@ For each assertion line, classify it:
 
 A test passes review only if its proof-bearing assertions are sufficient without counting setup, policing, laundering, or junk-tolerant lines.
 
----
+* * *
 
 ## **[LANG-AGNOSTIC-BANNED]** Language-Agnostic Banned Shapes
 
@@ -93,11 +100,12 @@ For every assertion line, force this question:
 
 If the answer is "many," ban the line.
 
----
+* * *
 
 ## Python / pytest Banned Shapes
 
 ### **[PY-EXISTENCE]** Existence and non-null
+
 **Ban:**
 ```python
 def test_result_exists():
@@ -116,6 +124,7 @@ def test_object_has_field():
 *Remediation:* See [Remediation: Existence / Truthy / Shape as Proof](remediations.md#remediation-existence--truthy--shape-as-proof).
 
 ### **[PY-TRUTHY]** Truthy / non-empty
+
 **Ban:**
 ```python
 def test_items_returned():
@@ -133,6 +142,7 @@ def test_response_ok():
 *Remediation:* See [Remediation: Existence / Truthy / Shape as Proof](remediations.md#remediation-existence--truthy--shape-as-proof).
 
 ### **[PY-STRINGS]** String assertions
+
 **Ban:**
 ```python
 def test_missing_config_message(tmp_path):
@@ -144,9 +154,11 @@ def test_error_banner(page):
     page.click("button")
     assert "failed" in page.text_content("#status")
 ```
-*Remediation:* Use structured error types and assert on error kind, not message. See [Remediation: String-Based Error Types](remediations.md#remediation-string-based-error-types).
+*Remediation:* Use structured error types and assert on error kind, not message.
+See [Remediation: String-Based Error Types](remediations.md#remediation-string-based-error-types).
 
 ### **[PY-SHAPE]** Shape-only assertions
+
 **Ban:**
 ```python
 def test_payload_shape():
@@ -158,9 +170,11 @@ def test_items_are_models():
     items = collect_items(source)
     assert all(isinstance(item, DomainItem) for item in items)
 ```
-*Remediation:* Assert on concrete values against fixtures. See [Remediation: Existence / Truthy / Shape as Proof](remediations.md#remediation-existence--truthy--shape-as-proof).
+*Remediation:* Assert on concrete values against fixtures.
+See [Remediation: Existence / Truthy / Shape as Proof](remediations.md#remediation-existence--truthy--shape-as-proof).
 
 ### **[PY-NO-THROW]** No-throw tests
+
 **Ban:**
 ```python
 def test_operation_does_not_crash():
@@ -169,9 +183,11 @@ def test_operation_does_not_crash():
 def test_config_loads(tmp_path):
     load_config(tmp_path / "app.toml")
 ```
-*Remediation:* Assert on exact output values, not just that the operation did not crash. See [Remediation: No-Throw / No-Crash as Proof](remediations.md#remediation-no-throw--no-crash-as-proof).
+*Remediation:* Assert on exact output values, not just that the operation did not crash.
+See [Remediation: No-Throw / No-Crash as Proof](remediations.md#remediation-no-throw--no-crash-as-proof).
 
 ### **[PY-SOURCE-POLICING]** Source policing
+
 **Ban:**
 ```python
 def test_no_fallbacks_in_config_source():
@@ -184,9 +200,11 @@ def test_no_type_ignore_comments():
     assert "# type: ignore" not in source
 ```
 *Why banned:* This belongs to global QC/static analysis, not project behavior tests.
-*Remediation:* Move source-text assertions to global QC. Test runtime behavior instead. See [Remediation: Source Policing in Tests](remediations.md#remediation-source-policing-in-tests).
+*Remediation:* Move source-text assertions to global QC. Test runtime behavior instead.
+See [Remediation: Source Policing in Tests](remediations.md#remediation-source-policing-in-tests).
 
 ### **[PY-HELPER-BRANCH]** Helper branch laundering
+
 **Ban:**
 ```python
 def test_existing_config_requires_explicit_values():
@@ -207,10 +225,13 @@ def test_absent_config_uses_defaults():
     )
     assert value == 750
 ```
-*Why banned:* The test passes the boolean that chooses the branch. It does not construct an existing or absent config.
-*Remediation:* Test the source-of-truth boundary, not an extracted helper. See [Remediation: Boundary Test Bypass](remediations.md#remediation-boundary-test-bypass).
+*Why banned:* The test passes the boolean that chooses the branch.
+It does not construct an existing or absent config.
+*Remediation:* Test the source-of-truth boundary, not an extracted helper.
+See [Remediation: Boundary Test Bypass](remediations.md#remediation-boundary-test-bypass).
 
 ### **[PY-TRY-EXCEPT]** Try/except in tests
+
 **Ban:**
 ```python
 def test_expected_failure():
@@ -219,9 +240,11 @@ def test_expected_failure():
     except Exception as error:
         assert "missing" in str(error)
 ```
-*Remediation:* Use the test framework's structured assertion and assert on error kind. See [Remediation: String-Based Error Types](remediations.md#remediation-string-based-error-types).
+*Remediation:* Use the test framework's structured assertion and assert on error kind.
+See [Remediation: String-Based Error Types](remediations.md#remediation-string-based-error-types).
 
 ### **[PY-MOCK-SPY]** Mock/spy/call-count
+
 **Ban:**
 ```python
 def test_calls_renderer(mocker):
@@ -233,13 +256,15 @@ def test_network_path(monkeypatch):
     monkeypatch.setattr(client, "get", lambda url: {"ok": True})
     assert load_remote_data(url)
 ```
-*Remediation:* Assert the real effect at the owned boundary. See [Remediation: Mock/Spy/Call-Count as Proof](remediations.md#remediation-mockspycall-count-as-proof).
+*Remediation:* Assert the real effect at the owned boundary.
+See [Remediation: Mock/Spy/Call-Count as Proof](remediations.md#remediation-mockspycall-count-as-proof).
 
----
+* * *
 
 ## TypeScript / JavaScript Banned Shapes
 
 ### **[TS-EXISTENCE]** Existence / defined / truthy
+
 **Ban:**
 ```ts
 test("returns result", () => {
@@ -257,9 +282,11 @@ test("module exports function", async () => {
   expect(module.render).toBeTruthy();
 });
 ```
-*Remediation:* Assert on concrete values against fixtures. See [Remediation: Existence / Truthy / Shape as Proof](remediations.md#remediation-existence--truthy--shape-as-proof).
+*Remediation:* Assert on concrete values against fixtures.
+See [Remediation: Existence / Truthy / Shape as Proof](remediations.md#remediation-existence--truthy--shape-as-proof).
 
 ### **[TS-VISIBILITY]** Visibility-only
+
 **Ban:**
 ```ts
 test("editor shell renders", async ({ page }) => {
@@ -274,9 +301,11 @@ test("status is ready", async ({ page }) => {
 });
 ```
 *Why banned:* A totally broken app can render a shell and display "ready."
-*Remediation:* Assert on concrete output content, not visibility. See [Remediation: Existence / Truthy / Shape as Proof](remediations.md#remediation-existence--truthy--shape-as-proof).
+*Remediation:* Assert on concrete output content, not visibility.
+See [Remediation: Existence / Truthy / Shape as Proof](remediations.md#remediation-existence--truthy--shape-as-proof).
 
 ### **[TS-STATUS-LABEL]** Status / label / banner assertions
+
 **Ban:**
 ```ts
 test("save shows success", async ({ page }) => {
@@ -284,9 +313,11 @@ test("save shows success", async ({ page }) => {
   await expect(page.locator("#status")).toContainText("saved");
 });
 ```
-*Remediation:* Assert on the real side effect (file content, database state), not UI labels. See [Remediation: Existence / Truthy / Shape as Proof](remediations.md#remediation-existence--truthy--shape-as-proof).
+*Remediation:* Assert on the real side effect (file content, database state), not UI labels.
+See [Remediation: Existence / Truthy / Shape as Proof](remediations.md#remediation-existence--truthy--shape-as-proof).
 
 ### **[TS-STRINGS]** String assertions
+
 **Ban:**
 ```ts
 test("shows error", async ({ page }) => {
@@ -298,9 +329,11 @@ test("throws missing config", () => {
   expect(() => loadConfig(path)).toThrow("missing runtime.command");
 });
 ```
-*Remediation:* Assert on structured error types, not string messages. See [Remediation: String-Based Error Types](remediations.md#remediation-string-based-error-types).
+*Remediation:* Assert on structured error types, not string messages.
+See [Remediation: String-Based Error Types](remediations.md#remediation-string-based-error-types).
 
 ### **[TS-TYPE-SHAPE]** Type-only / shape-only
+
 **Ban:**
 ```ts
 test("returns array", () => {
@@ -313,9 +346,11 @@ test("has html property", () => {
   expect(result).toHaveProperty("html");
 });
 ```
-*Remediation:* Assert on concrete output values, not type/shape. See [Remediation: Existence / Truthy / Shape as Proof](remediations.md#remediation-existence--truthy--shape-as-proof).
+*Remediation:* Assert on concrete output values, not type/shape.
+See [Remediation: Existence / Truthy / Shape as Proof](remediations.md#remediation-existence--truthy--shape-as-proof).
 
 ### **[TS-NO-THROW]** No-throw
+
 **Ban:**
 ```ts
 test("does not throw", () => {
@@ -326,9 +361,11 @@ test("promise resolves", async () => {
   await expect(runOperation(input)).resolves.toBeDefined();
 });
 ```
-*Remediation:* Assert on exact output values, not just absence of throw. See [Remediation: No-Throw / No-Crash as Proof](remediations.md#remediation-no-throw--no-crash-as-proof).
+*Remediation:* Assert on exact output values, not just absence of throw.
+See [Remediation: No-Throw / No-Crash as Proof](remediations.md#remediation-no-throw--no-crash-as-proof).
 
 ### **[TS-SOURCE-POLICING]** Source policing
+
 **Ban:**
 ```ts
 test("does not use any", () => {
@@ -344,6 +381,7 @@ test("no fallbacks", () => {
 ```
 
 ### **[TS-MOCKED-BOUNDARY]** Mocked boundary / browser smoke laundering
+
 **Ban:**
 ```ts
 test("browser shell renders", async ({ page }) => {
@@ -358,6 +396,7 @@ test("browser shell renders", async ({ page }) => {
 ```
 
 ### **[TS-SPY-COUNT]** Spy/call count
+
 **Ban:**
 ```ts
 test("save calls backend", async () => {
@@ -374,6 +413,7 @@ test("render invoked", async ({ page }) => {
 ```
 
 ### **[TS-TRY-CATCH]** Try/catch
+
 **Ban:**
 ```ts
 test("handles bad config", () => {
@@ -384,13 +424,15 @@ test("handles bad config", () => {
   }
 });
 ```
-*Remediation:* Test framework structured assertions with error types. See [Remediation: String-Based Error Types](remediations.md#remediation-string-based-error-types).
+*Remediation:* Test framework structured assertions with error types.
+See [Remediation: String-Based Error Types](remediations.md#remediation-string-based-error-types).
 
----
+* * *
 
 ## Rust Banned Shapes
 
 ### **[RS-IS_OK]** `is_ok`, `is_some`, length, existence
+
 **Ban:**
 ```rust
 #[test]
@@ -411,9 +453,11 @@ fn items_present() {
     assert!(!items.is_empty());
 }
 ```
-*Remediation:* Assert on concrete output content against fixtures. See [Remediation: Existence / Truthy / Shape as Proof](remediations.md#remediation-existence--truthy--shape-as-proof).
+*Remediation:* Assert on concrete output content against fixtures.
+See [Remediation: Existence / Truthy / Shape as Proof](remediations.md#remediation-existence--truthy--shape-as-proof).
 
 ### **[RS-STRING-ERRORS]** Exact string errors
+
 **Ban:**
 ```rust
 #[test]
@@ -428,9 +472,11 @@ fn config_panics() {
     load_config(incomplete_config_path()).unwrap();
 }
 ```
-*Remediation:* Assert on structured error variants, not string rendering. See [Remediation: String-Based Error Types](remediations.md#remediation-string-based-error-types).
+*Remediation:* Assert on structured error variants, not string rendering.
+See [Remediation: String-Based Error Types](remediations.md#remediation-string-based-error-types).
 
 ### **[RS-HELPER-BRANCH]** Helper branch proof
+
 **Ban:**
 ```rust
 #[test]
@@ -445,9 +491,11 @@ fn existing_config_requires_explicit_values() {
     assert_eq!(error, "missing runtime.command");
 }
 ```
-*Remediation:* Test the source-of-truth boundary, not an extracted helper. See [Remediation: Boundary Test Bypass](remediations.md#remediation-boundary-test-bypass).
+*Remediation:* Test the source-of-truth boundary, not an extracted helper.
+See [Remediation: Boundary Test Bypass](remediations.md#remediation-boundary-test-bypass).
 
 ### **[RS-BOOLEAN-FORCING]** Boolean branch-forcing
+
 **Ban:**
 ```rust
 #[test]
@@ -462,9 +510,11 @@ fn branch_for_absent_config() {
     assert_eq!(result.unwrap(), RuntimeConfig::default());
 }
 ```
-*Remediation:* Construct actual config state via real files, not boolean flags. See [Remediation: Boundary Test Bypass](remediations.md#remediation-boundary-test-bypass).
+*Remediation:* Construct actual config state via real files, not boolean flags.
+See [Remediation: Boundary Test Bypass](remediations.md#remediation-boundary-test-bypass).
 
 ### **[RS-SOURCE-POLICING]** Source policing
+
 **Ban:**
 ```rust
 #[test]
@@ -476,6 +526,7 @@ fn no_defaults_in_config_source() {
 ```
 
 ### **[RS-SWALLOWED-ERROR]** Swallowed-error tests
+
 **Ban:**
 ```rust
 #[test]
@@ -483,9 +534,11 @@ fn cleanup_does_not_crash_when_file_missing() {
     cleanup_backup(missing_path()).unwrap();
 }
 ```
-*Remediation:* Assert on specific error variants or output values, not just absence of panic. See [Remediation: No-Throw / No-Crash as Proof](remediations.md#remediation-no-throw--no-crash-as-proof).
+*Remediation:* Assert on specific error variants or output values, not just absence of panic.
+See [Remediation: No-Throw / No-Crash as Proof](remediations.md#remediation-no-throw--no-crash-as-proof).
 
 ### **[RS-PROCESS-LIFECYCLE]** Process lifecycle source-shape test
+
 **Ban:**
 ```rust
 #[test]
@@ -494,13 +547,15 @@ fn renderer_uses_kill_on_drop() {
     assert!(source.contains("kill_on_drop(true)"));
 }
 ```
-*Remediation:* Test runtime process behavior, not source text patterns. See [Remediation: Source Policing in Tests](remediations.md#remediation-source-policing-in-tests).
+*Remediation:* Test runtime process behavior, not source text patterns.
+See [Remediation: Source Policing in Tests](remediations.md#remediation-source-policing-in-tests).
 
----
+* * *
 
 ## Bash / Shell Banned Shapes
 
 ### **[SH-EXISTENCE]** Existence-only
+
 **Ban:**
 ```bash
 test -f "$output_file"
@@ -510,15 +565,18 @@ test -f "$output_file"
 *Remediation:* Assert on concrete output content (diff, structured JSON). See [Remediation: Existence / Truthy / Shape as Proof](remediations.md#remediation-existence--truthy--shape-as-proof).
 
 ### **[SH-GREP-STRINGS]** Grep string assertions
+
 **Ban:**
 ```bash
 grep -q "ready" "$log_file"
 grep -q "success" "$output_file"
 grep -q "missing runtime.command" "$stderr_file"
 ```
-*Remediation:* Assert on structured output with jq, not grep strings. See [Remediation: String-Based Error Types](remediations.md#remediation-string-based-error-types).
+*Remediation:* Assert on structured output with jq, not grep strings.
+See [Remediation: String-Based Error Types](remediations.md#remediation-string-based-error-types).
 
 ### **[SH-STATUS]** Status-only
+
 **Ban:**
 ```bash
 curl -s "$url" >/tmp/response
@@ -527,9 +585,11 @@ test "$?" -eq 0
 status="$(curl -s -o /dev/null -w '%{http_code}' "$url")"
 test "$status" = 200
 ```
-*Remediation:* Assert on concrete response content with structured checks. See [Remediation: Existence / Truthy / Shape as Proof](remediations.md#remediation-existence--truthy--shape-as-proof).
+*Remediation:* Assert on concrete response content with structured checks.
+See [Remediation: Existence / Truthy / Shape as Proof](remediations.md#remediation-existence--truthy--shape-as-proof).
 
 ### **[SH-SUPPRESSION]** Suppression / fallback
+
 **Ban:**
 ```bash
 command_under_test 2>/dev/null || echo "ok"
@@ -538,6 +598,7 @@ run_check >/dev/null 2>&1
 ```
 
 ### **[SH-SOURCE-POLICING]** Source policing
+
 **Ban:**
 ```bash
 ! grep -R "unwrap_or" src
@@ -545,12 +606,14 @@ run_check >/dev/null 2>&1
 ! grep -R "fallback" src
 ```
 
----
+* * *
 
 ## Final Language for the Skill
 
 A test suite is not allowed to accumulate comforting facts.
 
-Every assertion must carry proof weight. If an assertion does not increase the epistemic status of the owned behavior, it is not neutral; it is false signal. False signal is worse than no test because it teaches future agents that the burden is already discharged.
+Every assertion must carry proof weight.
+If an assertion does not increase the epistemic status of the owned behavior, it is not neutral; it is false signal.
+False signal is worse than no test because it teaches future agents that the burden is already discharged.
 
 Ban the line.

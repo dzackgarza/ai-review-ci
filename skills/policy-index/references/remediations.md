@@ -1,11 +1,9 @@
 # Policy Remediations
 
-Load this file only when acting as the remediation/fixer agent after triage provides a
-`POLICY.*` code.
+Load this file only when acting as the remediation/fixer agent after triage provides a `POLICY.*` code.
 
-Do not load this file while acting as the issue-seeing reviewer, detector author, or QC
-triage classifier. The reviewer classifies the weakened obligation; the fixer reads the
-remediation map.
+Do not load this file while acting as the issue-seeing reviewer, detector author, or QC triage classifier.
+The reviewer classifies the weakened obligation; the fixer reads the remediation map.
 
 ## Remediation Registry
 
@@ -28,19 +26,23 @@ remediation map.
 
 ## Assignment Rule
 
-The fixer receives the policy code from triage and chooses the remediation code in this
-file. The detector and issue-seeing reviewer must not prescribe the remediation code.
+The fixer receives the policy code from triage and chooses the remediation code in this file.
+The detector and issue-seeing reviewer must not prescribe the remediation code.
 
-If more than one remediation applies, choose the one that restores the original
-obligation at the widest real boundary. Do not pick the smallest local edit.
+If more than one remediation applies, choose the one that restores the original obligation at the widest real boundary.
+Do not pick the smallest local edit.
 
----
+* * *
 
 ## [REMEDIATION-POLICIES] Detailed Remediation Policies
 
-A red flag says "this is suspicious." A remediation policy says "replace it with this exact shape." Every remediation converts a slop-enabling pattern into a fail-loud, minimal-cruft equivalent.
+A red flag says "this is suspicious."
+A remediation policy says "replace it with this exact shape."
+Every remediation converts a slop-enabling pattern into a fail-loud, minimal-cruft equivalent.
 
-All remediation code follows [ADDD: Assert, Dump Data, Direct](runtime-control-flow.md#addd-assert-dump-data-direct). Assert the invariant at the earliest owned boundary, include the related observed data in the failure payload, then direct the reader to the file, config, command, usage, or owned tool repo that fixes the cause. After the assertion, simplify the remaining code as if the invariant holds.
+All remediation code follows [ADDD: Assert, Dump Data, Direct](runtime-control-flow.md#addd-assert-dump-data-direct).
+Assert the invariant at the earliest owned boundary, include the related observed data in the failure payload, then direct the reader to the file, config, command, usage, or owned tool repo that fixes the cause.
+After the assertion, simplify the remaining code as if the invariant holds.
 
 ### [FALLBACK-HEDGE] Remediation: Fallback / Optional-Dependency / File-Availability Hedge
 
@@ -60,7 +62,9 @@ except ImportError:
     magic = None
 ```
 
-Remediation: Assert availability at the program boundary. If the resource is required, failure to find it is a hard error. Do not provide a silent branch.
+Remediation: Assert availability at the program boundary.
+If the resource is required, failure to find it is a hard error.
+Do not provide a silent branch.
 
 ```python
 # Remediation: boundary assertion
@@ -81,7 +85,8 @@ Do not apply remediation when:
 
 Slop pattern: A try/catch around an operation that is expected to succeed, converting a useful diagnostic into a silent continuation or a weak log line.
 
-Catching `AssertionError` is worse than ordinary swallowing: an assertion is a proof claim about code state, not a runtime error. Do not recover from it, translate it, or test it as product behavior.
+Catching `AssertionError` is worse than ordinary swallowing: an assertion is a proof claim about code state, not a runtime error.
+Do not recover from it, translate it, or test it as product behavior.
 
 ```python
 # BAD: swallows diagnostic
@@ -98,7 +103,9 @@ except Exception as e:
     data = []
 ```
 
-Remediation: Let the error propagate. If the caller cannot handle the error, it should not catch it. If a specific error type is expected and recoverable, catch only that type and handle it in the same scope.
+Remediation: Let the error propagate.
+If the caller cannot handle the error, it should not catch it.
+If a specific error type is expected and recoverable, catch only that type and handle it in the same scope.
 
 ```python
 # Remediation: propagate
@@ -132,7 +139,8 @@ for item in items:
     # items with other statuses are silently ignored
 ```
 
-Remediation: Filter and assert invariants before the loop. The loop body should only contain the processing logic, with preconditions already satisfied.
+Remediation: Filter and assert invariants before the loop.
+The loop body should only contain the processing logic, with preconditions already satisfied.
 
 ```python
 # Remediation: filter then process
@@ -205,7 +213,9 @@ Path("/etc/app/config.ini").write_text(config_content)
 # (same problem — no independent file to review)
 ```
 
-Remediation: Commit a static version of the file as a tracked artifact. Read or copy it at runtime. If dynamic content is genuinely required (not for config — for user data), use a real templating engine (Jinja2, Mustache, etc.) with a template file that IS the reviewed artifact.
+Remediation: Commit a static version of the file as a tracked artifact.
+Read or copy it at runtime.
+If dynamic content is genuinely required (not for config — for user data), use a real templating engine (Jinja2, Mustache, etc.) with a template file that IS the reviewed artifact.
 
 ```python
 # Remediation: tracked static file, read at runtime
@@ -230,7 +240,8 @@ Do not apply remediation when:
 
 ### [INLINE-STRINGS] Remediation: Inline Large Strings / Prompts Embedded as Code
 
-Slop pattern: Embedding agent prompts, user-facing messages, instruction blocks, or any text longer than ~5 lines directly in source files as string literals. This treats data (strings) as code, making the text invisible to separate review, unversioned independently, and vulnerable to ad-hoc inline edits that bypass normal review.
+Slop pattern: Embedding agent prompts, user-facing messages, instruction blocks, or any text longer than ~5 lines directly in source files as string literals.
+This treats data (strings) as code, making the text invisible to separate review, unversioned independently, and vulnerable to ad-hoc inline edits that bypass normal review.
 
 ```python
 # BAD: agent prompt embedded as a string literal in application code
@@ -247,7 +258,9 @@ Provide a structured summary with citations.
 """
 ```
 
-Remediation: Extract all non-code strings to a standard data file (TOML, YAML, JSON) keyed by label. Load them at runtime via a library. The data file is the reviewed, diffable artifact; the code is a thin accessor.
+Remediation: Extract all non-code strings to a standard data file (TOML, YAML, JSON) keyed by label.
+Load them at runtime via a library.
+The data file is the reviewed, diffable artifact; the code is a thin accessor.
 
 ```toml
 # prompts.toml — reviewed artifact, independently versioned
@@ -289,7 +302,9 @@ Slop pattern: The app relies on runtime defaults, ambient discovery (inferring c
 
 These are distinct variants of the same failure: state that should be explicit is implicit, discoverable only by reading non-code surfaces.
 
-Remediation: Declare all configuration explicitly in a committed project config file. Validate the config at startup; fail hard if values are missing or invalid. Core state is total — normalized once at initialization, never optional.
+Remediation: Declare all configuration explicitly in a committed project config file.
+Validate the config at startup; fail hard if values are missing or invalid.
+Core state is total — normalized once at initialization, never optional.
 
 ```
 File layout:
@@ -319,7 +334,9 @@ if result.status == "ok":
 # else: caller must check every access
 ```
 
-Remediation: An operation either succeeds completely or fails with a clear error. Do not return objects that are "mostly OK" with missing parts. If the operation genuinely has partial results, represent them as explicit alternatives (union type, enum variant, tagged sum).
+Remediation: An operation either succeeds completely or fails with a clear error.
+Do not return objects that are "mostly OK" with missing parts.
+If the operation genuinely has partial results, represent them as explicit alternatives (union type, enum variant, tagged sum).
 
 ```python
 # Remediation: complete success or clear failure
@@ -371,7 +388,8 @@ Do not apply remediation when:
 
 ### [UNTYPED-IMPORT-BOUNDARY] Remediation: Untyped Third-Party Imports
 
-Slop pattern: A mypy `import-untyped` diagnostic appears because a dependency lacks stubs or a `py.typed` marker. The agent treats the diagnostic as a reason to change the dependency, hand-roll the feature, suppress mypy, or scatter casts.
+Slop pattern: A mypy `import-untyped` diagnostic appears because a dependency lacks stubs or a `py.typed` marker.
+The agent treats the diagnostic as a reason to change the dependency, hand-roll the feature, suppress mypy, or scatter casts.
 
 ```python
 # BAD: direct untyped import in product code
@@ -389,10 +407,15 @@ ignore_missing_imports = true
 
 Remediation order:
 
-- Preserve the correct library unless product requirements independently reject it. Do not replace a library solely because it is untyped.
-- If maintained stubs exist, add the stub package through the approved dependency path. Generic reusable stubs belong in global QC/tooling; repo-specific runtime or test stubs belong in the repo only when they are part of the project’s declared dependency surface.
-- If no maintained stubs exist and the needed API is small, add minimal `.pyi` stubs for the exact imported module and symbols. Stub only the surface the project uses.
-- If stubbing would be large or brittle, isolate the untyped import in one typed firewall module. The firewall imports the untyped library, validates or converts its outputs, and returns project-owned named types. Owned code imports the firewall, not the untyped library.
+- Preserve the correct library unless product requirements independently reject it.
+  Do not replace a library solely because it is untyped.
+- If maintained stubs exist, add the stub package through the approved dependency path.
+  Generic reusable stubs belong in global QC/tooling; repo-specific runtime or test stubs belong in the repo only when they are part of the project’s declared dependency surface.
+- If no maintained stubs exist and the needed API is small, add minimal `.pyi` stubs for the exact imported module and symbols.
+  Stub only the surface the project uses.
+- If stubbing would be large or brittle, isolate the untyped import in one typed firewall module.
+  The firewall imports the untyped library, validates or converts its outputs, and returns project-owned named types.
+  Owned code imports the firewall, not the untyped library.
 - Global QC should provide the only allowed `import-untyped` carve-out: firewall modules may be exempt from that specific diagnostic, while direct imports elsewhere remain blockers.
 
 Firewall shape:
@@ -427,7 +450,8 @@ Firewall constraints:
 - downstream code has no `Any`, casts, or mypy ignores for the dependency;
 - semantic tests exercise the project boundary that consumes the typed result.
 
-Canonical exclusion rule: global QC may ignore `import-untyped` only for modules under the project’s type-firewall convention, such as `src/<package>/_type_firewalls/<dependency>.py`. The same gate must still reject the untyped import outside that convention. Repo-local mypy config, file-level ignore comments, and blanket `ignore_missing_imports` remain validator bypasses.
+Canonical exclusion rule: global QC may ignore `import-untyped` only for modules under the project’s type-firewall convention, such as `src/<package>/_type_firewalls/<dependency>.py`. The same gate must still reject the untyped import outside that convention.
+Repo-local mypy config, file-level ignore comments, and blanket `ignore_missing_imports` remain validator bypasses.
 
 Remediation applies when:
 - mypy reports `import-untyped`, `missing library stubs`, or missing `py.typed`;
@@ -453,7 +477,9 @@ def test_sanitize_input():
 # The real question: does the endpoint reject or escape XSS?
 ```
 
-Remediation: Test the source-of-truth boundary — the public API, the route handler, the middleware, the validation gateway — not the internal helper. If the helper is the boundary (standalone library function), test it there. Otherwise, test through the boundary.
+Remediation: Test the source-of-truth boundary — the public API, the route handler, the middleware, the validation gateway — not the internal helper.
+If the helper is the boundary (standalone library function), test it there.
+Otherwise, test through the boundary.
 
 ```python
 # Remediation: test through the boundary
@@ -476,7 +502,8 @@ Do not apply remediation when:
 
 ### [STRINGLY-ERROR] Remediation: String-Based Error Types
 
-Slop pattern: Errors are represented as strings (string literals, error messages, or string enums) that force callers to match on exact text rather than structured error types. This makes error handling brittle, tests assert on message wording instead of error semantics, and catch-all handling becomes inevitable.
+Slop pattern: Errors are represented as strings (string literals, error messages, or string enums) that force callers to match on exact text rather than structured error types.
+This makes error handling brittle, tests assert on message wording instead of error semantics, and catch-all handling becomes inevitable.
 
 ```python
 # BAD: stringly error
@@ -489,7 +516,9 @@ def process_file(path):
 assert "file not found" in str(result)
 ```
 
-Remediation: Define domain error types as explicit classes, enums, or exception types. Assert on error type/tag, not error message. Tests that need to verify error semantics should match on the error kind, not the rendered text.
+Remediation: Define domain error types as explicit classes, enums, or exception types.
+Assert on error type/tag, not error message.
+Tests that need to verify error semantics should match on the error kind, not the rendered text.
 
 ```python
 # Remediation: domain error type
@@ -538,7 +567,8 @@ Do not apply remediation when:
 
 Slop pattern: A project defines quality gates (test runner, type checker, linter) through local scripts or configs that bypass the global quality control system, giving agents a narrower set of checks to pass.
 
-Remediation: Route all quality gates through the global QC system (`~/ai-review-ci/justfiles/<language>.just`). Local justfiles may compose global recipes but must not define independent checks that duplicate or override global gates. A local QC surface that passes when global QC fails is a bypass.
+Remediation: Route all quality gates through the global QC system (`~/ai-review-ci/justfiles/<language>.just`). Local justfiles may compose global recipes but must not define independent checks that duplicate or override global gates.
+A local QC surface that passes when global QC fails is a bypass.
 
 Remediation applies when:
 - A project-local test/lint/type-check recipe exists that does not delegate to global QC.
@@ -558,7 +588,10 @@ Slop pattern: A comment, annotation, or config suppresses a validator (linter, t
 # pylint: disable=unused-argument  # used in template expansion but linter can't see it
 ```
 
-Remediation: Either fix the code to satisfy the validator, or escalate the decision. If the validator is wrong (false positive), document the reason in a durable, specific comment and keep the suppression narrow. If the validator is right, fix the code. A bypass comment with no rationale is equivalent to silencing a diagnostic without addressing it.
+Remediation: Either fix the code to satisfy the validator, or escalate the decision.
+If the validator is wrong (false positive), document the reason in a durable, specific comment and keep the suppression narrow.
+If the validator is right, fix the code.
+A bypass comment with no rationale is equivalent to silencing a diagnostic without addressing it.
 
 Remediation applies when:
 - The suppression covers more than one specific line (broad suppression that silences multiple diagnostics).
@@ -580,7 +613,8 @@ def old_api(x, y):
 old_api.__doc__ = "Deprecated: use new_api instead"
 ```
 
-Remediation: Replace the callers, then delete the old interface. In pre-launch code there are no legacy consumers — every shim is dead weight that doubles the review surface and preserves wrong patterns that future code will copy.
+Remediation: Replace the callers, then delete the old interface.
+In pre-launch code there are no legacy consumers — every shim is dead weight that doubles the review surface and preserves wrong patterns that future code will copy.
 
 Remediation applies when:
 - The shim exists "for compatibility" in pre-launch code with no known callers outside the repo.
@@ -603,7 +637,9 @@ except TimeoutError:
     data = None  # API calls have never timed out in this environment
 ```
 
-Remediation: Do not add handling for failure modes that have not been observed. If the condition is logically impossible (invariant already guaranteed upstream), assert rather than branch. When a failure IS observed, add targeted handling for that specific case.
+Remediation: Do not add handling for failure modes that have not been observed.
+If the condition is logically impossible (invariant already guaranteed upstream), assert rather than branch.
+When a failure IS observed, add targeted handling for that specific case.
 
 ```python
 # Remediation: assert the invariant
@@ -627,7 +663,8 @@ Do not apply remediation when:
 
 Policy: `POLICY.PREFER_ASSERTION`, `POLICY.NO_HYPOTHETICAL_PATH`
 
-Slop pattern: An invariant or precondition is enforced with `if not cond: raise ValueError(...)`/`RuntimeError(...)` instead of `assert cond, "..."`, or an existing assertion is wrapped in `try/except AssertionError`. The most common trigger is a reviewer (often an automated one) recommending "replace `assert` with `if/raise` because assertions are stripped under `python -O`." Accepting that recommendation is the slop. Catching assertion failure is the same slop in catch-form: it turns a provable claim about state into runtime logic.
+Slop pattern: An invariant or precondition is enforced with `if not cond: raise ValueError(...)`/`RuntimeError(...)` instead of `assert cond, "..."`, or an existing assertion is wrapped in `try/except AssertionError`. The most common trigger is a reviewer (often an automated one) recommending "replace `assert` with `if/raise` because assertions are stripped under `python -O`." Accepting that recommendation is the slop.
+Catching assertion failure is the same slop in catch-form: it turns a provable claim about state into runtime logic.
 
 ```python
 # BAD: if/raise on what is an invariant, "to survive python -O"
@@ -648,7 +685,10 @@ def run_with_config(config: RuntimeConfig) -> None:
     run(config.command)
 ```
 
-Why this is wrong here: Assertions are the strongly-preferred idiom. An `assert` is an auditable proof of what the author believes must be true at that point; it forces the writer to engage with the data, name real failure modes, and narrow types so the checker can validate the branch. `if/raise` on an invariant is adjacent to timid, fail-open, splat-guessing slop and removes that proof. The `python -O` argument is hypothetical fiction (`POLICY.NO_HYPOTHETICAL_PATH`): these are bespoke tools that are never run with `-O`, the assertion-stripping failure has never been observed, and protecting downstream users who pass optimization flags is not an owned obligation.
+Why this is wrong here: Assertions are the strongly-preferred idiom.
+An `assert` is an auditable proof of what the author believes must be true at that point; it forces the writer to engage with the data, name real failure modes, and narrow types so the checker can validate the branch.
+`if/raise` on an invariant is adjacent to timid, fail-open, splat-guessing slop and removes that proof.
+The `python -O` argument is hypothetical fiction (`POLICY.NO_HYPOTHETICAL_PATH`): these are bespoke tools that are never run with `-O`, the assertion-stripping failure has never been observed, and protecting downstream users who pass optimization flags is not an owned obligation.
 
 ```python
 # Remediation: keep the assertion; if anything, make it stronger
@@ -664,7 +704,10 @@ def global_vault_path() -> Path:
     ...
 ```
 
-Remediation: Reject the suggestion. Restore (or keep) the `assert`. Then audit the assertion itself: is it the strongest provably-true statement available at that point, does it dump the related data needed to repair the failure, and does it direct the maintainer to the owning config, data file, command, usage surface, or owned tool repository? Strengthen it if a more precise invariant or more useful ADDD payload holds. Do not add a raise-based escape hatch or a catch-based recovery path.
+Remediation: Reject the suggestion.
+Restore (or keep) the `assert`. Then audit the assertion itself: is it the strongest provably-true statement available at that point, does it dump the related data needed to repair the failure, and does it direct the maintainer to the owning config, data file, command, usage surface, or owned tool repository?
+Strengthen it if a more precise invariant or more useful ADDD payload holds.
+Do not add a raise-based escape hatch or a catch-based recovery path.
 
 Do not apply remediation when:
 - The raise is a genuine domain error on observed external input the app contractually owns (see `[STRINGLY-ERROR]` for using structured error types there) — not an internal invariant.
@@ -674,7 +717,8 @@ Do not apply remediation when:
 
 Slop pattern: Code that is longer, noisier, or more abstract than it needs to be — filler documentation, verbose comments that restate the obvious, unnecessary intermediate variables, verbose variable names ("currentUserAuthenticationStatusBoolean"), "just in case" dead code, excessive defensive checks on already-validated data, boilerplate explosion (one trivial operation = one file/class), and over-abstraction (interface with one implementation, factory with one product, strategy pattern that never diverges).
 
-Remediation: Delete the noise. Every line that carries no proof or instruction burden is a liability:
+Remediation: Delete the noise.
+Every line that carries no proof or instruction burden is a liability:
 - Filler docstrings: delete; let the signature and body speak.
 - Verbose comments restating the obvious: delete; restructure the code if it is not self-explanatory.
 - Unnecessary intermediate variables: inline; keep only if the expression genuinely needs a name.
@@ -695,7 +739,8 @@ Do not apply remediation when:
 
 ### [CODE-WITHIN-CODE] Remediation: Code Within Code / Embedded Cross-Language Programs
 
-Slop pattern: A program in language A assembles and executes language B as a string — Python calling `subprocess.run("bash -c '...'")`, shell scripts inlining Perl/Python with `$(python -c '...')`, or any template-like generation where one language builds another inline. The embedded language is invisible to syntax checking, linting, static analysis, and independent debugging.
+Slop pattern: A program in language A assembles and executes language B as a string — Python calling `subprocess.run("bash -c '...'")`, shell scripts inlining Perl/Python with `$(python -c '...')`, or any template-like generation where one language builds another inline.
+The embedded language is invisible to syntax checking, linting, static analysis, and independent debugging.
 
 ```python
 # BAD: Python embedding bash as a string
@@ -706,9 +751,12 @@ subprocess.run(
 # The bash is a string — no syntax check, no shellcheck, no debugger
 ```
 
-Remediation narrative reconstruction: This pattern signals a missing abstraction layer. Trace through three approximations to find the correct boundary:
+Remediation narrative reconstruction: This pattern signals a missing abstraction layer.
+Trace through three approximations to find the correct boundary:
 
-**1st approximation — externalize the embedded language into its own file:** Extract the bash into a standalone script. Python calls the script, not a constructed string. The script is now syntax-checkable, lintable, and reviewable independently.
+**1st approximation — externalize the embedded language into its own file:** Extract the bash into a standalone script.
+Python calls the script, not a constructed string.
+The script is now syntax-checkable, lintable, and reviewable independently.
 
 ```bash
 # scripts/transcode.sh — reviewed, shellcheck-passing artifact
@@ -722,7 +770,8 @@ ffmpeg -i "$1" -vf "scale=$2:$3" "$4"
 subprocess.run(["scripts/transcode.sh", input_file, str(width), str(height), output_file], check=True)
 ```
 
-**2nd approximation — lift to ambient workflow:** The Python and bash run sequentially in the same automation context (CI pipeline, Makefile, just recipe). Call them as separate steps rather than nesting one inside the other.
+**2nd approximation — lift to ambient workflow:** The Python and bash run sequentially in the same automation context (CI pipeline, Makefile, just recipe).
+Call them as separate steps rather than nesting one inside the other.
 
 ```yaml
 # CI workflow — steps are peers, not nested
@@ -735,7 +784,10 @@ steps:
     run: python upload.py
 ```
 
-**3rd approximation — eliminate the embedded language entirely:** The bash was never needed. The CI workflow orchestration (or justfile/ Makefile) is the correct abstraction for running sequenced commands. The Python step does Python work; the shell step does shell work; neither embeds the other. Each tool operates at its native level, and the workflow definition provides the sequencing.
+**3rd approximation — eliminate the embedded language entirely:** The bash was never needed.
+The CI workflow orchestration (or justfile/ Makefile) is the correct abstraction for running sequenced commands.
+The Python step does Python work; the shell step does shell work; neither embeds the other.
+Each tool operates at its native level, and the workflow definition provides the sequencing.
 
 ```yaml
 # CI workflow — correct solution: each tool at its own level
@@ -754,13 +806,14 @@ Do not apply remediation when:
 - The inner language is a genuine data query (SQL, XPath, JMESPath) where the query string is data, not control flow.
 - The embedding uses a safe, non-executing template engine (Jinja2, Mustache) that produces static output files, not executed code.
 
----
+* * *
 
 <a id="remediation-existence--truthy--shape-as-proof"></a>
 
 ### [EXISTENCE-AS-PROOF] Remediation: Existence / Truthy / Shape as Proof
 
-Slop pattern: A test asserts only that a value exists, is truthy, non-empty, or has the right type/shape, without checking its semantic content. Examples: `assert result is not None`, `assert items`, `assert len(output) > 0`, `assert isinstance(result, dict)`, `assert hasattr(payload, "items")`, `expect(result).toBeDefined()`.
+Slop pattern: A test asserts only that a value exists, is truthy, non-empty, or has the right type/shape, without checking its semantic content.
+Examples: `assert result is not None`, `assert items`, `assert len(output) > 0`, `assert isinstance(result, dict)`, `assert hasattr(payload, "items")`, `expect(result).toBeDefined()`.
 
 ```python
 # BAD: asserts existence, not semantics
@@ -779,7 +832,9 @@ def test_file_created(tmp_path):
 
 These assertions pass even on broken output: `None` proves nothing; an empty file exists; a junk dict `{"x": 1}` is truthy.
 
-Remediation: Assert on exact expected values against real fixtures. The assertion should prove the output is correct, not just that it exists. Every existence assertion should be replaceable with a concrete value assertion against known test fixtures.
+Remediation: Assert on exact expected values against real fixtures.
+The assertion should prove the output is correct, not just that it exists.
+Every existence assertion should be replaceable with a concrete value assertion against known test fixtures.
 
 ```python
 # Remediation: assert exact semantics against fixtures
@@ -811,7 +866,8 @@ Do not apply remediation when:
 
 ### [NO-CRASH-PROOF] Remediation: No-Throw / No-Crash as Proof
 
-Slop pattern: A test calls a function and asserts nothing about the result — it only proves the function did not crash. Examples: calling `run_operation()` without asserting on the output, asserting that `run()` returns without error but ignoring what it returns.
+Slop pattern: A test calls a function and asserts nothing about the result — it only proves the function did not crash.
+Examples: calling `run_operation()` without asserting on the output, asserting that `run()` returns without error but ignoring what it returns.
 
 ```python
 # BAD: no-crash is not proof of correctness
@@ -822,7 +878,10 @@ def test_parse_does_not_raise():
     result = parse_document(text)  # result is never inspected
 ```
 
-Remediation: Assert exact output values or side effects. A test that proves nothing about correctness is noise. If the function returns a value, assert on it. If the function produces a side effect (file write, database insert, API call), assert on the side effect's result.
+Remediation: Assert exact output values or side effects.
+A test that proves nothing about correctness is noise.
+If the function returns a value, assert on it.
+If the function produces a side effect (file write, database insert, API call), assert on the side effect's result.
 
 ```python
 # Remediation: assert on the output
@@ -849,7 +908,8 @@ Do not apply remediation when:
 
 ### [MOCK-AS-PROOF] Remediation: Mock/Spy/Call-Count as Proof
 
-Slop pattern: A test asserts that a mock was called, or called N times, with certain arguments, without asserting on the real effect at the boundary. The mock assertion proves the internal wiring is connected but not that the system produces correct output.
+Slop pattern: A test asserts that a mock was called, or called N times, with certain arguments, without asserting on the real effect at the boundary.
+The mock assertion proves the internal wiring is connected but not that the system produces correct output.
 
 ```python
 # BAD: asserts mock was called, not that output is correct
@@ -861,7 +921,8 @@ def test_sends_notification():
     mock_send.assert_called_once_with(to=user_email, body="...")
 ```
 
-Remediation: Assert on the real boundary effect — the file that was written, the database row that was inserted, the API response that was returned. If the code path is simple enough that a mock assertion is the only way to verify it, consider whether the test adds value at all (the path is trivially correct by inspection) or whether an integration test would cover it.
+Remediation: Assert on the real boundary effect — the file that was written, the database row that was inserted, the API response that was returned.
+If the code path is simple enough that a mock assertion is the only way to verify it, consider whether the test adds value at all (the path is trivially correct by inspection) or whether an integration test would cover it.
 
 ```python
 # Remediation: assert on the real effect
@@ -885,7 +946,8 @@ Do not apply remediation when:
 
 ### [SOURCE-POLICING] Remediation: Source Policing in Tests
 
-Slop pattern: A test reads the source code of the application and asserts that certain strings, patterns, or symbols do or do not appear in the text. Examples: asserting `"fallback" not in source` to verify there are no fallback branches, scanning files for deprecated function names, asserting on line counts.
+Slop pattern: A test reads the source code of the application and asserts that certain strings, patterns, or symbols do or do not appear in the text.
+Examples: asserting `"fallback" not in source` to verify there are no fallback branches, scanning files for deprecated function names, asserting on line counts.
 
 ```python
 # BAD: test asserts on source code text
@@ -894,7 +956,9 @@ def test_no_fallback():
     assert "fallback" not in source  # source policing instead of behavior testing
 ```
 
-Remediation: Move source-text assertions to global QC (lint rules, AST checks, dedicated static analysis). Tests assert on runtime behavior, not on source text. The runtime behavior — whether a fallback is actually reachable — is what matters; source text is an unreliable proxy.
+Remediation: Move source-text assertions to global QC (lint rules, AST checks, dedicated static analysis).
+Tests assert on runtime behavior, not on source text.
+The runtime behavior — whether a fallback is actually reachable — is what matters; source text is an unreliable proxy.
 
 ```python
 # Remediation: test the runtime behavior
@@ -918,7 +982,9 @@ Do not apply remediation when:
 
 ### [DELETION-LAUNDERING] Remediation: Deletion Laundering / Proof-Burden Erasure
 
-Slop pattern: A criticized slop artifact is deleted without solving or recording the original problem it attempted to address. The codebase looks cleaner, but the proof burden is now hidden. The next agent is likely to recreate the same fake proof, fallback, wrapper, or harness because the original requirement is absent from the new PR narrative.
+Slop pattern: A criticized slop artifact is deleted without solving or recording the original problem it attempted to address.
+The codebase looks cleaner, but the proof burden is now hidden.
+The next agent is likely to recreate the same fake proof, fallback, wrapper, or harness because the original requirement is absent from the new PR narrative.
 
 Detection:
 - deletion follows review or user criticism;
@@ -928,7 +994,9 @@ Detection:
 - final report says the review item is resolved because the artifact is gone;
 - the original requirement is absent from the new PR narrative.
 
-Remediation: Require a burden disposition: the original problem must be either solved, invalidated, transferred to real proof, or explicitly recorded as unresolved. Deletion is not a disposition — it is the removal of an artifact. The record of what was wrong and why must survive the deletion.
+Remediation: Require a burden disposition: the original problem must be either solved, invalidated, transferred to real proof, or explicitly recorded as unresolved.
+Deletion is not a disposition — it is the removal of an artifact.
+The record of what was wrong and why must survive the deletion.
 
 ```python
 # BAD: commit message says "removed dead code" — the original problem is gone
@@ -952,7 +1020,8 @@ Do not apply remediation when:
 
 ### [BESPOKE-DEP] Remediation: Bespoke Dependency Reinvention
 
-Slop pattern: Application code reimplements what an existing, installed dependency already provides — custom React components when a UI library has them, hand-rolled YAML generation when a YAML library is installed, bespoke string parsing when a parser exists, custom pagination when a framework provides it. The model perceives the generic, tested solution as "abstraction layer bloat" and the bespoke reinvention as "clean, minimal code."
+Slop pattern: Application code reimplements what an existing, installed dependency already provides — custom React components when a UI library has them, hand-rolled YAML generation when a YAML library is installed, bespoke string parsing when a parser exists, custom pagination when a framework provides it.
+The model perceives the generic, tested solution as "abstraction layer bloat" and the bespoke reinvention as "clean, minimal code."
 
 Examples:
 - Custom `AcademicCard.tsx` (~60 LOC) when `card.tsx` exists in the UI inventory.
@@ -961,7 +1030,10 @@ Examples:
 - Custom string-concatenated YAML generation when a YAML library is installed.
 - Custom hand-rolled AST stringifier when the parser library already provides stringification.
 
-Remediation: REFINE, REPLACE, REFACTOR — migrate the bespoke implementation to use the dependency. For every custom function or component, ask: "Is there a standard library or installed dependency that already solves this?" If yes, the custom code is technical debt. Do not delete the dependency because it is "unused" — it was unused because the bespoke code was written instead of using it.
+Remediation: REFINE, REPLACE, REFACTOR — migrate the bespoke implementation to use the dependency.
+For every custom function or component, ask: "Is there a standard library or installed dependency that already solves this?"
+If yes, the custom code is technical debt.
+Do not delete the dependency because it is "unused" — it was unused because the bespoke code was written instead of using it.
 
 Remediation applies when:
 - A dependency provides exactly the functionality reimplemented in custom code.
@@ -973,8 +1045,9 @@ Do not apply remediation when:
 - The custom code has genuinely different requirements that the library does not support.
 - The library is deprecated, unmaintained, or has known security issues.
 
----
+* * *
 
 > **Agent-resistant codebases should be designed so that the easiest code to write is also the hardest code to fake.**
 
-Defaults, fallbacks, mocks, skips, helper proofs, string errors, and local QC gates all make faking easier. The bridge-burning policies remove those moves from the game.
+Defaults, fallbacks, mocks, skips, helper proofs, string errors, and local QC gates all make faking easier.
+The bridge-burning policies remove those moves from the game.

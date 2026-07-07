@@ -72,10 +72,10 @@ Instead, use this mechanical checklist to classify design choices:
 
 **How to use this**: This is a single-gate test for the feature/premise scope, not a license to bypass implementation auditing.
 If a design-choice signal is true, do not critique the feature, product scope, or user-owned behavior.
-But continue reviewing implementation mechanisms against bridge-burning policies and the red-flag catalog. A user-requested feature may still be implemented through slop.
+But continue reviewing implementation mechanisms against bridge-burning policies and the red-flag catalog.
+A user-requested feature may still be implemented through slop.
 
 If none of these signals are true AND you can point to a specific code pattern from the loaded skills (patch accretion, dead control flow, dependency aversion, etc.), then the finding is implementation quality and you may proceed.
-
 
 ### Brittleness Is Not Edge-Case Coverage
 
@@ -295,8 +295,7 @@ Slop is detected by **design quality**, not by import count.
 
 ### The Cross-Inventory Test
 
-Before concluding that code is slop, you must perform a **dependency vs.
-custom** mapping:
+Before concluding that code is slop, you must perform a **dependency vs. custom** mapping:
 
 1. **List every problem** that custom code in the repo claims to solve.
 
@@ -323,14 +322,11 @@ When a generic, tested solution exists in a dependency, and the bespoke layer co
 
 Examples of this inversion:
 
-- `AcademicCard.tsx` (custom, ~60 LOC) vs.
-  `card.tsx` (generic, tested, accessible)
+- `AcademicCard.tsx` (custom, ~60 LOC) vs. `card.tsx` (generic, tested, accessible)
 
-- `FilterControls.tsx` (custom popover logic) vs.
-  `select.tsx` + `dropdown-menu.tsx`
+- `FilterControls.tsx` (custom popover logic) vs. `select.tsx` + `dropdown-menu.tsx`
 
-- `PaginatedScroller.tsx` (custom scroll logic) vs.
-  `scroll-area.tsx` + `pagination.tsx`
+- `PaginatedScroller.tsx` (custom scroll logic) vs. `scroll-area.tsx` + `pagination.tsx`
 
 The custom implementations are slop.
 The generic dependencies are the solution.
@@ -349,29 +345,16 @@ Before reading code, answer:
 
 If you cannot identify the live goal and proof loop, you are not ready to analyze.
 
-**Establish external reality before adopting the artifact's frame.** Agent-generated work
-drifts toward an internally coherent, self-referential frame, and a reviewer who reads the
-project's preferred documentation first gets captured by it (`V1`–`V9` in the
-`llm-failure-modes/references/agent-distortion-index.md`).
-Hold a skeptical, distance-keeping posture; keep the *findings* in ordinary engineering
-language.
+**Establish external reality before adopting the artifact's frame.** Agent-generated work drifts toward an internally coherent, self-referential frame, and a reviewer who reads the project's preferred documentation first gets captured by it (`V1`–`V9` in the `llm-failure-modes/references/agent-distortion-index.md`). Hold a skeptical, distance-keeping posture; keep the *findings* in ordinary engineering language.
 
-- Do not start from the project's doctrine, conceptual overview, glossary, or recommended
-  reading order. Start from what is externally observable: what code runs, what data
-  exists, what a user concretely receives, what one complete use case looks like.
-- State, in plain nouns, what the thing is before using any project-coined term:
-  "this appears to be a ___ used by ___ to do ___." If no ordinary noun fits, that is
-  already a finding.
-- Treat internal consistency as weak evidence. Many generated documents agreeing with one
-  another may all descend from the same ungrounded premise; cross-references are pointers,
-  not corroboration.
-- Treat a bizarre visible artifact as a **sample of the production process**, not an
-  isolated defect (see the Blast Radius Rule in `fixing-slop`).
-- Do not debate the merits of a project-invented construct on its own terms ("is the
-  seven-gate matrix complete?"). Reconcile it against reality instead: "which observable
-  workflow requires a custom gate system rather than ordinary validation, review, access
-  control, or release state?" The bespoke construct carries the burden of proof for
-  existing.
+- Do not start from the project's doctrine, conceptual overview, glossary, or recommended reading order.
+  Start from what is externally observable: what code runs, what data exists, what a user concretely receives, what one complete use case looks like.
+- State, in plain nouns, what the thing is before using any project-coined term: "this appears to be a ___ used by ___ to do ___." If no ordinary noun fits, that is already a finding.
+- Treat internal consistency as weak evidence.
+  Many generated documents agreeing with one another may all descend from the same ungrounded premise; cross-references are pointers, not corroboration.
+- Treat a bizarre visible artifact as a **sample of the production process**, not an isolated defect (see the Blast Radius Rule in `fixing-slop`).
+- Do not debate the merits of a project-invented construct on its own terms ("is the seven-gate matrix complete?"). Reconcile it against reality instead: "which observable workflow requires a custom gate system rather than ordinary validation, review, access control, or release state?"
+  The bespoke construct carries the burden of proof for existing.
 
 ### Phase 2: Load Complementary Skills
 
@@ -537,8 +520,7 @@ If you catch yourself doing any of these, you have slipped from analysis into ja
 
 **DO analyze:**
 
-- **Dependency vs.
-  Custom overlap** (Cross-Inventory Test)
+- **Dependency vs. Custom overlap** (Cross-Inventory Test)
 
 - **Structural complexity as a dependency-detection signal** (long functions, for loops, high if/else density, deep nesting, large classes, many helpers — stop and search for the dependency before reviewing the code on its own terms)
 
@@ -555,11 +537,9 @@ If you catch yourself doing any of these, you have slipped from analysis into ja
 
 - **Myopic patching** (stacked conditionals around prior mistakes, parallel helpers)
 
-- **Prior-shaped probes** (commands encoding the expected answer and suppressing contrary evidence — guessed flags with `2>/dev/null`, greps whose failure is treated as absence, `jq` paths run before response-shape inspection, endpoint guesses treated as API facts)
-  See `reality-grounded-debugging` for the behavioral fix.
+- **Prior-shaped probes** (commands encoding the expected answer and suppressing contrary evidence — guessed flags with `2>/dev/null`, greps whose failure is treated as absence, `jq` paths run before response-shape inspection, endpoint guesses treated as API facts) See `reality-grounded-debugging` for the behavioral fix.
 
-- **Debug-surface debt** (failures addressed by mutating global code, adding one-off scripts, or repeatedly running opaque whole-system commands instead of creating isolated reproducers, structured logs, artifact dumps, schema inspections, or canonical diagnostic recipes)
-  See `reality-grounded-debugging` for the surface-upgrade requirements.
+- **Debug-surface debt** (failures addressed by mutating global code, adding one-off scripts, or repeatedly running opaque whole-system commands instead of creating isolated reproducers, structured logs, artifact dumps, schema inspections, or canonical diagnostic recipes) See `reality-grounded-debugging` for the surface-upgrade requirements.
 
 - **Bespoke reinvention** (custom `AcademicCard` when `card.tsx` exists)
 
@@ -617,52 +597,31 @@ Note that **grepping imports is an EXPLICIT anti-pattern for this task.** Taking
 
 ## Structural and Organizational Slop (Project-Level)
 
-The same cognitive distortions that produce slop inside a function also show up in the
-**structure and complexity of the project itself** — directory layouts, schemas, status
-systems, governance, and documentation organization — independent of any single file's
-code quality. A project can have clean functions and still be slop at the structural level.
+The same cognitive distortions that produce slop inside a function also show up in the **structure and complexity of the project itself** — directory layouts, schemas, status systems, governance, and documentation organization — independent of any single file's code quality.
+A project can have clean functions and still be slop at the structural level.
 
-This is a **different axis** from the dependency-complexity signal above. There, complex
-*owned code* usually means a missed library. Here, the tell is **organizational and
-process complexity that is disproportionate to a demonstrated problem**: the control plane
-outgrows the payload. Hold the proportionality rule from `bespoke-software-policy` →
-**Proportionality: Earned vs. Manufactured Complexity**: the question is whether this is
-the simplest standard mechanism for a demonstrated failure mode, not whether it is complex.
+This is a **different axis** from the dependency-complexity signal above.
+There, complex *owned code* usually means a missed library.
+Here, the tell is **organizational and process complexity that is disproportionate to a demonstrated problem**: the control plane outgrows the payload.
+Hold the proportionality rule from `bespoke-software-policy` → **Proportionality: Earned vs. Manufactured Complexity**: the question is whether this is the simplest standard mechanism for a demonstrated failure mode, not whether it is complex.
 
 Structural tells (each is a pointer to verify, not a verdict):
 
-- **Empty-stub sprawl** — large directory trees, many files, or schemas that are mostly
-  placeholders, with little inspectable payload. Volume of files/commits is treated as
-  progress (`O12 Activity Simulation`).
-- **Classification baked into structure** — passes, matrices, tiers, "canonical roots",
-  numbered cells, or authority classes imposed on ordinary folders. A Dewey-decimal system
-  for one's own work is itself the red flag (`O2`, `O4`).
-- **Control plane larger than payload** — more code, config, or docs devoted to
-  governance, trust, gates, receipts, status, and review flow than to the useful thing
-  delivered (`O6 Process–Payload Inversion`).
-- **Schemas/tests for invented concepts** — a schema or test exists chiefly to make a named
-  but unimplemented concept appear real; it proves conformity to the invention, not value
-  (`C6`).
-- **Invented institutions in structure** — `CODEOWNERS`, role directories, approval
-  workflows, or separation-of-duty layout for an organization that does not exist (`O3`).
-- **Recursive meta-structure** — directories of documentation about the documentation,
-  inventories of inventories, trees explaining where other trees sit (`O13`).
-- **Threat-model-driven layout** — subsystems, lanes, and tiers for every conceivable
-  hazard before the common user path is demonstrated (`O9`, `O10`).
+- **Empty-stub sprawl** — large directory trees, many files, or schemas that are mostly placeholders, with little inspectable payload.
+  Volume of files/commits is treated as progress (`O12 Activity Simulation`).
+- **Classification baked into structure** — passes, matrices, tiers, "canonical roots", numbered cells, or authority classes imposed on ordinary folders.
+  A Dewey-decimal system for one's own work is itself the red flag (`O2`, `O4`).
+- **Control plane larger than payload** — more code, config, or docs devoted to governance, trust, gates, receipts, status, and review flow than to the useful thing delivered (`O6 Process–Payload Inversion`).
+- **Schemas/tests for invented concepts** — a schema or test exists chiefly to make a named but unimplemented concept appear real; it proves conformity to the invention, not value (`C6`).
+- **Invented institutions in structure** — `CODEOWNERS`, role directories, approval workflows, or separation-of-duty layout for an organization that does not exist (`O3`).
+- **Recursive meta-structure** — directories of documentation about the documentation, inventories of inventories, trees explaining where other trees sit (`O13`).
+- **Threat-model-driven layout** — subsystems, lanes, and tiers for every conceivable hazard before the common user path is demonstrated (`O9`, `O10`).
 
-Apply the same false-positive discipline as for code: a deliberately elaborate structure
-that a real demonstrated constraint forces (genuine domain complexity, a real
-multi-actor workflow, a real compliance boundary) is a design choice, not slop. Run the
-**Design Choices Are Not Slop** gate. The finding is structural slop only when the
-machinery precedes the incident, the categories precede the instances, or the organization
-is justified by internal documents rather than an observable need.
+Apply the same false-positive discipline as for code: a deliberately elaborate structure that a real demonstrated constraint forces (genuine domain complexity, a real multi-actor workflow, a real compliance boundary) is a design choice, not slop.
+Run the **Design Choices Are Not Slop** gate.
+The finding is structural slop only when the machinery precedes the incident, the categories precede the instances, or the organization is justified by internal documents rather than an observable need.
 
-For agent-generated documents specifically (READMEs, architecture docs, roadmaps), the
-concrete patterns and forcing questions live in
-`llm-failure-modes/documentation-failures.md`.
-When a structural artifact's whole frame is contaminated, the remediation is a
-fresh-context greenfield rebuild, not in-place editing — see `fixing-slop` →
-**Contaminated Artifacts Cannot Be Repaired In Place**.
+For agent-generated documents specifically (READMEs, architecture docs, roadmaps), the concrete patterns and forcing questions live in `llm-failure-modes/documentation-failures.md`. When a structural artifact's whole frame is contaminated, the remediation is a fresh-context greenfield rebuild, not in-place editing — see `fixing-slop` → **Contaminated Artifacts Cannot Be Repaired In Place**.
 
 ## Reference Files
 
@@ -679,31 +638,41 @@ Secondary references (use when the central catalog does not cover the specific d
 
 - `references/text-patterns.md` — Natural language slop patterns (text-only reviews)
 
-- `references/deepening.md` — How to deepen shallow modules into deep interfaces. The constructive inverse of anti-slop: where this skill detects *shallowness*, deepening names the *replacement*. Covers dependency categories (in-process, local-substitutable, ports & adapters, mock), seam discipline, testing strategy (replace don't layer), and the Design It Twice interface exploration process. Uses vocabulary from `references/deepening-vocabulary.md`.
+- `references/deepening.md` — How to deepen shallow modules into deep interfaces.
+  The constructive inverse of anti-slop: where this skill detects *shallowness*, deepening names the *replacement*. Covers dependency categories (in-process, local-substitutable, ports & adapters, mock), seam discipline, testing strategy (replace don't layer), and the Design It Twice interface exploration process.
+  Uses vocabulary from `references/deepening-vocabulary.md`.
 
-- `references/deepening-vocabulary.md` — Precise glossary for architectural deepening: module, interface, depth, seam, adapter, leverage, locality, deletion test. Use these terms exactly — consistent language prevents drift into vague synonyms.
+- `references/deepening-vocabulary.md` — Precise glossary for architectural deepening: module, interface, depth, seam, adapter, leverage, locality, deletion test.
+  Use these terms exactly — consistent language prevents drift into vague synonyms.
 
 - **`../reality-grounded-debugging/SKILL.md`** — Load alongside when reviewing debugging attempts, probe logs, or diagnostic commands.
   Detects prior-shaped probes, debug-surface debt, and missing command-output discipline.
   Provides the behavioral fix (surface upgrade) for patterns in this catalog.
 
-- **`../llm-failure-modes/documentation-failures.md`** and **`../llm-failure-modes/references/agent-distortion-index.md`** — Load when reviewing agent-generated documents or project structure. The first is the concrete documentation-failure catalog; the second is the R/T/L/O/C/V distortion shorthand (including the reviewer-infection codes to watch for in your own analysis).
+- **`../llm-failure-modes/documentation-failures.md`** and **`../llm-failure-modes/references/agent-distortion-index.md`** — Load when reviewing agent-generated documents or project structure.
+  The first is the concrete documentation-failure catalog; the second is the R/T/L/O/C/V distortion shorthand (including the reviewer-infection codes to watch for in your own analysis).
 
 ## Remediation
 
-This skill is ANALYSIS only. It detects slop but does not prescribe fixes.
+This skill is ANALYSIS only.
+It detects slop but does not prescribe fixes.
 
-When slop has been identified, do NOT rename or delete it — both are laundering. Instead, load **`../fixing-slop/SKILL.md`** for the remediation protocol: reconstruct the narrative, identify the correct intention, fulfill the intention with the right implementation.
+When slop has been identified, do NOT rename or delete it — both are laundering.
+Instead, load **`../fixing-slop/SKILL.md`** for the remediation protocol: reconstruct the narrative, identify the correct intention, fulfill the intention with the right implementation.
 
 ### Deletion Laundering / Problem-Erasure Deletion
 
 Deletion laundering occurs when an agent removes a criticized slop artifact without solving, invalidating, or explicitly preserving the original problem it was trying to solve.
 
-The artifact disappears. The proof burden disappears from view. The PR looks cleaner. But the original need remains unresolved.
+The artifact disappears.
+The proof burden disappears from view.
+The PR looks cleaner.
+But the original need remains unresolved.
 
 This is laundering because the deletion makes the codebase look less sloppy while also erasing the evidence that a correctness, proof, workflow, or diagnostic gap existed.
 
-Deleting the artifact is not enough. The reviewer must ask where the original burden went.
+Deleting the artifact is not enough.
+The reviewer must ask where the original burden went.
 
 ### The Corrected Principle
 
@@ -728,10 +697,11 @@ Invalid outcomes:
 
 while the original problem silently disappears.
 
-First reconstruct the original burden. Then remove, replace, move, or preserve the artifact only after the burden is solved, invalidated, explicitly transferred, or recorded as unresolved.
+First reconstruct the original burden.
+Then remove, replace, move, or preserve the artifact only after the burden is solved, invalidated, explicitly transferred, or recorded as unresolved.
 
-One-line principle:
-*Slop remediation is not artifact management. It is obligation management.*
+One-line principle: *Slop remediation is not artifact management.
+It is obligation management.*
 
 A slop artifact may be deleted only after the problem it was trying to solve has been solved, disproved, or made explicitly unresolved.
 
@@ -748,7 +718,8 @@ Before accepting a slop remediation, answer:
 7. Did the fix change runtime/proof behavior, or only remove the evidence of failure?
 8. Could a future agent reintroduce the same artifact because the original problem is still invisible?
 
-A remediation is incomplete if the artifact is gone but the burden has no owner. This links to the existing goal-integrity rule: changing labels, comments, issue state, or public framing does not satisfy a goal whose object is code, proof, data, implementation, research, or semantic review.
+A remediation is incomplete if the artifact is gone but the burden has no owner.
+This links to the existing goal-integrity rule: changing labels, comments, issue state, or public framing does not satisfy a goal whose object is code, proof, data, implementation, research, or semantic review.
 
 **Short reviewer form:**
 - Do not ask only “is the slop gone?”
@@ -758,22 +729,18 @@ A remediation is incomplete if the artifact is gone but the burden has no owner.
 
 ## Bridge-Burning Policies
 
-The canonical bridge-burning policy registry has moved to
-[policy-index/SKILL.md#policy-registry](../policy-index/SKILL.md#policy-registry).
+The canonical bridge-burning policy registry has moved to [policy-index/SKILL.md#policy-registry](../policy-index/SKILL.md#policy-registry).
 
-This skill no longer owns the enumerated policy text. Use `policy-index` for
-`POLICY.*` codes and the exception protocol. Anti-slop review uses those policies to
-classify slop, reconstruct the original obligation, and decide whether a finding is a
-real bridge-burning violation. Remediation instructions are intentionally separate and
-belong to the fixer-side reference under `policy-index/references/`.
+This skill no longer owns the enumerated policy text.
+Use `policy-index` for `POLICY.*` codes and the exception protocol.
+Anti-slop review uses those policies to classify slop, reconstruct the original obligation, and decide whether a finding is a real bridge-burning violation.
+Remediation instructions are intentionally separate and belong to the fixer-side reference under `policy-index/references/`.
 
 ## Policy Exception Protocol
 
-The canonical policy exception protocol lives in
-[policy-index/SKILL.md#exception-protocol](../policy-index/SKILL.md#exception-protocol).
+The canonical policy exception protocol lives in [policy-index/SKILL.md#exception-protocol](../policy-index/SKILL.md#exception-protocol).
 
-Anti-slop findings may identify that an exception would be required, but this skill does
-not grant exceptions or maintain a separate exception checklist.
+Anti-slop findings may identify that an exception would be required, but this skill does not grant exceptions or maintain a separate exception checklist.
 
 * * *
 
@@ -783,7 +750,8 @@ Do not recommend, install, template, or casually mention dependencies whose main
 
 Examples include mock frameworks, patch helpers, request-mocking libraries, fake service frameworks, and time/network/filesystem simulation tools unless a skill explicitly discusses them as prohibited patterns.
 
-A dependency is not acceptable merely because it is common. If it helps the agent avoid a real owned boundary, captured real fixture, live integration check, or substantive assertion, it is proof-loop poison.
+A dependency is not acceptable merely because it is common.
+If it helps the agent avoid a real owned boundary, captured real fixture, live integration check, or substantive assertion, it is proof-loop poison.
 
 ### Dependency Taxonomy
 
@@ -816,5 +784,4 @@ Skills must not seed:
 
 ### Cross-References (Source-of-Truth Skills)
 
-Rather than repeating policy in every skill, consult the central policy index to locate the canonical source-of-truth skill:
-[policy-index](../policy-index/SKILL.md)
+Rather than repeating policy in every skill, consult the central policy index to locate the canonical source-of-truth skill: [policy-index](../policy-index/SKILL.md)

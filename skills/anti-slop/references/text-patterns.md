@@ -2,10 +2,10 @@
 name: text-patterns
 description: Reference guide for detecting AI slop patterns in natural language text including overused phrases, buzzwords, and meta-commentary. Use as reference when reviewing text content for quality.
 ---
+
 # Text Slop Patterns
 
-This reference documents common “AI slop” patterns in natural language writing that
-should be avoided or cleaned up.
+This reference documents common “AI slop” patterns in natural language writing that should be avoided or cleaned up.
 
 ## Table of Contents
 
@@ -20,8 +20,7 @@ should be avoided or cleaned up.
 
 ## **[ OVERUSE ]** Overused Transition Phrases
 
-These phrases appear disproportionately in AI-generated text and signal low-quality
-content:
+These phrases appear disproportionately in AI-generated text and signal low-quality content:
 
 ### High-Risk Phrases (Nearly Always Slop)
 

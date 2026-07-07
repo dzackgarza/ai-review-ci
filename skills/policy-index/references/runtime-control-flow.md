@@ -4,11 +4,13 @@ This catalog lists runtime control-flow shapes that are banned or considered hig
 
 Every runtime branch is suspicious.
 
-Branches are admitted only when they distinguish real, domain-owned cases. Branches are not admitted for preserving execution after missing data, invalid state, unavailable dependencies, malformed config, failed subprocesses, absent files, empty responses, or uncertain environment conditions.
+Branches are admitted only when they distinguish real, domain-owned cases.
+Branches are not admitted for preserving execution after missing data, invalid state, unavailable dependencies, malformed config, failed subprocesses, absent files, empty responses, or uncertain environment conditions.
 
 Runtime code must not fail open.
 
-If a condition is required for correctness, assert it directly and continue linearly. Do not write an `if` branch whose failure path returns `None`, `false`, `[]`, `{}`, empty string, default values, warning objects, partial success, or logged continuation.
+If a condition is required for correctness, assert it directly and continue linearly.
+Do not write an `if` branch whose failure path returns `None`, `false`, `[]`, `{}`, empty string, default values, warning objects, partial success, or logged continuation.
 
 All runtime failures in owned code must be explicit assertions of correctness or structured fatal errors at an owned boundary.
 
@@ -24,29 +26,36 @@ If the condition is missing data, bad config, missing dependency, failed IO, fai
 - We NEVER run Python with the `-O` flag.
 - It is NOT a recognized way that agents game or reward-hack around assertions.
 - Any finding citing the removal of assertions in optimized mode as a "decay risk" or "reliability issue" is **pure cargo cult** and will be summarily rejected.
-- Do NOT report the use of `assert` in Python as a problem. It is the preferred way to state invariants in this repository.
+- Do NOT report the use of `assert` in Python as a problem.
+  It is the preferred way to state invariants in this repository.
 
 ### **[NO-PREEMPTIVE-PATH]** General Principle: No Pre-Emptive Path Code
 
-A branch, guard, fallback, or defensive check must be motivated by a real observed failure, not by a hypothetical scenario. Code that handles a failure path that has never been observed, tested, or reported is speculative dead weight — it introduces branches, testing obligations, and maintenance surface for a world that does not exist.
+A branch, guard, fallback, or defensive check must be motivated by a real observed failure, not by a hypothetical scenario.
+Code that handles a failure path that has never been observed, tested, or reported is speculative dead weight — it introduces branches, testing obligations, and maintenance surface for a world that does not exist.
 
-**The wrong gradient:** "This code could fail in scenario X, so add handling for X."
-**The correct gradient:** "This code has never failed in scenario X. If it ever does, fail loudly — then handle it."
+**The wrong gradient:** "This code could fail in scenario X, so add handling for X." **The correct gradient:** "This code has never failed in scenario X. If it ever does, fail loudly — then handle it."
 
 Concretely:
 - If `sudo` is required and has never failed, assert it, do not guard it.
 - If a dependency has always been available, do not add a fallback for its absence.
 - If a file has always existed at a known path, do not add a discovery chain for "what if it moves."
 
-A hypothetical scenario is not an edge case. It is an imaginary world. Code for the world that exists.
+A hypothetical scenario is not an edge case.
+It is an imaginary world.
+Code for the world that exists.
 
----
+* * *
 
 ## **[ASSERT-X]** Why `assert X` Matters
 
-`assert X` states the admissible world. The code after the assertion is allowed to assume X. That is the point.
+`assert X` states the admissible world.
+The code after the assertion is allowed to assume X. That is the point.
 
-Never catch `AssertionError` or an equivalent invariant-failure exception in owned runtime code. An assertion is not runtime logic, not a domain error, and not an error handler. It records a nontrivial provable claim about code state at that point. Catching it turns the claim into a branch and gives future agents a place to recover, warn, retry, default, or convert invariant failure into product behavior.
+Never catch `AssertionError` or an equivalent invariant-failure exception in owned runtime code.
+An assertion is not runtime logic, not a domain error, and not an error handler.
+It records a nontrivial provable claim about code state at that point.
+Catching it turns the claim into a branch and gives future agents a place to recover, warn, retry, default, or convert invariant failure into product behavior.
 
 Do not replace `assert X` with:
 
@@ -55,7 +64,8 @@ if not X:
     raise AssertionError(...)
 ```
 
-That shape reintroduces a branch. It gives future agents a place to add logging, fallback, warnings, defaulting, metrics, cleanup, alternate return values, or "temporary" recovery.
+That shape reintroduces a branch.
+It gives future agents a place to add logging, fallback, warnings, defaulting, metrics, cleanup, alternate return values, or "temporary" recovery.
 
 For languages where native `assert` has caveats, use a single invariant primitive, not ad hoc branches:
 
@@ -71,9 +81,10 @@ invariant(condition, "owned invariant");
 assert!(condition, "owned invariant");
 ```
 
-But the call site must still be assertion-shaped. Do not scatter `if !condition { throw ... }` / `if not condition: raise ...` across runtime code.
+But the call site must still be assertion-shaped.
+Do not scatter `if !condition { throw ... }` / `if not condition: raise ...` across runtime code.
 
----
+* * *
 
 ## Allowed and Suspicious Branches
 
@@ -96,7 +107,7 @@ Suspicious or banned:
 9. Test/smoke/debug mode branches in product runtime.
 10. `if` branches whose else case is not a real domain case.
 
----
+* * *
 
 ## If Statement Admission Gate
 
@@ -113,13 +124,16 @@ Before admitting any `if`, `match`, `case`, ternary, nullish coalescing, fallbac
 
 If the branch does not distinguish real product cases, replace it with an assertion, a schema/parser boundary, or an exhaustive enum dispatch.
 
-> **Rule of thumb:** If this is not a domain case, it is probably an invariant. Assert invariants. Branch only on cases.
+> **Rule of thumb:** If this is not a domain case, it is probably an invariant.
+> Assert invariants.
+> Branch only on cases.
 
----
+* * *
 
 ## **[BANNED-SHAPES]** Banned Language-Agnostic Shapes
 
-These are the runtime shapes to ban outright. Any of these must trigger a red-flag finding:
+These are the runtime shapes to ban outright.
+Any of these must trigger a red-flag finding:
 - `if missing -> return []`
 - `if missing -> return None/null/undefined`
 - `if missing -> return false`
@@ -139,11 +153,12 @@ These are the runtime shapes to ban outright. Any of these must trigger a red-fl
 - `if nested optional chain -> eventually default`
 - `if result is Err -> .ok() / discard / continue`
 
----
+* * *
 
 ## Python Examples
 
 ### **[LAUNDER-EMPTY-LIST]** Banned: empty-list laundering
+
 ```python
 def collect_records(source_path: Path) -> list[Record]:
     if not source_path.exists():
@@ -174,6 +189,7 @@ type RecordSet = NonEmptyRecordSet | EmptyRecordSet
 Do not use `[]` as both “valid empty” and “failed to load.”
 
 ### **[FALSY-OPTIONAL-CORE]** Banned: falsy optional core state
+
 ```python
 def render_current_document(state: AppState) -> RenderedDocument | None:
     if not state.current_document:
@@ -201,6 +217,7 @@ class AppState(BaseModel):
 ```
 
 ### **[CONFIG-DEFAULTING]** Banned: config defaulting
+
 ```python
 def load_runtime_config(config: dict[str, object]) -> RuntimeConfig:
     command = config.get("command") or "pandoc --to html"
@@ -218,9 +235,11 @@ def load_runtime_config(config_path: Path) -> RuntimeConfig:
     raw = tomllib.loads(config_path.read_text())
     return RuntimeConfig.model_validate(raw)
 ```
-The starter config may contain defaults. Runtime logic should not.
+The starter config may contain defaults.
+Runtime logic should not.
 
 ### **[TRY-EXCEPT-FALLBACK]** Banned: try/except fallback
+
 ```python
 def load_document(path: Path) -> str:
     try:
@@ -235,9 +254,11 @@ def load_document(path: Path) -> str:
     assert path.is_file(), f"document path must exist: {path}"
     return path.read_text()
 ```
-If this is a public command boundary, convert the exception once into a structured fatal error. Do not return a falsy value.
+If this is a public command boundary, convert the exception once into a structured fatal error.
+Do not return a falsy value.
 
 ### **[ASSERTION-CATCH]** Banned: catching assertion failures
+
 ```python
 def load_runtime_config(config_path: Path) -> RuntimeConfig:
     config = RuntimeConfig.model_validate(tomllib.loads(config_path.read_text()))
@@ -263,9 +284,11 @@ def load_runtime_config(config_path: Path) -> RuntimeConfig:
     )
     return config
 ```
-Assertions are provable state claims. They are allowed to stop execution; they are not errors for product code to catch, translate, retry, or recover from.
+Assertions are provable state claims.
+They are allowed to stop execution; they are not errors for product code to catch, translate, retry, or recover from.
 
 ### **[STRINGLY-BOUNDARY-EXIT]** Banned: stringly graceful exit at a CLI boundary
+
 ```python
 def main() -> None:
     try:
@@ -280,14 +303,12 @@ def main() -> None:
 def main() -> None:
     run()
 ```
-"Convert the exception once into a structured fatal error" (above) means raise or keep
-the TYPED error with its stack intact — NOT stringify it into a message plus a magic
-exit code. Tell-tale: if a test asserts the exact stderr text or a magic exit code, you
-built a stringly graceful exit, not a structured fatal error. A non-empty `except` is
-not automatically clean — catch-to-rethrow and catch-to-graceful-exit are slop even
-though the body is not `pass`.
+"Convert the exception once into a structured fatal error" (above) means raise or keep the TYPED error with its stack intact — NOT stringify it into a message plus a magic exit code.
+Tell-tale: if a test asserts the exact stderr text or a magic exit code, you built a stringly graceful exit, not a structured fatal error.
+A non-empty `except` is not automatically clean — catch-to-rethrow and catch-to-graceful-exit are slop even though the body is not `pass`.
 
 ### **[TRY-IMPORT]** Banned: try-import / optional dependency
+
 ```python
 try:
     import rich
@@ -311,6 +332,7 @@ def print_report(report: Report) -> None:
 Dependency presence is setup/doctor/tool-provisioning’s problem, not runtime branching’s problem.
 
 ### **[BRANCH-FORCING-HELPER]** Banned: branch-forcing helper
+
 ```python
 def require_or_default(
     value: str | None,
@@ -336,6 +358,7 @@ def create_starter_config(config_path: Path) -> None:
 No helper should mix “required” and “default.”
 
 ### **[CATCH-AND-LOG]** Banned: catch-and-log continuation
+
 ```python
 def refresh_index(paths: list[Path]) -> list[IndexEntry]:
     entries: list[IndexEntry] = []
@@ -354,11 +377,12 @@ def refresh_index(paths: list[Path]) -> list[IndexEntry]:
 ```
 If one path failing should not fail the whole operation, that must be explicit product behavior with a structured result type, not a warning-and-continue loop.
 
----
+* * *
 
 ## TypeScript / JavaScript Examples
 
 ### **[EMPTY-ARRAY-FAILED]** Banned: empty array as failed data
+
 ```ts
 export async function loadItems(sourcePath: string): Promise<Item[]> {
   if (!sourcePath) {
@@ -390,6 +414,7 @@ export async function loadItems(sourcePath: string): Promise<NonEmptyArray<Item>
 ```
 
 ### **[OPTIONAL-UI-FAILOPEN]** Banned: optional UI state fail-open
+
 ```ts
 function renderPreview(state: EditorState): PreviewModel | null {
   if (!state.document) {
@@ -426,6 +451,7 @@ function renderPreview(state: ReadyEditorState): PreviewModel {
 ```
 
 ### **[NULLISH-DEFAULT]** Banned: nullish/default config
+
 ```ts
 function loadRuntimeConfig(raw: Partial<RuntimeConfig>): RuntimeConfig {
   return {
@@ -450,6 +476,7 @@ function loadRuntimeConfig(raw: unknown): RuntimeConfig {
 ```
 
 ### **[CATCH-FALLBACK]** Banned: catch fallback
+
 ```ts
 async function fetchRegistry(url: string): Promise<RegistryEntry[]> {
   try {
@@ -483,6 +510,7 @@ type RegistryResult =
 But do not return `[]` for failure.
 
 ### **[TEST-RUNTIME-MODE]** Banned: test/smoke runtime mode
+
 ```ts
 async function invokeCommand(command: string, payload: unknown): Promise<unknown> {
   if (process.env.NODE_ENV === "test") {
@@ -502,6 +530,7 @@ async function invokeCommand(command: CommandName, payload: CommandPayload): Pro
 Tests must cross the real boundary or not claim proof.
 
 ### **[WARNING-CONTINUE]** Banned: warning-and-continue
+
 ```ts
 async function saveDocument(model: DocumentModel): Promise<{ ok: boolean; warnings: string[] }> {
   const warnings: string[] = [];
@@ -534,6 +563,7 @@ async function saveDocument(model: DocumentModel): Promise<void> {
 ```
 
 ### **[NESTED-OPTIONAL-PYRAMID]** Banned: nested optional pyramid
+
 ```ts
 function selectedPath(state: AppState): string | undefined {
   if (state.workspace) {
@@ -571,11 +601,12 @@ function selectedPath(selection: SelectionState): string {
 }
 ```
 
----
+* * *
 
 ## Rust Examples
 
 ### **[VECTOR-LAUNDERING]** Banned: empty vector laundering
+
 ```rust
 fn collect_entries(root: &Path) -> Vec<Entry> {
     if !root.exists() {
@@ -611,6 +642,7 @@ fn collect_entries(root: &Path) -> Result<Vec<Entry>, FsError> {
 If empty directory is a valid case, `Ok(vec![])` may be valid only after successful `read_dir`. It must not represent failure.
 
 ### **[OPTION-CORE-STATE]** Banned: `Option` core state
+
 ```rust
 struct AppState {
     workspace_root: Option<PathBuf>,
@@ -643,6 +675,7 @@ fn render(state: &AppState, markdown: &str) -> RenderResult {
 ```
 
 ### **[UNWRAP-OR]** Banned: `unwrap_or` / defaulting
+
 ```rust
 fn load_config(raw: RawConfig) -> RuntimeConfig {
     RuntimeConfig {
@@ -668,6 +701,7 @@ fn load_config(raw: RawConfig) -> Result<RuntimeConfig, ConfigError> {
 Better: deserialize directly into a non-optional config struct when possible.
 
 ### **[OK-DISCARD]** Banned: `.ok()` / `let _ =`
+
 ```rust
 fn cleanup_backup(path: &Path) {
     let _ = std::fs::remove_file(path);
@@ -695,6 +729,7 @@ fn cleanup_backup(path: &Path) -> Result<(), CleanupError> {
 The accepted non-error state is explicit and narrow.
 
 ### **[FALSEY-RESULT]** Banned: falsey `Result` conversion
+
 ```rust
 fn load_registry(path: &Path) -> Vec<RegistryEntry> {
     match std::fs::read_to_string(path) {
@@ -713,6 +748,7 @@ fn load_registry(path: &Path) -> Result<Vec<RegistryEntry>, RegistryError> {
 ```
 
 ### **[IF-REQUIRED-INVARIANT]** Banned: `if` for required invariant
+
 ```rust
 fn save_document(path: Option<PathBuf>, content: String) -> Result<(), SaveError> {
     if path.is_none() {
@@ -733,6 +769,7 @@ fn save_document(path: &Path, content: &str) -> Result<(), SaveError> {
 Better: make `path` non-optional before calling `save_document`.
 
 ### **[IFLET-INITIALIZED]** Banned: `if let` optional branch for initialized state
+
 ```rust
 fn active_file_path(state: &AppState) -> Option<&Path> {
     if let Some(path) = state.file.as_deref() {
@@ -752,6 +789,7 @@ fn active_file_path(state: &ReadyAppState) -> &Path {
 If unselected is a real product case, represent it as an enum and dispatch at the UI boundary, not in every runtime function.
 
 ### **[NESTED-IF-CHAIN]** Banned: nested if chain
+
 ```rust
 fn command_for(state: &AppState) -> Option<&str> {
     if let Some(config) = &state.config {
@@ -780,11 +818,12 @@ fn command_for(config: &AppConfig) -> &RenderCommand {
 }
 ```
 
----
+* * *
 
 ## Bash Examples
 
 ### **[FALLBACK-CHAINS]** Banned: fallback chains
+
 ```bash
 if command -v fd >/dev/null 2>&1; then
   fd -e md -t f
@@ -801,6 +840,7 @@ exec $FINDER_COMMAND
 Better: the app config names the command; doctor verifies it.
 
 ### **[EMPTY-OUTPUT-FAILURE]** Banned: empty output on failure
+
 ```bash
 if ! output="$(renderer "$input" 2>/dev/null)"; then
   output=""
@@ -819,6 +859,7 @@ printf '%s\n' "$output"
 If the renderer fails, the script fails.
 
 ### **[PIPE-TRUE]** Banned: `|| true`
+
 ```bash
 cleanup_artifact "$path" || true
 ```
@@ -839,6 +880,7 @@ rm -f -- "$path"
 But do not use this in diagnostic/build/test logic unless absence is an explicit contract.
 
 ### **[STATUS-LAUNDERING]** Banned: status laundering
+
 ```bash
 if curl -s "$endpoint" >/tmp/response.json; then
   jq '.items // []' /tmp/response.json
@@ -860,6 +902,7 @@ jq '.items' "$response"
 ```
 
 ### **[TEST-MODE-FAKE]** Banned: test-mode fake
+
 ```bash
 if [ "${APP_ENV:-}" = "test" ]; then
   echo '{"ok": true, "items": []}'
@@ -876,6 +919,7 @@ real_command "$@"
 Tests must use real fixture inputs and real outputs.
 
 ### **[SILENT-PROBING]** Banned: silent probing
+
 ```bash
 if git remote get-url origin 2>/dev/null | grep -q github.com; then
   echo "github"
@@ -893,7 +937,7 @@ case "$remote_url" in
 esac
 ```
 
----
+* * *
 
 ## If Taxonomy
 
@@ -915,7 +959,7 @@ esac
 | `if` followed by assertion in branch | usually replace with direct assertion |
 | `if` whose only purpose is to raise | replace with direct assertion/invariant call |
 
----
+* * *
 
 ## Correct Replacements from First Principles
 
@@ -930,13 +974,14 @@ esac
 9. **Cleanup** → classify the only accepted absence/error; propagate all others.
 10. **Test mode** → no runtime test branches; tests use real boundaries or do not claim proof.
 
----
+* * *
 
 ## **[NESTED-IF-BAN]** Nested If Ban
 
 Nested `if` blocks over missing/optional/falsy state are banned.
 
-They almost always indicate that invalid states are being carried too far into the core. Normalize once at the boundary, then operate on total types.
+They almost always indicate that invalid states are being carried too far into the core.
+Normalize once at the boundary, then operate on total types.
 
 If nesting seems necessary:
 - extract a boundary parser/validator;
@@ -946,7 +991,7 @@ If nesting seems necessary:
 
 Do not build pyramids of permission for code to proceed.
 
----
+* * *
 
 ## **[FAIL-OPEN-BAN]** Fail-Open Ban
 
@@ -967,7 +1012,7 @@ Fail-open return values include:
 
 Fail-open branches are banned.
 
----
+* * *
 
 ## Assertion Style Guide
 
@@ -977,11 +1022,15 @@ Fail-open branches are banned.
 
 All code follows ADDD at runtime boundaries and invariant checkpoints:
 
-- **Assert** the admissible world as early as the code can know it. Then write the following code linearly as if the assertion holds. Use the assertion to narrow types, remove defensive branches, and make invalid states disappear from the rest of the function.
-- **Dump data** in the assertion payload. A failed assertion should give the next maintainer enough related data to fix the cause without re-running blind probes.
+- **Assert** the admissible world as early as the code can know it.
+  Then write the following code linearly as if the assertion holds.
+  Use the assertion to narrow types, remove defensive branches, and make invalid states disappear from the rest of the function.
+- **Dump data** in the assertion payload.
+  A failed assertion should give the next maintainer enough related data to fix the cause without re-running blind probes.
 - **Direct** the reader to the owning fix surface: the file to edit, the config to correct, the command or API usage to change, or the owned tool repository where an issue belongs.
 
-The assertion message is part of the debugging contract. It should name the invariant and include the relevant observed shape, not just say that something failed.
+The assertion message is part of the debugging contract.
+It should name the invariant and include the relevant observed shape, not just say that something failed.
 
 For a file with a broken schema, dump:
 
@@ -991,9 +1040,11 @@ For a file with a broken schema, dump:
 - the loader, command, or config surface that consumed the file;
 - the place to correct the data or schema.
 
-For a required dependency, dump the required binary/package/service/model, the declared config or setup surface that should provide it, and the command the agent should use to repair setup. Do not dump secrets or raw credentials.
+For a required dependency, dump the required binary/package/service/model, the declared config or setup surface that should provide it, and the command the agent should use to repair setup.
+Do not dump secrets or raw credentials.
 
-For tool defects, direct to an issue only when the user owns the tool repo. For unowned external tools, report the blocker with the assertion data and the upstream surface to inspect; do not file issues unless the user asks.
+For tool defects, direct to an issue only when the user owns the tool repo.
+For unowned external tools, report the blocker with the assertion data and the upstream surface to inspect; do not file issues unless the user asks.
 
 **Good:**
 ```python
@@ -1032,7 +1083,8 @@ if config.runtime.command.is_empty() {
     return Err("runtime.command is required".into());
 }
 ```
-The bad form creates a branch-shaped surface and withholds the data needed to fix the broken input. Branch-shaped surfaces accumulate fallbacks.
+The bad form creates a branch-shaped surface and withholds the data needed to fix the broken input.
+Branch-shaped surfaces accumulate fallbacks.
 
 For TypeScript, define a canonical helper:
 ```ts
@@ -1042,12 +1094,10 @@ export function invariant(condition: unknown, message: string): asserts conditio
   }
 }
 ```
-Then ban local ad hoc versions. The helper may throw internally, but call sites must remain assertion-shaped and ADDD-shaped.
+Then ban local ad hoc versions.
+The helper may throw internally, but call sites must remain assertion-shaped and ADDD-shaped.
 
-
-
-
----
+* * *
 
 ## Runtime If Red Flags
 
@@ -1073,9 +1123,15 @@ If a condition is required for correctness, assert it.
 If a condition is a real case, encode it as a case.
 If a condition is an error, fail.
 
----
+* * *
 
 ## Summary Principles
 
-- **Runtime confidence**: Runtime code should be confident after the boundary. Obsequious code asks every value whether it is allowed to proceed. Correct code constructs an admissible world, asserts it, and then operates inside it.
-- **Rules of engagement**: No fail-open branches. No falsy error values. No empty-list laundering. Assert invariants. Dispatch only on real domain cases.
+- **Runtime confidence**: Runtime code should be confident after the boundary.
+  Obsequious code asks every value whether it is allowed to proceed.
+  Correct code constructs an admissible world, asserts it, and then operates inside it.
+- **Rules of engagement**: No fail-open branches.
+  No falsy error values.
+  No empty-list laundering.
+  Assert invariants.
+  Dispatch only on real domain cases.

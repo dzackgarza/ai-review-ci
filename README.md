@@ -17,9 +17,8 @@ Each type runs in two scopes: **repo** (full-repository sweep) and **diff** (PR 
 
 ## Installing the skills
 
-This repo is the canonical home of the skills under `skills/` — each top-level
-directory there is one skill. Install them by cloning this repo and symlinking
-every skill into your skills directory:
+This repo is the canonical home of the skills under `skills/` — each top-level directory there is one skill.
+Install them by cloning this repo and symlinking every skill into your skills directory:
 
 ```bash
 # In ~/.envrc (direnv): point at your harness's skills directory
@@ -29,10 +28,8 @@ cd /path/to/clone/of/ai-review-ci
 just install-skills
 ```
 
-Each `skills/<name>` becomes a symlink `$AI_SKILLS_DIR/<name>` pointing into
-the clone, so `git pull` updates every installed skill in place. The recipe
-refuses to replace a non-symlink (a real directory already at that name) and
-is idempotent otherwise.
+Each `skills/<name>` becomes a symlink `$AI_SKILLS_DIR/<name>` pointing into the clone, so `git pull` updates every installed skill in place.
+The recipe refuses to replace a non-symlink (a real directory already at that name) and is idempotent otherwise.
 
 ## Installing into a repo
 

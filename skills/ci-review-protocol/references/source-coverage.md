@@ -22,12 +22,13 @@ It exists to prevent shallow "book-name citation" reviews.
 ## Review Discipline
 
 - Cite a book only when the observed symptom actually matches that book's principle.
-- A threshold crossing is a hint, not a verdict. Check context, intent, and blast radius.
+- A threshold crossing is a hint, not a verdict.
+  Check context, intent, and blast radius.
 - Look for justified tradeoffs before flagging a smell as debt.
 - Prefer concrete architectural or domain consequences over abstract style complaints.
 - If two books pull in different directions, state the tradeoff instead of pretending there is no tension.
 
----
+* * *
 
 ## Frederick Brooks — *The Mythical Man-Month*
 
@@ -44,15 +45,14 @@ It exists to prevent shallow "book-name citation" reviews.
 - Large systems are not automatically second systems
 - Multi-module designs are acceptable when they preserve conceptual integrity
 
----
+* * *
 
 ## Steve McConnell — *Code Complete*
 
 **Encoded today**
 - Routine length, nesting, naming, and magic numbers
 - Construction-phase YAGNI checks
-- Defensive programming and error-handling discipline (guard clauses, input validation,
-  explicit error paths, assertions for invariants)
+- Defensive programming and error-handling discipline (guard clauses, input validation, explicit error paths, assertions for invariants)
 
 **Do not ignore**
 - Whether low-level readability choices compound into operational risk
@@ -62,7 +62,7 @@ It exists to prevent shallow "book-name citation" reviews.
 - Small, explicit guard clauses are not cognitive overload
 - A long routine may be acceptable when it is linear, well-named, and single-purpose
 
----
+* * *
 
 ## Martin Fowler — *Refactoring*
 
@@ -81,7 +81,7 @@ It exists to prevent shallow "book-name citation" reviews.
 - Temporary duplication during an active extraction is not always debt
 - A data-focused structure is acceptable when it is intentionally a DTO or boundary record
 
----
+* * *
 
 ## Robert C. Martin — *Clean Architecture*
 
@@ -89,8 +89,7 @@ It exists to prevent shallow "book-name citation" reviews.
 - DIP, ADP, SDP, SAP, and layering direction
 - ISP: fat interfaces that force callers to depend on methods they do not use
 - LSP: subclasses that break the behavioral contract of their parent type
-- SRP and OCP: classes with multiple reasons to change; modules closed to modification
-  but open to extension via abstraction
+- SRP and OCP: classes with multiple reasons to change; modules closed to modification but open to extension via abstraction
 
 **Do not ignore**
 - Policy vs detail boundaries
@@ -100,7 +99,7 @@ It exists to prevent shallow "book-name citation" reviews.
 - Composition roots may depend on concrete infrastructure by design
 - Thin adapter layers can import both directions when they are explicitly boundary glue
 
----
+* * *
 
 ## Andrew Hunt & David Thomas — *The Pragmatic Programmer*
 
@@ -117,7 +116,7 @@ It exists to prevent shallow "book-name citation" reviews.
 - Similar code in different bounded contexts is not automatically a DRY violation
 - Direct object access inside a cohesive aggregate is not always a Demeter problem
 
----
+* * *
 
 ## Eric Evans — *Domain-Driven Design*
 
@@ -125,8 +124,7 @@ It exists to prevent shallow "book-name citation" reviews.
 - Ubiquitous Language
 - Bounded Context
 - Anemic Domain Model
-- Entity vs Value Object: objects with identity and lifecycle vs. objects defined solely by
-  their attributes (Money, Email, Address should be immutable value types, not mutable entities)
+- Entity vs Value Object: objects with identity and lifecycle vs. objects defined solely by their attributes (Money, Email, Address should be immutable value types, not mutable entities)
 - Aggregate Roots: who owns the invariant boundary; cross-aggregate access only through the root
 
 **Do not ignore**
@@ -137,15 +135,14 @@ It exists to prevent shallow "book-name citation" reviews.
 - CRUD-heavy workflows may legitimately use transaction scripts
 - Thin entities are acceptable when the domain itself is simple
 
----
+* * *
 
 ## John Ousterhout — *A Philosophy of Software Design*
 
 **Encoded today**
 - Deep vs shallow modules
 - Strategic vs tactical programming
-- Information Leakage: a design decision encoded in more than one module, creating
-  change coupling even when no explicit import exists between the modules
+- Information Leakage: a design decision encoded in more than one module, creating change coupling even when no explicit import exists between the modules
 
 **Do not ignore**
 - Interface complexity relative to hidden complexity
@@ -156,17 +153,15 @@ It exists to prevent shallow "book-name citation" reviews.
 - Internal implementation complexity is fine when the interface stays simple
 - A small wrapper is acceptable when it meaningfully absorbs volatility
 
----
+* * *
 
 ## Titus Winters, Tom Manshreck, Hyrum Wright — *Software Engineering at Google*
 
 **Encoded today**
 - Hyrum's Law
 - Dependency management and upgrade blockage
-- Code sustainability: whether code as written can be maintained, migrated, and upgraded
-  over a multi-year horizon without heroic effort
-- Backward compatibility: whether API changes preserve existing callers or force
-  coordinated upgrades across the organization
+- Code sustainability: whether code as written can be maintained, migrated, and upgraded over a multi-year horizon without heroic effort
+- Backward compatibility: whether API changes preserve existing callers or force coordinated upgrades across the organization
 
 **Do not ignore**
 - De facto APIs created by observable behavior
@@ -177,15 +172,14 @@ It exists to prevent shallow "book-name citation" reviews.
 - A stable public API is not a liability if it is intentionally supported
 - Fan-out alone is not disorder when dependency policy is explicit and governed
 
----
+* * *
 
 ## Gerard Meszaros — *xUnit Test Patterns*
 
 **Encoded today**
 - Assertion Roulette, Mystery Guest, General Fixture
 - Eager Test, Lazy Test, Test Code Duplication, Behavior Verification
-- Erratic Test: tests that produce non-deterministic results due to shared state,
-  time dependence, or ordering assumptions between tests
+- Erratic Test: tests that produce non-deterministic results due to shared state, time dependence, or ordering assumptions between tests
 
 **Do not ignore**
 - Whether test failures are diagnosable
@@ -195,7 +189,7 @@ It exists to prevent shallow "book-name citation" reviews.
 - Multiple assertions are acceptable when they express one behavior with one failure story
 - Shared fixtures are acceptable when every field is relevant to the scenario
 
----
+* * *
 
 ## Roy Osherove — *The Art of Unit Testing*
 
@@ -213,7 +207,7 @@ It exists to prevent shallow "book-name citation" reviews.
 - A mock is acceptable when the dependency is nondeterministic and the assertion still verifies behavior
 - Naming conventions are guidance; clarity is the goal
 
----
+* * *
 
 ## Michael Feathers — *Working Effectively with Legacy Code*
 
@@ -231,7 +225,7 @@ It exists to prevent shallow "book-name citation" reviews.
 - Untested code is not automatically legacy if it is stable and not under active change
 - Characterization tests are most important before modifying unclear existing behavior
 
----
+* * *
 
 ## Google Engineering — *How Google Tests Software*
 

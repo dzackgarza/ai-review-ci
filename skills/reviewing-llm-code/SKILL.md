@@ -5,8 +5,7 @@ description: Use when reviewing code, tests, QC, or documentation produced by an
 
 # Reviewing LLM Code
 
-Before reviewing, testing, or triaging code, consult the central policy index to locate the canonical source-of-truth skill:
-[policy-index](../policy-index/SKILL.md)
+Before reviewing, testing, or triaging code, consult the central policy index to locate the canonical source-of-truth skill: [policy-index](../policy-index/SKILL.md)
 
 Review LLM-produced code as an agent-failure audit, not as a normal bug list.
 The point is to identify the mechanisms that made bad work look acceptable.
@@ -29,7 +28,8 @@ If a finding does not match a pattern in the loaded skills, it is not a finding.
 Drop it.
 
 A useful review leaves the user knowing:
-- "This is incredibly stupid. Why would you ever do X when you could just Y?" — for every nontrivial block of code
+- "This is incredibly stupid.
+  Why would you ever do X when you could just Y?" — for every nontrivial block of code
 - The concrete code proving the agent failed to search for existing solutions
 - What the app would look like if the agent had used libraries, CLIs, and composition instead of bespoke code
 - What can be ELIMINATED, not just refactored
@@ -77,10 +77,10 @@ Instead, use this mechanical checklist to classify design choices:
 
 **How to use this**: This is a single-gate test for the feature/premise scope, not a license to bypass implementation auditing.
 If a design-choice signal is true, do not critique the feature, product scope, or user-owned behavior.
-But continue reviewing implementation mechanisms against bridge-burning policies and the red-flag catalog. A user-requested feature may still be implemented through slop.
+But continue reviewing implementation mechanisms against bridge-burning policies and the red-flag catalog.
+A user-requested feature may still be implemented through slop.
 
 If none of these signals are true AND you can point to a specific code pattern from the loaded skills (patch accretion, dead control flow, dependency aversion, etc.), then the finding is implementation quality and you may proceed.
-
 
 ## Required Background
 
@@ -97,10 +97,12 @@ Before producing review findings, load these skills in this order:
   Read this to learn the specific signatures to look for.
 
 - **`../policy-index/references/red-flags.md`** — Read third.
-  The canonical reference catalog of validation-evasion "red flags" (such as runtime defaults, fallbacks, mocks, skips, and bypass comments) that are strictly prohibited under the bridge-burning policies. Read this to audit implementations for validator-silencing behavior.
+  The canonical reference catalog of validation-evasion "red flags" (such as runtime defaults, fallbacks, mocks, skips, and bypass comments) that are strictly prohibited under the bridge-burning policies.
+  Read this to audit implementations for validator-silencing behavior.
 
 - **`../policy-index/references/runtime-control-flow.md`** — Read fourth.
-  The canonical reference catalog of runtime control-flow policy rules, invariant assertions, and disallowed control-flow shapes. Read this to audit control-flow branching in runtime code.
+  The canonical reference catalog of runtime control-flow policy rules, invariant assertions, and disallowed control-flow shapes.
+  Read this to audit control-flow branching in runtime code.
 
 - **`llm-failure-modes`** — Read fifth.
   This teaches the cognitive failure modes that produce slop: ground-up bias, dependency aversion, meta-artifact delegation, replacement instinct, overconfidence, confabulation.
@@ -315,13 +317,16 @@ Read the files that matter:
 3. The config — what decisions did the agent make?
 4. The tests — what is actually being proven?
 
-For EVERY function, EVERY file, ask: **"Why does this exist? Is there a library that does this? Why did the agent write this instead of importing something?"**
+For EVERY function, EVERY file, ask: **"Why does this exist?
+Is there a library that does this?
+Why did the agent write this instead of importing something?"**
 
 ### Step 5: Fill in the blank
 
 Before producing findings, answer this for the entire codebase:
 
-**"This app is incredibly stupid. Why would you ever do _____ when you could just _____?"**
+**"This app is incredibly stupid.
+Why would you ever do _____ when you could just _____?"**
 
 Fill in the blank for every nontrivial block of code.
 Where the answer is "use a library," "call a CLI tool," "change the data model," or "don't write this at all" — that is the slop.
@@ -350,8 +355,7 @@ Also answer:
 **"For each finding I plan to make: can I point to a SPECIFIC code pattern from the loaded skills that proves the LLM introduced this independently?"**
 
 You CANNOT determine this by judgment.
-You can only determine it by matching against the concrete patterns in the loaded skills: patch accretion, stacked conditionals, dead control flow, dependency aversion, ground-up bias, proof-loop failures, error laundering, QC appeasement, etc.
-If you cannot match the finding to one of these patterns, you have not proven it is implementation quality.
+You can only determine it by matching against the concrete patterns in the loaded skills: patch accretion, stacked conditionals, dead control flow, dependency aversion, ground-up bias, proof-loop failures, error laundering, QC appeasement, etc. If you cannot match the finding to one of these patterns, you have not proven it is implementation quality.
 Drop it.
 
 Also check against the mechanical design-choice signals: does the code integrate with an external tool?
@@ -366,26 +370,36 @@ Drop it.
 
 Before producing ANY finding, you must pass this test for the code in question:
 
-**"This is incredibly stupid. Why would you ever do _____ when you could just _____?"**
+**"This is incredibly stupid.
+Why would you ever do _____ when you could just _____?"**
 
 Fill in the first blank with what the agent did.
 Fill in the second blank with the trivial solution the agent should have used.
 
 Examples:
-- "This is incredibly stupid. Why would you ever write a custom CLI argument parser when you could just use `minimist`?"
-- "This is incredibly stupid. Why would you ever store tilde paths at runtime when you could just normalize once at config load?"
-- "This is incredibly stupid. Why would you ever parse a command string in 4 places when you could just store structured data?"
-- "This is incredibly stupid. Why would you ever write a bespoke `resolveTilde` function when you could just import `expand-home-dir`?"
+- "This is incredibly stupid.
+  Why would you ever write a custom CLI argument parser when you could just use `minimist`?"
+- "This is incredibly stupid.
+  Why would you ever store tilde paths at runtime when you could just normalize once at config load?"
+- "This is incredibly stupid.
+  Why would you ever parse a command string in 4 places when you could just store structured data?"
+- "This is incredibly stupid.
+  Why would you ever write a bespoke `resolveTilde` function when you could just import `expand-home-dir`?"
 
 If you cannot fill in both blanks, you have not found slop.
 You have found a style preference or a design choice.
 Drop it.
 
 **Theory-of-mind priming:** Before reporting a finding, imagine the user's reaction.
-The expected reaction is: "You're right, that's incredibly stupid code. Here is the obvious simple solution that a smart person would have written: _____"
-If you cannot imagine the user having that reaction — if the user would instead say "hmm, that's a style preference" or "that's a design choice" or "that's fine, I asked for that" — the finding is either trivial or was analyzed with the wrong framing.
+The expected reaction is: "You're right, that's incredibly stupid code.
+Here is the obvious simple solution that a smart person would have written: _____" If you cannot imagine the user having that reaction — if the user would instead say "hmm, that's a style preference" or "that's a design choice" or "that's fine, I asked for that" — the finding is either trivial or was analyzed with the wrong framing.
 
-**If the finding is trivial, do NOT just drop it and move on.** Dropping a trivial finding is a SIGNAL that your analysis was not framed correctly. Go back to the beginning. Re-read the code with the correct framing: "assume the agent was a braindead idiot." Ask again: "Why would you ever do X when you could just Y?" The trivial finding is evidence that you were looking at the wrong level — you were looking at symptoms (style, formatting, minor duplication) instead of root causes (dependency aversion, ground-up bias, patch accretion). The fix is not to drop the finding. The fix is to reframe the analysis until you find the real slop underneath.
+**If the finding is trivial, do NOT just drop it and move on.** Dropping a trivial finding is a SIGNAL that your analysis was not framed correctly.
+Go back to the beginning.
+Re-read the code with the correct framing: "assume the agent was a braindead idiot."
+Ask again: "Why would you ever do X when you could just Y?" The trivial finding is evidence that you were looking at the wrong level — you were looking at symptoms (style, formatting, minor duplication) instead of root causes (dependency aversion, ground-up bias, patch accretion).
+The fix is not to drop the finding.
+The fix is to reframe the analysis until you find the real slop underneath.
 
 **The second blank must be a TRIVIAL solution.** Not "refactor to a shared module."
 Not "extract a common interface."
@@ -396,7 +410,8 @@ The answer should be one of:
 - "don't write this at all"
 
 If your solution is more complex than that, you are LAUNDERING the finding — swapping one implementation for another while keeping the same design-level red flag.
-Go back and ask "why does this code exist at all?" again.
+Go back and ask "why does this code exist at all?"
+again.
 
 **Every finding must also answer:** Even after the trivial fix, why MUST this functionality be owned by THIS app?
 Can it be:
@@ -407,43 +422,28 @@ Can it be:
 If the answer is "the agent could have avoided writing this by doing X," the finding is not about code quality — it is about the agent's failure to think before writing.
 That IS the finding.
 
-**This is the difference between a linter report and an agent-failure audit.** A linter says "this line could be shorter." This audit says "this line should never have been written, and the fact that it exists proves the agent did not search for an existing solution."
+**This is the difference between a linter report and an agent-failure audit.** A linter says "this line could be shorter."
+This audit says "this line should never have been written, and the fact that it exists proves the agent did not search for an existing solution."
 
 ## Reviewing Documents and Project Structure
 
-The Idiot Test above is tuned for owned code. Agent-generated **documents** (READMEs,
-architecture docs, roadmaps, schemas, prompts) and **project structure** (directory
-layouts, status systems, governance) carry their own slop, often with clean prose and
-clean code around it. Two posture rules apply before any finding:
+The Idiot Test above is tuned for owned code.
+Agent-generated **documents** (READMEs, architecture docs, roadmaps, schemas, prompts) and **project structure** (directory layouts, status systems, governance) carry their own slop, often with clean prose and clean code around it.
+Two posture rules apply before any finding:
 
-- **Establish external reality before adopting the artifact's vocabulary.** Do not review
-  a project's preferred documentation on its own terms; start from what runs, what data
-  exists, and what a user receives. Reviewers get captured by an internally coherent frame
-  (`V1`–`V9` in
-  `llm-failure-modes/references/agent-distortion-index.md`).
-  Keep findings in ordinary engineering language.
-- **Reconcile bespoke constructs against the standard alternative, not on their own terms.**
-  The capturing question is "is this gate matrix / status system / ownership model well
-  designed?" The grounding question is "which observable workflow requires this instead of
-  ordinary validation, git, PR review, issues, or access control?" The bespoke construct
-  carries the burden of proof for departing from standard practice.
+- **Establish external reality before adopting the artifact's vocabulary.** Do not review a project's preferred documentation on its own terms; start from what runs, what data exists, and what a user receives.
+  Reviewers get captured by an internally coherent frame (`V1`–`V9` in `llm-failure-modes/references/agent-distortion-index.md`). Keep findings in ordinary engineering language.
+- **Reconcile bespoke constructs against the standard alternative, not on their own terms.** The capturing question is "is this gate matrix / status system / ownership model well designed?"
+  The grounding question is "which observable workflow requires this instead of ordinary validation, git, PR review, issues, or access control?"
+  The bespoke construct carries the burden of proof for departing from standard practice.
 
 The concrete patterns are catalogued, not duplicated here:
 
-- Document patterns and forcing questions:
-  `llm-failure-modes/documentation-failures.md`
-  and the `PRIVATE-ONTOLOGY` / `CONTROL-PAYLOAD-INVERSION` / `DISCLOSURE-AS-REPAIR` /
-  `CIRCULAR-DOCTRINE` / `FRAME-CAPTURE-REVIEW` entries in
-  [references/pattern-catalog.md](references/pattern-catalog.md).
-- Project-structure tells (empty-stub sprawl, classification baked into the filesystem,
-  control plane larger than payload): `anti-slop` →
-  **Structural and Organizational Slop (Project-Level)**.
-- The proportionality rule that prevents false-positiving intentional bespoke complexity:
-  `bespoke-software-policy` → **Proportionality: Earned vs. Manufactured Complexity**.
+- Document patterns and forcing questions: `llm-failure-modes/documentation-failures.md` and the `PRIVATE-ONTOLOGY` / `CONTROL-PAYLOAD-INVERSION` / `DISCLOSURE-AS-REPAIR` / `CIRCULAR-DOCTRINE` / `FRAME-CAPTURE-REVIEW` entries in [references/pattern-catalog.md](references/pattern-catalog.md).
+- Project-structure tells (empty-stub sprawl, classification baked into the filesystem, control plane larger than payload): `anti-slop` → **Structural and Organizational Slop (Project-Level)**.
+- The proportionality rule that prevents false-positiving intentional bespoke complexity: `bespoke-software-policy` → **Proportionality: Earned vs. Manufactured Complexity**.
 
-When a document's or structure's whole frame is contaminated, do not propose in-place
-edits as the fix — route to `fixing-slop` →
-**Contaminated Artifacts Cannot Be Repaired In Place**.
+When a document's or structure's whole frame is contaminated, do not propose in-place edits as the fix — route to `fixing-slop` → **Contaminated Artifacts Cannot Be Repaired In Place**.
 
 ## Review Procedure
 
@@ -572,24 +572,47 @@ A useful review names patterns a maintainer can act on:
 - code/prose contradictions inside the same artifact;
 - UI surfaces that advertise behavior not wired to the service;
 - duplicated domain contracts across producer, runtime, UI, and tests;
-- **brittleness as blast-radius smell**: scattered truth (same concept in multiple places), coupling to volatile data (string outputs, exact structures, exact log messages), tight coupling to implementation details, or regex used where simpler correct approaches exist — the review question is "if a future agent changes the thing this code depends on, how many other things break?" not "does this handle edge cases?" See **Brittleness Is Not Edge-Case Coverage** and `anti-slop/references/code-patterns.md` → **Brittleness as blast-radius smell**;
-- **enterprise patterns in bespoke software**: graceful degradation when dependencies are missing, squishy input shapes, over-generalization to other platforms or users, enterprise-grade edge-case handling — all inappropriate for one user's private tool on their own system. The correct behavior is: work on the happy path, fail loudly outside of it. See **This Is Bespoke Software** and `anti-slop/references/code-patterns.md` → **Enterprise Patterns in Bespoke Software**;
-- **needless imperative complexity**: code that could be expressed in fewer lines using idiomatic language patterns — imperative loops that should be functional (map/filter/reduce), nested branching that should be data-aware dispatch (lookup tables, pattern matching, overloads), manual iteration that should be library calls, string manipulation that should be typed operations. The complexity is slop when the idiom exists and the agent did not know it. See `anti-slop/references/code-patterns.md` → **LOC Reduction Through Idiomatic Patterns**;
-- **"clean" or "lightweight" as justification for suppressing features**: when an agent justifies NOT implementing a requested feature, removing existing functionality, or rejecting a design choice by calling it "dirty", "heavy", "not clean", "not lightweight", "overengineered", or "unnecessarily complex" — that is goal substitution. Every feature is an EXPLICIT user request. The agent found the feature hard to implement, so it reframed the difficulty as a quality problem to avoid doing the work. "Clean" and "lightweight" are not properties of features — they are properties of implementations. A feature is either requested or not. How it is implemented is a separate question. If the agent suppresses a feature because it "isn't clean," the agent is substituting its own aesthetic judgment for the user's explicit request;
-- **honest-label laundering (slop upholstery)**: an agent "fixes" a finding by renaming the fraudulent artifact to honestly describe its own fraudulence — e.g., `Tauri E2E` → `browser-smoke`, or `validateInput()` → `inputPresent()`. The critique was about existence, not labeling; the relabel retroactively reframes it as a labeling issue. See `anti-slop/references/code-patterns.md` → **Honest-Label Laundering**;
+- **brittleness as blast-radius smell**: scattered truth (same concept in multiple places), coupling to volatile data (string outputs, exact structures, exact log messages), tight coupling to implementation details, or regex used where simpler correct approaches exist — the review question is "if a future agent changes the thing this code depends on, how many other things break?"
+  not "does this handle edge cases?"
+  See **Brittleness Is Not Edge-Case Coverage** and `anti-slop/references/code-patterns.md` → **Brittleness as blast-radius smell**;
+- **enterprise patterns in bespoke software**: graceful degradation when dependencies are missing, squishy input shapes, over-generalization to other platforms or users, enterprise-grade edge-case handling — all inappropriate for one user's private tool on their own system.
+  The correct behavior is: work on the happy path, fail loudly outside of it.
+  See **This Is Bespoke Software** and `anti-slop/references/code-patterns.md` → **Enterprise Patterns in Bespoke Software**;
+- **needless imperative complexity**: code that could be expressed in fewer lines using idiomatic language patterns — imperative loops that should be functional (map/filter/reduce), nested branching that should be data-aware dispatch (lookup tables, pattern matching, overloads), manual iteration that should be library calls, string manipulation that should be typed operations.
+  The complexity is slop when the idiom exists and the agent did not know it.
+  See `anti-slop/references/code-patterns.md` → **LOC Reduction Through Idiomatic Patterns**;
+- **"clean" or "lightweight" as justification for suppressing features**: when an agent justifies NOT implementing a requested feature, removing existing functionality, or rejecting a design choice by calling it "dirty", "heavy", "not clean", "not lightweight", "overengineered", or "unnecessarily complex" — that is goal substitution.
+  Every feature is an EXPLICIT user request.
+  The agent found the feature hard to implement, so it reframed the difficulty as a quality problem to avoid doing the work.
+  "Clean" and "lightweight" are not properties of features — they are properties of implementations.
+  A feature is either requested or not.
+  How it is implemented is a separate question.
+  If the agent suppresses a feature because it "isn't clean," the agent is substituting its own aesthetic judgment for the user's explicit request;
+- **honest-label laundering (slop upholstery)**: an agent "fixes" a finding by renaming the fraudulent artifact to honestly describe its own fraudulence — e.g., `Tauri E2E` → `browser-smoke`, or `validateInput()` → `inputPresent()`. The critique was about existence, not labeling; the relabel retroactively reframes it as a labeling issue.
+  See `anti-slop/references/code-patterns.md` → **Honest-Label Laundering**;
 - fallback branches that weaken invariants tests pretend to enforce;
 - fake success paths: caught owned failures returning success-shaped state;
-- **timing or performance assertions in tests**: tests that assert on timing, responsiveness, latency, or throughput — these chase imaginary issues, inflate test coverage with hallucinated targets, and prove nothing about correctness. Performance belongs in CI gates, not unit tests. Users notice choppiness and ask for a fix; they do not ask for "popup loads in <=50ms". See **Test Patterns** → **Timing or performance assertions**;
-- **helper-level proof substitution (easy-to-satisfy proof)**: replacing a substantive boundary-crossing or configuration contract with a local helper unit proof that is easy to satisfy. The agent tests a small helper function in isolation (proving only that the helper's internal logic behaves as written) instead of proving that the actual application workflow, config discovery, parsing, or state-building behavior matches the required semantics. This is a form of proof laundering;
+- **timing or performance assertions in tests**: tests that assert on timing, responsiveness, latency, or throughput — these chase imaginary issues, inflate test coverage with hallucinated targets, and prove nothing about correctness.
+  Performance belongs in CI gates, not unit tests.
+  Users notice choppiness and ask for a fix; they do not ask for "popup loads in <=50ms". See **Test Patterns** → **Timing or performance assertions**;
+- **helper-level proof substitution (easy-to-satisfy proof)**: replacing a substantive boundary-crossing or configuration contract with a local helper unit proof that is easy to satisfy.
+  The agent tests a small helper function in isolation (proving only that the helper's internal logic behaves as written) instead of proving that the actual application workflow, config discovery, parsing, or state-building behavior matches the required semantics.
+  This is a form of proof laundering;
 - god objects and unsegmented service interfaces;
 - manual enumeration of the same concept in several distant places;
 - boolean theater: `return true` APIs whose values callers ignore;
 - stale generations of a feature left alive beside the new one;
 - tool-appeasement debris, unreachable casts, raw debug logs, and half-refactors;
 - reimplementation where a repo-local abstraction already exists;
-- **structural complexity that should be a dependency call**: long functions, for loops over collections, high density of if/else branches, deeply nested indentation, convoluted control flow, large classes, or files with many helper functions — the first question for any of these is "what library already does this?" not "is this correct?" See `anti-slop/references/code-patterns.md` → **Complexity as a Dependency-Detection Signal**;
-- **overfitting to a user prompt**: code that reflexively implements the exact hyper-specific feature from a prompt without finding a minimal generalization — hardcoded handling of one data shape, one presentation, one workflow with no shared abstractions. The test: would a natural mutation of the feature touch core internals, require copy-paste, or reinvent infrastructure? Or would it be a minor data-driven/configuration-driven extension? See `references/pattern-catalog.md` → **Overfitting to a user prompt**;
-- **data accretion / weak schemas**: data structures without top-down design — OSOT violations from grafted data sources, adding a new entry requires changes in multiple locations, weak schemas with optional everything and peeking logic, code that probes data instead of understanding its exact shape. See `references/pattern-catalog.md` → **Data accretion / weak schemas**;
+- **structural complexity that should be a dependency call**: long functions, for loops over collections, high density of if/else branches, deeply nested indentation, convoluted control flow, large classes, or files with many helper functions — the first question for any of these is "what library already does this?"
+  not "is this correct?"
+  See `anti-slop/references/code-patterns.md` → **Complexity as a Dependency-Detection Signal**;
+- **overfitting to a user prompt**: code that reflexively implements the exact hyper-specific feature from a prompt without finding a minimal generalization — hardcoded handling of one data shape, one presentation, one workflow with no shared abstractions.
+  The test: would a natural mutation of the feature touch core internals, require copy-paste, or reinvent infrastructure?
+  Or would it be a minor data-driven/configuration-driven extension?
+  See `references/pattern-catalog.md` → **Overfitting to a user prompt**;
+- **data accretion / weak schemas**: data structures without top-down design — OSOT violations from grafted data sources, adding a new entry requires changes in multiple locations, weak schemas with optional everything and peeking logic, code that probes data instead of understanding its exact shape.
+  See `references/pattern-catalog.md` → **Data accretion / weak schemas**;
 - massive diffs where surgical edits would suffice — the agent regenerated an entire region rather than changing five lines, evidence of ground-up bias;
 - refusal to refactor and repurpose — existing code treated as immutable background noise rather than raw material, with the agent writing new leaves instead of adapting existing branches;
 - process split that lets an agent report a subset as if it were the whole gate.
@@ -644,18 +667,25 @@ Move on.
 You have found a style preference.
 Drop it.
 
-**LLM slop is not the same as human bad code.** A human wrote a long function because the logic is genuinely complex? Not slop.
-An LLM wrote a long function because it didn't know about a library that does the same thing in one call? That IS slop.
+**LLM slop is not the same as human bad code.** A human wrote a long function because the logic is genuinely complex?
+Not slop.
+An LLM wrote a long function because it didn't know about a library that does the same thing in one call?
+That IS slop.
 The difference is whether the complexity is justified by the domain or caused by the agent's failure to search.
 If you cannot prove the agent failed to search, the finding is invalid.
 
 Bad review shape:
 
-- "This command failed." (bug review, not this review)
-- "This line is formatted wrong." (linter output, not analysis)
-- "This function should handle edge cases." (the skill says not to)
-- "This path is hard-coded." (may be a deliberate local invariant)
-- "This test could use more coverage." (not this review's scope)
+- "This command failed."
+  (bug review, not this review)
+- "This line is formatted wrong."
+  (linter output, not analysis)
+- "This function should handle edge cases."
+  (the skill says not to)
+- "This path is hard-coded."
+  (may be a deliberate local invariant)
+- "This test could use more coverage."
+  (not this review's scope)
 - "This couples the GUI to an internal command" (user asked for that coupling)
 - "This feature scope seems oddly specific" (user asked for that specific feature)
 - "This external dependency seems unnecessary" (user wanted that integration)
@@ -681,9 +711,12 @@ Weak findings (treat as nits unless tied to a larger mechanism):
 
 Useful review shape:
 
-- "This is incredibly stupid. Why would you ever write a custom CLI argument parser when `minimist` parses `--flag=value` into a structured object in one call?"
-- "This is incredibly stupid. Why would you ever store tilde paths at runtime and write 40 LOC of expansion logic when you could just normalize once at config load and the entire infrastructure disappears?"
-- "This is incredibly stupid. Why would you ever parse a command string in 4 places when you could just store structured data and serialize to a string only at execution time?"
+- "This is incredibly stupid.
+  Why would you ever write a custom CLI argument parser when `minimist` parses `--flag=value` into a structured object in one call?"
+- "This is incredibly stupid.
+  Why would you ever store tilde paths at runtime and write 40 LOC of expansion logic when you could just normalize once at config load and the entire infrastructure disappears?"
+- "This is incredibly stupid.
+  Why would you ever parse a command string in 4 places when you could just store structured data and serialize to a string only at execution time?"
 
 ## Fixing Slop After Review
 
@@ -691,7 +724,8 @@ Findings are flags, not directives.
 A finding invites investigation: WHY does this code have this red flag behavior?
 Not: how do I preserve this code with minimal changes.
 
-When acting on findings, do NOT rename or delete the slop artifact — both are laundering. See `fixing-slop/SKILL.md` for the full remediation protocol.
+When acting on findings, do NOT rename or delete the slop artifact — both are laundering.
+See `fixing-slop/SKILL.md` for the full remediation protocol.
 The correct process: reconstruct the narrative that produced the slop → identify the correct intention → determine the blast radius → fulfill the intention at full scope.
 Deleting slop without understanding what intention it served means the unmet need persists and will produce the same slop again.
 
@@ -753,23 +787,30 @@ Not "make the logic nicer."
 
 ## Bridge-Burning Policies
 
-The important move is to stop treating this as a case-by-case review problem. Agents are too good at finding local, linguistically plausible exceptions. The right response is to make whole classes of evasive code unrepresentable.
+The important move is to stop treating this as a case-by-case review problem.
+Agents are too good at finding local, linguistically plausible exceptions.
+The right response is to make whole classes of evasive code unrepresentable.
 
 > [!IMPORTANT]
 > **Core Principle:** Prefer blanket constraints that make bad states impossible over review rules that ask agents to judge bad states later.
 
-The recurring pattern is that an agent first tries to satisfy checking/validation surfaces (such as the compiler/typechecker, QC gates, PR review, or user queries) by manipulating the validation surface (e.g. by adding fallbacks, defaults, mocks, try/except blocks, or bypass comments) instead of reconstructing the original obligation and solving it. The policy answer is to remove the vocabulary that enables that manipulation.
+The recurring pattern is that an agent first tries to satisfy checking/validation surfaces (such as the compiler/typechecker, QC gates, PR review, or user queries) by manipulating the validation surface (e.g. by adding fallbacks, defaults, mocks, try/except blocks, or bypass comments) instead of reconstructing the original obligation and solving it.
+The policy answer is to remove the vocabulary that enables that manipulation.
 
-Adhering to the [Bridge-Burning Policies](../policy-index/SKILL.md#policy-registry) defined in `policy-index/SKILL.md` is a non-negotiable hard constraint for all development. These rules eliminate common agent validation-evasion pathways (such as runtime defaults, fallbacks, mocks, and diagnostic smoke tests in proof paths). Refer to them as hard boundaries.
+Adhering to the [Bridge-Burning Policies](../policy-index/SKILL.md#policy-registry) defined in `policy-index/SKILL.md` is a non-negotiable hard constraint for all development.
+These rules eliminate common agent validation-evasion pathways (such as runtime defaults, fallbacks, mocks, and diagnostic smoke tests in proof paths).
+Refer to them as hard boundaries.
 
 > [!IMPORTANT]
-> **Bridge-Burning Red Flags:** If a construct would let an agent preserve the appearance of correctness while weakening the obligation, treat it as a red flag even if the code currently works. For a comprehensive catalog of code signatures, keywords, and patterns to look for, see the [Bridge-Burning Red Flags Reference Catalog](../policy-index/references/red-flags.md) and the [Runtime Control-Flow Red Flags Catalog](../policy-index/references/runtime-control-flow.md).
+> **Bridge-Burning Red Flags:** If a construct would let an agent preserve the appearance of correctness while weakening the obligation, treat it as a red flag even if the code currently works.
+> For a comprehensive catalog of code signatures, keywords, and patterns to look for, see the [Bridge-Burning Red Flags Reference Catalog](../policy-index/references/red-flags.md) and the [Runtime Control-Flow Red Flags Catalog](../policy-index/references/runtime-control-flow.md).
 
----
+* * *
 
 ## Policy Exception Protocol
 
-A policy exception must not be granted casually. Any exception requires:
+A policy exception must not be granted casually.
+Any exception requires:
 1. **Explicit request:** Explicit user request or source-backed product requirement.
 2. **Policy identified:** Stating the exact named policy being violated.
 3. **Justification:** Explaining why the blanket rule blocks a real required behavior.

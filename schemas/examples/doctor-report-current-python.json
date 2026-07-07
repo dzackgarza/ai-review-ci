@@ -42,20 +42,8 @@
       "path": "/example/python-target/.github/workflows/review-pr.yml",
       "required_ref": "main",
       "observed_ref": "main",
-      "required_gates": [
-        "deterministic-diff",
-        "delegation-conformance",
-        "qc-doctor",
-        "pr-description-checklist",
-        "thread-resolution"
-      ],
-      "observed_gates": [
-        "delegation-conformance",
-        "deterministic-diff",
-        "qc-doctor",
-        "pr-description-checklist",
-        "thread-resolution"
-      ]
+      "required_gates": ["deterministic-diff", "delegation-conformance", "qc-doctor", "pr-description-checklist", "thread-resolution"],
+      "observed_gates": ["delegation-conformance", "deterministic-diff", "qc-doctor", "pr-description-checklist", "thread-resolution"]
     }
   },
   "justfile_delegation": {
@@ -95,48 +83,28 @@
   "profile_proof_requirements": {
     "python": {
       "profile": "python",
-      "required_paths": [
-        "pyproject.toml"
-      ],
+      "required_paths": ["pyproject.toml"],
       "missing_paths": []
     },
     "bun": {
       "profile": "bun",
-      "required_paths": [
-        "package.json"
-      ],
-      "missing_paths": [
-        "package.json",
-        "bun.lock or bun.lockb"
-      ]
+      "required_paths": ["package.json"],
+      "missing_paths": ["package.json", "bun.lock or bun.lockb"]
     },
     "bun-playwright": {
       "profile": "bun-playwright",
-      "required_paths": [
-        "package.json",
-        "playwright.config.ts"
-      ],
-      "missing_paths": [
-        "package.json",
-        "playwright.config.ts",
-        "bun.lock or bun.lockb"
-      ]
+      "required_paths": ["package.json", "playwright.config.ts"],
+      "missing_paths": ["package.json", "playwright.config.ts", "bun.lock or bun.lockb"]
     },
     "rust": {
       "profile": "rust",
-      "required_paths": [
-        "Cargo.toml"
-      ],
-      "missing_paths": [
-        "Cargo.toml"
-      ]
+      "required_paths": ["Cargo.toml"],
+      "missing_paths": ["Cargo.toml"]
     },
     "sage": {
       "profile": "sage",
       "required_paths": [],
-      "missing_paths": [
-        "at least one .sage file"
-      ]
+      "missing_paths": ["at least one .sage file"]
     }
   },
   "findings": [],

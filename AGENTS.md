@@ -1,10 +1,10 @@
 # Agent Rules
 
-
 ## Issue-Scoped PR Lifecycle
 
 Policy, QC, reviewer, workflow, and gate changes must be issue-first and draft-first.
-Do not accumulate local changes and then invent a PR scope around them. Before writing code:
+Do not accumulate local changes and then invent a PR scope around them.
+Before writing code:
 
 - identify the existing triaged issue or create one with the original problem, policy risk, and acceptance criteria;
 - create a draft PR associated with that issue before broad implementation continues;
@@ -13,7 +13,8 @@ Do not accumulate local changes and then invent a PR scope around them. Before w
 - move from draft to ready-for-review only after tests/evidence and adversarial policy review are complete;
 - handle review feedback as a loop: accepted feedback requires a committed remediation before any “fixed/addressed” reply, and rejected or modified feedback belongs in a top-level `Review feedback disposition ledger`.
 
-If a branch is discovered to contain a broad, untriaged, or policy-poisoned diff, close or abandon the PR rather than trying to salvage it by summary wording. Recreate the work from `origin/main` on an issue-scoped branch.
+If a branch is discovered to contain a broad, untriaged, or policy-poisoned diff, close or abandon the PR rather than trying to salvage it by summary wording.
+Recreate the work from `origin/main` on an issue-scoped branch.
 
 ## QC Delegation
 
@@ -73,66 +74,47 @@ If a branch is discovered to contain a broad, untriaged, or policy-poisoned diff
 
 # Policy Alignment Gate
 
-Every PR against this repo must reconcile against the burned-bridge policy before it
-leaves draft or merges. This gate exists because agents — local and, especially, remote —
-arrive with strong priors that *want* fail-soft slop accepted. A "noisy detector" reads as
-"make it quieter"; the obvious fix (allow an empty-array default, add a fallback, widen a
-type, swallow an error) is exactly the policy violation. The reviewer cannot catch a change
-that weakens the reviewer, so the check lives in the definition of done for the work itself,
-not only in CI.
+Every PR against this repo must reconcile against the burned-bridge policy before it leaves draft or merges.
+This gate exists because agents — local and, especially, remote — arrive with strong priors that *want* fail-soft slop accepted.
+A "noisy detector" reads as "make it quieter"; the obvious fix (allow an empty-array default, add a fallback, widen a type, swallow an error) is exactly the policy violation.
+The reviewer cannot catch a change that weakens the reviewer, so the check lives in the definition of done for the work itself, not only in CI.
 
-Concrete failure this prevents: **PR #143** "fixed" a noisy `POLICY.RUNTIME_DEFAULT`
-detector by allowing `?? ""` / `?? []` / `?? {}` as "boundary normalization" — converting a
-true `POLICY.FAIL_OPEN` finding into scanner silence, and blessing the fail-open pattern for
-every downstream consumer. It was merged, then reopened for policy-aligned remediation
-(#120, #130).
+Concrete failure this prevents: **PR #143** "fixed" a noisy `POLICY.RUNTIME_DEFAULT` detector by allowing `?? ""` / `?? []` / `?? {}` as "boundary normalization" — converting a true `POLICY.FAIL_OPEN` finding into scanner silence, and blessing the fail-open pattern for every downstream consumer.
+It was merged, then reopened for policy-aligned remediation (#120, #130).
 
 ## Canonical policy source (self-contained — no external fetch)
 
 The authoritative policy is owned by this repo under `skills/`. Load it from the checkout:
 
-- `skills/policy-index/SKILL.md` and `skills/policy-index/references/policies.md`
-  — the `POLICY.*` records and their **Invalid local fixes**.
+- `skills/policy-index/SKILL.md` and `skills/policy-index/references/policies.md` — the `POLICY.*` records and their **Invalid local fixes**.
 - `skills/policy-index/references/red-flags.md` — the red-flag inventory.
 - `skills/policy-index/references/runtime-control-flow.md` — runtime control-flow red flags.
 
-Do not rely on globally-installed skills: remote review/coding agents (Codex, Jules, cloud
-runs) do not have them. The in-repo copy is the contract — this repo is the canonical home;
-other machines install these skills as symlinks via `just install-skills`.
+Do not rely on globally-installed skills: remote review/coding agents (Codex, Jules, cloud runs) do not have them.
+The in-repo copy is the contract — this repo is the canonical home; other machines install these skills as symlinks via `just install-skills`.
 
 ## Tier 0 — every PR
 
 Before requesting review or merging, the PR body (or disposition ledger) must state:
 
 - Which `POLICY.*` records the change touches or risks.
-- That no **Invalid local fix** from those records was introduced — no new fallback, runtime
-  default, optional core-state, swallowed error, or partial-success path added to make
-  required work look successful after it should have failed loudly.
+- That no **Invalid local fix** from those records was introduced — no new fallback, runtime default, optional core-state, swallowed error, or partial-success path added to make required work look successful after it should have failed loudly.
 
-Empty and falsy literals are not exceptions. A fallback whose value is a placeholder — the
-canonical `POLICY.FAIL_OPEN` record names `None`, `[]`, `{}`, and `false`; empty strings behave
-the same way — is a `POLICY.FAIL_OPEN` violation, not "safe boundary normalization." Genuinely
-optional product state is represented as an explicit typed/semantic state at the owned
-boundary, never laundered through an empty default.
+Empty and falsy literals are not exceptions.
+A fallback whose value is a placeholder — the canonical `POLICY.FAIL_OPEN` record names `None`, `[]`, `{}`, and `false`; empty strings behave the same way — is a `POLICY.FAIL_OPEN` violation, not "safe boundary normalization."
+Genuinely optional product state is represented as an explicit typed/semantic state at the owned boundary, never laundered through an empty default.
 
 ## Tier 1 — PRs that change the QC tooling itself
 
-Any PR touching `tool-configs/`, `reviews/`, the detectors, or QC `justfiles/` additionally
-must carry an **adversarial regression-lock**:
+Any PR touching `tool-configs/`, `reviews/`, the detectors, or QC `justfiles/` additionally must carry an **adversarial regression-lock**:
 
-- A fixture (`// ruleid:` or equivalent) proving each previously-flagged banned pattern
-  **still fires** after the change. A precision fix narrows by **position** — excluding
-  genuine boolean/control-flow uses — never by **value**. No fallback value is reclassified
-  as safe.
-- An explicit statement that the change weakens no `POLICY.*` and converts no true finding
-  into scanner silence.
+- A fixture (`// ruleid:` or equivalent) proving each previously-flagged banned pattern **still fires** after the change.
+  A precision fix narrows by **position** — excluding genuine boolean/control-flow uses — never by **value**. No fallback value is reclassified as safe.
+- An explicit statement that the change weakens no `POLICY.*` and converts no true finding into scanner silence.
 
-This is the gate PR #143 would have failed: a `ruleid` fixture on `?? ""` / `?? []` / `?? {}`
-makes any future empty-literal whitelist a red test.
+This is the gate PR #143 would have failed: a `ruleid` fixture on `?? ""` / `?? []` / `?? {}` makes any future empty-literal whitelist a red test.
 
-See `# Review Guidelines` → Evidence Expectations for the reviewer-side counterpart, and the
-wiki page [Policy Alignment Gate](https://github.com/dzackgarza/ai-review-ci/wiki/Policy-Alignment-Gate)
-for the full rationale.
+See `# Review Guidelines` → Evidence Expectations for the reviewer-side counterpart, and the wiki page [Policy Alignment Gate](https://github.com/dzackgarza/ai-review-ci/wiki/Policy-Alignment-Gate) for the full rationale.
 
 # Review Guidelines
 
@@ -266,11 +248,14 @@ agent-memory add --scope project --type context --title <title> --content <conte
 agent-memory add --scope project --type reference --title <title> --content <content>
 ```
 
-Plan work is card-backed. Create and update plan cards with `agent-memory plan add` and `agent-memory plan update`, not `agent-memory add --type plan`.
+Plan work is card-backed.
+Create and update plan cards with `agent-memory plan add` and `agent-memory plan update`, not `agent-memory add --type plan`.
 
 Use `agent-memory retrieve <key>`, `agent-memory update <key>`, and `agent-memory delete <key>` for memory CRUD.
 
-The vault should be committed at all times. Treat staged or unstaged vault changes as an ephemeral error state. Before normal memory work resumes, load the bundled vault-maintenance skill with `agent-memory maintain skill vault-maintenance` and follow its referenced check, repair, and commit workflows.
+The vault should be committed at all times.
+Treat staged or unstaged vault changes as an ephemeral error state.
+Before normal memory work resumes, load the bundled vault-maintenance skill with `agent-memory maintain skill vault-maintenance` and follow its referenced check, repair, and commit workflows.
 
 Move reusable lessons during maintenance with:
 

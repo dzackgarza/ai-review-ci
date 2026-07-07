@@ -1,50 +1,38 @@
 # Issue Workflow (Filing, View, Create, Manage, Triage)
 
-Issue tracking at integration time: the owned-repo improvement loop, filing rules and
-templates, labels, and the CLI mechanics for viewing, creating, managing, and triaging
-issues. Sourced from the `git-guidelines` Issue Workflow section and `issues.md`.
+Issue tracking at integration time: the owned-repo improvement loop, filing rules and templates, labels, and the CLI mechanics for viewing, creating, managing, and triaging issues.
+Sourced from the `git-guidelines` Issue Workflow section and `issues.md`.
 
-For planning-tree issues — roadmap, phase, feature, story, proof obligation, or
-implementation node — load `plan` and read its `references/externalization.md` before
-creating or restructuring anything. The model it defines (single root roadmap issue,
-story-shaped nodes at altitude, milestones scoped to subtree roots, proof obligations
-in issue bodies) is not reconstructable from the CLI commands below.
+For planning-tree issues — roadmap, phase, feature, story, proof obligation, or implementation node — load `plan` and read its `references/externalization.md` before creating or restructuring anything.
+The model it defines (single root roadmap issue, story-shaped nodes at altitude, milestones scoped to subtree roots, proof obligations in issue bodies) is not reconstructable from the CLI commands below.
 
 ## Owned Repo Improvement Loop
 
-For repos owned by this system, observed defects should not remain as chat residue or
-private notes.
-If an app, tool, plugin, QC gate, or agent workflow has a small observed error,
-inefficiency, false green, confusing edge case, or recurring paper cut, do one of these
-before handoff:
+For repos owned by this system, observed defects should not remain as chat residue or private notes.
+If an app, tool, plugin, QC gate, or agent workflow has a small observed error, inefficiency, false green, confusing edge case, or recurring paper cut, do one of these before handoff:
 
 - fix it in the current coherent work unit and commit the fix;
 - file a GitHub issue on the owning repo with evidence and concrete expected behavior;
 - if ownership or scope is ambiguous, ask the user where to file it.
 
-Do not file speculative bugs. Do not create issues for vague dissatisfaction without an
-observed example. Do not bury observed owned-repo defects only in memory; memory can note
-the durable lesson, but the actionable project gap belongs on GitHub.
+Do not file speculative bugs.
+Do not create issues for vague dissatisfaction without an observed example.
+Do not bury observed owned-repo defects only in memory; memory can note the durable lesson, but the actionable project gap belongs on GitHub.
 
 ## Filing Issues
 
 **All issues must be labeled immediately upon creation.**
 
-Use
-`gh issue create --repo <owner>/<repo> --title "..." --body-file issue.md --label "<label>"`
+Use `gh issue create --repo <owner>/<repo> --title "..." --body-file issue.md --label "<label>"`
 
-For roadmap, feature, PRD, or cross-agent planning issues, first load
-the `plan` skill's `references/externalization.md`. Create story-shaped issue nodes, use native
-sub-issues for parent/child tree edges, use dependencies only for blockers, assign the
-GitHub Milestone that owns the delivery slice, and avoid turning a wiki page or issue body
-into a second live tracker.
+For roadmap, feature, PRD, or cross-agent planning issues, first load the `plan` skill's `references/externalization.md`. Create story-shaped issue nodes, use native sub-issues for parent/child tree edges, use dependencies only for blockers, assign the GitHub Milestone that owns the delivery slice, and avoid turning a wiki page or issue body into a second live tracker.
 
 **Mandatory Issue Rules:**
 
 1. **Deep description**: Explain exactly what is happening or missing.
 
-2. **Proof**: Include relevant logs, outputs, error traces, or code snippets that PROVE
-   the issue exists. Provide as many clear examples as possible.
+2. **Proof**: Include relevant logs, outputs, error traces, or code snippets that PROVE the issue exists.
+   Provide as many clear examples as possible.
 
 3. **Concrete Expectations**: Describe new designs, specs, and expected behavior.
    Include TDD-style pseudocode showing what the expected new behavior looks like.
@@ -53,10 +41,8 @@ into a second live tracker.
 4. **Informative Only**: Use plain, technical language.
    No marketing or selling language.
 
-5. **No Implementation Code**: Do NOT attempt to write the actual code to fix the
-   problem in the issue body.
-   The person filing the issue does NOT decide HOW to fix it; they provide data to more
-   specialized design and triage agents.
+5. **No Implementation Code**: Do NOT attempt to write the actual code to fix the problem in the issue body.
+   The person filing the issue does NOT decide HOW to fix it; they provide data to more specialized design and triage agents.
 
 6. **No Plans**: Do not include a step-by-step "plan" to fix the issue.
    That is a separate task.
@@ -94,18 +80,14 @@ Create a local `.md` file for the body and pass it to `gh issue create --body-fi
 
 - `documentation`: Improvements or additions to documentation.
 
-**Mandatory**: If an observed owned-repo defect, inefficiency, false green, or recurring
-paper cut cannot be fixed in the current coherent work unit, log it as an issue on the
-owning repo.
-Do not file speculative concerns; frame observed improvement ideas as `enhancement` when
-they are not bugs.
+**Mandatory**: If an observed owned-repo defect, inefficiency, false green, or recurring paper cut cannot be fixed in the current coherent work unit, log it as an issue on the owning repo.
+Do not file speculative concerns; frame observed improvement ideas as `enhancement` when they are not bugs.
 
 * * *
 
 # CLI Mechanics (View, Create, Manage, Triage)
 
-The rest of this file is mechanics only, consolidated from the former `github-issues`
-skill.
+The rest of this file is mechanics only, consolidated from the former `github-issues` skill.
 
 ## Setup
 
@@ -216,9 +198,21 @@ gh issue edit 42 --add-assignee username
 ### Parent and Sub-Issues
 
 Use native sub-issues for tree edges when the repository's GitHub surface supports them.
-Do not use labels, title numbering, or dependencies to simulate ordinary parent/child
-order.
+Do not use labels, title numbering, or dependencies to simulate ordinary parent/child order.
 
+**With itree (Recommended):** To manage parent/child relationships programmatically, use the `itree` CLI:
+```bash
+# Create a new child issue and automatically attach it to a parent.
+itree add OWNER/REPO#PARENT_NUMBER "Title of new child" --body-file issue.md
+
+# Attach an existing child issue under a parent.
+itree attach OWNER/REPO#PARENT_NUMBER OWNER/REPO#CHILD_NUMBER
+
+# Reparent or reorder an issue (under a parent, optionally before/after a sibling).
+itree move OWNER/REPO#CHILD_NUMBER --under OWNER/REPO#PARENT_NUMBER [--before OWNER/REPO#SIBLING_NUMBER | --after OWNER/REPO#SIBLING_NUMBER]
+```
+
+**With gh:**
 ```bash
 # Create a new child issue under a parent.
 gh issue create --title "<child story or implementation node>" --body-file issue.md --parent 42
@@ -243,8 +237,8 @@ gh issue edit 42 --remove-blocked-by 41 --remove-blocking 44
 
 ### Milestones
 
-Milestones are delivery/progress buckets over issues and PRs. They do not replace the
-issue tree.
+Milestones are delivery/progress buckets over issues and PRs.
+They do not replace the issue tree.
 
 ```bash
 gh issue edit 42 --milestone "<milestone>"
