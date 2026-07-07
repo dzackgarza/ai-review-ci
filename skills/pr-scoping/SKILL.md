@@ -1,6 +1,6 @@
 ---
 name: pr-scoping
-description: Use before scoping or opening any pull request, when deciding whether a change warrants a PR at all, and when triaging a backlog into units of work. Forces PRs to be scoped as significant work units that close constellations of related issues, routes small urgent repairs direct to main, and bans the trivial single-nudge PRs agents default to.
+description: Use before scoping or opening any pull request, when deciding whether a change warrants a PR at all, and when triaging a backlog into units of work. Forces every non-organizational issue to be a significant PR-sized work unit, routes small urgent repairs direct to main, and bans the trivial single-nudge PRs agents default to.
 ---
 
 # PR Scoping: Significant Work Units, Not Nudges
@@ -32,7 +32,7 @@ Every change takes exactly one of these routes:
    No PR, no review loop.
    Add a regression test when cheap.
    If the crash is a symptom of an open root-cause issue, note the relief on that issue and leave it open.
-2. **Review-loop PR.** Issue-complete, cluster-complete, or milestone-subtree work: rewrites, feature grafts, structural consolidations.
+2. **Review-loop PR.** Issue-complete work: rewrites, feature grafts, structural consolidations.
    Enough scope to justify the review cost.
 
 The review loop is an expensive mechanism for validating substantial changes, not a ritual for all changes.
@@ -44,7 +44,7 @@ Small urgent repairs go to main; large coherent repairs go through review; small
 
 Your prior about what fits in one PR is years out of date.
 A 2026 frontier model can read an entire issue tree, understand the app, and deliver the subsystem rewrite that obviates most of it — with regression tests and decent code — in a single work window.
-Smaller agents can do the same for a pre-scoped root-cause cluster.
+Smaller agents can do the same when the issue already self-describes the root-cause cluster.
 These repos are small bespoke tools; "simple subsystem rewrite with regression tests" is a normal, one-shot-able unit of work here, not a special project requiring staging.
 
 So when a scope feels "too big," check which is actually true:
@@ -74,50 +74,60 @@ The selection procedure, in order:
    Large rewrites and whole features are not the risky option to attempt after the small fixes; they are the *first-choice* unit of work precisely because they burn down the backlog instead of grooming it.
 4. **That umbrella is the most urgent work.** Only when a repo genuinely has no umbrella — all open issues atomic and unrelated — does single-issue work become the right unit.
 
-## The unit of work is the constellation, not the issue
+## The unit of work is the issue
 
-A PR typically bundles **several issues**. One issue per PR is the floor for the rare genuinely-atomic case, not the norm; part of an issue is never a unit at all.
+Every issue that is not purely organizational is a PR-sized work unit.
+The issue itself carries the constellation: the story, root cause, sibling symptoms, proof burdens, implementation checklist, blocker state, and review requirements.
+Do not break a work-unit issue into sub-issues for sub-tasks, sub-stories, proof obligations, or checklist items.
+Those belong in the issue body or issue comments.
 Before opening any PR:
 
 1. **Cluster first.** Read the open issues, review findings, and epics.
    Group them by shared root cause: same subsystem, same design defect, same missing abstraction, same class of symptom.
-   That cluster — not any single member — is the candidate unit of work.
+   If the cluster is currently scattered across issues, first rewrite or create the work-unit issue so it self-describes the whole cluster.
+   Do not preserve the scattered issues as the PR's live decomposition.
 2. **Ask the obviation question.** Is there a rewrite, consolidation, or design change that makes the whole cluster impossible rather than individually patched?
-   If yes, **that rewrite is the PR.** The rewrite is the *smaller* change when measured in total system cost: one review cycle instead of N, and the symptom generator removed instead of throttled.
+   If yes, put that rewrite on the work-unit issue, then execute that issue through one PR.
+   The rewrite is the *smaller* change when measured in total system cost: one review cycle instead of N, and the symptom generator removed instead of throttled.
    These are bespoke owner-local tools (see `bespoke-software-policy`): no downstream consumers exist, so break internal APIs freely and rewrite the subsystem when that is simpler than preserving broken structure.
    "Bespoke" means *move aggressively* — not "be careful because policy exists."
-3. **Scope the PR from the cluster.** The PR body names the issues it closes, the epic or subtree it advances, and the class of future findings it obviates.
-   `Closes #a, #b, #c; advances epic #z` is the expected shape.
+3. **Scope the PR from the issue.** Open the PR when implementation starts.
+   The PR body is synthesized from the work-unit issue and its evidence: what issue it closes, what organizational parent it advances, and what future findings it obviates.
+   `Closes #a; refs organizational ledger #z` is the expected shape.
 
 ## The significance floor
 
 Every PR must satisfy at least one of:
 
-- **Closes multiple related issues** (or a whole subtree) via a shared-cause fix, or
+- **Closes one substantive work-unit issue** that self-describes the related symptoms, proof burdens, and implementation checklist, or
 - **Is a structural change** that removes a symptom generator — a rewrite, boundary change, or consolidation that obviates a class of findings, not an instance, or
-- **Carries an explicit atomicity justification** in the PR body: one or two sentences proving the change is genuinely isolated — no sibling symptoms, no parent epic, no cluster it could join.
+- **Carries an explicit atomicity justification** in the PR body synthesized from the issue: one or two sentences proving the issue is genuinely isolated — no sibling symptoms, no parent epic, no cluster it could join.
   Silence is not justification.
 
 If a change fails the floor, it does not become its own PR. It goes direct to main if it qualifies for that path, rides along inside the significant PR whose territory it belongs to, or waits until that PR forms.
 
 ## Work-unit issues are scope artifacts — the same floor applies
 
-A work-unit issue that pre-scopes a unit for pickup is a *design decision about the unit of work*, and it is where timidity actually enters: if the issue defines the unit below the root-cause cluster, the failure has already happened before any code is written.
+A work-unit issue is a *design decision about the unit of work*, and it is where timidity actually enters: if the issue defines the unit below the root-cause cluster, the failure has already happened before any code is written.
 Every rule in this skill applies when writing or updating the issue, not just when opening a PR.
 
 - **Issues are the minimum unit of work.** A PR scoped to *part* of an issue is invalid — there is no altitude below one whole issue.
-  The valid altitudes are: one genuinely atomic issue, a root-cause cluster, or a milestone subtree.
+  The valid altitudes are: one genuinely atomic issue, or one issue that self-describes the root-cause cluster.
+  Purely organizational issues may group and order work units, but they are not implementation scope.
 - **An issue whose open task list excludes the actual requested feature is invalid.** Scoping the easy fragments and deferring the requested behavior is the timid slice in issue form.
   Re-scope the issue upward.
 - **A planning issue is not implementation completion.** Issue-closing semantics attach only when the branch actually delivers the closing behavior; until then update the issue body/comments.
-- **Work-unit issues exist to hand agents pre-scoped ambitious units**, so smaller agents can pick up a coherent rewrite without re-deriving the constellation.
+- **Work-unit issues exist to hand agents ambitious units**, so smaller agents can pick up a coherent rewrite without re-deriving the constellation.
   An issue that hands them a sliver defeats its own purpose.
 
 ## Banned scopes
 
 - **`partial #x` as a PR scope.** An issue is already the *minimum* unit of work, so a PR that partially closes one is guaranteed to be wildly underambitious — it is below the floor by construction, a nudge wearing a claim.
   There is no judgment call to make here: if you find yourself writing "partial", the scope is wrong.
-  Take the whole issue or the subtree containing it.
+  Take the whole issue, or rewrite the issue so the true work unit is explicit before implementation starts.
+- **Work-unit sub-issues.** A non-organizational issue is already the PR boundary.
+  Do not create child issues for its sub-tasks, sub-stories, proof burdens, or implementation checklist.
+  Move that decomposition into the issue body/comments, or convert the parent into an organizational ledger if the children are truly separate PR-sized work units.
 - **Fixing one caller when siblings share the bug.** The lazy fix and the root-cause fix are the same fix: one change where all callers route through.
   Patching only the path the finding named leaves every sibling broken and guarantees N follow-up PRs.
 - **Patching a symptom while the epic naming its cause sits open.** If a review finding is an instance of an open epic, the PR addresses the epic's next coherent work-unit cluster — not the instance.
@@ -147,7 +157,7 @@ A work unit is finished when the issue tree reflects the new reality, not when t
 The work-unit issue must already state the plan, acceptance criteria, proof obligations, and implementation checklist.
 The final PR body synthesizes that issue state for reviewers and must state, concretely:
 
-- **Issues closed** — each with a regression test witnessing its reported failure.
+- **Issue closed** — with regression proof witnessing the reported failure or requested behavior.
   No `partial #N` closure language anywhere.
 - **The shared root cause removed** — and what old behavior is now *impossible*, not just fixed.
 - **Issues made obsolete or narrowed** — the rewrite usually invalidates more issues than it formally closes.
@@ -165,8 +175,8 @@ Answer these; if any answer is wrong, re-scope:
 
 0. Does this change warrant a PR at all, or is it a direct-to-main repair?
    (A PR for something the owner would accept as a direct fix = wrong path.)
-1. What constellation does this PR close?
-   (Naming one issue = probable nudge.)
+1. Which work-unit issue does this PR close?
+   (If the answer is "part of #N" or "several issues without one issue owning the contract", re-scope.)
 2. What symptom generator does it remove?
    ("None, it patches an instance" = re-scope to the generator.)
 3. Would a sibling of this bug/finding still exist after merge?

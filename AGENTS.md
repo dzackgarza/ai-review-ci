@@ -10,8 +10,8 @@ Before writing code:
 
 - identify the existing triaged issue or create one with the original problem, policy risk, and acceptance criteria;
 - update that issue with the plan, proof obligations, checklist, and expected review evidence before broad implementation continues;
-- keep the PR diff limited to that issue family; unrelated reopened issues require separate branches/PRs;
-- synthesize the PR body from the issue acceptance criteria and the Policy Alignment Gate when the work is ready for review;
+- keep the PR diff limited to that work-unit issue and its evidence; unrelated reopened issues require separate branches/PRs;
+- open the PR when implementation starts, synthesize its body from the issue acceptance criteria and the Policy Alignment Gate, and refresh that synthesis before review;
 - request review only after tests/evidence and adversarial policy review are complete;
 - handle review feedback as a loop: accepted feedback requires a committed remediation before any “fixed/addressed” reply, and rejected or modified feedback belongs in a top-level `Review feedback disposition ledger`.
 

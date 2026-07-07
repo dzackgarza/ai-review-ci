@@ -82,9 +82,9 @@ It is not a second round of planning.
 If the worker cannot place the work under an existing roadmap node, issue subtree, or new top-level roadmap issue without inventing scope, user behavior, acceptance criteria, proof burdens, milestone cuts, or dependency order, the work-unit issue is not ready.
 
 The canonical model for the issue tree and milestone mapping is owned by the `plan` skill's `references/externalization.md`. Load and follow it; this guide does not restate the model.
-Before implementation, the work-unit issue must already satisfy that reference's Plan Fit Gate: tree root, parent or roadmap node, GitHub Milestone scope, the selected issue set or subtree, the close/reference split, and the proof obligations addressed versus not addressed.
+Before implementation, the work-unit issue must already satisfy that reference's Plan Fit Gate: tree root, parent or roadmap node, GitHub Milestone scope, the issue this PR will close, parent issues referenced but not closed, and the proof obligations owned by the issue.
 
-This guide adds only the PR-execution specializations: the review-synthesis body shape below, closing-keyword discipline, and the stop rules specific to deriving one PR from one work-unit issue or coherent issue set.
+This guide adds only the PR-execution specializations: the review-synthesis body shape below, closing-keyword discipline, and the stop rules specific to deriving one PR from one work-unit issue.
 
 The issue-tree, milestone, wiki, and PR projections may add owner, branch, status, blocker, commit, run, artifact, and review-link metadata.
 They must not add, delete, demote, or reinterpret scope, behavior, acceptance criteria, proof burdens, dependencies, handoffs, or integration semantics.
@@ -115,16 +115,18 @@ Stop and repair the work-unit issue when any of these are true:
 
 - the PR body would only mention issues in checklist prose without closing keywords or manual Development links for issues this PR is meant to close.
 
-- a closing keyword would target a parent issue, deferred issue, future issue, partial work, or out-of-scope issue that this PR does not fully complete.
+- a closing keyword would target a parent issue, deferred issue, future issue, partial work-unit issue, or out-of-scope issue that this PR does not fully complete.
 
 - the PR would span multiple GitHub Milestones without either splitting the PR or naming the broader milestone/release that owns the cross-milestone scope and why.
 
 ## PR body as review synthesis from issues
 
 Use the work-unit issue as the centralized live planning and tracking surface.
-The issue tree owns decomposition, stories, scope, acceptance criteria, proof obligations, implementation tasks, and blocker state.
+The issue tree owns organizational grouping, sibling order, parent-child edges between separate work units, and blocker visibility.
+The work-unit issue owns its story, scope, acceptance criteria, proof obligations, implementation tasks, and blocker state.
 The GitHub Milestone owns the delivery grouping.
-The PR body contains a reviewer-facing synthesis of the selected issue set or subtree: close/reference split, review obligations, evidence, and explicit non-scope.
+The PR opens when implementation starts.
+Its body contains a reviewer-facing synthesis of the work-unit issue: close/reference split, review obligations, evidence, and explicit non-scope.
 If a checkbox appears in the PR body, completing it is required before the PR can be submitted for review.
 
 Minimum body shape:
@@ -139,12 +141,13 @@ Minimum body shape:
 - Preserved behavior: <baseline that must remain true>
 
 ## GitHub tracking
-- Target issue set / subtree: <#root, #child list, or explicit issue set>
+- Work-unit issue: <#issue fully completed by this PR>
+- Organizational parent or ledger: <#parent referenced but not closed, if any>
 - Milestone: <GitHub Milestone assigned to the delivery slice and this PR>
 - Closes on merge:
   - Closes #<issue fully completed by this PR>
 - References only:
-  - Refs #<parent, deferred, partial, or excluded issue not closed by this PR>
+  - Refs #<parent, deferred, or excluded issue not closed by this PR>
 
 ## Review obligations
 - [ ] **<#issue or story node> - <review obligation this PR satisfies>**
@@ -158,12 +161,15 @@ Minimum body shape:
 ```
 
 Use closing keywords only for issues the PR fully completes and should close on merge.
-Use `Refs` or prose for parent issues, future work, deferred work, excluded scope, partial work, and issues that remain open after this PR. If the PR targets a non-default branch or GitHub does not show the expected Development links, add the manual Development links before asking for review.
+Use `Refs` or prose for parent issues, future work, deferred work, excluded scope, and issues that remain open after this PR.
+Do not use partial-issue closure language.
+If the PR targets a non-default branch or GitHub does not show the expected Development links, add the manual Development links before asking for review.
 
 Use typed nodes.
 A roadmap, phase, feature, story, proof obligation, or implementation task should stay at its own altitude.
 Stories and proof obligations normally live in the owning issue body as definition-of-done material; implementation tasks live as checklists/comments on that issue.
-Split work into child issues only when the child is a separate work unit with its own acceptance/proof boundary.
+Split work into child issues only under organizational grouping issues, and only when the child is a separate PR-sized work unit with its own acceptance/proof boundary.
+Do not split a non-organizational work-unit issue into child issues for sub-tasks, sub-stories, proof burdens, or checklist items.
 Parent completion follows from semantic attainment and supported evidence, not merely from checked descendants.
 
 Checklist items must earn reviewer attention.
@@ -201,14 +207,15 @@ When a plan changes, update the work-unit issue and use normal review discussion
 
 Put each fact in the surface that can represent and enforce it:
 
-- GitHub issue tree: canonical public decomposition and planning surface, including roadmap nodes, feature/story nodes, parent-child edges, sibling order, blocker dependencies, acceptance criteria, proof obligations, implementation checklists, and proof status.
+- GitHub issue tree: canonical public grouping and ordering surface, including roadmap ledgers, milestone/backlog ledgers, parent-child edges between separate work units, sibling order, and blocker dependencies.
+  Each non-organizational work-unit issue owns its acceptance criteria, proof obligations, implementation checklist, proof status, and planning comments.
 
 - GitHub Milestone: delivery or progress bucket over issues and PRs.
-  It should name the subtree root or explicit issue set it covers, then attach the descendant issues and linked PRs that count toward that delivery slice.
+  It should name the organizational ledger or explicit work-unit issue set it covers, then attach the issues and linked PRs that count toward that delivery slice.
 
 - GitHub PR Development links: closing-keyword or manual links between the PR and the in-scope issues that should close when the PR merges.
 
-- PR body: reviewer-facing synthesis for the current branch's issue set or subtree: intended result, scope/non-scope, close/reference split, proof obligations addressed, evidence mappings, and review checklist linked to the relevant GitHub issues.
+- PR body: reviewer-facing synthesis for the current branch's work-unit issue: intended result, scope/non-scope, close/reference split, proof obligations addressed, evidence mappings, and review checklist linked to the relevant GitHub issue.
   Deferred or excluded work belongs in prose or linked issues, not as PR checkboxes.
 
 - GitHub wiki: durable narrative context and readable roadmap projection.
@@ -669,8 +676,8 @@ pytest path/to/test_file.py -q
 # 5. update the issue with proof status and any changed decisions
 gh issue comment <WORK_UNIT_ISSUE_NUMBER> --body-file issue-proof-update.md
 
-# 6. synthesize the PR body from the issue when the work is ready for review
-$EDITOR .pr/PR_BODY.md   # include Closes only for full completions; use Refs for parents/partials/deferred work
+# 6. open the PR when implementation starts; synthesize the body from the issue
+$EDITOR .pr/PR_BODY.md   # include Closes only for the work-unit issue; use Refs for parents/deferred work
 git add .pr/PR_BODY.md .pr/REVIEW_LOG.md <changed code/tests>
 git commit -m "Complete work-unit implementation"
 git push -u origin HEAD
@@ -734,13 +741,13 @@ If the PR does not expose those answers directly, it is not review-ready.
 
 5. Add closing-keyword Development links only for issues the PR fully satisfies on merge.
 
-6. Use `Refs` or prose, not closing keywords, for parent issues, partial work, deferred work, future work, and out-of-scope issues.
+6. Use `Refs` or prose, not closing keywords, for parent issues, deferred work, future work, and out-of-scope issues.
 
 7. Link nontrivial top-level PR review items to the owning issues.
 
 8. Keep deferred, excluded, future, and out-of-scope work out of PR checkboxes.
 
-9. Do not use a draft PR as the planning tracker; submit the PR after every in-scope issue and proof obligation is complete and evidenced.
+9. Do not use a draft PR as the planning tracker; open the PR when implementation starts, and submit it for review only after every in-scope issue and proof obligation is complete and evidenced.
 
 10. Derive the PR body from the work-unit issue, issue tree, and evidence, not from memory or the web form.
 

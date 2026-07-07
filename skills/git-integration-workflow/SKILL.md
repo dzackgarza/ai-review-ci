@@ -31,7 +31,7 @@ Each arrow is a gate, not a suggestion.
 
 3. **PR review synthesis.** Open or update the PR from the current work-unit issue: summarize the issue scope, close/reference split, proof obligations addressed, evidence, and reviewer checklist.
    The PR body is a review submission derived from the issue, not a second planning tracker.
-   Use closing keywords (`Closes`) only for issues this PR fully completes on merge; use `Refs` or prose for parents, partial work, and deferred work.
+   Use closing keywords (`Closes`) only for the work-unit issue this PR fully completes on merge; use `Refs` or prose for organizational parents and deferred work.
    A visible open checkbox in the PR body is a reviewer-facing blocker copied from the issue; if it is still open, the PR is not ready.
 
 4. **Mark ready.** Only after every in-scope issue and proof obligation is complete and evidenced: push the branch, ensure the issue body/comments are current, publish the PR body, then request review.

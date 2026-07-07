@@ -214,10 +214,10 @@ Put those tasks in the parent issue body or comments.
 
 **With itree (Recommended):** To manage parent/child relationships programmatically, use the `itree` CLI:
 ```bash
-# Create a new child work-unit issue and automatically attach it to a parent.
+# Create a new child work-unit issue under an organizational parent.
 itree add OWNER/REPO#PARENT_NUMBER "Title of new child" --body-file issue.md
 
-# Attach an existing child work-unit issue under a parent.
+# Attach an existing child work-unit issue under an organizational parent.
 itree attach OWNER/REPO#PARENT_NUMBER OWNER/REPO#CHILD_NUMBER
 
 # Reparent or reorder an issue (under a parent, optionally before/after a sibling).
@@ -226,7 +226,7 @@ itree move OWNER/REPO#CHILD_NUMBER --under OWNER/REPO#PARENT_NUMBER [--before OW
 
 **With gh:**
 ```bash
-# Create a new child work-unit issue under a parent.
+# Create a new child work-unit issue under an organizational parent.
 gh issue create --title "<child story or work-unit node>" --body-file issue.md --parent 42
 
 # Attach or detach existing issues.
