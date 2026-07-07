@@ -267,11 +267,7 @@ def test_reusable_workflows_use_maintained_just_installer(workflow_file: str) ->
 
 @pytest.mark.parametrize(
     "workflow_file,job_name",
-    [
-        (wf, job)
-        for wf in ("_qc.yml", "_review.yml", "_gates.yml")
-        for job in _workflow_jobs(wf)
-    ],
+    [(wf, job) for wf in ("_qc.yml", "_review.yml", "_gates.yml") for job in _workflow_jobs(wf)],
 )
 def test_reusable_workflow_just_installs_via_setup_action(workflow_file: str, job_name: str) -> None:
     """Every job's Install just step uses extractions/setup-just@v4 with a token."""
