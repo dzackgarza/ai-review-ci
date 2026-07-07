@@ -271,6 +271,64 @@ def _pr_thread_lines(repo: str, pr_number: int) -> list[str]:
     return lines
 
 
+def _fetch_pr_body(repo: str, pr_number: int) -> str | None:
+    """Fetch the PR description body; None when the PR has no body or the fetch fails softly.
+
+    The PR body carries the claim map (which issues the PR claims to satisfy and how)
+    and the evidence map (what commands/artifacts the author cites as proof). The LLM
+    reviewer needs both to detect the claim-vs-evidence mismatch at the heart of
+    proof-laundering (#185): a PR may claim a real-boundary obligation is satisfied
+    while the cited evidence only crosses a developer-controlled surface.
+    """
+    result = subprocess.run(
+        ["gh", "api", f"repos/{repo}/pulls/{pr_number}"],
+        capture_output=True,
+        text=True,
+    )
+    if result.returncode != 0:
+        # A missing/unfetchable PR body is non-fatal: the reviewer still has the
+        # diff, alerts, and threads. Fail loudly only on hard API errors handled
+        # elsewhere; here, absence means "no claim map available".
+        return None
+    data = json.loads(result.stdout)
+    body = data.get("body")
+    if not isinstance(body, str) or not body.strip():
+        return None
+    return body
+
+
+def _pr_claim_map_lines(repo: str, pr_number: int) -> list[str]:
+    """Render the PR body's claim map and evidence map as a reviewer-context section.
+
+    This section is the #185 fix: it gives the LLM reviewer the PR's *stated*
+    obligations and cited evidence, so it can compare the claimed boundary against
+    the evidence shape in the diff. Without it, the reviewer sees only the diff and
+    cannot flag a PR that claims a real boundary is crossed but supplies only a fake
+    executable, argv recorder, or helper-only test as proof.
+    """
+    body = _fetch_pr_body(repo, pr_number)
+    if body is None:
+        return []
+    return [
+        "## PR claim map",
+        "",
+        "The PR description below states what the author claims this PR proves and "
+        "the evidence they cite. Cross-reference the *claimed boundary obligation* "
+        "(which issue is marked satisfied, what real-world boundary it names) "
+        "against the *evidence shape* in the diff. If the PR claims a real boundary "
+        "(app boot, browser, subprocess, downstream repo, hook) is satisfied but "
+        "the evidence is developer-controlled (fake executable, argv recorder, "
+        "helper-only test, call-count assertion, synthetic provider, empty config "
+        "generation), that is proof-laundering — flag it as `POLICY.NO_MOCK_PROOF` "
+        "or `POLICY.NO_HELPER_PROOF` rather than accepting the green surface.",
+        "",
+        "```markdown",
+        body.strip(),
+        "```",
+        "",
+    ]
+
+
 def fetch_context(
     repo: str,
     tool_names: str = DEFAULT_TOOL_NAMES,
@@ -307,6 +365,7 @@ def fetch_context(
 
     if pr_number:
         lines.extend(_pr_thread_lines(repo, pr_number))
+        lines.extend(_pr_claim_map_lines(repo, pr_number))
 
     text = "\n".join(lines).strip() + "\n"
 
