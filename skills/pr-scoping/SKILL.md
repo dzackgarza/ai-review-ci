@@ -1,6 +1,6 @@
 ---
 name: pr-scoping
-description: Use before drafting, scoping, or opening any pull request (including draft work-unit PRs), when deciding whether a change warrants a PR at all, and when triaging a backlog into units of work. Forces PRs to be scoped as significant work units that close constellations of related issues, routes small urgent repairs direct to main, and bans the trivial single-nudge PRs agents default to.
+description: Use before scoping or opening any pull request, when deciding whether a change warrants a PR at all, and when triaging a backlog into units of work. Forces PRs to be scoped as significant work units that close constellations of related issues, routes small urgent repairs direct to main, and bans the trivial single-nudge PRs agents default to.
 ---
 
 # PR Scoping: Significant Work Units, Not Nudges
@@ -51,7 +51,7 @@ So when a scope feels "too big," check which is actually true:
 
 - **It fits your window.** Then the feeling is the miscalibrated prior — the trained reflex toward the minimum defensible diff.
   Do the rewrite.
-- **It genuinely exceeds your window.** Then the correct move is a draft work-unit PR scoping the *full* cluster for a more capable agent to pick up — never silently shrinking the scope below the issue boundary so it fits.
+- **It genuinely exceeds your window.** Then the correct move is to update or create the work-unit issue for the *full* cluster so a more capable agent can pick it up — never silently shrinking the scope below the issue boundary so it fits.
   Scope is set by the root cause; capability decides *who* executes, not *what* the unit is.
 
 The "hard" work agents route around — reconciling a subsystem, collapsing two command surfaces onto one path, replacing a hand-rolled layer — is typically not hard.
@@ -77,7 +77,7 @@ The selection procedure, in order:
 ## The unit of work is the constellation, not the issue
 
 A PR typically bundles **several issues**. One issue per PR is the floor for the rare genuinely-atomic case, not the norm; part of an issue is never a unit at all.
-Before drafting any PR:
+Before opening any PR:
 
 1. **Cluster first.** Read the open issues, review findings, and epics.
    Group them by shared root cause: same subsystem, same design defect, same missing abstraction, same class of symptom.
@@ -86,7 +86,7 @@ Before drafting any PR:
    If yes, **that rewrite is the PR.** The rewrite is the *smaller* change when measured in total system cost: one review cycle instead of N, and the symptom generator removed instead of throttled.
    These are bespoke owner-local tools (see `bespoke-software-policy`): no downstream consumers exist, so break internal APIs freely and rewrite the subsystem when that is simpler than preserving broken structure.
    "Bespoke" means *move aggressively* — not "be careful because policy exists."
-3. **Scope the PR as a claim against the cluster.** The PR body names the issues it closes, the epic or subtree it advances, and the class of future findings it obviates.
+3. **Scope the PR from the cluster.** The PR body names the issues it closes, the epic or subtree it advances, and the class of future findings it obviates.
    `Closes #a, #b, #c; advances epic #z` is the expected shape.
 
 ## The significance floor
@@ -100,18 +100,18 @@ Every PR must satisfy at least one of:
 
 If a change fails the floor, it does not become its own PR. It goes direct to main if it qualifies for that path, rides along inside the significant PR whose territory it belongs to, or waits until that PR forms.
 
-## Draft work-unit PRs are scope artifacts — the same floor applies
+## Work-unit issues are scope artifacts — the same floor applies
 
-A draft PR that pre-scopes a work unit for pickup is a *design decision about the unit of work*, and it is where timidity actually enters: if the draft defines the unit below the issue boundary or below the root-cause cluster, the failure has already happened before any code is written.
-Every rule in this skill applies to drafts at creation time, not just to ready-for-review.
+A work-unit issue that pre-scopes a unit for pickup is a *design decision about the unit of work*, and it is where timidity actually enters: if the issue defines the unit below the root-cause cluster, the failure has already happened before any code is written.
+Every rule in this skill applies when writing or updating the issue, not just when opening a PR.
 
-- **Issues are the minimum unit of work.** A draft scoped to *part* of an issue is invalid — there is no altitude below one whole issue.
+- **Issues are the minimum unit of work.** A PR scoped to *part* of an issue is invalid — there is no altitude below one whole issue.
   The valid altitudes are: one genuinely atomic issue, a root-cause cluster, or a milestone subtree.
-- **A draft whose "not claimed" list contains the actual feature the issue requests is invalid.** Scoping the easy fragments and deferring the requested behavior is the timid slice in draft form.
-  Re-scope upward.
-- **A planning-shell draft must not carry `Closes #N`.** Issue-closing semantics attach only when the branch actually delivers the closing behavior; until then use `Refs`.
-- **Drafts exist to hand agents pre-scoped ambitious units**, so smaller agents can pick up a coherent rewrite without re-deriving the constellation.
-  A draft that hands them a sliver defeats its own purpose.
+- **An issue whose open task list excludes the actual requested feature is invalid.** Scoping the easy fragments and deferring the requested behavior is the timid slice in issue form.
+  Re-scope the issue upward.
+- **A planning issue is not implementation completion.** Issue-closing semantics attach only when the branch actually delivers the closing behavior; until then update the issue body/comments.
+- **Work-unit issues exist to hand agents pre-scoped ambitious units**, so smaller agents can pick up a coherent rewrite without re-deriving the constellation.
+  An issue that hands them a sliver defeats its own purpose.
 
 ## Banned scopes
 
@@ -120,7 +120,7 @@ Every rule in this skill applies to drafts at creation time, not just to ready-f
   Take the whole issue or the subtree containing it.
 - **Fixing one caller when siblings share the bug.** The lazy fix and the root-cause fix are the same fix: one change where all callers route through.
   Patching only the path the finding named leaves every sibling broken and guarantees N follow-up PRs.
-- **Patching a symptom while the epic naming its cause sits open.** If a review finding is an instance of an open epic, the PR claims the epic's next coherent slice — not the instance.
+- **Patching a symptom while the epic naming its cause sits open.** If a review finding is an instance of an open epic, the PR addresses the epic's next coherent work-unit cluster — not the instance.
 - **Splitting a coherent rewrite into "safer" sequential slices.** Slices of one design change are not independently reviewable anyway; each slice-PR re-pays the full review cost and the intermediate states are dead weight.
   Ship the rewrite as one PR with a clear narrative.
 - **One-finding remediation PRs.** Review findings arrive in batches; their remediations ship in batches, grouped by root cause.
@@ -137,17 +137,18 @@ Significance is measured in **cohesion × consequence**, not line count.
 
 - **No unrelated-change dumping.** A big PR is one root cause and all its symptoms — not a grab bag of every open nit.
   If two clusters have different root causes, they are two PRs.
-- **No scope-laundering.** "While I'm here" additions that don't serve the claimed cluster are still banned.
-  Ambition means claiming the whole cluster, not annexing neighbors.
+- **No scope-laundering.** "While I'm here" additions that don't serve the selected cluster are still banned.
+  Ambition means addressing the whole cluster, not annexing neighbors.
 - **Cohesion is the reviewability contract.** A 2,000-line PR with one design narrative ("moved all finding delivery through the state machine; closes #42, #140, #141, #144") is *more* reviewable than ten disconnected 40-line PRs, because the reviewer holds one idea instead of ten contexts.
 
 ## The completion contract: burn down the tree, don't just land the diff
 
 A work unit is finished when the issue tree reflects the new reality, not when the PR merges.
-The final PR body must state, concretely:
+The work-unit issue must already state the plan, acceptance criteria, proof obligations, and implementation checklist.
+The final PR body synthesizes that issue state for reviewers and must state, concretely:
 
 - **Issues closed** — each with a regression test witnessing its reported failure.
-  No `partial #N` claims anywhere.
+  No `partial #N` closure language anywhere.
 - **The shared root cause removed** — and what old behavior is now *impossible*, not just fixed.
 - **Issues made obsolete or narrowed** — the rewrite usually invalidates more issues than it formally closes.
   Name them.
@@ -171,6 +172,6 @@ Answer these; if any answer is wrong, re-scope:
 3. Would a sibling of this bug/finding still exist after merge?
    (Yes = the PR is scoped to the wrong altitude.)
 4. Is there an open epic this change is secretly a sliver of?
-   (Yes = claim the epic's slice instead.)
+   (Yes = scope the work to the epic's coherent cluster instead.)
 5. If you opened five PRs of this size this week, would the backlog be meaningfully smaller?
    (No = you are burning review cycles, not working.)

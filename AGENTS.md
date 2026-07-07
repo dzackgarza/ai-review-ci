@@ -2,15 +2,17 @@
 
 ## Issue-Scoped PR Lifecycle
 
-Policy, QC, reviewer, workflow, and gate changes must be issue-first and draft-first.
+Policy, QC, reviewer, workflow, and gate changes must be issue-first.
 Do not accumulate local changes and then invent a PR scope around them.
+The work-unit issue is the draft: keep the story, scope, acceptance criteria, proof obligations, implementation checklist, blocker state, and planning decisions in the issue body or comments.
+Do not open a draft PR to hold planning state.
 Before writing code:
 
 - identify the existing triaged issue or create one with the original problem, policy risk, and acceptance criteria;
-- create a draft PR associated with that issue before broad implementation continues;
+- update that issue with the plan, proof obligations, checklist, and expected review evidence before broad implementation continues;
 - keep the PR diff limited to that issue family; unrelated reopened issues require separate branches/PRs;
-- keep the PR body mapped to the issue acceptance criteria and the Policy Alignment Gate;
-- move from draft to ready-for-review only after tests/evidence and adversarial policy review are complete;
+- synthesize the PR body from the issue acceptance criteria and the Policy Alignment Gate when the work is ready for review;
+- request review only after tests/evidence and adversarial policy review are complete;
 - handle review feedback as a loop: accepted feedback requires a committed remediation before any “fixed/addressed” reply, and rejected or modified feedback belongs in a top-level `Review feedback disposition ledger`.
 
 If a branch is discovered to contain a broad, untriaged, or policy-poisoned diff, close or abandon the PR rather than trying to salvage it by summary wording.
@@ -74,7 +76,7 @@ Recreate the work from `origin/main` on an issue-scoped branch.
 
 # Policy Alignment Gate
 
-Every PR against this repo must reconcile against the burned-bridge policy before it leaves draft or merges.
+Every PR against this repo must reconcile against the burned-bridge policy before review is requested or before it merges.
 This gate exists because agents — local and, especially, remote — arrive with strong priors that *want* fail-soft slop accepted.
 A "noisy detector" reads as "make it quieter"; the obvious fix (allow an empty-array default, add a fallback, widen a type, swallow an error) is exactly the policy violation.
 The reviewer cannot catch a change that weakens the reviewer, so the check lives in the definition of done for the work itself, not only in CI.

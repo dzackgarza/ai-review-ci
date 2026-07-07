@@ -7,13 +7,15 @@ For consuming, triaging, or acting on existing review comments as a firewalled l
 
 ## Completion gate
 
-For nontrivial features: branch + draft PR tracks implementation while work is still incomplete.
+For nontrivial features: the work-unit issue tracks planning and incomplete implementation state until the PR is ready for review.
 Completion is not local implementation; it includes GitHub PR state.
 
 A PR-scoped task is not complete until:
 
-- the branch is pushed and the PR body or claim map is current;
-- the PR is no longer draft (`gh pr ready <PR_NUMBER>`);
+- the branch is pushed;
+- the work-unit issue body/comments contain the current plan, checklist, proof obligations, and evidence state;
+- the PR body is current and derived from that issue;
+- the PR has been submitted for review;
 - the automated review loop has been explicitly triggered (`gh pr comment <PR_NUMBER> --body '@codex review'`, or the repo's documented equivalent);
 - returned review and check feedback has been scanned with `extract_unresolved_issues` and routed through `pr-feedback-triage`, or a real blocker has been reported.
 

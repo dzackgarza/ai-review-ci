@@ -3,8 +3,10 @@
 Issue tracking at integration time: the owned-repo improvement loop, filing rules and templates, labels, and the CLI mechanics for viewing, creating, managing, and triaging issues.
 Sourced from the `git-guidelines` Issue Workflow section and `issues.md`.
 
-For planning-tree issues — roadmap, phase, feature, story, proof obligation, or implementation node — load `plan` and read its `references/externalization.md` before creating or restructuring anything.
-The model it defines (single root roadmap issue, story-shaped nodes at altitude, milestones scoped to subtree roots, proof obligations in issue bodies) is not reconstructable from the CLI commands below.
+For planning-tree issues — roadmap, phase, feature, story, proof obligation, or work-unit node — load `plan` and read its `references/externalization.md` before creating or restructuring anything.
+The model is: GitHub issues are the planning drafts.
+Put stories, plans, proof obligations, acceptance criteria, blocker state, and implementation checklists in the issue body or comments.
+Use child issues only for separate work units, never for ordinary implementation tasks.
 
 ## Owned Repo Improvement Loop
 
@@ -25,7 +27,7 @@ Do not bury observed owned-repo defects only in memory; memory can note the dura
 
 Use `gh issue create --repo <owner>/<repo> --title "..." --body-file issue.md --label "<label>"`
 
-For roadmap, feature, PRD, or cross-agent planning issues, first load the `plan` skill's `references/externalization.md`. Create story-shaped issue nodes, use native sub-issues for parent/child tree edges, use dependencies only for blockers, assign the GitHub Milestone that owns the delivery slice, and avoid turning a wiki page or issue body into a second live tracker.
+For roadmap, feature, PRD, or cross-agent planning issues, first load the `plan` skill's `references/externalization.md`. Create story-shaped work-unit issues, use native sub-issues only for grouping and separate work-unit edges, use dependencies only for blockers, assign the GitHub Milestone that owns the delivery slice, and keep live planning state on the issue body/comments.
 
 **Mandatory Issue Rules:**
 
@@ -42,11 +44,11 @@ For roadmap, feature, PRD, or cross-agent planning issues, first load the `plan`
    No marketing or selling language.
 
 5. **No Implementation Code**: Do NOT attempt to write the actual code to fix the problem in the issue body.
-   The person filing the issue does NOT decide HOW to fix it; they provide data to more specialized design and triage agents.
+   The issue may carry the plan, checklist, proof obligations, and design decisions, but not a pasted implementation.
 
-6. **No Plans**: Do not include a step-by-step "plan" to fix the issue.
-   That is a separate task.
-   High-level suggestions for phases are permitted.
+6. **Work-Unit Plan Lives Here**: For work-unit issues, include the live plan directly in the issue body or comments.
+   Use issue checklists and comments for implementation tasks, proof status, decisions, and blockers.
+   Do not create child issues for ordinary implementation tasks and do not open a draft PR to hold this state.
 
 7. **No Time Estimates**: NEVER include time estimates.
 
@@ -67,9 +69,17 @@ Create a local `.md` file for the body and pass it to `gh issue create --body-fi
 
 <Concrete expectations. TDD-style pseudocode.>
 
-# Suggested Phases (Optional)
+# Acceptance Criteria
 
-<High-level suggestions for phases, but no detailed implementation plan.>
+<Observable criteria that make the issue complete.>
+
+# Proof Obligations
+
+<Tests, commands, screenshots, logs, or live checks required to prove completion.>
+
+# Implementation Tasks
+
+- [ ] <Task tracked on this issue, not as a child issue>
 ```
 
 ## Available Labels
@@ -199,13 +209,15 @@ gh issue edit 42 --add-assignee username
 
 Use native sub-issues for tree edges when the repository's GitHub surface supports them.
 Do not use labels, title numbering, or dependencies to simulate ordinary parent/child order.
+Do not create sub-issues for implementation tasks inside one work unit.
+Put those tasks in the parent issue body or comments.
 
 **With itree (Recommended):** To manage parent/child relationships programmatically, use the `itree` CLI:
 ```bash
-# Create a new child issue and automatically attach it to a parent.
+# Create a new child work-unit issue and automatically attach it to a parent.
 itree add OWNER/REPO#PARENT_NUMBER "Title of new child" --body-file issue.md
 
-# Attach an existing child issue under a parent.
+# Attach an existing child work-unit issue under a parent.
 itree attach OWNER/REPO#PARENT_NUMBER OWNER/REPO#CHILD_NUMBER
 
 # Reparent or reorder an issue (under a parent, optionally before/after a sibling).
@@ -214,8 +226,8 @@ itree move OWNER/REPO#CHILD_NUMBER --under OWNER/REPO#PARENT_NUMBER [--before OW
 
 **With gh:**
 ```bash
-# Create a new child issue under a parent.
-gh issue create --title "<child story or implementation node>" --body-file issue.md --parent 42
+# Create a new child work-unit issue under a parent.
+gh issue create --title "<child story or work-unit node>" --body-file issue.md --parent 42
 
 # Attach or detach existing issues.
 gh issue edit 42 --add-sub-issue 43

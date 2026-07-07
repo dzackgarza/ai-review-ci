@@ -16,7 +16,7 @@ Gate failures (any one is sufficient):
 
 - **Zero-diff planning shell claiming closure** — no implementing diff, but `Closes #N` in the body.
   → 🔴 Critical: Invalid Work Unit.
-  Remedy: demote `Closes` to `Refs`; the draft must re-scope to the full cluster before any review spend.
+  Remedy: demote `Closes` to `Refs`; close the planning-shell PR and move the full cluster scope back onto the work-unit issue before any review spend.
 - **Direct-to-main-qualifying change** — a trivial fix, doc/config nudge, or crash relief the owner would accept as a direct repair.
   → 🔴 Critical: Wrong Path.
   Remedy: this should not be a PR; land it on main and close the PR, or fold it into the root-cause work unit it belongs to.
@@ -143,8 +143,8 @@ If the diff contains only generated files, configuration, or documentation with 
 - Are corresponding test file changes included in the diff?
 - If new public behavior was added with no new tests: → 🟡 Warning: Coverage Illusion — new behavior is untested → Source: Feathers — Working Effectively with Legacy Code, Ch. 1
 - If the change is a pure refactor and existing tests cover the behavior → no finding.
-- If the body claims `Closes #a, #b, #c`, each closed issue needs a regression test witnessing its reported failure.
-  A claimed issue with no corresponding test: → 🟡 Warning: Coverage Illusion — issue closed without a regression witness
+- If the body says `Closes #a, #b, #c`, each closed issue needs a regression test witnessing its reported failure.
+  A closed issue with no corresponding test: → 🟡 Warning: Coverage Illusion — issue closed without a regression witness
 
 **Signal 2: Quick Mock Abuse sniff**
 
