@@ -68,7 +68,6 @@ uv run --project /home/dzack/ai-review-ci/tools/itree itree [subcommand]
 - `uv run --project /home/dzack/ai-review-ci/tools/itree itree doctor OWNER/REPO`: Verify the tree structure and list any warnings or errors.
   Use `--explain CODE` (e.g. `uv run --project /home/dzack/ai-review-ci/tools/itree itree doctor OWNER/REPO --explain E010`) to see detailed remediation steps.
 - `uv run --project /home/dzack/ai-review-ci/tools/itree itree root create OWNER/REPO --title "..."`: Create a new root ledger issue.
-- `uv run --project /home/dzack/ai-review-ci/tools/itree itree root declare OWNER/REPO --issue N`: Mark issue #N as the root ledger by appending the required marker.
 - `uv run --project /home/dzack/ai-review-ci/tools/itree itree attach OWNER/REPO#PARENT OWNER/REPO#CHILD`: Attach an existing child issue under a parent.
 - `uv run --project /home/dzack/ai-review-ci/tools/itree itree move OWNER/REPO#CHILD --under OWNER/REPO#PARENT [--before SIBLING | --after SIBLING]`: Reparent or reorder an issue.
 
