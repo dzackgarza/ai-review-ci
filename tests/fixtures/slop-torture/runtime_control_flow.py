@@ -95,6 +95,23 @@ def swallow_everything(path: str) -> str:
     return ""
 
 
+def swallow_typed(path: str) -> str:
+    # ruleid: py-no-bare-except
+    try:
+        return open(path).read()
+    except OSError:
+        pass
+    return ""
+
+
+def handle_domain_error(path: str) -> str:
+    # ok: py-no-bare-except
+    try:
+        return open(path).read()
+    except FileNotFoundError as error:
+        raise RuntimeError(f"required review artifact missing: {path}") from error
+
+
 def fail_loudly(path: str) -> str:
     # ok: py-no-bare-except
     return open(path).read()

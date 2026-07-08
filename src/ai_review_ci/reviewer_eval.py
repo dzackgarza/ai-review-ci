@@ -22,7 +22,7 @@ import json
 from dataclasses import dataclass
 from pathlib import Path
 
-DISPOSITIONS = ("accepted", "rejected", "outdated", "duplicate", "unstamped")
+DISPOSITIONS = ("accepted", "rejected", "outdated", "duplicate", "needs-investigation", "unstamped")
 SCOREABLE = ("accepted", "rejected")
 
 

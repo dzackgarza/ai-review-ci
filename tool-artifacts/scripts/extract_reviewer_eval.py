@@ -37,7 +37,8 @@ query($owner: String!, $name: String!, $number: Int!, $endCursor: String) {
           isOutdated
           path
           line
-          comments(first: 50) {
+          comments(first: 100) {
+            totalCount
             nodes { databaseId url author { login } body }
           }
         }
@@ -47,15 +48,25 @@ query($owner: String!, $name: String!, $number: Int!, $endCursor: String) {
 }
 """
 
-# A disposition stamp is a reply that names its verdict. Scanned in reverse
-# reply order so the final stamp wins over earlier triage chatter.
+# A disposition stamp is a reply that names its verdict. All four verdicts
+# match case-insensitively; within one reply the earliest-positioned verdict
+# keyword wins, so "Accepted — the outdated note is resolved" reads as
+# accepted rather than being captured by a fixed verdict priority.
 _DISPOSITION_VERDICTS = (
-    ("outdated", re.compile(r"\b[Oo]utdated\b|\bsuperseded\b")),
-    ("duplicate", re.compile(r"\bduplicate\b")),
-    ("accepted", re.compile(r"\bAccepted\b")),
-    ("rejected", re.compile(r"\bRejected\b")),
+    ("needs-investigation", re.compile(r"\binvestigate before action\b|\bneeds investigation\b", re.IGNORECASE)),
+    ("outdated", re.compile(r"\boutdated\b|\bsuperseded\b", re.IGNORECASE)),
+    ("duplicate", re.compile(r"\bduplicate\b", re.IGNORECASE)),
+    ("accepted", re.compile(r"\baccepted\b", re.IGNORECASE)),
+    ("rejected", re.compile(r"\brejected\b", re.IGNORECASE)),
 )
 _STAMP_MARKER = re.compile(r"^Disposition\b", re.MULTILINE)
+
+
+def _verdict_in(body: str) -> str | None:
+    matches = [(m.start(), verdict) for verdict, pattern in _DISPOSITION_VERDICTS for m in [pattern.search(body)] if m]
+    if not matches:
+        return None
+    return min(matches)[1]
 
 
 def parse_disposition(replies: list[dict[str, object]]) -> tuple[str, int | None]:
@@ -69,11 +80,11 @@ def parse_disposition(replies: list[dict[str, object]]) -> tuple[str, int | None
             body = str(reply["body"])
             if require_marker and not _STAMP_MARKER.search(body):
                 continue
-            for verdict, pattern in _DISPOSITION_VERDICTS:
-                if pattern.search(body):
-                    database_id = reply["databaseId"]
-                    assert database_id is None or isinstance(database_id, int), reply
-                    return verdict, database_id
+            verdict = _verdict_in(body)
+            if verdict is not None:
+                database_id = reply["databaseId"]
+                assert database_id is None or isinstance(database_id, int), reply
+                return verdict, database_id
     return "unstamped", None
 
 
@@ -135,6 +146,8 @@ def build_dataset(owner: str, name: str, number: int) -> dict[str, object]:
     for thread in fetch_threads(owner, name, number):
         comments = _dig(thread, "comments", "nodes")
         assert isinstance(comments, list) and comments, f"review thread with no comments: {thread}"
+        total_count = _dig(thread, "comments", "totalCount")
+        assert len(comments) == total_count, f"thread comments truncated ({len(comments)} of {total_count}); raise the fetch bound"
         finding, replies = comments[0], comments[1:]
         assert isinstance(finding, dict), finding
         verdict, stamp_id = parse_disposition(replies)

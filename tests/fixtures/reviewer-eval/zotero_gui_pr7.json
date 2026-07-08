@@ -58,7 +58,7 @@
      "body": "Rejected. the file was deleted in the TanStack migration; the new columnModel persistence fails loud on malformed/outdated state (commit 611ab5f) — no silent reset, no fallback added. See the top-level **Review feedback disposition ledger** for full reasoning."
     }
    ],
-   "disposition": "outdated",
+   "disposition": "rejected",
    "disposition_comment_id": 3448755814
   },
   {
@@ -1255,8 +1255,8 @@
      "body": "Duplicate.\n\nClaim disposition: GHAS restatement of the dead-dependency claim at package.json:36 (the comment body states the generic \"every dependency must be provably imported / zero import sites is dead infrastructure\" invariant on line 36, dotenv). The GHAS rule title is cross-wired; dispositioned on body + line. Same finding as canonical dotenv thread 3448620499.\nRemediation disposition: Tracked on the canonical thread (accepted there); not double-tracked here.\nPolicy basis: pr-feedback-triage — restatement of an already-dispositioned finding.\nAudit anchor: canonical thread comment 3448620499; package.json:36."
     }
    ],
-   "disposition": "unstamped",
-   "disposition_comment_id": null
+   "disposition": "duplicate",
+   "disposition_comment_id": 3448794871
   },
   {
    "finding_id": 3448732816,
@@ -1273,8 +1273,8 @@
      "body": "Duplicate.\n\nClaim disposition: GHAS restatement of the dead-dependency claim at package.json:38 (the comment body states the generic \"every dependency must be provably imported / zero import sites is dead infrastructure\" invariant on line 38, fast-xml-parser). The GHAS rule title is cross-wired and unrelated to the body; dispositioned on body + line. Same finding as canonical thread 3448705262.\nRemediation disposition: Tracked on the canonical thread (accepted there); not double-tracked here.\nPolicy basis: pr-feedback-triage — restatement of an already-dispositioned finding.\nAudit anchor: canonical thread comment 3448705262; package.json:38."
     }
    ],
-   "disposition": "unstamped",
-   "disposition_comment_id": null
+   "disposition": "duplicate",
+   "disposition_comment_id": 3448794846
   },
   {
    "finding_id": 3448732882,
@@ -1291,8 +1291,8 @@
      "body": "Duplicate.\n\nClaim disposition: Same dead-dependency claim as the canonical fast-xml-parser thread (comment 3448705262) — identical category and identical line (package.json:38, \"fast-xml-parser\": \"^5.9.2\"). Verified once: zero fast-xml-parser import sites across src/, resolver-plugins/, scripts/, vite.config.ts.\nRemediation disposition: Tracked on the canonical thread (accepted there); not double-tracked here.\nPolicy basis: pr-feedback-triage — restatement of an already-dispositioned finding (Slop Review tier1 mirror of the General Review STALE_DEPENDENCY finding).\nAudit anchor: canonical thread comment 3448705262; package.json:38."
     }
    ],
-   "disposition": "unstamped",
-   "disposition_comment_id": null
+   "disposition": "duplicate",
+   "disposition_comment_id": 3448794812
   },
   {
    "finding_id": 3448734341,
@@ -1309,8 +1309,8 @@
      "body": "Duplicate.\n\nClaim disposition: GHAS restatement of the citeproc DUAL_IMPORT_PATH claim. The comment body states \"citeproc is both a direct dependency and a peer dependency of @citation-js/plugin-csl, creating a version-divergence path that would spawn two independent instances\" — identical to the canonical thread 3448734411 (package.json:21/33). The GHAS rule title is cross-wired; dispositioned on body.\nRemediation disposition: Tracked on the canonical thread (accepted there); not double-tracked here.\nPolicy basis: pr-feedback-triage — restatement of an already-dispositioned finding.\nAudit anchor: canonical thread comment 3448734411; package.json:21, package.json:33, src/utils/fuzzy.ts:1."
     }
    ],
-   "disposition": "unstamped",
-   "disposition_comment_id": null
+   "disposition": "duplicate",
+   "disposition_comment_id": 3448794886
   },
   {
    "finding_id": 3448734345,
@@ -2001,8 +2001,8 @@
      "body": "Duplicate of the thread on comment 3448734408 (src/appCommands.test.ts:6).\n\nDisposition (independent disposition subagent):\n  Claim disposition: same finding as the canonical thread — verified identical ai-review-fingerprint (1a3482eed71f891e915b7621789f740a15cfb9d9436638d23cc0884afce6e0c0), same location (appCommands.test.ts:6-28), same invariant (a command-registration shape/ID-array assertion proves no behavioral contract).\n  Remediation disposition: deferred to the canonical thread.\n  Policy basis: pr-feedback-triage Loop and Convergence — \"A thread whose finding is already dispositioned elsewhere -> Duplicate of <canonical thread>, closed with that pointer.\" Disposition of record lives on 3448734408.\n  Audit anchor: canonical thread comment 3448734408."
     }
    ],
-   "disposition": "unstamped",
-   "disposition_comment_id": null
+   "disposition": "duplicate",
+   "disposition_comment_id": 3448981902
   },
   {
    "finding_id": 3448879705,
@@ -2724,8 +2724,8 @@
      "body": "Disposition (independent disposition subagent): Investigate before action.\n\nClaim disposition: needs investigation. The code is as described: when a non-empty query exists but no search fields are enabled, both rankDocuments (src/utils/fuzzy.ts:279) and filterZoteroItems (src/utils/fuzzy.ts:326-327) short-circuit keys.length === 0 to return [] (empty result). The reviewer asserts the user EXPECTS the opposite — \"no fields to filter on = show everything\" — and wants an empty-keys short-circuit to the full items list.\n\nWhy not accepted as a defect: which semantics is correct for \"non-empty query + all fields disabled\" is an owner UX/product decision, not a repository-owned invariant that the current code violates. \"All fields off => match nothing\" (the current behavior) is a defensible reading: there is no field in which the query can match, so nothing matches. \"All fields off => ignore the query and show all\" is the reviewer's reading. Neither is dictated by any contract visible in the code, and the empty-search-keys path is reached only from a UI state the owner controls. Per anti-slop, the desired UX of an all-toggles-off state is user taste, not auto-fixable slop.\n\nMissing evidence required before any change: the owner's intended behavior contract for the (non-empty query, zero enabled fields) state — specifically whether disabling all fields is meant to mean \"filter on nothing\" (current []) or \"filtering inert, show full list.\" Until that contract is stated, the remediation direction is undetermined.\n\nPolicy basis: bespoke-software-policy Verification Rule (no concrete owner-affecting defect is established without the intended-behavior contract) + anti-slop user-owned-decision separation.\n\nStatus: OPEN pending the owner's intended-UX contract for the empty-enabled-fields state. No remediation prescribed."
     }
    ],
-   "disposition": "unstamped",
-   "disposition_comment_id": null
+   "disposition": "needs-investigation",
+   "disposition_comment_id": 3449093605
   },
   {
    "finding_id": 3449084656,
@@ -3042,7 +3042,7 @@
      "body": "Disposition (independent disposition subagent): Rejected.\n\nClaim disposition: false; the premise misframes the duplicate-detection contract. The finding asserts a duplicate pair can consist of one titled item and one title-less item, making the title-less item invisible. But duplicateItems (src/librarySelectors.ts:58-78) implements TITLE-based duplication: two items are duplicates iff their normalized titles are equal. A title-less item (item.title === undefined) has no title to compare, so by the definition of this detector it can never be the equal-title twin of a titled item; their title states differ (one present, one absent). The count phase skip (line 65) and the filter-phase false (line 71) are the same intended semantic, stated explicitly in the code comment at 62-63: a title-less item cannot be a title-duplicate. This is a deliberate design choice about what duplicate means, not an asymmetric bug. Fail-loud is preserved: a titled item missing from the count map throws (line 73-74).\nRemediation disposition: misaligned. Treating a titled item and a title-less item as a duplicate pair would require redefining duplication on some other key, which is a product redesign, not a defect fix.\nPolicy basis: anti-slop design-choice gate (the duplicate predicate is a user-owned behavioral definition); bespoke-software-policy (fail-loud retained on the only case that can violate the invariant).\nAudit anchor: src/librarySelectors.ts:58-78, esp. comment 62-63 and throw 73-74."
     }
    ],
-   "disposition": "duplicate",
+   "disposition": "rejected",
    "disposition_comment_id": 3451625863
   },
   {
@@ -3373,8 +3373,8 @@
      "body": "Duplicate of canonical thread zoteroRepository.ts:164 (PRRT_kwDOS-nFnM6LKRqN, comment 3450021386).\n\nDisposition (independent disposition subagent): Duplicate. The quoted invariant on this thread (a date that fails semantic validation must not be silently converted to a simpler form that omits the failure signal) is identical to the canonical silent_year_coercion thread at line 164 and targets the same cleanDate function (zoteroRepository.ts:164-171). The leading ai-review/slop header text about error type identification is mislocated boilerplate; the actual finding is the date-coercion one. Disposed against the canonical thread, where the merits are recorded."
     }
    ],
-   "disposition": "unstamped",
-   "disposition_comment_id": null
+   "disposition": "duplicate",
+   "disposition_comment_id": 3451626584
   },
   {
    "finding_id": 3450021123,
@@ -3568,7 +3568,7 @@
      "body": "Disposition (independent disposition subagent): Rejected (claim false on investigation; the two parses guard distinct, independently-reachable boundaries).\n\nClaim disposition: false. The finding asserts the parseBibTeXToMetadata call at resolverPlugins.ts:227 is redundant with the parse at :206 because \"no code path between the two calls modifies the BibTeX string.\" That reasoning only holds for the resolveSourceToZotero path (runResolverPlugin -> importBibTeXToZotero). It is false for the OTHER caller of importBibTeXToZotero.\n\nimportBibTeXToZotero has two production consumers (verified by grep):\n  1. resolveSourceToZotero (resolverPlugins.ts:253-254), which first runs runResolverPlugin -> parseBibTeXToMetadata at :206;\n  2. runAddItemDiagnostic (src/server/liveDiagnostics.ts:81-102), which builds a raw BibTeX template string in-place (lines 84-89) and calls importBibTeXToZotero(bibtex, ...) at liveDiagnostics.ts:91 WITHOUT ever calling runResolverPlugin or parseBibTeXToMetadata beforehand.\n\nFor caller (2) the parse at resolverPlugins.ts:227 is the SOLE import-boundary validation -- it is the only guard ensuring malformed BibTeX cannot be written to Zotero through the diagnostic path. Removing it would leave that boundary unvalidated. The two parses therefore guard two distinct, independently-reachable entrypoints; this is not dead/redundant validation.\n\nThe fingerprint's own \"possible duplicate disposition required\" note was checked: this is the same category/path as a prior round's finding, which was likewise REJECTED-on-investigation for the same reason (second caller does not pre-validate). The current code still has both callers, so the prior disposition is independently re-confirmed on the merits, not merely deferred to.\n\nRemediation disposition: n/a (no defect; both validation boundaries are necessary).\n\nPolicy basis: bespoke-software-policy crash-at-the-boundary -- importBibTeXToZotero is an import boundary that must validate its input regardless of which caller supplies it; anti-slop Cross-Inventory/multiple-data-points -- the redundancy claim was triangulated across both callers and fails.\n\nNo code change. Resolving as Rejected."
     }
    ],
-   "disposition": "duplicate",
+   "disposition": "rejected",
    "disposition_comment_id": 3451848286
   },
   {
@@ -3830,7 +3830,7 @@
      "body": "Disposition (independent disposition subagent): Rejected.\n\nClaim disposition: false against current architecture. The claim is that item types are validated twice redundantly (parseItemType in preflight + LibraryPayloadSchema.parse on the same data) with no distinct fault domain. These are two different boundaries with two different fault domains. assertObservedItemTypes (src/server/zoteroRepository.ts:215-233) runs as part of the structural-only preflight (assertStructuralContract, lines 305-316), which is the ONLY item-type validation executed on the startup path assertDatabaseContractFromUri (src/server/main.ts:48) where queryLibrary and therefore LibraryPayloadSchema.parse are never run. It surfaces a typed unsupported_item_type ZoteroDatabaseContractError against the actual DB content before serving. LibraryPayloadSchema.parse (line 596) validates the mapped response-payload shape at the API boundary via ItemTypeSchema (src/schemas.ts:56). Removing the preflight check (the finding's implied remediation) would erase the startup contract guarantee entirely. This is the deliberate structural-only-startup-preflight + crash-at-the-boundary design from 183a0bc, not dead duplicate validation. No code change.\nPolicy basis: bespoke-software-policy Crash at the Boundary (assert expected shape at each external boundary); the two checks guard distinct boundaries (startup DB contract vs per-request payload shape).\n"
     }
    ],
-   "disposition": "duplicate",
+   "disposition": "rejected",
    "disposition_comment_id": 3452018574
   },
   {
@@ -3961,7 +3961,7 @@
      "body": "Duplicate of the doi.mjs:45 thread (canonical: manifest-trust validation gap, comment 3451969618).\n\nDisposition (independent disposition subagent):\n  Claim disposition: Same finding as the canonical thread. This thread (anchored at doi.mjs:60) carries a mislocated \"redundant parsing on the production path is dead validation\" header, but its actual body is the manifest-trust / defense-in-depth claim — \"every plugin boundary must validate its own input shape independently; trusting the caller s manifest pattern matching removes defense-in-depth against misrouted inputs.\" That is the same underlying concern as the canonical doi.mjs:45 thread (no host check in doiFromInput before extracting the pathname as a DOI). Verified against current code: both target the doiFromInput boundary at HEAD 3338800. Not outdated — the \"don t truncate bare DOIs\" rework (3338800) addressed the strip/truncate concern, but this thread s live body is about host validation, which is unaddressed.\n  Disposition carried from canonical: Investigate before action. See comment 3452012881 for the full grounded rationale (the URL branch never checks url.host; the function comment claims a host check the code omits; the standalone import.meta.main path has no manifest gate).\n\nNo code change. Resolving as duplicate; the underlying concern is tracked on the canonical doi.mjs:45 thread."
     }
    ],
-   "disposition": "outdated",
+   "disposition": "duplicate",
    "disposition_comment_id": 3452018702
   },
   {
@@ -4084,7 +4084,7 @@
      "body": "Rejected (on investigation).\n\nDisposition (independent disposition subagent): the concern was that the 'Untitled Record' literal for a title-less item is a boundary fabrication of a domain value.\n\nInvestigation: the literal exists only in the render/display layer (renderTitleCell: item.title || 'Untitled Record'). The data layer keeps ZoteroItem.title undefined; duplicate detection branches on title === undefined and fabricates nothing; sort projects absent title to '' for ordering only; search preserves absent title as a no-term contribution (no '' fabrication). The literal never leaks into data, sort keys, search terms, or duplicate detection — it is a legitimate presentational placeholder so the user has a clickable label, not a data fabrication. No change."
     }
    ],
-   "disposition": "duplicate",
+   "disposition": "rejected",
    "disposition_comment_id": 3452224682
   },
   {
@@ -4199,8 +4199,8 @@
      "body": "Tracked as code debt in #18 (deferred per maintainer decision: file genuinely-new findings as code debt and merge). This finding is genuinely new this round (or the deferred live-write diagnostic); it is captured in the code-debt tracking issue with its file:line and fix direction. Closing for merge."
     }
    ],
-   "disposition": "unstamped",
-   "disposition_comment_id": null
+   "disposition": "duplicate",
+   "disposition_comment_id": 3452360209
   },
   {
    "finding_id": 3452264569,
@@ -4325,7 +4325,7 @@
      "body": "Disposition (independent disposition subagent): Rejected. Scanner header outdated (fuzzy consolidated in 61f121a); body concern not present in current code.\n\nClaim disposition: false. Two separate non-findings are stapled together here. (1) The scanner header \"A single owned capability (fuzzy string matching) should use one dependency, not two overlapping libraries\" is outdated: fuzzy matching is consolidated to a single engine — fuzzy.ts constructs one new Fzf(...) (fuzzy.ts:292) and the module comment states \"Both modes run on the same fuzzy engine (fzf)\" (fuzzy.ts:195). There are not two overlapping fuzzy libraries. (2) The body invariant \"A diagnostic function must use exactly one canonical response shape and fail loud on format changes, not silently fall back to a second shape\" has no target in liveDiagnostics.ts: the add-item diagnostic reads result.item_key directly behind the ZoteroImportResultSchema guarantee, with the prior item_keys[0] fallback explicitly removed as unreachable dead defense (liveDiagnostics.ts:81-85). importBibTeXToZotero ends in ZoteroImportResultSchema.parse (resolverPlugins.ts:254), so a format change fails loud at the parse — there is no second-shape fallback to silently take.\n\nRemediation disposition: misaligned (no live target for either the header or the body claim).\n\nPolicy basis: pr-feedback-triage Loop and Convergence (Outdated header against 61f121a) + bespoke-software-policy (single canonical shape already enforced fail-loud by schema parse; no fallback present). No code change made. Audit anchor: src/utils/fuzzy.ts:195,292 (single fuzzy engine), src/server/liveDiagnostics.ts:80-85 (no fallback shape), src/server/resolverPlugins.ts:254 (fail-loud result parse). NOTE: this disposition does not touch the separately-deferred liveDiagnostics side-effect/timing thread."
     }
    ],
-   "disposition": "outdated",
+   "disposition": "rejected",
    "disposition_comment_id": 3452356473
   },
   {
@@ -4361,7 +4361,7 @@
      "body": "Disposition (independent disposition subagent): Rejected. (Re-flag of the previously-rejected as-cast family; rationale re-verified against current code.)\n\nClaim disposition: false in its consequential premise. zoteroSortingFn casts columnId as SortKey at columnModel.ts:177-178. The reviewer's stated failure path — \"a persistent column layout from a future version, or a programmatic column registration that bypasses the SortKey union, silently breaks sorting\" — is precluded by the current code, not left to chance. (1) Column ids are single-sourced: ZOTERO_COLUMNS is built by buildColumnDef (columnModel.ts:204-217) with id: column.key where column.key is typed SortKey via ColumnDefinition; TanStack does not invent columnIds, it carries exactly these. (2) Persisted layouts cannot inject a foreign id: readColumnLayout (columnModel.ts:76-120) validates the stored columnOrder/visibility/sizing against DEFAULT_COLUMN_IDS and throws loudly on any unknown id (lines 88-110) and on count mismatch — it does NOT silently reset. So every columnId reaching sortableValue is a real SortKey member, and the \"unrecognized key returns undefined -> NaN/0-sort\" path cannot be reached on a contract-valid layout.\n\nRemediation disposition: misaligned. Adding a runtime membership re-check at the cast site would guard a state the persistence boundary already proves impossible (duplicate validation), and sortableValue itself is total over SortKey (no NaN-producing branch; falsy -> '' at librarySelectors.ts:184).\n\nPolicy basis: bespoke-software-policy Verification Rule (no concrete defect on a contract-valid layout right now; the unknown-id condition is structurally precluded by the fail-loud persistence contract) + anti-slop (the proposed boundary re-validation would be redundant validation behind an existing single-source-of-truth contract). No code change made. Audit anchor: columnModel.ts:76-120 (fail-loud persistence contract), columnModel.ts:204-217 (single-source column ids), librarySelectors.ts:167-185 (total sortableValue)."
     }
    ],
-   "disposition": "duplicate",
+   "disposition": "rejected",
    "disposition_comment_id": 3452339125
   },
   {
@@ -4420,8 +4420,8 @@
      "body": "Tracked as code debt in #18 (deferred per maintainer decision: file genuinely-new findings as code debt and merge). This finding is genuinely new this round (or the deferred live-write diagnostic); it is captured in the code-debt tracking issue with its file:line and fix direction. Closing for merge."
     }
    ],
-   "disposition": "unstamped",
-   "disposition_comment_id": null
+   "disposition": "duplicate",
+   "disposition_comment_id": 3452323389
   },
   {
    "finding_id": 3452285722,
@@ -4438,7 +4438,7 @@
      "body": "Disposition (independent disposition subagent): Rejected; scanner header outdated.\n\nClaim disposition: false on both the header and the body. (1) Header \"malformed JSON body must return 400 invalid_request, not 500\" is already addressed (commit 7dc3d8e): classifyError detects the express.json structural identity { type: 'entity.parse.failed', status: 400 } and returns 400 invalid_request (server.ts:146-157), proven by serverErrors.test.ts \"classifies a malformed JSON request body as a 400 invalid_request, not a 500\" (lines 318-329). (2) Body claim \"both the runtime schema (CollectionSchema) and the type interface (Collection) declare key as optional\" is factually wrong. Collection is a discriminated union: the real variant requires key non-optionally in BOTH surfaces — RealCollectionSchema.key is z.string().min(1) (schemas.ts:51) and RealCollection.key is key: string (types.ts:166-172). A keyless real collection is unrepresentable: it fails the Zod parse at runtime and is a compile-time error in the type. The synthetic library-root variant intentionally has no key (it is not a real collection and never reaches the import boundary). So a future schema change dropping key WOULD be caught — at compile time on the type and at runtime by the schema.\n\nRemediation disposition: misaligned (no optional-key drift exists; the discriminated union already makes a keyless real collection impossible).\n\nPolicy basis: bespoke-software-policy crash-at-the-boundary (required key enforced by schema + type) + pr-feedback-triage Loop and Convergence (Outdated header against 7dc3d8e). No code change made. Audit anchor: src/schemas.ts:44-57, src/types.ts:160-176, src/server/server.ts:146-157, src/server/serverErrors.test.ts:318-329."
     }
    ],
-   "disposition": "outdated",
+   "disposition": "rejected",
    "disposition_comment_id": 3452370845
   },
   {
@@ -4461,8 +4461,8 @@
      "body": "Tracked as code debt in #18 (deferred per maintainer decision: file genuinely-new findings as code debt and merge). This finding is genuinely new this round (or the deferred live-write diagnostic); it is captured in the code-debt tracking issue with its file:line and fix direction. Closing for merge."
     }
    ],
-   "disposition": "unstamped",
-   "disposition_comment_id": null
+   "disposition": "duplicate",
+   "disposition_comment_id": 3452333740
   },
   {
    "finding_id": 3452285755,
@@ -4484,7 +4484,7 @@
      "body": "Tracked as code debt in #18 (deferred per maintainer decision: file genuinely-new findings as code debt and merge). This finding is genuinely new this round (or the deferred live-write diagnostic); it is captured in the code-debt tracking issue with its file:line and fix direction. Closing for merge."
     }
    ],
-   "disposition": "accepted",
+   "disposition": "duplicate",
    "disposition_comment_id": 3452326893
   },
   {
@@ -4638,8 +4638,8 @@
      "body": "Tracked as code debt in #18 (deferred per maintainer decision: file genuinely-new findings as code debt and merge). This finding is genuinely new this round (or the deferred live-write diagnostic); it is captured in the code-debt tracking issue with its file:line and fix direction. Closing for merge."
     }
    ],
-   "disposition": "unstamped",
-   "disposition_comment_id": null
+   "disposition": "needs-investigation",
+   "disposition_comment_id": 3452321806
   },
   {
    "finding_id": 3452286018,
@@ -4707,8 +4707,8 @@
      "body": "Tracked as code debt in #18 (deferred per maintainer decision: file genuinely-new findings as code debt and merge). This finding is genuinely new this round (or the deferred live-write diagnostic); it is captured in the code-debt tracking issue with its file:line and fix direction. Closing for merge."
     }
    ],
-   "disposition": "unstamped",
-   "disposition_comment_id": null
+   "disposition": "needs-investigation",
+   "disposition_comment_id": 3452332390
   },
   {
    "finding_id": 3452290420,

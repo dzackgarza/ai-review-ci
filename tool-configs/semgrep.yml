@@ -251,9 +251,12 @@ rules:
   - id: py-no-bare-except
     # A bare "except:\n    pass" clause fragment never parses as a semgrep
     # python pattern, so the rule silently matched nothing (caught by the
-    # slop-torture suite, #41). The try-wrapped form fires; the match is
-    # reported at the try: line.
-    pattern: "try:\n    ...\nexcept:\n    pass"
+    # slop-torture suite, #41). The try-wrapped forms fire; the match is
+    # reported at the try: line. Typed "except $EXC: pass" swallows discard
+    # errors just as silently as the bare form, so both shapes match.
+    pattern-either:
+      - pattern: "try:\n    ...\nexcept:\n    pass"
+      - pattern: "try:\n    ...\nexcept $EXC:\n    pass"
     message: POLICY.NO_ERROR_DISCARD
     languages:
       - python
