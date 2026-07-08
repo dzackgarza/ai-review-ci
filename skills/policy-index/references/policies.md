@@ -181,7 +181,9 @@ Category: Proof and Test Integrity
 
 Rule: `skip`, `xfail`, `todo`, `only`, ignored tests, conditional test gating, and hidden test exclusions mask runtime reality and are not acceptable proof surfaces.
 
-Invalid local fixes: Moving the skip; adding a reason string; filing an issue while leaving the proof gap masked.
+Sanctioned exception (user grant 2026-07-09) — **open-issue red proof gates**: a committed red proof test for an OPEN tracked issue may carry `@pytest.mark.xfail(reason="... #<issue-number> ...", strict=True)`. The reason string must cite the open issue; `strict=True` is mandatory so the suite goes red the moment the gap closes (the marker must then be removed in the fixing commit). This is the coexistence mechanism between the all-green commit gate and the red-test-first bug workflow — nothing else is exempted: `skip`/`skipif`, non-strict xfail, and xfail without an open-issue citation remain violations, and citing a CLOSED issue is a violation (reviewers audit issue state).
+
+Invalid local fixes: Moving the skip; adding a reason string without an open-issue red-proof-gate grant; filing an issue while leaving the proof gap masked with `skip` or non-strict `xfail`.
 
 Detection handles: `TEST-GATING`, `NO MASKING`
 

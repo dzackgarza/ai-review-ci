@@ -116,7 +116,7 @@ This section belongs in [test-guidelines](../../test-guidelines/SKILL.md) and th
 | Pattern | Red flag |
 | :--- | :--- |
 | **[MOCK-STUB] Mock/fake/stub/simulation** | Directly prohibited unless it is outside proof/QC and not test-shaped. |
-| **[TEST-GATING] `skip`, `xfail`, conditional test gating** | Masks runtime reality. |
+| **[TEST-GATING] `skip`, `xfail`, conditional test gating** | Masks runtime reality. (Sole exception: strict `xfail` citing an OPEN issue — the red-proof-gate grant in policies.md `POLICY.NO_SKIP_MASK`.) |
 | **[SMOKE-TEST] “Smoke” tests in test suite** | Often fake proof with softer branding. |
 | **[HELPER-PATCH] Helper tests after review pressure** | Patch-shaped proof, not behavior proof. |
 | **[OVERCLAIM] Test name overclaims** | Name says “existing config”; body passes `true`. |
@@ -498,7 +498,7 @@ These can be compiled into global QC detectors to act as warning or error gates.
 - `@ts-ignore`, `eslint-disable`
 - `as any`, `as unknown as`
 - `jest.mock`, `vi.mock`, `MagicMock`, `monkeypatch`
-- `pytest.mark.skip`, `pytest.mark.xfail`
+- `pytest.mark.skip`, `pytest.mark.xfail` (except strict xfail citing an open issue — see `POLICY.NO_SKIP_MASK`)
 - `2>/dev/null`, `|| true`
 - `npm install -g`, `pip install`, `curl | bash`
 - `fallback`, `default`, `best effort`, `graceful`, `smoke`, `non-proof`, `quarantine`, `covered elsewhere`
@@ -509,7 +509,7 @@ These can be compiled into global QC detectors to act as warning or error gates.
 - `ExceptHandler` for `AssertionError`, `ImportError`, or broad `Exception`
 - `Call` to `os.getenv` or `dict.get` with default value
 - Subscript/annotation `Any`
-- `pytest` skip/xfail markers
+- `pytest` skip/xfail markers (strict open-issue xfail gates are sanctioned; verify the issue is open)
 - `unittest.mock` imports
 
 ### **[AST-TYPESCRIPT]** AST-Level Candidates (TypeScript)

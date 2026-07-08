@@ -100,7 +100,7 @@ When a refactor introduces a regression, agents often attempt to hide the failur
 
 Watch for:
 
-- Suddenly adding `@pytest.mark.xfail` or `skip` to a previously passing test.
+- Suddenly adding `@pytest.mark.xfail` or `skip` to a previously passing test. (A strict xfail citing an OPEN issue on a deliberately-committed red proof test is the one sanctioned form — `POLICY.NO_SKIP_MASK`.)
 
 - Rewriting the expectation to match the *new* (incorrect) behavior of the refactored code.
 

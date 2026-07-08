@@ -150,7 +150,7 @@ These may be true statements, but they usually do not prove repository-owned fun
 
 3. **REQUIRED: Reference Skills** — Strictly follow `prompt-engineering`, `agent-orchestration`, and the guidelines below.
 
-4. **No Masking** — All tests must reflect actual runtime state (no `xfail`, no `ignore`).
+4. **No Masking** — All tests must reflect actual runtime state (no `xfail`, no `ignore`), with one sanctioned exception: an open-issue red proof gate marked `xfail(reason="... #<open-issue> ...", strict=True)` (see `POLICY.NO_SKIP_MASK`).
 
 5. **Substantive Assertions** — Every test MUST prove a nontrivial fact; reject “content-free” checks.
 
@@ -208,7 +208,7 @@ This agent must follow these standards:
   A mock-based test proves only that you wrote code that calls the mock — it says nothing about whether the real system works.
   Every hour spent on mock infrastructure is net-negative: the tests pass, the system is unproven, and the mocks must now be maintained.
 
-- **NO MASKING**: Never use `pytest.mark.xfail`, `pytest.mark.skip`, or `pytest.mark.skipif`. Suite status must reflect 100% actual runtime reality.
+- **NO MASKING**: Never use `pytest.mark.skip` or `pytest.mark.skipif`; never use `pytest.mark.xfail` EXCEPT as an open-issue red proof gate: `@pytest.mark.xfail(reason="... #<issue> ...", strict=True)` where the cited issue is OPEN. Strictness is mandatory — the suite must go red when the gap closes, forcing the marker's removal in the fixing commit. Suite status otherwise reflects 100% actual runtime reality.
   `skipif` deserves special attention: it is almost always a hedge against a dependency not being installed or a service not being running.
   That is a *setup problem*, not a test design problem.
   Hard dependencies must be present; if they are not, the system is broken and the suite should fail loudly, not silently pass.

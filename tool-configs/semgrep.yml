@@ -300,7 +300,27 @@ rules:
   - id: py-no-skip-test
     pattern-either:
       - pattern: '@pytest.mark.skip'
-      - pattern: '@pytest.mark.xfail'
+      - pattern: '@pytest.mark.skip(...)'
+      - pattern: '@pytest.mark.skipif(...)'
+    message: POLICY.NO_SKIP_MASK
+    languages:
+      - python
+    severity: ERROR
+    metadata:
+      policy_code: POLICY.NO_SKIP_MASK
+      remediation_code: REMEDIATE.REAL_PROOF_LOOP
+  - id: py-xfail-without-open-issue-gate
+    # POLICY.NO_SKIP_MASK exception (user grant 2026-07-09): xfail is
+    # sanctioned ONLY as an open-issue red proof gate — strict=True and a
+    # reason citing the tracked issue (#N; reviewers audit that it is open).
+    # Everything else (bare xfail, non-strict xfail, no issue citation)
+    # remains a violation.
+    patterns:
+      - pattern-either:
+          - pattern: '@pytest.mark.xfail'
+          - pattern: '@pytest.mark.xfail(...)'
+      - pattern-not: '@pytest.mark.xfail(..., reason="=~/#[0-9]+/", ..., strict=True, ...)'
+      - pattern-not: '@pytest.mark.xfail(..., strict=True, ..., reason="=~/#[0-9]+/", ...)'
     message: POLICY.NO_SKIP_MASK
     languages:
       - python
