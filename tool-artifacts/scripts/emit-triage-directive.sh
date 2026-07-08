@@ -19,7 +19,11 @@ cat << 'TRIAGE_EOF'
 
   One or more quality control checks failed (see above for details).
 
-  YOU ARE NOW IN TRIAGE MODE. Follow these rules EXACTLY:
+  YOU ARE NOW IN TRIAGE MODE. This is a PIVOT, not a global halt:
+  pause only the change that tripped this gate and redirect your own
+  effort into triage. Unrelated tasks and background work continue.
+
+  Follow these rules EXACTLY:
 
   1.  Do NOT probe, inspect, or modify any file in ~/ai-review-ci/.
       The QC configs, scripts, checking tools, and ML models are centrally
@@ -65,6 +69,14 @@ cat << 'TRIAGE_EOF'
     above. Never include your own policy paraphrase, severity opinion,
     root-cause theory, remediation menu, or leaning. The orchestrator
     never adjudicates findings and never reads the remediation index.
+
+    ESCAPE HATCH (true false positives only): if every catalog
+    remediation would obfuscate or golf otherwise-honest code purely to
+    satisfy the detector, do NOT contort the code and do NOT suppress
+    the check. Stop and present a formal policy-exception request to
+    the user (policy code, justification, replacement invariant,
+    boundary proof, audit trail). Only the user grants exceptions.
+    See "Escape Hatch" in qc-triage.md.
 
 ================================================================================
 TRIAGE_EOF

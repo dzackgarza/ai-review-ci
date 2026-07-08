@@ -25,8 +25,13 @@ When a QC check fails and the triage directive is emitted, the orchestrator MUST
 
 1. **Make no judgment calls about findings.** Do not decide, state, hint, imply, or act on whether a finding is real, false, clean, slop, a false positive, or a tool bug.
 
-2. **Stop all work.** Cease the in-progress task.
-   Do not continue the original work until triage has resolved the QC failure.
+2. **Pivot into triage; do not freeze everything.** Pause only the work
+   that produced or depends on the failing change, and redirect your own
+   effort into the triage/remediation flow until the gate is resolved.
+   This is a pivot, not a global halt: unrelated running work, background
+   jobs, and other agents' tasks continue. Do not advance the failing
+   change itself (push it, build on it, or report it complete) until
+   triage resolves.
 
 3. **Do not probe QC internals.** Do not read, inspect, or modify `~/ai-review-ci/` during downstream triage.
    Do not read the remediation policy yourself.
@@ -91,6 +96,31 @@ The subagent must:
 The orchestrator must not read the remediation policy during downstream triage.
 C reads it.
 
+## Escape Hatch: Genuine False Positives
+
+This is the ONLY sanctioned route when a finding appears to be a true
+false positive — including the case where every catalog remediation
+would make honest code materially worse (obfuscated, golfed, needlessly
+indirect) solely to satisfy a detector.
+
+The hatch is: **stop and explain to the user.** Present a formal
+policy-exception request containing the policy code, the justification,
+the replacement invariant that still protects the policy's intent, the
+boundary proof, and an audit trail. Only the user grants the exception.
+
+The hatch is NOT:
+
+- contorting, golfing, or obfuscating the code until the detector goes
+  quiet (that trades a lint warning for real damage and is itself slop);
+- suppressing, scoping, or editing the check (`POLICY.NO_QC_SILENCING`);
+- an agent — orchestrator, B, or C — declaring "false positive" and
+  moving on.
+
+If C, while remediating, concludes that every applicable `REMEDIATE.*`
+entry would degrade the code this way, C reports that conclusion back
+as a blocker with the draft exception request; the orchestrator
+forwards it to the user verbatim and waits.
+
 ## Dispatch Hygiene
 
 Dispatch prompts are part of the proof boundary.
@@ -131,7 +161,9 @@ Do not include:
 | Running isolated checks to verify | Cherry-picks around the full gate | Run the target repo's canonical `just test` after remediation |
 | Adding bypass comments or suppressions | Hides symptoms without satisfying policy | Fix the policy violation |
 | Editing QC configs or thresholds during downstream triage | Weakens central QC for all consumers | Change only target project code |
-| Continuing the original task after QC fails | The current output failed the gate | Triage first, then resume only if the fix leaves work remaining |
+| Continuing to advance the failing change after QC fails | The current output failed the gate | Pivot into triage first; resume once the gate is green |
+| Halting all work, including unrelated tasks, on any QC failure | Overcompliance: the gate scopes to the failing change, not the session | Pause only the failing change; pivot your effort into triage |
+| Golfing or obfuscating code purely to satisfy a detector | Trades a lint warning for real damage; the code is the product, not the gate | Use the Escape Hatch: stop and present a policy-exception request to the user |
 
 ## Evidence Requirements
 
