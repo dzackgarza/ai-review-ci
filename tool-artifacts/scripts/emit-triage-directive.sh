@@ -36,18 +36,35 @@ cat << 'TRIAGE_EOF'
 
   TRIAGE WORKFLOW (after user approval):
 
-    Step 1 — Spawn a SUBAGENT to perform an llm-review slop report on
-             the findings. Load the `reviewing-llm-code` skill in the
-             subagent.
+    STEP 0 (MANDATORY, BEFORE SPAWNING ANYTHING) — Read the complete
+    protocol and follow it exactly:
 
-    Step 2 — Spawn a SEPARATE SUBAGENT to solve the underlying
-             architectural issues. The reviewer and fixer MUST be
-             different subagent instances.
+      reviewing-llm-code/references/qc-triage.md
 
-  Load the QC Triage Protocol reference (under reviewing-llm-code) for the
-  complete triage protocol:
+    Routing gate (mechanical, no judgment calls):
 
-    reviewing-llm-code/references/qc-triage.md
+    - Output already contains POLICY.* codes with file/line locations
+      -> it IS the disposition artifact. Spawn ONLY a remediation
+         subagent (Route C). That subagent loads
+         policy-index/references/remediations.md + fixing-slop and
+         derives the fix from the matching REMEDIATE.* entry.
+         Do NOT spawn a reviewer/disposition subagent.
+
+    - Output has no POLICY.* codes
+      -> spawn a disposition subagent (Route B) that loads policy-index
+         (with its references), anti-slop, reviewing-llm-code,
+         bespoke-software-policy, and test-guidelines, and returns ONLY
+         `VIOLATION -> POLICY.*` or `CLEARED` with quoted policy proof.
+         B must NOT propose or imply any fix; a "false positive"
+         disposition requires the formal policy-exception burden and is
+         never a default. Then spawn a SEPARATE Route C remediation
+         subagent for each violation.
+
+    DISPATCH HYGIENE: subagent prompts carry ONLY the raw verbatim
+    findings, file/line locations, and the skill-loading instructions
+    above. Never include your own policy paraphrase, severity opinion,
+    root-cause theory, remediation menu, or leaning. The orchestrator
+    never adjudicates findings and never reads the remediation index.
 
 ================================================================================
 TRIAGE_EOF
