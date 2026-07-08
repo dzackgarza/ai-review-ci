@@ -39,6 +39,7 @@ _python-qc-files:
 	done < <(uv run {{artifacts}}/scripts/read_qc_excludes.py {{configs}}/qc-excludes.toml)
 	rg --files \
 		-g '*.py' \
+		-g '!*.sage.py' \
 		-g '!tool-artifacts/vulture_whitelist.py' \
 		"${exclude_args[@]}"
 
@@ -198,7 +199,7 @@ _check-python-project:
 		fi
 	done
 	# 5. Tests must exist
-	if ! rg --files -g 'test_*.py' -g '*_test.py' -g 'tests/*.py' >/dev/null 2>&1; then
+	if ! rg --files -g 'test_*.py' -g '*_test.py' -g 'tests/*.py' -g '!*.sage.py' >/dev/null 2>&1; then
 		echo "ERROR: Python project must have tests. No test files found with patterns: test_*.py, *_test.py, tests/*.py"
 		"{{artifacts}}/scripts/emit-test-writing-directive.sh"
 		exit 1
@@ -244,7 +245,7 @@ _pytest: _install-tools
 	echo "============================="
 	echo "=== Running: pytest (commit tier — no coverage gate) ==="
 	echo "# Runs the project's own test suite; must pass. Coverage thresholds are enforced at push (test-ci)."
-	if ! rg --files tests -g 'test_*.py' -g '*_test.py' >/dev/null 2>&1; then
+	if ! rg --files tests -g 'test_*.py' -g '*_test.py' -g '!*.sage.py' >/dev/null 2>&1; then
 		echo "ERROR: pytest: no test files found in a Python project."
 		"{{artifacts}}/scripts/emit-test-writing-directive.sh"
 		exit 1
@@ -277,7 +278,7 @@ _pytest_with_coverage: _install-tools
 	echo "============================="
 	echo "=== Running: pytest with coverage measurement ==="
 	echo "# Runs pytest with coverage.py and generates coverage.xml for diff-cover"
-	if ! rg --files tests -g 'test_*.py' -g '*_test.py' >/dev/null 2>&1; then
+	if ! rg --files tests -g 'test_*.py' -g '*_test.py' -g '!*.sage.py' >/dev/null 2>&1; then
 		echo "ERROR: pytest/coverage: no test files found in a Python project."
 		"{{artifacts}}/scripts/emit-test-writing-directive.sh"
 		exit 1

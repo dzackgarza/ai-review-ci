@@ -10,6 +10,15 @@ from typing import cast
 
 def _load_pyproject(project_root: Path) -> dict[str, object]:
     pyproject_path = project_root / "pyproject.toml"
+    if not pyproject_path.is_file():
+        raise SystemExit(
+            f"ERROR: no pyproject.toml at {pyproject_path.resolve()} — QC installs the project\n"
+            "       editable and reads dependency groups from it. Create a minimal one:\n"
+            "         [project]\n"
+            '         name = "<project-name>"\n'
+            '         version = "0.0.1"\n'
+            '         requires-python = ">=3.14"\n'
+        )
     raw_config = tomllib.loads(pyproject_path.read_text(encoding="utf-8"))
     return cast("dict[str, object]", raw_config)
 

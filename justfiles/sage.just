@@ -37,6 +37,46 @@ _sage-qc-files:
 		-g '!*.sage.py' \
 		"${exclude_args[@]}"
 
+# Wiring preflight: every failure prints the exact remediation so a
+# misconfigured repo converges to correct QC wiring instead of guessing.
+_sage-preflight:
+	#!/usr/bin/env bash
+	set -euo pipefail
+	echo "============================="
+	echo "=== Running: Sage QC wiring preflight ==="
+	echo "# Validates SAGE_BIN, pyproject.toml, and absence of committed preparse artifacts"
+	failed=0
+	if [ "${SAGE_BIN+x}" != x ] || [ ! -x "${SAGE_BIN:-}" ]; then
+		echo "ERROR: SAGE_BIN is unset or not executable (current: '${SAGE_BIN:-<unset>}')."
+		echo "       FIX: export it from the repo's tracked .envrc (it is a path, not a secret):"
+		echo "         export SAGE_BIN=\"\${SAGE_BIN:-\$(command -v sage)}\""
+		echo "       then run: direnv allow"
+		failed=1
+	fi
+	if [ ! -f pyproject.toml ]; then
+		echo "ERROR: no pyproject.toml in the Sage project root ($(pwd -P))."
+		echo "       QC installs the project editable for mypy/pytest. FIX: create a minimal one:"
+		echo "         [project]"
+		echo "         name = \"<project-name>\""
+		echo "         version = \"0.0.1\""
+		echo "         requires-python = \">=3.14\""
+		failed=1
+	fi
+	tracked_generated="$(git ls-files -- '*.sage.py' 2>/dev/null || true)"
+	if [ -n "$tracked_generated" ]; then
+		echo "ERROR: git-tracked *.sage.py preparse artifacts found. These are generated from"
+		echo "       .sage sources by 'sage --preparse'; QC preparses into a tempdir itself, so"
+		echo "       committed copies are duplicate state that pollutes Python QC."
+		echo "       FIX: git rm --cached -- '*.sage.py'  and add '*.sage.py' to .gitignore"
+		printf '%s\n' "$tracked_generated" | sed 's/^/         /'
+		failed=1
+	fi
+	if [ "$failed" -ne 0 ]; then
+		"{{artifacts}}/scripts/emit-triage-directive.sh"
+		exit 1
+	fi
+	echo "Sage QC wiring OK"
+
 _sage-bin:
 	#!/usr/bin/env bash
 	set -euo pipefail
@@ -188,30 +228,24 @@ _sage-pytest:
 	# Collect .sage test files
 	mapfile -t sage_test_files < <(rg --files -g 'test_*.sage' -g '*_test.sage' 2>/dev/null || true)
 	# Also collect any .py test files (mixed projects)
-	mapfile -t py_test_files < <(rg --files tests -g 'test_*.py' -g '*_test.py' 2>/dev/null || true)
+	mapfile -t py_test_files < <(rg --files tests -g 'test_*.py' -g '*_test.py' -g '!*.sage.py' 2>/dev/null || true)
 
 	if [ "${#sage_test_files[@]}" -eq 0 ] && [ "${#py_test_files[@]}" -eq 0 ]; then
 		echo "ERROR: pytest: no test files found (.sage or .py)."
 		"{{artifacts}}/scripts/emit-test-writing-directive.sh"
 		exit 1
 	fi
-	if [ ! -f pyproject.toml ]; then
-		echo "ERROR: pytest: no pyproject.toml found — cannot install project."
+	# Sage tests can only run under the Sage interpreter: sage.* is not
+	# pip-installable into a uvx CPython environment. The project must be
+	# importable there (PYTHONPATH via envrc, or installed into Sage's python).
+	if ! "$sage_bin" -python -m pytest --version >/dev/null 2>&1; then
+		echo "ERROR: pytest is not available in the Sage interpreter's Python."
+		echo "       FIX: \"$sage_bin\" -pip install pytest"
 		"{{artifacts}}/scripts/emit-triage-directive.sh"
 		exit 1
 	fi
 
-	with_args=(--with-editable .)
-	dependency_requirements_output="$(uv run --no-project python "{{artifacts}}/scripts/python_qc_metadata.py" dependency-group-requirements .)"
-	if [ -n "$dependency_requirements_output" ]; then
-		mapfile -t dependency_requirements <<<"$dependency_requirements_output"
-		for requirement in "${dependency_requirements[@]}"; do
-			with_args+=(--with "$requirement")
-		done
-	fi
-
 	pytest_args=()
-	cleanup_files=()
 
 	if [ "${#sage_test_files[@]}" -gt 0 ]; then
 		sage_preparse_dir="$(mktemp -d "${TMPDIR:-/tmp}/qc-sage-pytest.XXXXXX")"
@@ -234,7 +268,11 @@ _sage-pytest:
 				"{{artifacts}}/scripts/emit-triage-directive.sh"
 				exit 1
 			fi
-			pytest_args+=("$generated")
+			# foo.sage.py is not an importable module name for pytest
+			# (the extra dot breaks module resolution); strip the .sage.
+			importable="${generated%.sage.py}.py"
+			mv "$generated" "$importable"
+			pytest_args+=("$importable")
 		done
 	fi
 
@@ -243,7 +281,7 @@ _sage-pytest:
 		[ -n "$py_file" ] && pytest_args+=("$py_file")
 	done
 
-	if uvx --python 3.14 --from pytest "${with_args[@]}" pytest "${pytest_args[@]}"; then
+	if "$sage_bin" -python -m pytest "${pytest_args[@]}"; then
 		:
 	else
 		ec=$?
@@ -253,7 +291,7 @@ _sage-pytest:
 	fi
 
 # public: COMMIT gate — Sage syntax + Python correctness/normalization
-test: _normalize-common _sage-syntax
+test: _sage-preflight _normalize-common _sage-syntax
 	#!/usr/bin/env bash
 	set -euo pipefail
 	python_qc_repo="{{justfiles}}/python.just"
