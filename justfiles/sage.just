@@ -25,6 +25,40 @@ justfiles := infra / "justfiles"
 default:
 	@just test
 
+# public: print the wiring contract for putting a Sage project on this QC
+setup:
+	@echo "Sage QC wiring contract (what _sage-preflight enforces):"
+	@echo ""
+	@echo "1. Delegate the project justfile to this file:"
+	@echo "     test:"
+	@echo "         @just -f ~/ai-review-ci/justfiles/sage.just -d . test"
+	@echo "     test-ci:"
+	@echo "         @just -f ~/ai-review-ci/justfiles/sage.just -d . test-ci"
+	@echo ""
+	@echo "2. Export the Sage executable from a tracked .envrc (path, not a secret):"
+	@echo "     export SAGE_BIN=\"\${SAGE_BIN:-\$(command -v sage)}\""
+	@echo "   then: direnv allow"
+	@echo ""
+	@echo "3. Provide a pyproject.toml (mypy installs the project editable):"
+	@echo "     [project]"
+	@echo "     name = \"<project-name>\""
+	@echo "     version = \"0.0.1\""
+	@echo "     requires-python = \">=3.14\""
+	@echo ""
+	@echo "4. Write tests as .sage files (test_*.sage / *_test.sage) so the"
+	@echo "   preparser converts integer literals to Sage Integer/Rational."
+	@echo "   NEVER commit generated *.sage.py preparse artifacts; add"
+	@echo "   '*.sage.py' to .gitignore. QC preparses into a tempdir itself."
+	@echo ""
+	@echo "5. Tests run under the Sage interpreter's own Python. It needs pytest:"
+	@echo "     \"\$SAGE_BIN\" -pip install pytest"
+	@echo "   The package must be importable there (PYTHONPATH via .envrc, or"
+	@echo "   installed into Sage's python)."
+	@echo ""
+	@echo "6. Gates: pre-commit hook runs 'just test' (syntax, mypy, pytest);"
+	@echo "   pre-push runs 'just test-ci' (adds style/slop/coverage stack)."
+	@echo "   Run 'just test' locally first — every failure prints its own fix."
+
 _sage-qc-files:
 	#!/usr/bin/env bash
 	set -euo pipefail

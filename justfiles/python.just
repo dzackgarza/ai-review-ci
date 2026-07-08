@@ -29,6 +29,32 @@ configs := infra / "tool-configs"
 artifacts := infra / "tool-artifacts"
 justfiles := infra / "justfiles"
 
+# public: print the wiring contract for putting a Python project on this QC
+setup:
+	@echo "Python QC wiring contract (what _check-python-project enforces):"
+	@echo ""
+	@echo "1. Delegate the project justfile to this file:"
+	@echo "     test:"
+	@echo "         @just -f ~/ai-review-ci/justfiles/python.just -d . test"
+	@echo "     test-ci:"
+	@echo "         @just -f ~/ai-review-ci/justfiles/python.just -d . test-ci"
+	@echo ""
+	@echo "2. Provide a pyproject.toml with requires-python = \">=3.14\"."
+	@echo "   QC installs the project editable for mypy and pytest."
+	@echo ""
+	@echo "3. Do NOT add local QC tool configs — ruff/mypy/coverage/deptry/"
+	@echo "   vulture/import-linter sections in pyproject.toml, or standalone"
+	@echo "   files (ruff.toml, mypy.ini, .coveragerc, ...). Global QC owns"
+	@echo "   these; the preflight rejects local overrides."
+	@echo ""
+	@echo "4. Tests must exist (test_*.py / *_test.py / tests/*.py)."
+	@echo ""
+	@echo "5. Gates: pre-commit hook runs 'just test' (syntax, mypy, pytest);"
+	@echo "   pre-push runs 'just test-ci' (adds style/slop/coverage stack)."
+	@echo "   Run 'just test' locally first — every failure prints its own fix."
+	@echo ""
+	@echo "Sage projects: use sage.just instead ('just -f ~/ai-review-ci/justfiles/sage.just setup')."
+
 # private recipes (prefix with _ — never run individually)
 _python-qc-files:
 	#!/usr/bin/env bash
