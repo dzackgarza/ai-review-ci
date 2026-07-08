@@ -20,6 +20,9 @@
 # Do NOT add tool-specific ignores here — add them in the tool's own config.
 
 directories = [
+    # Deliberately noncompliant detector-test fixtures (#41): adversarial data
+    # for tests/test_slop_torture.py, never owned product code.
+    "tests/fixtures/slop-torture",
     "node_modules",
     ".venv",
     ".pytest_cache",
