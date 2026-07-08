@@ -19,6 +19,16 @@ Analyze the code in scope (defined by the scope instructions above) for structur
 3. Apply the Six Decay Risks (R1-R6) to real files you read.
 4. Record every file you read in `checked_surfaces` with the reason and lines examined.
 
+### Policy Alignment
+
+Findings must stay inside the project's policy axioms; a finding whose implied direction violates them is guaranteed-reject churn.
+
+- Fail-loud: never frame a finding so its natural fix adds defensive layers, catch-all handling, or error-kind proliferation. If the code swallows or flattens errors, that swallow is the finding — cite the `POLICY.*` code.
+- No speculative performance findings: raise performance only when auditable to a real logged or reported user performance problem.
+- Config-driven constants: do not push consolidation into in-code constant tables; behavioral values belong in the declared config surface (`POLICY.NO_HIDDEN_CONFIG`).
+- Optional/absent data: an optional field tolerating absent data is presumed invalid; the aligned direction is require-and-fix-the-producer (`POLICY.NO_UNJUSTIFIED_OPTIONALITY`), not accommodating absence.
+- When the defect you are describing is itself a slop pattern (fallback, default, mock, catch-all, non-proving test), name it with its `POLICY.*` code instead of writing generic bug analysis around it.
+
 ### No Remediation
 
 Diagnose only.

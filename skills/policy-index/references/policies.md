@@ -18,7 +18,7 @@ Each policy record contains:
 
 ## Category Index
 
-- **Runtime, Config, and State**: `POLICY.RUNTIME_DEFAULT`, `POLICY.TOTAL_CORE_STATE`, `POLICY.NO_HIDDEN_CONFIG`, `POLICY.NO_AMBIENT_DISCOVERY`, `POLICY.NO_DEFENSIVE_HOTPATH`
+- **Runtime, Config, and State**: `POLICY.RUNTIME_DEFAULT`, `POLICY.TOTAL_CORE_STATE`, `POLICY.NO_UNJUSTIFIED_OPTIONALITY`, `POLICY.NO_HIDDEN_CONFIG`, `POLICY.NO_AMBIENT_DISCOVERY`, `POLICY.NO_DEFENSIVE_HOTPATH`
 - **Fail-Loud Execution**: `POLICY.FAIL_OPEN`, `POLICY.CRITICAL_DEPENDENCY`, `POLICY.NO_PARTIAL_SUCCESS`, `POLICY.NO_ERROR_DISCARD`
 - **Proof and Test Integrity**: `POLICY.NO_SMOKE_PROOF`, `POLICY.NO_MOCK_PROOF`, `POLICY.NO_SKIP_MASK`, `POLICY.NO_HELPER_PROOF`, `POLICY.NO_EXACT_STRING_PROOF`
 - **Type and Interface Integrity**: `POLICY.NO_BOOLEAN_MODE`, `POLICY.NO_TYPE_ESCAPE`, `POLICY.NO_UNTYPED_IMPORT_LEAK`
@@ -54,6 +54,22 @@ Inside owned core logic, required data is total and non-optional.
 Invalid local fixes: Sprinkling null checks; using `Optional`, `Partial`, `Any`, sentinel fields, or "maybe initialized" state in core paths.
 
 Detection handles: `OPTIONAL-STATE`, `OPTIONAL-UI-FAILOPEN`, `OPTION-CORE-STATE`, `IFLET-INITIALIZED`, `NESTED-IF-CHAIN`
+
+Related remediation: `REMEDIATE.TOTAL_CONFIG_MODEL`
+
+#### `POLICY.NO_UNJUSTIFIED_OPTIONALITY` — No unjustified optionality for absent data
+
+Category: Runtime, Config, and State
+
+Rule: An optional, nullable, or defaulted field declared to tolerate absent data is invalid by default.
+The required move is to require the field and fix the producer so the data is always present, handling true absence as a narrow sliced-off case at the boundary.
+Optionality is admissible only when absence is a genuine irreducible domain state — a fact about the domain, not a convenience for a producer that sometimes omits the value — and that justification must be stated at the point of declaration.
+Do not push optionality up into a shared interface to tolerate one absent case; that weakens the field for every consumer.
+"Genuinely optional" claimed from priors, without a declaration-site justification, resolves against the optional.
+
+Invalid local fixes: Defending the optional as "genuinely optional" in review or triage without a declaration-site justification; widening a shared interface field to optional; adding null checks or sentinel stand-ins at consumers; moving the default value elsewhere.
+
+Detection handles: `UNJUSTIFIED-OPTIONAL`, `OPTIONAL-STATE`, `DEFAULTS-OPTIONALITY`, `OPTIONAL-UI-FAILOPEN`
 
 Related remediation: `REMEDIATE.TOTAL_CONFIG_MODEL`
 
