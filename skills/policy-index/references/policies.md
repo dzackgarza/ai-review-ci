@@ -232,11 +232,11 @@ Related remediation: `REMEDIATE.API_SPLIT_OR_VARIANT`
 
 Category: Type and Interface Integrity
 
-Rule: Owned code must not bypass static guarantees with `Any`, casts, double casts, `as any`, `unknown as`, broad `Partial`, stringly errors, or untyped blobs for structured state.
+Rule: Owned code must not bypass static guarantees with `Any`, casts, double casts, `as any`, `unknown as`, broad `Partial`, stringly errors, untyped blobs for structured state, or runtime duck-typing introspection (`hasattr`, dynamic `getattr`/`setattr`/`delattr`, `vars()`, `type(x) ==`/`is` comparisons, `__class__`/`__dict__` probing) in place of declared types. Sage research code in particular must declare exactly which mathematical objects it expects rather than discovering their capabilities at runtime.
 
-Invalid local fixes: Adding a narrower cast without proving the boundary; asserting type shape in tests; hiding data in JSON/dicts.
+Invalid local fixes: Adding a narrower cast without proving the boundary; asserting type shape in tests; hiding data in JSON/dicts; replacing `hasattr` with `try`/`except AttributeError`.
 
-Detection handles: `TYPE-PROOF-ESCAPE`, `TYPE-ESCAPE`, `TSAnyKeyword`, `Any`, `Partial<T>`
+Detection handles: `TYPE-PROOF-ESCAPE`, `TYPE-ESCAPE`, `TSAnyKeyword`, `Any`, `Partial<T>`, `sage-no-hasattr`, `sage-no-dynamic-attr`, `sage-no-type-identity`, `sage-no-dunder-introspection`
 
 Related remediation: `REMEDIATE.STRUCTURED_TYPES`
 

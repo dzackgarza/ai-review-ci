@@ -8,7 +8,7 @@
 #   All cross-language (justfile) and Python (justfile-python) recipes.
 #
 # Sage-specific recipes:
-#   _sage-qc-files, _sage-syntax, _vulture (Sage-aware preparse)
+#   _sage-qc-files, _sage-syntax, _vulture, _sage-ast-grep (Sage-aware preparse)
 #
 # WORKFLOW (two-tier):
 #   just test     — COMMIT gate: Sage syntax + Python correctness/normalize
@@ -335,8 +335,66 @@ test: _sage-preflight _normalize-common _sage-syntax
 	just -f {{justfiles}}/shared.just -d . _no-bypass
 	echo "Sage commit-tier quality checks completed"
 
+_sage-ast-grep:
+	#!/usr/bin/env bash
+	set -euo pipefail
+	echo "============================="
+	echo "=== Running: ast-grep duck-typing audit (Sage-aware) ==="
+	echo "# Bans runtime type introspection (hasattr/getattr/setattr/delattr/vars, type(x) comparisons,"
+	echo "# __class__/__dict__ probing). Sage research code must declare the mathematical objects it"
+	echo "# expects through the type system, not discover them at runtime."
+	mapfile -t python_files < <(just -f {{justfiles}}/python.just -d . _python-qc-files)
+	mapfile -t sage_files < <(just --justfile {{justfile()}} -d . _sage-qc-files)
+	scan_files=("${python_files[@]}")
+	if [ "${#python_files[@]}" -eq 0 ] && [ "${#sage_files[@]}" -eq 0 ]; then
+		echo "ERROR: ast-grep duck-typing audit: no Python or Sage files found in a Sage project."
+		"{{artifacts}}/scripts/emit-triage-directive.sh"
+		exit 1
+	fi
+
+	if [ "${#sage_files[@]}" -gt 0 ]; then
+		sage_bin="$(just --justfile {{justfile()}} -d . _sage-bin)"
+
+		sage_preparse_dir="$(mktemp -d "${TMPDIR:-/tmp}/qc-astgrep-sage.XXXXXX")"
+		trap 'if [ -e "$sage_preparse_dir" ]; then gio trash "$sage_preparse_dir"; fi' EXIT
+		echo "# Preparsing ${#sage_files[@]} Sage file(s) for ast-grep"
+		copied_sage_files=()
+		for sage_file in "${sage_files[@]}"; do
+			target="$sage_preparse_dir/$sage_file"
+			mkdir -p "$(dirname "$target")"
+			cp "$sage_file" "$target"
+			copied_sage_files+=("$sage_file")
+		done
+		(
+			cd "$sage_preparse_dir"
+			"$SAGE_BIN" --preparse "${copied_sage_files[@]}" >/dev/null
+		)
+		for sage_file in "${sage_files[@]}"; do
+			generated_file="$sage_preparse_dir/$sage_file.py"
+			if [ ! -f "$generated_file" ]; then
+				echo "ERROR: Sage preparse did not produce $generated_file"
+				"{{artifacts}}/scripts/emit-triage-directive.sh"
+				exit 1
+			fi
+			scan_files+=("$generated_file")
+		done
+	fi
+
+	findings_file=$(mktemp)
+	trap 'if [ -e "$findings_file" ]; then rm -f "$findings_file"; fi; if [ -e "${sage_preparse_dir:-}" ]; then gio trash "$sage_preparse_dir"; fi' EXIT
+	npx -y --package @ast-grep/cli ast-grep scan \
+		--config {{configs}}/sage-sgconfig.yml \
+		--report-style short \
+		"${scan_files[@]}" | tee "$findings_file"
+	if [ -s "$findings_file" ]; then
+		echo "Blocking just test-ci: duck-typing introspection found. Declare the expected"
+		echo "mathematical object types explicitly (POLICY.NO_TYPE_ESCAPE -> REMEDIATE.STRUCTURED_TYPES)."
+		"{{artifacts}}/scripts/emit-triage-directive.sh"
+		exit 1
+	fi
+
 # public: PUSH/CI gate — test + the full style/slop/coverage stack
-test-ci: test _vulture
+test-ci: test _vulture _sage-ast-grep
 	#!/usr/bin/env bash
 	set -euo pipefail
 	python_qc_repo="{{justfiles}}/python.just"

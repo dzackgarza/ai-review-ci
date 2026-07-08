@@ -91,7 +91,12 @@ def test_semgrep_rules_use_id_only_messages_and_valid_metadata() -> None:
 def test_ast_grep_policy_rules_use_id_only_messages() -> None:
     index = load_policy_index()
 
-    for path in Path("tool-configs/ast-grep/rules").glob("*.yml"):
+    rule_files = [
+        *Path("tool-configs/ast-grep/rules").glob("*.yml"),
+        *Path("tool-configs/ast-grep/sage-rules").glob("*.yml"),
+    ]
+    assert rule_files
+    for path in rule_files:
         rule = yaml.safe_load(path.read_text())
         policy_code = rule["message"]
         assert policy_code.startswith("POLICY.")

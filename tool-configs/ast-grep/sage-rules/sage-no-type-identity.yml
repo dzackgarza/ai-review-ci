@@ -1,0 +1,15 @@
+id: sage-no-type-identity
+language: python
+rule:
+  any:
+    - pattern: type($X) == $Y
+    - pattern: type($X) != $Y
+    - pattern: type($X) is $Y
+    - pattern: type($X) is not $Y
+    - pattern: $Y == type($X)
+    - pattern: $Y is type($X)
+message: POLICY.NO_TYPE_ESCAPE
+severity: error
+metadata:
+  policy_code: POLICY.NO_TYPE_ESCAPE
+  remediation_code: REMEDIATE.STRUCTURED_TYPES

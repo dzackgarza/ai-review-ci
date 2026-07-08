@@ -1,0 +1,13 @@
+id: sage-no-dynamic-attr
+language: python
+rule:
+  any:
+    - pattern: getattr($$$)
+    - pattern: setattr($$$)
+    - pattern: delattr($$$)
+    - pattern: vars($$$)
+message: POLICY.NO_TYPE_ESCAPE
+severity: error
+metadata:
+  policy_code: POLICY.NO_TYPE_ESCAPE
+  remediation_code: REMEDIATE.STRUCTURED_TYPES

@@ -1,0 +1,9 @@
+id: sage-no-hasattr
+language: python
+rule:
+  pattern: hasattr($$$)
+message: POLICY.NO_TYPE_ESCAPE
+severity: error
+metadata:
+  policy_code: POLICY.NO_TYPE_ESCAPE
+  remediation_code: REMEDIATE.STRUCTURED_TYPES
