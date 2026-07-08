@@ -45,16 +45,12 @@ LIZARD_GATE = ("-C", "7", "-L", "100", "-i", "0")
 
 def test_runtime_control_flow_and_defensiveness_torture() -> None:
     """Swallowed errors, permissive defaults, optional state, try-import."""
-    _assert_rules_match_annotations(
-        RUNTIME_CONTROL_FLOW_RULES, "runtime_control_flow.py", fixtures_dir=TORTURE
-    )
+    _assert_rules_match_annotations(RUNTIME_CONTROL_FLOW_RULES, "runtime_control_flow.py", fixtures_dir=TORTURE)
 
 
 def test_mocking_and_proof_laundering_torture() -> None:
     """Mock-as-proof, masked tests, and the sanctioned red-proof xfail gate."""
-    _assert_rules_match_annotations(
-        PROOF_LAUNDERING_RULES, "proof_laundering.py", fixtures_dir=TORTURE
-    )
+    _assert_rules_match_annotations(PROOF_LAUNDERING_RULES, "proof_laundering.py", fixtures_dir=TORTURE)
 
 
 def _lizard(path: pathlib.Path) -> subprocess.CompletedProcess[str]:
