@@ -121,11 +121,12 @@ def _iter_documents(stream: str) -> list[object]:
     documents: list[object] = []
     index = 0
     while index < len(stream):
+        if stream[index].isspace():
+            index += 1
+            continue
         document, end = decoder.raw_decode(stream, index)
         documents.append(document)
         index = end
-        while index < len(stream) and stream[index].isspace():
-            index += 1
     return documents
 
 
@@ -165,7 +166,7 @@ def main() -> None:
     dataset = build_dataset(owner, name, int(sys.argv[2]))
     output = Path(sys.argv[3])
     output.parent.mkdir(parents=True, exist_ok=True)
-    output.write_text(json.dumps(dataset, indent=1, ensure_ascii=False) + "\n")
+    output.write_text(json.dumps(dataset, indent=1, ensure_ascii=False) + "\n", encoding="utf-8")
     rows = dataset["threads"]
     assert isinstance(rows, list), rows
     counts: dict[str, int] = {}

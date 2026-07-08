@@ -417,9 +417,11 @@ _deptry: _install-tools
 	package_module_name_map="$(uv run --no-project python "{{artifacts}}/scripts/deptry_package_module_name_map.py" "{{configs}}/pyproject.toml")"
 	deptry_args=(. --package-module-name-map "$package_module_name_map" --ignore DEP002)
 	# qc-excludes.toml is the single source of truth for never-scanned
-	# directories; deptry takes path regexes, so glob stars widen to `.*`.
+	# directories; deptry takes path regexes, so literal dots are escaped
+	# and glob stars widen to `.*`.
 	while IFS= read -r exclude_dir; do
-		deptry_args+=(--extend-exclude "(^|.*/)${exclude_dir//\*/.*}")
+		exclude_regex="${exclude_dir//./\\.}"
+		deptry_args+=(--extend-exclude "(^|.*/)${exclude_regex//\*/.*}")
 	done < <(uv run --no-project python "{{artifacts}}/scripts/read_qc_excludes.py" "{{configs}}/qc-excludes.toml")
 	first_party_modules_output="$(uv run --no-project python "{{artifacts}}/scripts/python_qc_metadata.py" first-party-modules .)"
 	if [ -n "$first_party_modules_output" ]; then

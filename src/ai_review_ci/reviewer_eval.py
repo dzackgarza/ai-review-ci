@@ -55,7 +55,7 @@ class EvalMetrics:
 
 
 def load_eval_dataset(path: Path) -> tuple[EvalThread, ...]:
-    raw = json.loads(path.read_text())
+    raw = json.loads(path.read_text(encoding="utf-8"))
     threads = raw["threads"]
     assert threads, f"eval dataset {path} contains no threads"
     loaded = []
