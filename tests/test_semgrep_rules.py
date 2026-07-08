@@ -4,10 +4,13 @@ These run the *real* rule definitions (parsed out of the shipped config, not a
 copy) against annotated fixtures, so a rule edit that changes what fires is
 caught here rather than only in a downstream repo's gate.
 
-Annotation convention (semgrep's own): a ``// ruleid: <id>`` comment marks the
-following line as an expected match; ``// ok: <id>`` marks it as an expected
-non-match. The test asserts the rules flag exactly the ``ruleid`` lines and
-none of the ``ok`` lines.
+Annotation convention (semgrep's own): a ``// ruleid: <id>`` comment (``#`` in
+Python fixtures) marks the following line as an expected match; ``// ok: <id>``
+marks it as an expected non-match. The test asserts the rules flag exactly the
+``ruleid`` lines and none of the ``ok`` lines.
+
+The annotation/run/assert helpers here are shared with the slop-torture suite
+in test_slop_torture.py (#41).
 """
 
 import json
@@ -26,7 +29,7 @@ FIXTURES = pathlib.Path(__file__).resolve().parent / "fixtures" / "semgrep"
 # bare ``||`` / ``??`` operator, must be the signal.
 RUNTIME_DEFAULT_RULES = ("ts-no-or-default", "no-nullish-coalescing")
 
-_ANNOTATION = re.compile(r"//\s*(ruleid|ok):\s*([\w-]+)")
+_ANNOTATION = re.compile(r"(?://|#)\s*(ruleid|ok):\s*([\w-]+)")
 
 
 def _rules_subset(ids: tuple[str, ...]) -> list[dict[str, object]]:
@@ -75,9 +78,9 @@ def _semgrep_matches(rules: list[dict[str, object]], files: list[pathlib.Path]) 
     return {(pathlib.Path(r["path"]).name, r["start"]["line"]) for r in results}
 
 
-def _assert_rules_match_annotations(rule_ids: tuple[str, ...], glob: str) -> None:
-    fixtures = sorted(FIXTURES.glob(glob))
-    assert fixtures, f"no fixtures match {glob} in {FIXTURES}"
+def _assert_rules_match_annotations(rule_ids: tuple[str, ...], glob: str, fixtures_dir: pathlib.Path = FIXTURES) -> None:
+    fixtures = sorted(fixtures_dir.glob(glob))
+    assert fixtures, f"no fixtures match {glob} in {fixtures_dir}"
 
     expected_flag, expected_clean = _expected(fixtures)
     assert expected_flag and expected_clean, f"{glob}: fixtures must annotate both ruleid and ok cases"

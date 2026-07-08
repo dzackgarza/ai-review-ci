@@ -1049,7 +1049,7 @@ def test_bun_scaffold_delegates_qc_in_project_directory(
         (
             "sage",
             {"example.sage": "x = 1\n"},
-            "SAGE_BIN must be set",
+            "SAGE_BIN is unset or not executable",
             ("no .sage files found",),
         ),
     ],

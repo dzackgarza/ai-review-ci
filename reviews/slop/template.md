@@ -30,6 +30,28 @@ Perform a comprehensive, fresh analysis of the code in scope (defined by the sco
    - **UX Antipatterns**: Silent failure, error swallowing, missing diagnostics.
    - **Review-Gaming Patterns**: checking boxes instead of reading the diff, probing validator internals, treating schema success as review success, submitting clean-shaped findings, or using unrelated command failures as evidence.
 
+### Threat Model
+
+Slop review is calibrated to a specific threat model. The threat is:
+
+- fake / fallback / default / mock behavior that stops the app failing when it should, so the user is surprised later;
+- real bugs that fail slow or silently, so the user never knows and cannot provision an agent to diagnose;
+- cross-file fragility, where the next agent's small feature breaks many files;
+- tests that prove nothing;
+- the app lying to the user.
+
+The threat is NOT "find every esoteric bug or technically-not-quite-right detail."
+Generic correctness nitpicks, speculative micro-performance, style preferences, and "semantically not-quite-right" observations are off-target findings; do not emit them.
+Do not raise a performance finding unless it is auditable to a real logged or reported user performance problem.
+
+When you are staring at a slop pattern — a catch-all handler that flattens distinct failure domains, a fallback, a default, a mock, a fail-slow path, stringly errors, a non-proving test — name it as slop tersely with its `POLICY.*` code.
+Do not reframe it as a generic bug and produce paragraphs of fine-grained bug analysis around it; the pattern itself is the finding.
+
+Do not frame a finding so that its natural fix violates policy.
+A catch-all swallow's policy-aligned direction is fail-early removal of the swallow, not "add a distinct error kind" (which drives more error-handling layers).
+An unjustified optional's direction is require-and-fix-the-data (`POLICY.NO_UNJUSTIFIED_OPTIONALITY`), not accommodating the absence.
+The `policy_code` field carries the obligation; deterministic rendering resolves the canonical remediation — your narrative must not push a direction the policy index forbids.
+
 ### Finding Labeling
 
 Each finding MUST carry one of these labels in the JSON `label` field:

@@ -249,7 +249,14 @@ rules:
       policy_code: POLICY.NO_HIDDEN_CONFIG
       remediation_code: REMEDIATE.TOTAL_CONFIG_MODEL
   - id: py-no-bare-except
-    pattern: "except:\n    pass"
+    # A bare "except:\n    pass" clause fragment never parses as a semgrep
+    # python pattern, so the rule silently matched nothing (caught by the
+    # slop-torture suite, #41). The try-wrapped forms fire; the match is
+    # reported at the try: line. Typed "except $EXC: pass" swallows discard
+    # errors just as silently as the bare form, so both shapes match.
+    pattern-either:
+      - pattern: "try:\n    ...\nexcept:\n    pass"
+      - pattern: "try:\n    ...\nexcept $EXC:\n    pass"
     message: POLICY.NO_ERROR_DISCARD
     languages:
       - python
