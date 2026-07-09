@@ -324,6 +324,109 @@ _sage-pytest:
 		exit $ec
 	fi
 
+_sage-pytest-coverage:
+	#!/usr/bin/env bash
+	set -euo pipefail
+	echo "============================="
+	echo "=== Running: pytest with coverage under the Sage interpreter ==="
+	echo "# Same preparse flow as _sage-pytest, run under coverage.py inside Sage's"
+	echo "# Python (uvx CPython cannot import sage.*); emits coverage.xml for diff-cover."
+	sage_bin="$(just --justfile {{justfile()}} -d . _sage-bin)"
+	mapfile -t sage_test_files < <(rg --files -g 'test_*.sage' -g '*_test.sage' 2>/dev/null || true)
+	mapfile -t py_test_files < <(rg --files tests -g 'test_*.py' -g '*_test.py' -g '!*.sage.py' 2>/dev/null || true)
+	if [ "${#sage_test_files[@]}" -eq 0 ] && [ "${#py_test_files[@]}" -eq 0 ]; then
+		echo "ERROR: pytest/coverage: no test files found (.sage or .py)."
+		"{{artifacts}}/scripts/emit-test-writing-directive.sh"
+		exit 1
+	fi
+	if ! "$sage_bin" -python -m pytest --version >/dev/null 2>&1; then
+		echo "ERROR: pytest is not available in the Sage interpreter's Python."
+		echo "       FIX: \"$sage_bin\" -pip install pytest"
+		"{{artifacts}}/scripts/emit-triage-directive.sh"
+		exit 1
+	fi
+	if ! "$sage_bin" -python -m coverage --version >/dev/null 2>&1; then
+		echo "ERROR: coverage is not available in the Sage interpreter's Python."
+		echo "       FIX: \"$sage_bin\" -pip install coverage"
+		"{{artifacts}}/scripts/emit-triage-directive.sh"
+		exit 1
+	fi
+	pytest_args=()
+	if [ "${#sage_test_files[@]}" -gt 0 ]; then
+		sage_preparse_dir="$(mktemp -d "${TMPDIR:-/tmp}/qc-sage-cov.XXXXXX")"
+		trap 'if [ -e "$sage_preparse_dir" ]; then gio trash "$sage_preparse_dir"; fi' EXIT
+		echo "# Preparsing ${#sage_test_files[@]} .sage test file(s)"
+		for sage_file in "${sage_test_files[@]}"; do
+			target="$sage_preparse_dir/$sage_file"
+			mkdir -p "$(dirname "$target")"
+			cp "$sage_file" "$target"
+		done
+		(
+			cd "$sage_preparse_dir"
+			"$sage_bin" --preparse "${sage_test_files[@]}" >/dev/null
+		)
+		for sage_file in "${sage_test_files[@]}"; do
+			generated="$sage_preparse_dir/${sage_file}.py"
+			if [ ! -f "$generated" ]; then
+				echo "ERROR: sage --preparse did not produce $generated for $sage_file"
+				"{{artifacts}}/scripts/emit-triage-directive.sh"
+				exit 1
+			fi
+			importable="${generated%.sage.py}.py"
+			mv "$generated" "$importable"
+			pytest_args+=("$importable")
+		done
+	fi
+	for py_file in "${py_test_files[@]:-}"; do
+		[ -n "$py_file" ] && pytest_args+=("$py_file")
+	done
+	project_root="$(pwd -P)"
+	project_slug="$(printf '%s' "$project_root" | sed 's#[^A-Za-z0-9._-]#_#g')"
+	coverage_root="${XDG_CACHE_HOME:-$HOME/.cache}/quality-control/coverage/$project_slug"
+	mkdir -p "$coverage_root"
+	export COVERAGE_FILE="$coverage_root/.coverage"
+	export COVERAGE_RCFILE="{{configs}}/coverage-sage.ini"
+	if "$sage_bin" -python -m coverage run -m pytest "${pytest_args[@]}"; then
+		:
+	else
+		ec=$?
+		echo "ERROR: pytest failed."
+		"{{artifacts}}/scripts/emit-triage-directive.sh"
+		exit $ec
+	fi
+	if "$sage_bin" -python -m coverage xml -o "$coverage_root/coverage.xml"; then
+		:
+	else
+		ec=$?
+		echo "ERROR: coverage XML generation failed."
+		"{{artifacts}}/scripts/emit-triage-directive.sh"
+		exit $ec
+	fi
+	echo "Coverage XML report: $coverage_root/coverage.xml"
+
+_sage-diff-cover: _sage-pytest-coverage
+	#!/usr/bin/env bash
+	set -euo pipefail
+	echo "============================="
+	echo "=== Running: diff-cover against main branch (Sage flavor) ==="
+	echo "# Reports coverage gaps on code changed since main branch to ensure new code is tested"
+	project_root="$(pwd -P)"
+	project_slug="$(printf '%s' "$project_root" | sed 's#[^A-Za-z0-9._-]#_#g')"
+	coverage_xml="${XDG_CACHE_HOME:-$HOME/.cache}/quality-control/coverage/$project_slug/coverage.xml"
+	if [ ! -f "$coverage_xml" ]; then
+		echo "ERROR: diff-cover: no coverage.xml at $coverage_xml — coverage step did not produce output."
+		"{{artifacts}}/scripts/emit-triage-directive.sh"
+		exit 1
+	fi
+	if uvx --from diff-cover diff-cover "$coverage_xml" --compare-branch ${DIFF_COVER_BASE:-main}; then
+		:
+	else
+		ec=$?
+		echo "ERROR: diff-cover found coverage gaps in changed code."
+		"{{artifacts}}/scripts/emit-triage-directive.sh"
+		exit $ec
+	fi
+
 # public: COMMIT gate — Sage syntax + Python correctness/normalization
 test: _sage-preflight _normalize-common _sage-syntax
 	#!/usr/bin/env bash
@@ -398,7 +501,13 @@ test-ci: test _vulture _sage-ast-grep
 	#!/usr/bin/env bash
 	set -euo pipefail
 	python_qc_repo="{{justfiles}}/python.just"
-	python_qc_recipes=(_deptry _import-linter _ast-grep _jscpd-python _lizard-python _grain _pytest_with_coverage _diff-cover)
+	python_qc_recipes=(_deptry _import-linter _ast-grep _jscpd-python _grain)
 	just -f "$python_qc_repo" -d . "${python_qc_recipes[@]}"
+	# CCN 15 (lizard's own default) for Sage projects: mathematical case
+	# analysis is irreducibly branchy; see _lizard-python in python.just.
+	just -f "$python_qc_repo" -d . _lizard-python 15
+	# Coverage runs under the Sage interpreter (python-flavor coverage cannot
+	# import sage.* or see preparsed .sage tests).
+	just --justfile {{justfile()}} -d . _sage-diff-cover
 	just -f {{justfiles}}/shared.just -d . _global-qc
 	echo "Sage push/CI quality checks completed"

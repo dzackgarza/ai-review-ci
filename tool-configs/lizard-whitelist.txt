@@ -1,0 +1,9 @@
+# Central lizard whitelist (owner-gated; passed via -W by _lizard-python).
+# Entries are ratified irreducible routing tables — single total case analyses
+# whose branch structure IS the mathematical classification; splitting them
+# would scatter one definition across helpers (QC escape-hatch grants below).
+#
+# dzackgarza/research sage_lattice_category_spike (grant: 2026-07-09, CCN
+# question answered by owner; gap-ledger G1 / category_for mirror):
+is_isometric
+synthetic_lattice

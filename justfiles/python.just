@@ -499,7 +499,10 @@ _jscpd-python:
 		exit $ec
 	fi
 
-_lizard-python: _install-tools
+# ccn: cyclomatic-complexity threshold. Sage projects pass 15 (lizard's own
+# default): mathematical case analysis (axiom stratification, decision
+# procedures) is irreducibly branchy; 7 stays the pure-Python default.
+_lizard-python ccn="7": _install-tools
 	#!/usr/bin/env bash
 	set -euo pipefail
 	echo "============================="
@@ -521,7 +524,7 @@ _lizard-python: _install-tools
 	done
 	if [ "${#scan_files[@]}" -eq 0 ]; then
 		echo "# lizard: all Python files are lexicon boundary files; nothing to scan"
-	elif uvx --from lizard lizard -l python -C 7 -L 100 -i 0 "${scan_files[@]}"; then
+	elif uvx --from lizard lizard -l python -C {{ccn}} -L 100 -i 0 -W "{{configs}}/lizard-whitelist.txt" "${scan_files[@]}"; then
 		:
 	else
 		ec=$?
