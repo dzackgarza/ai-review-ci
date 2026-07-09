@@ -340,7 +340,7 @@ _sage-ast-grep:
 	set -euo pipefail
 	echo "============================="
 	echo "=== Running: ast-grep duck-typing audit (Sage-aware) ==="
-	echo "# Bans runtime type introspection (hasattr/getattr/setattr/delattr/vars, type(x) comparisons,"
+	echo "# Bans runtime type introspection (hasattr/getattr/setattr/delattr, type(x) comparisons,"
 	echo "# __class__/__dict__ probing). Sage research code must declare the mathematical objects it"
 	echo "# expects through the type system, not discover them at runtime."
 	mapfile -t python_files < <(just -f {{justfiles}}/python.just -d . _python-qc-files)

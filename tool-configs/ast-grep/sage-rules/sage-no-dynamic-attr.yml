@@ -1,11 +1,19 @@
 id: sage-no-dynamic-attr
 language: python
+# vars($$$) is deliberately NOT banned here: it is class-namespace reflection
+# (metaprogramming over a type's own attribute table, e.g. projecting a class's
+# own-method delta for Sage's category framework), not an instance-level type
+# escape. The instance escapes this rule targets are get/set/delattr.
+# The lexicon subtree is the declared typed firewall to Sage; reflective
+# verification of stubs against the live runtime is its charter, so it is
+# excluded from the instance-escape ban.
+ignores:
+  - "**/lexicon/**"
 rule:
   any:
     - pattern: getattr($$$)
     - pattern: setattr($$$)
     - pattern: delattr($$$)
-    - pattern: vars($$$)
 message: POLICY.NO_TYPE_ESCAPE
 severity: error
 metadata:

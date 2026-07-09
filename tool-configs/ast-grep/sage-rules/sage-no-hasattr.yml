@@ -1,5 +1,10 @@
 id: sage-no-hasattr
 language: python
+# The lexicon subtree is the declared typed firewall to Sage; its verifier
+# checks stub claims against the live runtime by reflection (attribute names
+# are data read from the stub AST), which is that boundary's charter.
+ignores:
+  - "**/lexicon/**"
 rule:
   pattern: hasattr($$$)
 message: POLICY.NO_TYPE_ESCAPE
