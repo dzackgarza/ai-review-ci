@@ -415,15 +415,30 @@ _vibecheck:
 	    return False
 	
 	
+	def is_python_prose_arrow(finding):
+	    # G118 flags Unicode arrows as pseudocode operators. In a .py file that
+	    # the syntax tier already requires to compile, an arrow used as an
+	    # operator is a SyntaxError — so any G118 hit in compiled Python is by
+	    # construction inside a string, comment, or docstring (mathematical
+	    # notation such as ring maps ``R → S``), never executable pseudocode.
+	    if finding.get("rule_id") != "G118":
+	        return False
+	    path_value = finding.get("file") or ""
+	    return path_value.endswith(".py")
+	
+	
 	payload = json.loads(pathlib.Path(sys.argv[1]).read_text())
 	filtered = []
-	ignored = {"G141": 0, "G22": 0}
+	ignored = {"G141": 0, "G22": 0, "G118": 0}
 	for finding in payload.get("findings", []):
 	    if finding.get("rule_id") == "G141" and not is_comment_line(finding.get("content")):
 	        ignored["G141"] += 1
 	        continue
 	    if has_non_empty_except_handler(finding):
 	        ignored["G22"] += 1
+	        continue
+	    if is_python_prose_arrow(finding):
+	        ignored["G118"] += 1
 	        continue
 	    filtered.append(finding)
 	
@@ -443,6 +458,10 @@ _vibecheck:
 	fi
 	if [ "$ignored_g22_count" -gt 0 ]; then
 		echo "vibecheck: ignored $ignored_g22_count G22 non-empty except-handler false-positive finding(s)."
+	fi
+	ignored_g118_count=$(echo "$filter_result" | jq -r '.ignored.G118')
+	if [ "$ignored_g118_count" -gt 0 ]; then
+		echo "vibecheck: ignored $ignored_g118_count G118 prose-arrow finding(s) in compiled Python (notation, not pseudocode)."
 	fi
 	remaining_count=$(echo "$filtered_output" | jq -r '.summary.critical + .summary.high')
 	if [ "$remaining_count" -eq 0 ]; then
