@@ -733,6 +733,62 @@ def test_vibecheck_still_blocks_g141_comment_matches(tmp_path: pathlib.Path) -> 
     assert TRIAGE_MARKER in output
 
 
+def aislop_payload(*diagnostics: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "schemaVersion": "1",
+        "score": max(0, 100 - 20 * len(diagnostics)),
+        "summary": {
+            "errors": sum(1 for d in diagnostics if d["severity"] == "error"),
+            "warnings": sum(1 for d in diagnostics if d["severity"] == "warning"),
+            "fixable": 0,
+            "files": 1,
+        },
+        "diagnostics": list(diagnostics),
+    }
+
+
+def test_aislop_blocks_on_error_severity_findings(tmp_path: pathlib.Path) -> None:
+    project = tmp_path / "aislop-project"
+    project.mkdir()
+    payload = aislop_payload(
+        {
+            "filePath": "app.py",
+            "line": 3,
+            "rule": "ai-slop/swallowed-exception",
+            "severity": "error",
+            "message": "Catch block only prints error without proper handling",
+        },
+    )
+    env = os.environ | {"PATH": f"{write_fake_npx_slop_scan(tmp_path, payload)}:{os.environ['PATH']}"}
+
+    result = run_just(ROOT / "justfiles" / "shared.just", project, "_aislop", env=env)
+
+    output = result.stdout + result.stderr
+    assert result.returncode != 0, output
+    assert "ai-slop/swallowed-exception" in output
+
+
+def test_aislop_surfaces_warnings_without_blocking(tmp_path: pathlib.Path) -> None:
+    project = tmp_path / "aislop-project"
+    project.mkdir()
+    payload = aislop_payload(
+        {
+            "filePath": "app.py",
+            "line": 1,
+            "rule": "ai-slop/python-print-debug",
+            "severity": "warning",
+            "message": "print() left in code",
+        },
+    )
+    env = os.environ | {"PATH": f"{write_fake_npx_slop_scan(tmp_path, payload)}:{os.environ['PATH']}"}
+
+    result = run_just(ROOT / "justfiles" / "shared.just", project, "_aislop", env=env)
+
+    output = result.stdout + result.stderr
+    assert result.returncode == 0, output
+    assert "python-print-debug" in output
+
+
 def test_slop_scan_ignores_non_gating_structural_heuristics(
     tmp_path: pathlib.Path,
 ) -> None:
