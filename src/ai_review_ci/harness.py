@@ -208,6 +208,7 @@ def run_review(template: Path, scope: Path, manifest: Path, reviewer_context: Pa
 
     last_timeout: subprocess.TimeoutExpired | None = None
     for attempt in range(1, MAX_ATTEMPTS + 1):
+        last_timeout = None
         if attempt > 1:
             time.sleep(5)
             prompt = retry_prompt(submitted_path)
