@@ -551,6 +551,21 @@ _aislop:
 		"{{artifacts}}/scripts/emit-triage-directive.sh"
 		exit 1
 	fi
+	# Fail closed on an unexpected-but-parseable schema: if summary.errors /
+	# summary.warnings are not numbers, or diagnostics is not an array, the
+	# numeric guards below would silently fall through and treat the scan as
+	# clean. Treat a schema mismatch as a QC TOOLING failure, not a pass.
+	if ! printf '%s' "$raw_output" | jq -e '(.summary.errors | type == "number") and (.summary.warnings | type == "number") and (.diagnostics | type == "array")' >/dev/null 2>&1; then
+		printf '%s\n' "$raw_output"
+		echo ""
+		echo "!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!"
+		echo "  ERROR: aislop returned JSON without the expected schema (numeric"
+		echo "  summary.errors and summary.warnings, array diagnostics). This is a QC"
+		echo "  TOOLING failure — failing closed rather than assuming the scan passed."
+		echo "!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!"
+		"{{artifacts}}/scripts/emit-triage-directive.sh"
+		exit 1
+	fi
 	errors=$(printf '%s' "$raw_output" | jq '.summary.errors')
 	warnings=$(printf '%s' "$raw_output" | jq '.summary.warnings')
 	if [ "$warnings" -gt 0 ]; then

@@ -789,6 +789,23 @@ def test_aislop_surfaces_warnings_without_blocking(tmp_path: pathlib.Path) -> No
     assert "python-print-debug" in output
 
 
+def test_aislop_fails_closed_on_unexpected_schema(tmp_path: pathlib.Path) -> None:
+    # A parseable-but-unexpected aislop response (no numeric summary counts,
+    # no diagnostics array) must NOT be treated as clean: the numeric guards
+    # would otherwise fall through and pass the gate. The recipe must fail
+    # closed on scanner schema/tooling drift.
+    project = tmp_path / "aislop-project"
+    project.mkdir()
+    payload = {"schemaVersion": "1", "score": 100, "note": "no summary or diagnostics"}
+    env = os.environ | {"PATH": f"{write_fake_npx_slop_scan(tmp_path, payload)}:{os.environ['PATH']}"}
+
+    result = run_just(ROOT / "justfiles" / "shared.just", project, "_aislop", env=env)
+
+    output = result.stdout + result.stderr
+    assert result.returncode != 0, output
+    assert "expected schema" in output
+
+
 def test_slop_scan_ignores_non_gating_structural_heuristics(
     tmp_path: pathlib.Path,
 ) -> None:
