@@ -1049,7 +1049,10 @@ def test_bun_scaffold_delegates_qc_in_project_directory(
         (
             "sage",
             {"example.sage": "x = 1\n"},
-            "SAGE_BIN is unset or not executable",
+            # Semantic key, not the copied diagnostic sentence
+            # (POLICY.NO_EXACT_STRING_PROOF): the preflight must fail *about*
+            # SAGE_BIN, whatever its wording.
+            "SAGE_BIN",
             ("no .sage files found",),
         ),
     ],

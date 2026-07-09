@@ -104,6 +104,25 @@ def swallow_typed(path: str) -> str:
     return ""
 
 
+def swallow_with_continue(paths: list[str]) -> list[str]:
+    contents = []
+    for path in paths:
+        # ruleid: py-no-bare-except
+        try:
+            contents.append(open(path).read())
+        except OSError:
+            continue
+    return contents
+
+
+def swallow_with_return_none(path: str) -> str | None:
+    # ruleid: py-no-bare-except
+    try:
+        return open(path).read()
+    except Exception:
+        return None
+
+
 def handle_domain_error(path: str) -> str:
     # ok: py-no-bare-except
     try:
