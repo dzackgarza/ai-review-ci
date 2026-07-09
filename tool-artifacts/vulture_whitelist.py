@@ -631,33 +631,20 @@ _SPEC_ABSTRACT_NAMES: Final[tuple[object, ...]] = (
     _spec.SubcategoryMethods,
     _spec._repr_object_names,
     # --- Python protocol dunders: dispatched by the interpreter/Sage from
-    #     syntax (call, iteration, containment); flagged when declared in
+    #     syntax (iteration, containment, length); flagged when declared in
     #     TYPE_CHECKING-only stubs ---
-    _spec.__call__,
     _spec.__iter__,
     _spec.__contains__,
     _spec.__len__,
-    # --- parameters of declaration-only signatures (TYPE_CHECKING stubs,
-    #     @abstract_method stubs, and assert-False typed declarations); the
-    #     names are the keyword contract, so underscore-renaming is wrong ---
-    _spec.args,
-    _spec.kwds,
-    _spec.kwargs,
+    # --- declaration-only parameter names still masked pending research#24:
+    #     assert-False typed engine stubs in algebra/domain_algebra.py where
+    #     these params are genuinely unused until the engines land. The names
+    #     are the keyword contract, so underscore-renaming is wrong. Retire
+    #     when research#24 implements the engines (verified via _vulture per
+    #     ai-review-ci#199). ---
     _spec.isotropic_subgroup,
     _spec.data,
     _spec.height,
     _spec.bilinear,
     _spec.quadratic,
-    # --- research spike TYPE_CHECKING-only contract declarations
-    #     (declared engines pending implementation; see research#24) ---
-    _spec.primitive_embedding_into_unimodular,
-    _spec.embeds_primitively_in_unimodular,
-    # --- research spike declared-but-not-yet-consumed math API vocabulary
-    #     and typecheck-surface functions (same class as the spec-stub
-    #     sections above) ---
-    _spec.orthogonal_submodule,
-    _spec.is_unique_class,
-    _spec.trivial,
-    _spec.discriminant_representation,
-    _spec.stable_kernel,
 )
