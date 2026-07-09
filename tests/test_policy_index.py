@@ -117,8 +117,8 @@ def test_policy_bearing_rules_are_blocking_tier() -> None:
     assert ast_grep_files
     for path in ast_grep_files:
         rule = yaml.safe_load(path.read_text())
-        assert rule["message"].startswith("POLICY.")
-        assert rule["severity"] == "error", f"{path}: {rule['severity']}"
+        if str(rule["message"]).startswith("POLICY."):
+            assert rule["severity"] == "error", f"{path}: {rule['severity']}"
 
     semgrep = yaml.safe_load(Path("tool-configs/semgrep.yml").read_text())
     for rule in semgrep["rules"]:

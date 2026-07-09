@@ -1,3 +1,9 @@
+# Covers the common Python dynamic-import surfaces: importlib.import_module,
+# the direct `from importlib import import_module` call, and __import__.
+# Aliased-module access (`import importlib as il; il.import_module(...)`) and the
+# importlib.util spec-loader machinery (module_from_spec / exec_module) are out
+# of scope: matching them requires `$X.import_module(...)` for any receiver,
+# which reintroduces false positives on unrelated `.import_module()` methods.
 id: no-dynamic-import-python
 language: python
 rule:
