@@ -219,8 +219,8 @@ def run_review(template: Path, scope: Path, manifest: Path, reviewer_context: Pa
         ARTIFACT_PATH.unlink(missing_ok=True)
         try:
             run_opencode(task_path, attempt)
-        except subprocess.TimeoutExpired:
-            print("--- opencode timed out ---", file=sys.stderr)
+        except subprocess.TimeoutExpired as error:
+            print(f"--- opencode timed out: {error} ---", file=sys.stderr)
         except FileNotFoundError:
             print(
                 "FATAL: 'opencode' executable not found in PATH. This is a non-transient failure — exiting immediately.",

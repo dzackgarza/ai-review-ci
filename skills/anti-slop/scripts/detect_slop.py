@@ -132,7 +132,7 @@ class SlopDetector:
                 transition_starters += 1
 
         if len(self.lines) > 0:
-            transition_ratio = transition_starters / len([l for l in self.lines if l.strip()])
+            transition_ratio = transition_starters / len([line for line in self.lines if line.strip()])
             if transition_ratio > 0.3:
                 self.findings["structure"].append({"issue": "Excessive transitions", "description": f"{transition_ratio:.0%} of paragraphs start with transition words"})
 
