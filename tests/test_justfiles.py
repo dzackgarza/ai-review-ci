@@ -432,11 +432,40 @@ def test_python_ast_grep_uses_official_cli_and_central_rules(
 
     result = run_just(ROOT / "justfiles" / "python.just", project, "_ast-grep")
 
-    # Rule-declared severities gate: no-field-default is warning-tier, so the
-    # finding must print but must not block. Only error[ findings exit nonzero.
+    # no-field-default carries POLICY.RUNTIME_DEFAULT, a hard bridge-burning
+    # policy. A policy-bearing rule must BAN the pattern (block the gate), not
+    # emit an ignorable warning. The gate blocks on error[ findings, so the rule
+    # must be error-tier and the scan must exit nonzero.
     output = result.stdout + result.stderr
-    assert "warning[no-field-default]" in output
-    assert result.returncode == 0, output
+    assert result.returncode != 0, output
+    assert "no-field-default" in output
+
+
+def test_python_ast_grep_blocks_dynamic_import(
+    tmp_path: pathlib.Path,
+) -> None:
+    # POLICY.CRITICAL_DEPENDENCY is enforced for TypeScript (await import(...))
+    # via no-dynamic-import. Python's equivalent dynamic-import forms —
+    # importlib.import_module(...) and __import__(...) — are the same policy
+    # violation and must block the Python gate equivalently, not go unaudited.
+    project = tmp_path / "python-dynamic-import-project"
+    project.mkdir()
+    (project / "app.py").write_text(
+        "\n".join(
+            [
+                "import importlib",
+                'plugin = importlib.import_module("plugin")',
+                'legacy = __import__("legacy")',
+                "",
+            ]
+        )
+    )
+
+    result = run_just(ROOT / "justfiles" / "python.just", project, "_ast-grep")
+
+    output = result.stdout + result.stderr
+    assert result.returncode != 0, output
+    assert "no-dynamic-import" in output
 
 
 def test_bun_ast_grep_uses_official_cli_and_central_rules_without_parsing_markdown(

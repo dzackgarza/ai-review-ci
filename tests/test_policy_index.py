@@ -104,6 +104,28 @@ def test_ast_grep_policy_rules_use_id_only_messages() -> None:
         index.remediation_for_policy(policy_code, rule["metadata"]["remediation_code"])
 
 
+def test_policy_bearing_rules_are_blocking_tier() -> None:
+    # Bridge-burning policies BAN patterns; they do not emit ignorable warnings.
+    # Any ast-grep or semgrep rule that carries a POLICY.* code must sit at the
+    # tool's blocking severity tier, or the gate silently under-enforces a hard
+    # policy (a warning-tier POLICY.RUNTIME_DEFAULT rule is the regression this
+    # locks out). ast-grep blocks on `error`; semgrep blocks on `ERROR`.
+    ast_grep_files = [
+        *Path("tool-configs/ast-grep/rules").glob("*.yml"),
+        *Path("tool-configs/ast-grep/sage-rules").glob("*.yml"),
+    ]
+    assert ast_grep_files
+    for path in ast_grep_files:
+        rule = yaml.safe_load(path.read_text())
+        assert rule["message"].startswith("POLICY.")
+        assert rule["severity"] == "error", f"{path}: {rule['severity']}"
+
+    semgrep = yaml.safe_load(Path("tool-configs/semgrep.yml").read_text())
+    for rule in semgrep["rules"]:
+        if str(rule["message"]).startswith("POLICY."):
+            assert rule["severity"] == "ERROR", f"{rule['id']}: {rule['severity']}"
+
+
 def test_test_semgrep_fixture_uses_policy_id_metadata() -> None:
     index = load_policy_index()
     data = yaml.safe_load(Path("tool-configs/test-semgrep.yml").read_text())
