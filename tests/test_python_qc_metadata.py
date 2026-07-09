@@ -48,6 +48,26 @@ def test_first_party_modules_dedupes_preserving_order(tmp_path: pathlib.Path) ->
     assert result == ["alpha", "beta"], result  # duplicate 'alpha' removed, order kept
 
 
+def test_first_party_modules_accepts_explicit_setuptools_packages_list(tmp_path: pathlib.Path) -> None:
+    # setuptools accepts packages as an explicit list of dotted package names
+    # (not only the {find = {where = [...]}} table). The top-level segments are
+    # the first-party modules; sub-packages collapse into their root.
+    (tmp_path / "pyproject.toml").write_text(
+        "\n".join(
+            [
+                "[tool.setuptools]",
+                'package-dir = { "spam" = "." }',
+                'packages = ["spam", "spam.algebra", "spam.forms"]',
+                "",
+            ]
+        )
+    )
+
+    result = _MOD.first_party_modules(tmp_path)
+
+    assert result == ["spam"], result
+
+
 def test_dependency_group_requirements_dedupes_preserving_order(tmp_path: pathlib.Path) -> None:
     (tmp_path / "pyproject.toml").write_text(
         "\n".join(
