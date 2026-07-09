@@ -468,9 +468,11 @@ _ast-grep: _install-tools
 		--config {{configs}}/sgconfig.yml \
 		--report-style short \
 		"${python_files[@]}" | tee "$findings_file"
-	# Fail on error-severity findings only: rule authors declare severity, and
-	# warning-tier rules (e.g. no-boolean-param) are advisory — printed above,
-	# never blocking. A non-empty-output check would make severity meaningless.
+	# Fail on error-severity findings: rule authors declare severity, and every
+	# rule carrying a POLICY.* code is error-tier (a bridge-burning policy BANS
+	# its pattern; it does not emit an ignorable warning — see the blocking-tier
+	# invariant in tests/test_policy_index.py). Any warning-tier rule would be a
+	# non-policy advisory lint, printed above but never blocking.
 	if grep -q "error\[" "$findings_file"; then
 		echo "Blocking just test: error-severity findings must be resolved against repository audit guidelines."
 		"{{artifacts}}/scripts/emit-triage-directive.sh"

@@ -4,7 +4,7 @@ rule:
   kind: function_definition
   regex: def\s+\w+\s*\([^)]*\b(bool)\b[^)]*\)
 message: POLICY.NO_BOOLEAN_MODE
-severity: warning
+severity: error
 metadata:
   policy_code: POLICY.NO_BOOLEAN_MODE
   remediation_code: REMEDIATE.API_SPLIT_OR_VARIANT
