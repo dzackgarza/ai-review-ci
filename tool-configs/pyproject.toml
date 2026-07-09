@@ -7,8 +7,13 @@ min_confidence = 60
 paths = ["src", "tests"]
 # Pydantic invokes validator methods by reflection, so vulture cannot see the call
 # sites and reports @model_validator/@field_validator/@validator methods as unused.
-# Ignore code attached to these decorators globally to clear that false positive.
-ignore_decorators = ["@model_validator", "@field_validator", "@validator"]
+# Sage's @abstract_method likewise marks declared category interface, dispatched
+# (or intentionally unimplemented) rather than called by name.
+# Ignore code attached to these decorators globally to clear those false positives.
+ignore_decorators = ["@model_validator", "@field_validator", "@validator", "@abstract_method"]
+# *_typecheck.py files are never-executed mypy fixtures (typed composition
+# checks); their gate is the type checker, so "unused" is false by construction.
+exclude = ["*_typecheck.py"]
 
 [tool.deptry]
 root = ["src"]
