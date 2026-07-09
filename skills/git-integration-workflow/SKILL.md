@@ -50,33 +50,33 @@ Each arrow is a gate, not a suggestion.
 
 For repositories that represent planned work as a single rooted ordered tree, use the standalone `itree` tool from `dzackgarza/itree` to manage the issue tree and discover task ordering.
 
-### How to invoke the tool via uv
+### How to invoke the tool via uvx
 
-Run the tool by pointing `uv` directly to the standalone `itree` checkout:
+Run the tool from GitHub via `uvx`:
 ```bash
-uv run --project /home/dzack/gitclones/itree itree [subcommand]
+uvx --from git+https://github.com/dzackgarza/itree itree [subcommand]
 ```
 
-If the checkout is absent, clone it from `git@github.com:dzackgarza/itree.git`.
+If setup is needed, use the GitHub URL directly: `uvx --from git+https://github.com/dzackgarza/itree itree`.
 
 ### When to use itree
 
-- **Before implementing**: Run `uv run --project /home/dzack/gitclones/itree itree next OWNER/REPO` to discover the next open work-unit issue.
+- **Before implementing**: Run `uvx --from git+https://github.com/dzackgarza/itree itree next OWNER/REPO` to discover the next open work-unit issue.
   Focus development on the returned work-unit issue.
   Keep the plan, checklist, proof obligations, and blocker updates on that issue.
-- **Before claiming completion**: Run `uv run --project /home/dzack/gitclones/itree itree doctor OWNER/REPO` to verify that the issue tree is well-formed (no unreachable issues, correct milestones, and no separate GitHub issues for ordinary implementation tasks).
+- **Before claiming completion**: Run `uvx --from git+https://github.com/dzackgarza/itree itree doctor OWNER/REPO` to verify that the issue tree is well-formed (no unreachable issues, correct milestones, and no separate GitHub issues for ordinary implementation tasks).
   If doctor warnings exist, resolve them.
-- **When creating a repository workspace**: Initialize the root ledger with `uv run --project /home/dzack/gitclones/itree itree root create OWNER/REPO --title "Ledger: OWNER/REPO"`.
+- **When creating a repository workspace**: Initialize the root ledger with `uvx --from git+https://github.com/dzackgarza/itree itree root create OWNER/REPO --title "Ledger: OWNER/REPO"`.
 - **When structuring work**: Attach issues with `itree attach` and move/reorder them with `itree move`.
 
 ### Key Commands
 
-- `uv run --project /home/dzack/gitclones/itree itree next OWNER/REPO`: Find the next open work-unit issue in preorder.
-- `uv run --project /home/dzack/gitclones/itree itree doctor OWNER/REPO`: Verify the tree structure and list any warnings or errors.
-  Use `--explain CODE` (e.g. `uv run --project /home/dzack/gitclones/itree itree doctor OWNER/REPO --explain E010`) to see detailed remediation steps.
-- `uv run --project /home/dzack/gitclones/itree itree root create OWNER/REPO --title "..."`: Create a new root ledger issue.
-- `uv run --project /home/dzack/gitclones/itree itree attach OWNER/REPO#PARENT OWNER/REPO#CHILD`: Attach an existing child issue under a parent.
-- `uv run --project /home/dzack/gitclones/itree itree move OWNER/REPO#CHILD --under OWNER/REPO#PARENT [--before SIBLING | --after SIBLING]`: Reparent or reorder an issue.
+- `uvx --from git+https://github.com/dzackgarza/itree itree next OWNER/REPO`: Find the next open work-unit issue in preorder.
+- `uvx --from git+https://github.com/dzackgarza/itree itree doctor OWNER/REPO`: Verify the tree structure and list any warnings or errors.
+  Use `--explain CODE` (e.g. `uvx --from git+https://github.com/dzackgarza/itree itree doctor OWNER/REPO --explain E010`) to see detailed remediation steps.
+- `uvx --from git+https://github.com/dzackgarza/itree itree root create OWNER/REPO --title "..."`: Create a new root ledger issue.
+- `uvx --from git+https://github.com/dzackgarza/itree itree attach OWNER/REPO#PARENT OWNER/REPO#CHILD`: Attach an existing child issue under a parent.
+- `uvx --from git+https://github.com/dzackgarza/itree itree move OWNER/REPO#CHILD --under OWNER/REPO#PARENT [--before SIBLING | --after SIBLING]`: Reparent or reorder an issue.
 
 ## Hard gates
 

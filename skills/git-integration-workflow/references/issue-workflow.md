@@ -215,13 +215,13 @@ Put those tasks in the parent issue body or comments.
 **With itree (Recommended):** To manage parent/child relationships programmatically, use the `itree` CLI:
 ```bash
 # Create a new child work-unit issue under an organizational parent.
-itree add OWNER/REPO#PARENT_NUMBER "Title of new child" --body-file issue.md
+uvx --from git+https://github.com/dzackgarza/itree itree add OWNER/REPO#PARENT_NUMBER "Title of new child" --body-file issue.md
 
 # Attach an existing child work-unit issue under an organizational parent.
-itree attach OWNER/REPO#PARENT_NUMBER OWNER/REPO#CHILD_NUMBER
+uvx --from git+https://github.com/dzackgarza/itree itree attach OWNER/REPO#PARENT_NUMBER OWNER/REPO#CHILD_NUMBER
 
 # Reparent or reorder an issue (under a parent, optionally before/after a sibling).
-itree move OWNER/REPO#CHILD_NUMBER --under OWNER/REPO#PARENT_NUMBER [--before OWNER/REPO#SIBLING_NUMBER | --after OWNER/REPO#SIBLING_NUMBER]
+uvx --from git+https://github.com/dzackgarza/itree itree move OWNER/REPO#CHILD_NUMBER --under OWNER/REPO#PARENT_NUMBER [--before OWNER/REPO#SIBLING_NUMBER | --after OWNER/REPO#SIBLING_NUMBER]
 ```
 
 **With gh:**
