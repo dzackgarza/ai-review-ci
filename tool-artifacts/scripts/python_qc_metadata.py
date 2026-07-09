@@ -83,9 +83,26 @@ def _hatch_wheel_packages(pyproject: dict[str, object]) -> list[str]:
     return [Path(package_path).name for package_path in package_paths]
 
 
+def _setuptools_explicit_packages(pyproject: dict[str, object]) -> list[str]:
+    # setuptools accepts packages as an explicit list of dotted package names
+    # (the alternative to the {find = {where = [...]}} table). The top-level
+    # segment of each name is the first-party module; sub-packages collapse
+    # into their root.
+    tool = _optional_table(pyproject, "tool", "tool")
+    setuptools = _optional_table(tool, "setuptools", "tool.setuptools")
+    packages = setuptools.get("packages")
+    if not isinstance(packages, list):
+        return []
+    names = _string_list(packages, "tool.setuptools.packages")
+    return [name.split(".")[0] for name in names]
+
+
 def _setuptools_package_roots(project_root: Path, pyproject: dict[str, object]) -> list[Path]:
     tool = _optional_table(pyproject, "tool", "tool")
     setuptools = _optional_table(tool, "setuptools", "tool.setuptools")
+    # The explicit-list form declares package names, not source roots.
+    if isinstance(setuptools.get("packages"), list):
+        return []
     packages = _optional_table(setuptools, "packages", "tool.setuptools.packages")
     find = _optional_table(packages, "find", "tool.setuptools.packages.find")
     where = find.get("where")
@@ -110,6 +127,7 @@ def first_party_modules(project_root: Path) -> list[str]:
     modules.extend(_source_modules(project_root / "src"))
     for package_root in _setuptools_package_roots(project_root, pyproject):
         modules.extend(_source_modules(package_root))
+    modules.extend(_setuptools_explicit_packages(pyproject))
     modules.extend(_hatch_wheel_packages(pyproject))
     modules.extend(_setuptools_py_modules(pyproject))
     return list(dict.fromkeys(modules))
