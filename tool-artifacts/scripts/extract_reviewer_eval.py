@@ -9,19 +9,21 @@ it a labeled ground-truth set for measuring reviewer-prompt candidates:
 slop-precision (does the reviewer flag actual slop?) and real-correctness
 recall (does it keep real findings?).
 
-Pages all review threads through `gh api graphql`, mechanically parses each
-thread's disposition from its reply comments, and writes the tracked dataset
-consumed by ai_review_ci.reviewer_eval:
+Pages all review threads through `gh api graphql` and writes the raw thread
+data (finding + reply bodies). Extraction is purely mechanical; it imposes no
+format on the dispositions. The verdict labels are added afterwards by
+label_reviewer_eval.py, which has the CI model *read* each thread's replies —
+dispositions are intelligent free text, not a template to regex:
 
     uv run tool-artifacts/scripts/extract_reviewer_eval.py \
-        dzackgarza/zotero-gui 7 tests/fixtures/reviewer-eval/zotero_gui_pr7.json
+        dzackgarza/zotero-gui 7 <raw.json>
+    uv run tool-artifacts/scripts/label_reviewer_eval.py \
+        <raw.json> tests/fixtures/reviewer-eval/zotero_gui_pr7.json
 
-Re-running regenerates the dataset deterministically from the live PR; the
-committed JSON is the reviewable artifact of record.
+The committed labeled JSON is the reviewable artifact of record.
 """
 
 import json
-import re
 import subprocess
 import sys
 from pathlib import Path
@@ -47,45 +49,6 @@ query($owner: String!, $name: String!, $number: Int!, $endCursor: String) {
   }
 }
 """
-
-# A disposition stamp is a reply that names its verdict. All four verdicts
-# match case-insensitively; within one reply the earliest-positioned verdict
-# keyword wins, so "Accepted — the outdated note is resolved" reads as
-# accepted rather than being captured by a fixed verdict priority.
-_DISPOSITION_VERDICTS = (
-    ("needs-investigation", re.compile(r"\binvestigate before action\b|\bneeds investigation\b", re.IGNORECASE)),
-    ("outdated", re.compile(r"\boutdated\b|\bsuperseded\b", re.IGNORECASE)),
-    ("duplicate", re.compile(r"\bduplicate\b", re.IGNORECASE)),
-    ("accepted", re.compile(r"\baccepted\b", re.IGNORECASE)),
-    ("rejected", re.compile(r"\brejected\b", re.IGNORECASE)),
-)
-_STAMP_MARKER = re.compile(r"^Disposition\b", re.MULTILINE)
-
-
-def _verdict_in(body: str) -> str | None:
-    matches = [(m.start(), verdict) for verdict, pattern in _DISPOSITION_VERDICTS for m in [pattern.search(body)] if m]
-    if not matches:
-        return None
-    return min(matches)[1]
-
-
-def parse_disposition(replies: list[dict[str, object]]) -> tuple[str, int | None]:
-    """(verdict, stamping comment databaseId) for a thread's reply comments.
-
-    Explicit "Disposition ..." stamps win over terse verdict-only replies;
-    within each tier the latest reply wins.
-    """
-    for require_marker in (True, False):
-        for reply in reversed(replies):
-            body = str(reply["body"])
-            if require_marker and not _STAMP_MARKER.search(body):
-                continue
-            verdict = _verdict_in(body)
-            if verdict is not None:
-                database_id = reply["databaseId"]
-                assert database_id is None or isinstance(database_id, int), reply
-                return verdict, database_id
-    return "unstamped", None
 
 
 def fetch_threads(owner: str, name: str, number: int) -> list[dict[str, object]]:
@@ -150,7 +113,6 @@ def build_dataset(owner: str, name: str, number: int) -> dict[str, object]:
         assert len(comments) == total_count, f"thread comments truncated ({len(comments)} of {total_count}); raise the fetch bound"
         finding, replies = comments[0], comments[1:]
         assert isinstance(finding, dict), finding
-        verdict, stamp_id = parse_disposition(replies)
         rows.append(
             {
                 "finding_id": finding["databaseId"],
@@ -161,8 +123,6 @@ def build_dataset(owner: str, name: str, number: int) -> dict[str, object]:
                 "finding_author": (finding["author"] or {}).get("login"),
                 "finding_body": finding["body"],
                 "replies": [{"id": r["databaseId"], "author": (r["author"] or {}).get("login"), "body": r["body"]} for r in replies],
-                "disposition": verdict,
-                "disposition_comment_id": stamp_id,
             }
         )
     rows.sort(key=lambda row: row["finding_id"])
@@ -180,17 +140,8 @@ def main() -> None:
     output = Path(sys.argv[3])
     output.parent.mkdir(parents=True, exist_ok=True)
     output.write_text(json.dumps(dataset, indent=1, ensure_ascii=False) + "\n", encoding="utf-8")
-    rows = dataset["threads"]
-    assert isinstance(rows, list), rows
-    counts: dict[str, int] = {}
-    for row in rows:
-        verdict = row["disposition"]
-        assert isinstance(verdict, str), row
-        if verdict not in counts:
-            counts[verdict] = 0
-        counts[verdict] += 1
     print(f"{dataset['thread_count']} threads -> {output}")
-    print(json.dumps(counts, indent=1, sort_keys=True))
+    print("next: label dispositions with tool-artifacts/scripts/label_reviewer_eval.py")
 
 
 if __name__ == "__main__":
