@@ -432,9 +432,11 @@ def test_python_ast_grep_uses_official_cli_and_central_rules(
 
     result = run_just(ROOT / "justfiles" / "python.just", project, "_ast-grep")
 
+    # Rule-declared severities gate: no-field-default is warning-tier, so the
+    # finding must print but must not block. Only error[ findings exit nonzero.
     output = result.stdout + result.stderr
-    assert result.returncode != 0, output
-    assert "no-field-default" in output
+    assert "warning[no-field-default]" in output
+    assert result.returncode == 0, output
 
 
 def test_bun_ast_grep_uses_official_cli_and_central_rules_without_parsing_markdown(
