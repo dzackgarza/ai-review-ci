@@ -3,6 +3,7 @@ language: python
 rule:
   any:
     - pattern: importlib.import_module($$$)
+    - pattern: import_module($$$)
     - pattern: __import__($$$)
 message: POLICY.CRITICAL_DEPENDENCY
 severity: error

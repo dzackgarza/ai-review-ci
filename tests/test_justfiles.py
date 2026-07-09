@@ -454,8 +454,10 @@ def test_python_ast_grep_blocks_dynamic_import(
         "\n".join(
             [
                 "import importlib",
-                'plugin = importlib.import_module("plugin")',
-                'legacy = __import__("legacy")',
+                "from importlib import import_module",
+                'attr = importlib.import_module("attr_form")',
+                'direct = import_module("direct_form")',
+                'dunder = __import__("dunder_form")',
                 "",
             ]
         )
@@ -465,7 +467,9 @@ def test_python_ast_grep_blocks_dynamic_import(
 
     output = result.stdout + result.stderr
     assert result.returncode != 0, output
-    assert "no-dynamic-import" in output
+    # Assert the Python rule id specifically, not a loose prefix that the
+    # TypeScript no-dynamic-import rule would also satisfy.
+    assert "no-dynamic-import-python" in output
 
 
 def test_bun_ast_grep_uses_official_cli_and_central_rules_without_parsing_markdown(
