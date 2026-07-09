@@ -105,11 +105,13 @@ def test_ast_grep_policy_rules_use_id_only_messages() -> None:
 
 
 def test_policy_bearing_rules_are_blocking_tier() -> None:
-    # Bridge-burning policies BAN patterns; they do not emit ignorable warnings.
-    # Any ast-grep or semgrep rule that carries a POLICY.* code must sit at the
-    # tool's blocking severity tier, or the gate silently under-enforces a hard
-    # policy (a warning-tier POLICY.RUNTIME_DEFAULT rule is the regression this
-    # locks out). ast-grep blocks on `error`; semgrep blocks on `ERROR`.
+    # Every central rule routes to a POLICY.* code and thence to a remediation
+    # (enforced by test_ast_grep_policy_rules_use_id_only_messages and
+    # test_semgrep_rules_use_id_only_messages_and_valid_metadata) — there are no
+    # non-policy rules. A bridge-burning policy BANS its pattern rather than
+    # emitting an ignorable warning, so every rule must sit at the tool's
+    # blocking tier: unconditionally, with no exemption. ast-grep blocks on
+    # `error`; semgrep blocks on `ERROR`.
     ast_grep_files = [
         *Path("tool-configs/ast-grep/rules").glob("*.yml"),
         *Path("tool-configs/ast-grep/sage-rules").glob("*.yml"),
@@ -117,13 +119,11 @@ def test_policy_bearing_rules_are_blocking_tier() -> None:
     assert ast_grep_files
     for path in ast_grep_files:
         rule = yaml.safe_load(path.read_text())
-        if str(rule["message"]).startswith("POLICY."):
-            assert rule["severity"] == "error", f"{path}: {rule['severity']}"
+        assert rule["severity"] == "error", f"{path}: {rule['severity']}"
 
     semgrep = yaml.safe_load(Path("tool-configs/semgrep.yml").read_text())
     for rule in semgrep["rules"]:
-        if str(rule["message"]).startswith("POLICY."):
-            assert rule["severity"] == "ERROR", f"{rule['id']}: {rule['severity']}"
+        assert rule["severity"] == "ERROR", f"{rule['id']}: {rule['severity']}"
 
 
 def test_test_semgrep_fixture_uses_policy_id_metadata() -> None:

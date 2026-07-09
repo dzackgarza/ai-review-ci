@@ -468,11 +468,11 @@ _ast-grep: _install-tools
 		--config {{configs}}/sgconfig.yml \
 		--report-style short \
 		"${python_files[@]}" | tee "$findings_file"
-	# Fail on error-severity findings: rule authors declare severity, and every
-	# rule carrying a POLICY.* code is error-tier (a bridge-burning policy BANS
-	# its pattern; it does not emit an ignorable warning — see the blocking-tier
-	# invariant in tests/test_policy_index.py). Any warning-tier rule would be a
-	# non-policy advisory lint, printed above but never blocking.
+	# Fail on error-severity findings. Every central rule routes to a POLICY.*
+	# code and thence to a remediation (enforced in tests/test_policy_index.py);
+	# there are no non-policy rules. A bridge-burning policy BANS its pattern
+	# rather than emitting an ignorable warning, so every rule is error-tier and
+	# blocks here — `error[` matches all of them.
 	if grep -q "error\[" "$findings_file"; then
 		echo "Blocking just test: error-severity findings must be resolved against repository audit guidelines."
 		"{{artifacts}}/scripts/emit-triage-directive.sh"
