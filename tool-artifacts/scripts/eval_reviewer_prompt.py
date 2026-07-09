@@ -28,8 +28,9 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "src"))
 from ai_review_ci.reviewer_eval import load_eval_dataset, score_emitted_findings  # noqa: E402
 
 MODEL = "opencode/deepseek-v4-flash-free"
-BATCH_SIZE = 8
-FINDING_CHAR_LIMIT = 2000
+BATCH_SIZE = 5
+FINDING_CHAR_LIMIT = 1500
+TIMEOUT_RETRIES = 2
 
 PROMPT_TEMPLATE = """You are a code reviewer operating under the following review framing:
 
@@ -50,13 +51,19 @@ Respond with ONLY a JSON object mapping each finding id (as a string) to "emit" 
 def _model_judge(framing: str, threads: list[dict[str, object]]) -> dict[str, str]:
     sections = [f"### Finding id {t['finding_id']}\n{str(t['finding_body'])[:FINDING_CHAR_LIMIT]}" for t in threads]
     prompt = PROMPT_TEMPLATE.format(framing=framing, findings="\n\n".join(sections))
-    proc = subprocess.run(
-        ["opencode", "run", "-m", MODEL, prompt],
-        capture_output=True,
-        text=True,
-        check=True,
-        timeout=600,
-    )
+    for attempt in range(1, TIMEOUT_RETRIES + 2):
+        try:
+            proc = subprocess.run(
+                ["opencode", "run", "-m", MODEL, prompt],
+                capture_output=True,
+                text=True,
+                check=True,
+                timeout=600,
+            )
+            break
+        except subprocess.TimeoutExpired as error:
+            print(f"--- opencode timed out (attempt {attempt}): {error.cmd[:4]} ---", file=sys.stderr)
+            assert attempt <= TIMEOUT_RETRIES, f"model call timed out {attempt} times; aborting"
     text = proc.stdout
     start, end = text.find("{"), text.rfind("}")
     assert start != -1 and end > start, f"no JSON object in model output:\n{text}"
