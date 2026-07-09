@@ -519,6 +519,75 @@ _slop:
 		exit $ec
 	fi
 
+_aislop:
+	#!/usr/bin/env bash
+	set -euo pipefail
+	echo "============================="
+	echo "=== Running: aislop AI-slop quality scan ==="
+	echo "# Runs scanaislop.com's aislop scanner; blocks on error-severity findings (warnings surface but do not block)"
+	if raw_output=$(npx -y aislop@latest scan --json .); then
+		:
+	else
+		ec=$?
+		if ! printf '%s' "$raw_output" | jq -e . >/dev/null 2>&1; then
+			printf '%s\n' "$raw_output"
+			echo ""
+			echo "!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!"
+			echo "  ERROR: aislop FAILED TO RUN (exit $ec). This is a QC TOOLING failure,"
+			echo "  NOT a project-code violation. aislop did not return parseable JSON,"
+			echo "  so no finding has been made about the project."
+			echo "!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!"
+			"{{artifacts}}/scripts/emit-triage-directive.sh"
+			exit "$ec"
+		fi
+	fi
+	if ! printf '%s' "$raw_output" | jq -e . >/dev/null 2>&1; then
+		printf '%s\n' "$raw_output"
+		echo ""
+		echo "!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!"
+		echo "  ERROR: aislop did not return parseable JSON. This is a QC TOOLING failure,"
+		echo "  NOT a project-code violation."
+		echo "!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!"
+		"{{artifacts}}/scripts/emit-triage-directive.sh"
+		exit 1
+	fi
+	# Fail closed on an unexpected-but-parseable schema: if summary.errors /
+	# summary.warnings are not numbers, or diagnostics is not an array, the
+	# numeric guards below would silently fall through and treat the scan as
+	# clean. Treat a schema mismatch as a QC TOOLING failure, not a pass.
+	if ! printf '%s' "$raw_output" | jq -e '(.summary.errors | type == "number") and (.summary.warnings | type == "number") and (.diagnostics | type == "array")' >/dev/null 2>&1; then
+		printf '%s\n' "$raw_output"
+		echo ""
+		echo "!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!"
+		echo "  ERROR: aislop returned JSON without the expected schema (numeric"
+		echo "  summary.errors and summary.warnings, array diagnostics). This is a QC"
+		echo "  TOOLING failure — failing closed rather than assuming the scan passed."
+		echo "!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!"
+		"{{artifacts}}/scripts/emit-triage-directive.sh"
+		exit 1
+	fi
+	errors=$(printf '%s' "$raw_output" | jq '.summary.errors')
+	warnings=$(printf '%s' "$raw_output" | jq '.summary.warnings')
+	if [ "$warnings" -gt 0 ]; then
+		echo "aislop: $warnings warning-tier finding(s) surfaced (advisory, not blocking):"
+		printf '%s' "$raw_output" | jq -r '.diagnostics[] | select(.severity=="warning") | "  \(.filePath):\(.line) [\(.rule)] \(.message)"'
+	fi
+	if [ "$errors" -gt 0 ]; then
+		printf '%s' "$raw_output" | jq -r '.diagnostics[] | select(.severity=="error") | "  \(.filePath):\(.line) [\(.rule)] \(.message)"'
+		echo ""
+		echo "!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!"
+		echo "  ERROR: aislop found $errors error-severity finding(s) in PROJECT CODE."
+		echo "  Fix the project code."
+		echo ""
+		echo "  PROBING GLOBAL QC IS REWARD-HACKING."
+		echo "  Do NOT weaken the aislop config, add .aislopignore entries, or edit"
+		echo "  QC tooling in ~/ai-review-ci/ to suppress these findings."
+		echo "!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!"
+		"{{artifacts}}/scripts/emit-triage-directive.sh"
+		exit 1
+	fi
+	echo "aislop: 0 error-severity findings — clean."
+
 # ── Config Sync ───────────────────────────────────────────────────
 # Sync qc-excludes.toml into every tool config (biome, eslint, knip,
 # jscpd, slop-scan, pyright, grain, and justfile-rust _rust-qc-files).
@@ -535,7 +604,7 @@ _sync-qc-excludes:
 
 # Push/CI-tier cross-language stack. `_no-bypass` is NOT here — it is a
 # commit-tier check invoked directly by each language's `test` recipe.
-_global-qc: _ensure-qc-repo-current _check-envrc _check-no-local-qc-override _semgrep _ast-grep _vibecheck _slop
+_global-qc: _ensure-qc-repo-current _check-envrc _check-no-local-qc-override _semgrep _ast-grep _vibecheck _slop _aislop
 	#!/usr/bin/env bash
 	set -euo pipefail
 	echo "Global quality checks completed"

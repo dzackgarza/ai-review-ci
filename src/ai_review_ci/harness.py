@@ -206,7 +206,9 @@ def run_review(template: Path, scope: Path, manifest: Path, reviewer_context: Pa
 
     submitted_path = candidates_dir / SUBMITTED_CANDIDATE
 
+    last_timeout: subprocess.TimeoutExpired | None = None
     for attempt in range(1, MAX_ATTEMPTS + 1):
+        last_timeout = None
         if attempt > 1:
             time.sleep(5)
             prompt = retry_prompt(submitted_path)
@@ -220,6 +222,7 @@ def run_review(template: Path, scope: Path, manifest: Path, reviewer_context: Pa
         try:
             run_opencode(task_path, attempt)
         except subprocess.TimeoutExpired as error:
+            last_timeout = error
             print(f"--- opencode timed out: {error} ---", file=sys.stderr)
         except FileNotFoundError:
             print(
@@ -232,5 +235,12 @@ def run_review(template: Path, scope: Path, manifest: Path, reviewer_context: Pa
             print("--- Report artifact submitted ---", file=sys.stderr)
             sys.exit(0)
 
-    print(f"FATAL: No report artifact after {MAX_ATTEMPTS} attempts", file=sys.stderr)
+    if last_timeout is not None:
+        print(
+            f"FATAL: No report artifact after {MAX_ATTEMPTS} attempts; "
+            f"last attempt timed out after {last_timeout.timeout}s",
+            file=sys.stderr,
+        )
+    else:
+        print(f"FATAL: No report artifact after {MAX_ATTEMPTS} attempts", file=sys.stderr)
     sys.exit(1)
