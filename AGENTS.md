@@ -55,6 +55,54 @@ Recreate the work from `origin/main` on an issue-scoped branch.
 - Treat self-QC findings as invalid proof until the target boundary is established.
   For example, a rule that bans `try` statements may itself contain code or text about `try`; diagnosing that self-reference starts a false triage loop, not a real product failure.
 
+## False-Positive Triage: Whitelist vs Boundary Typing
+
+Static dead-code detection (vulture) is resolution-free token matching: a name is
+"used" iff the token appears in a use position in the scanned corpus. It has no
+scopes, types, or inheritance, so it cannot see framework dispatch — and the shared
+whitelist is its designed input channel for exactly those facts, the same way type
+stubs are the type checker's channel. That analogy is the triage rule: classify
+every claimed false positive by *whose fact* it is before touching any suppression
+surface.
+
+1. **First prove it is not a true positive.** A finding on an accepted-but-ignored
+   parameter, an orphaned helper, or a dead branch is the gate working. Fix the
+   downstream code; never suppress. (Precedent: `research#48`, the sole true
+   positive among 23 findings.)
+
+2. **External-framework dispatch facts → shared whitelist or class rule, here.**
+   If an external framework calls the name by protocol or reflection (Sage coercion
+   hooks `_neg_`/`_add_`, category machinery `ElementMethods`/`super_categories`,
+   pydantic validators, pytest hooks), no downstream convention can ever make the
+   use visible — the caller is outside any scannable corpus. These are version-stable,
+   write-once facts. Prefer class mechanisms over name enumeration:
+   `ignore_decorators` for decorator-marked declarations, `exclude` patterns for
+   whole-file non-runtime fixtures (`*_typecheck.py`), name entries in
+   `tool-artifacts/vulture_whitelist.py` only when no class mechanism exists.
+   Requests arrive as issues on this repo with dispatch evidence; the fix is an
+   owner commit here.
+
+3. **Downstream type facts → fix the boundary, not the whitelist.** If the finding
+   exists because the downstream repo patched types at the use site — a
+   `TYPE_CHECKING`-only method declaration compensating for a loose stub, a declared
+   contract living outside the repo's declared-interface convention, stub parameter
+   names — the correct fix is downstream: extend the repo's stub subtree so the base
+   class declares the member (an override of an upstream-declared name needs no
+   suppression under any resolution-aware tool, and the use-site patch that vulture
+   trips on disappears), and keep declared contracts in the repo's single declaration
+   convention (`@abstract_method` / stub files). Whitelist entries for such findings
+   are provisional debt: admissible only to unblock, recorded with the downstream fix
+   that retires them, and removed once it lands.
+
+4. **Never create per-repo suppression surfaces.** A repo-writable whitelist,
+   ignore file, or override hook is self-service validator silence: the gated agent
+   appends its own finding and pushes. All suppression stays in this repo,
+   owner-gated. The boundary-crossing friction is the control.
+
+The one-line test: *if the fact is about an external framework's dispatch, declare
+it here once; if the fact is about the downstream repo's own types, the repo fixes
+its types.*
+
 ## Semgrep Findings
 
 - Separate Semgrep rule provenance from finding ownership.
