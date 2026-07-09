@@ -35,8 +35,10 @@ def test_committed_pr7_dataset_is_loadable_ground_truth() -> None:
         counts[thread.disposition] += 1
     # The scoreable core of the ground truth: real findings the reviewer
     # should emit, and dispositioned rejects it should never have emitted.
-    assert counts["accepted"] == 57
-    assert counts["rejected"] == 64
+    # Labels are model-read from the free-text dispositions (see
+    # tool-artifacts/scripts/label_reviewer_eval.py).
+    assert counts["accepted"] == 56
+    assert counts["rejected"] == 67
 
 
 def test_metrics_computed_from_dispositions() -> None:
