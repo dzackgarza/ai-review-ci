@@ -61,22 +61,26 @@ def _run_cli_install(
     repo: pathlib.Path,
     *,
     github_repo: str = "dzackgarza/ai-review-ci-install-target-does-not-exist",
+    skip_scaffold: bool = False,
 ) -> subprocess.CompletedProcess[str]:
+    args = [
+        sys.executable,
+        "-m",
+        "ai_review_ci.cli",
+        "install",
+        "--target",
+        str(repo),
+        "--repo",
+        github_repo,
+        "--branch",
+        "main",
+        "--profile",
+        "python",
+    ]
+    if skip_scaffold:
+        args.append("--skip-scaffold")
     return subprocess.run(
-        [
-            sys.executable,
-            "-m",
-            "ai_review_ci.cli",
-            "install",
-            "--target",
-            str(repo),
-            "--repo",
-            github_repo,
-            "--branch",
-            "main",
-            "--profile",
-            "python",
-        ],
+        args,
         text=True,
         capture_output=True,
         check=False,
@@ -328,3 +332,71 @@ def test_install_refuses_overwriting_repo_owned_scaffold(
         _write_scaffold(repo, "python")
 
     assert customized.read_text() == "test:\n    @true\n"
+
+
+def test_cli_install_skip_scaffold_adopts_repo_with_existing_justfile(
+    tmp_path: pathlib.Path,
+) -> None:
+    # Brownfield adoption path (#202): a repo that predates ai-review-ci already
+    # owns a substantive top-level justfile. Without an adoption path install
+    # hard-exits ("refusing to overwrite existing scaffold target(s)") before
+    # writing the manifest/triggers/branch protection, so the repo can never be
+    # brought under QC enforcement. --skip-scaffold is the explicit opt-in: the
+    # existing justfile is left untouched (convergence is a doctor finding), and
+    # install proceeds to write the manifest and triggers and reach branch
+    # protection — which fails here only because the gh target repo is
+    # unavailable, proving execution got past the scaffold guard.
+    repo = _git_repo(tmp_path)
+    (repo / "pyproject.toml").write_text('[project]\nname = "target"\nversion = "0.1.0"\n')
+    existing = repo / "justfile"
+    existing.write_text("# pre-existing brownfield justfile\ntest:\n    @true\n")
+
+    result = _run_cli_install(repo, skip_scaffold=True)
+
+    combined = result.stdout + result.stderr
+    assert "refusing to overwrite existing scaffold" not in combined, combined
+    assert result.returncode == 1, combined
+    assert "FATAL: gh api --method PUT failed:" in result.stderr, combined
+    assert existing.read_text() == "# pre-existing brownfield justfile\ntest:\n    @true\n"
+    assert (repo / ".ai-review-ci.toml").exists()
+    assert (repo / ".github" / "workflows" / "review-pr.yml").exists()
+
+
+def test_cli_install_without_skip_scaffold_still_refuses_existing_justfile(
+    tmp_path: pathlib.Path,
+) -> None:
+    # Adoption is opt-in: the genuine unsafe-overwrite guard stays live. Without
+    # --skip-scaffold a pre-existing justfile still hard-exits and nothing is
+    # written (#202 keeps the honest refusal for the accidental case).
+    repo = _git_repo(tmp_path)
+    (repo / "justfile").write_text("test:\n    @true\n")
+
+    result = _run_cli_install(repo)
+
+    assert result.returncode == 1
+    assert "refusing to overwrite existing scaffold" in result.stderr
+    assert not (repo / ".ai-review-ci.toml").exists()
+
+
+def test_qc_tier_step_does_not_export_gh_token_tier_wide() -> None:
+    # #218: GH_TOKEN must not sit on the whole "Run QC tier" step (nor the job
+    # env it inherits), where every QC recipe and every npx/uvx tool runner
+    # (semgrep, ai-slop, aislop) would execute with the token in its environment.
+    data = yaml.safe_load((_WORKFLOWS_DIR / "_qc.yml").read_text())
+    job = data["jobs"]["qc"]
+    assert "GH_TOKEN" not in (job.get("env") or {})
+    tier = next(step for step in job["steps"] if isinstance(step, dict) and step.get("name") == "Run QC tier")
+    assert "GH_TOKEN" not in (tier.get("env") or {})
+
+
+def test_qc_scopes_gh_token_to_isolated_gh_boundary_step() -> None:
+    # #218: only the label suite's real-boundary gh tests receive the token, in
+    # their own step running an isolated recipe — not the tier-wide
+    # `just "$QC_TIER"` run that drives the third-party tool runners.
+    job = _workflow_jobs("_qc.yml")["qc"]
+    token_steps = [step for step in job["steps"] if isinstance(step, dict) and (step.get("env") or {}).get("GH_TOKEN") == "${{ github.token }}"]
+    assert len(token_steps) == 1, token_steps
+    step = token_steps[0]
+    run = step.get("run", "")
+    assert "test-gh-boundary" in run
+    assert '"$QC_TIER"' not in run
