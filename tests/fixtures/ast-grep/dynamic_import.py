@@ -1,8 +1,8 @@
 """Fixture for no-dynamic-import-python (#219): static literal is a hidden
 dependency (flag); a name derived from data is dynamic-by-design (ok)."""
 
-from importlib import import_module
 import importlib
+from importlib import import_module
 
 
 def _loaders(module_name, node, pkg, sub, dyn):

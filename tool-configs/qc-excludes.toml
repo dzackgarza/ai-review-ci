@@ -23,6 +23,9 @@ directories = [
     # Deliberately noncompliant detector-test fixtures (#41): adversarial data
     # for tests/test_slop_torture.py, never owned product code.
     "tests/fixtures/slop-torture",
+    # Deliberately noncompliant detector-test fixture (#219): adversarial data
+    # for tests/test_ast_grep_rules.py, never owned product code.
+    "tests/fixtures/ast-grep",
     "node_modules",
     ".venv",
     ".pytest_cache",

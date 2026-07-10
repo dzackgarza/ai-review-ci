@@ -2,6 +2,8 @@
   "ignores": [
     "**/*.generated.*",
     "**/*.min.*",
+    "**/tests/fixtures/slop-torture/**",
+    "**/tests/fixtures/ast-grep/**",
     "**/node_modules/**",
     "**/.venv/**",
     "**/.pytest_cache/**",
