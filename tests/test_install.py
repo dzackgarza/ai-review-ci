@@ -330,10 +330,7 @@ def test_gates_qc_doctor_grants_labels_read_scope() -> None:
     """
     perms = _workflow_jobs("_gates.yml")["qc-doctor"].get("permissions")
     assert isinstance(perms, dict), "qc-doctor job must declare least-privilege permissions"
-    assert perms.get("issues") == "read", (
-        "qc-doctor job must grant issues: read so the label-alignment check's "
-        "`gh label list` call is verifiable; got permissions=%r" % (perms,)
-    )
+    assert perms.get("issues") == "read", f"qc-doctor job must grant issues: read so the label-alignment check's `gh label list` call is verifiable; got permissions={perms!r}"
     # Least privilege: read scope only, never widened to write.
     assert "write" not in perms.values()
 
@@ -350,9 +347,7 @@ def test_rendered_pr_qc_doctor_grants_labels_read_scope(profile: str) -> None:
     workflow = yaml.safe_load(_template_text("review-pr.yml", profile, "main"))
     perms = workflow["jobs"]["qc-doctor"].get("permissions")
     assert isinstance(perms, dict), f"review-pr.yml (profile={profile}) qc-doctor job must declare permissions"
-    assert perms.get("issues") == "read", (
-        f"review-pr.yml (profile={profile}) qc-doctor caller must grant issues: read; got {perms!r}"
-    )
+    assert perms.get("issues") == "read", f"review-pr.yml (profile={profile}) qc-doctor caller must grant issues: read; got {perms!r}"
     assert "write" not in perms.values()
 
 

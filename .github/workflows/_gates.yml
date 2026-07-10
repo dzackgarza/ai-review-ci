@@ -87,6 +87,9 @@ jobs:
     permissions:
       contents: read
       actions: read
+      # Label-alignment check reads live labels via `gh label list`
+      # (GET /repos/{owner}/{repo}/labels), which requires Issues (read).
+      issues: read
     env:
       REVIEW_INFRA_REF: ${{ inputs.infra_ref }}
       REVIEW_PROFILE: ${{ inputs.profile }}
