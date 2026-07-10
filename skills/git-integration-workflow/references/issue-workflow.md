@@ -8,6 +8,30 @@ The model is: GitHub issues are the planning drafts.
 Put stories, plans, proof obligations, acceptance criteria, blocker state, and implementation checklists in the issue body or comments.
 Use child issues only for separate work units, never for ordinary implementation tasks.
 
+## Creation Routing by Ownership
+
+The examples below abbreviate
+`uvx --from git+https://github.com/dzackgarza/itree itree` to `itree`.
+
+A repository is `itree`-governed when planned work lives in one rooted, ordered GitHub
+issue tree. Confirm that ownership from repository guidance and
+`itree doctor OWNER/REPO`. A missing root does not authorize raw creation; initialize
+the tree or obtain an explicit decision that the repository is outside `itree`
+governance.
+
+In a governed repository:
+
+- create a work unit with `itree new` and an explicit `--under` grouping parent;
+- create a GitHub Milestone and its matching ledger with `itree milestone` and an
+  explicit `--under` grouping parent;
+- use raw `gh issue create`, direct issue POSTs, or manual GitHub Milestone construction
+  only when the repository is explicitly not `itree`-governed.
+
+Omitting `--under` is a placement inquiry, never a default-to-root mutation.
+`itree new` prints existing work units, grouping targets, and exact placement commands
+without creating an issue. `itree milestone` likewise creates nothing, prints existing
+milestone ledgers, valid grouping targets, and an exact invocation, then exits nonzero.
+
 ## Owned Repo Improvement Loop
 
 For repos owned by this system, observed defects should not remain as chat residue or private notes.
@@ -25,7 +49,19 @@ Do not bury observed owned-repo defects only in memory; memory can note the dura
 
 **All issues must be labeled immediately upon creation.**
 
-Use `gh issue create --repo <owner>/<repo> --title "..." --body-file issue.md --label "<label>"`
+For an `itree`-governed repository, create beneath the selected grouping issue, then
+apply the required label to the returned issue reference before any other action:
+
+```bash
+itree new OWNER/REPO "Title" --under OWNER/REPO#PARENT --body-file issue.md
+gh issue edit NEW_ISSUE --repo OWNER/REPO --add-label "<label>"
+```
+
+For a repository explicitly outside `itree` governance, use the raw GitHub route:
+
+```bash
+gh issue create --repo <owner>/<repo> --title "..." --body-file issue.md --label "<label>"
+```
 
 For roadmap, feature, PRD, or cross-agent planning issues, first load the `plan` skill's `references/externalization.md`. Create story-shaped work-unit issues, use native sub-issues only for grouping and separate work-unit edges, use dependencies only for blockers, assign the GitHub Milestone that owns the delivery slice, and keep live planning state on the issue body/comments.
 
@@ -54,7 +90,9 @@ For roadmap, feature, PRD, or cross-agent planning issues, first load the `plan`
 
 **Minimal Issue Template:**
 
-Create a local `.md` file for the body and pass it to `gh issue create --body-file`:
+Create a local `.md` file for the body. Pass it to `itree new ... --body-file` in a
+governed repository, or to `gh issue create --body-file` only in a repository explicitly
+outside `itree` governance:
 
 ```markdown
 # Description
@@ -156,9 +194,13 @@ print(f\"State: {i['state']}  Labels: {labels}\")
 print(f\"\n{i['body']}\")"
 ```
 
-## 2. Creating Issues
+## 2. Creating Issues Outside `itree` Governance
 
-**With gh:**
+The raw creation routes in this section apply only after the repository has been
+explicitly classified as outside `itree` governance. In a governed repository, use
+`itree new ... --under ...` from [Creation Routing by Ownership](#creation-routing-by-ownership).
+
+**With gh (explicitly non-`itree`-governed repositories only):**
 ```bash
 gh issue create \
   --title "Login redirect ignores ?next= parameter" \
@@ -224,7 +266,7 @@ itree attach OWNER/REPO#PARENT_NUMBER OWNER/REPO#CHILD_NUMBER
 itree move OWNER/REPO#CHILD_NUMBER --under OWNER/REPO#PARENT_NUMBER [--before OWNER/REPO#SIBLING_NUMBER | --after OWNER/REPO#SIBLING_NUMBER]
 ```
 
-**With gh:**
+**With gh (explicitly non-`itree`-governed repositories only):**
 ```bash
 # Create a new child work-unit issue under an organizational parent.
 gh issue create --title "<child story or work-unit node>" --body-file issue.md --parent 42
@@ -241,6 +283,17 @@ gh issue edit 43 --remove-parent
 
 Use dependencies for blockers, not roadmap traversal order.
 
+For an `itree`-governed repository, create the work unit under its grouping parent, then
+record the blocker on the returned issue:
+
+```bash
+itree new OWNER/REPO "<blocked work>" --under OWNER/REPO#PARENT --body-file issue.md
+gh issue edit NEW_ISSUE --repo OWNER/REPO --add-blocked-by 41
+```
+
+For a repository explicitly outside `itree` governance, raw creation may carry the
+dependency directly:
+
 ```bash
 gh issue create --title "<blocked work>" --body-file issue.md --blocked-by 41
 gh issue edit 42 --add-blocked-by 41 --add-blocking 44
@@ -251,6 +304,37 @@ gh issue edit 42 --remove-blocked-by 41 --remove-blocking 44
 
 Milestones are delivery/progress buckets over issues and PRs.
 They do not replace the issue tree.
+
+In an `itree`-governed repository, create the GitHub Milestone and its matching ledger
+together:
+
+```bash
+itree milestone OWNER/REPO "<milestone>" \
+  --under OWNER/REPO#GROUPING_PARENT \
+  --body-file milestone.md \
+  --issues OWNER/REPO#FIRST OWNER/REPO#SECOND
+```
+
+`--issues` is not metadata-only assignment. In argument order, each distinct, open,
+same-repository work-unit leaf moves beneath the new ledger and receives the new
+milestone: a parentless issue uses attach semantics, and an already placed issue uses
+replace-parent semantics.
+
+The command is one preflighted orchestration, not a cross-resource GitHub transaction.
+A preflight failure performs no writes. Once mutation starts, the command stops at the
+first failed operation, performs no rollback or compensating close, and reports three
+separate sets: operations confirmed complete, operations confirmed untouched, and the
+current operation if its remote outcome is indeterminate after a timeout, interruption,
+or unusable response. Partial state is never reported as success. Recovery begins by
+rereading the live GitHub Milestone, issue,
+parentage, sibling order, and milestone-assignment state; never infer remote state from a
+lost response.
+
+If installed `itree --help` does not list `milestone`, stop. Do not replace the command
+with raw `gh api` construction.
+
+For a repository explicitly outside `itree` governance, existing GitHub issue milestone
+assignment remains available:
 
 ```bash
 gh issue edit 42 --milestone "<milestone>"
@@ -301,16 +385,20 @@ gh issue list --label "wontfix" --json number --jq '.[].number' | \
 
 ## Quick Reference
 
-| Action | gh | curl endpoint |
+| Action | CLI | API endpoint |
 | --- | --- | --- |
 | List issues | `gh issue list` | `GET /repos/{o}/{r}/issues` |
 | View issue | `gh issue view N` | `GET /repos/{o}/{r}/issues/N` |
-| Create issue | `gh issue create ...` | `POST /repos/{o}/{r}/issues` |
+| Create governed work unit | `itree new ... --under ...` | `itree`-owned orchestration |
+| Create issue outside `itree` governance | `gh issue create ...` | `POST /repos/{o}/{r}/issues` |
+| Create governed milestone and ledger | `itree milestone ... --under ...` | `itree`-owned orchestration |
 | Add labels | `gh issue edit N --add-label ...` | `POST /repos/{o}/{r}/issues/N/labels` |
 | Assign | `gh issue edit N --add-assignee ...` | `POST /repos/{o}/{r}/issues/N/assignees` |
-| Add sub-issue | `gh issue edit PARENT --add-sub-issue CHILD` | Use GitHub CLI native sub-issue support |
+| Attach governed issue | `itree attach PARENT CHILD` | `itree`-owned orchestration |
+| Move governed issue | `itree move CHILD --under PARENT` | `itree`-owned orchestration |
+| Add sub-issue outside `itree` governance | `gh issue edit PARENT --add-sub-issue CHILD` | Use GitHub CLI native sub-issue support |
 | Add blocker | `gh issue edit N --add-blocked-by BLOCKER` | Use GitHub CLI native dependency support |
-| Set milestone | `gh issue edit N --milestone "<milestone>"` | `PATCH /repos/{o}/{r}/issues/N` |
+| Set milestone outside `itree` governance | `gh issue edit N --milestone "<milestone>"` | `PATCH /repos/{o}/{r}/issues/N` |
 | Comment | `gh issue comment N --body ...` | `POST /repos/{o}/{r}/issues/N/comments` |
 | Close | `gh issue close N` | `PATCH /repos/{o}/{r}/issues/N` |
 | Search | `gh issue list --search "..."` | `GET /search/issues?q=...` |
