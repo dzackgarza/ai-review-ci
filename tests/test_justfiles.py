@@ -839,6 +839,74 @@ def test_aislop_fails_closed_on_unexpected_schema(tmp_path: pathlib.Path) -> Non
     assert "expected schema" in output
 
 
+def _scored_aislop_payload(score: int) -> dict[str, Any]:
+    # A warning-only scan (0 errors) at a specific score, so the error-tier gate
+    # passes and only the score gate can red it.
+    return {
+        "schemaVersion": "1",
+        "score": score,
+        "summary": {"errors": 0, "warnings": 1, "fixable": 0, "files": 1},
+        "diagnostics": [
+            {
+                "filePath": "app.py",
+                "line": 1,
+                "rule": "ai-slop/narrative-comment",
+                "severity": "warning",
+                "message": "Narrative comment block",
+            },
+        ],
+    }
+
+
+def test_aislop_blocks_when_score_below_configured_failbelow(tmp_path: pathlib.Path) -> None:
+    # A repo that opts into the score tier by declaring ci.failBelow in its own
+    # .aislop/config.yml must red when the scan score is below that threshold,
+    # even with zero error-severity findings.
+    project = tmp_path / "aislop-project"
+    (project / ".aislop").mkdir(parents=True)
+    (project / ".aislop" / "config.yml").write_text("ci:\n  failBelow: 90\n")
+    env = os.environ | {
+        "PATH": f"{write_fake_npx_slop_scan(tmp_path, _scored_aislop_payload(50))}:{os.environ['PATH']}",
+    }
+
+    result = run_just(ROOT / "justfiles" / "shared.just", project, "_aislop", env=env)
+
+    output = result.stdout + result.stderr
+    assert result.returncode != 0, output
+    assert "failBelow" in output
+    assert "50" in output
+
+
+def test_aislop_passes_when_score_meets_configured_failbelow(tmp_path: pathlib.Path) -> None:
+    project = tmp_path / "aislop-project"
+    (project / ".aislop").mkdir(parents=True)
+    (project / ".aislop" / "config.yml").write_text("ci:\n  failBelow: 90\n")
+    env = os.environ | {
+        "PATH": f"{write_fake_npx_slop_scan(tmp_path, _scored_aislop_payload(95))}:{os.environ['PATH']}",
+    }
+
+    result = run_just(ROOT / "justfiles" / "shared.just", project, "_aislop", env=env)
+
+    output = result.stdout + result.stderr
+    assert result.returncode == 0, output
+
+
+def test_aislop_score_gate_is_opt_in_without_failbelow(tmp_path: pathlib.Path) -> None:
+    # No .aislop/config.yml failBelow ⇒ score tier does not apply. A low-scoring
+    # but error-free scan must NOT red, so the shared gate never reds a governed
+    # repo that has not opted into the score tier (downstream blast-radius bound).
+    project = tmp_path / "aislop-project"
+    project.mkdir()
+    env = os.environ | {
+        "PATH": f"{write_fake_npx_slop_scan(tmp_path, _scored_aislop_payload(10))}:{os.environ['PATH']}",
+    }
+
+    result = run_just(ROOT / "justfiles" / "shared.just", project, "_aislop", env=env)
+
+    output = result.stdout + result.stderr
+    assert result.returncode == 0, output
+
+
 def test_slop_scan_ignores_non_gating_structural_heuristics(
     tmp_path: pathlib.Path,
 ) -> None:
