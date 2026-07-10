@@ -48,35 +48,37 @@ Each arrow is a gate, not a suggestion.
 
 ## Traversal and issue tree management (itree)
 
-For repositories that represent planned work as a single rooted ordered tree, use the standalone `itree` tool from `dzackgarza/itree` to manage the issue tree and discover task ordering.
+For repositories that represent planned work as a single rooted, ordered GitHub issue tree, use the standalone `itree` tool from `dzackgarza/itree` to discover the next task and keep the tree well-formed.
+`itree help model` prints the full organization model — ontology, repo state machine, the four rails, and proportionality doctrine; this section is the operational summary.
 
-### How to invoke the tool via uv
+### How to invoke
 
-Run the tool by pointing `uv` directly to the standalone `itree` checkout:
+Run the tool directly from GitHub via `uvx` — no local checkout required:
 ```bash
-uv run --project /home/dzack/gitclones/itree itree [subcommand]
+uvx --from git+https://github.com/dzackgarza/itree itree [subcommand]
 ```
 
-If the checkout is absent, clone it from `git@github.com:dzackgarza/itree.git`.
+The command lines below abbreviate that prefix to `itree`.
 
-### When to use itree
+### Doctrine (matches `itree help model`)
 
-- **Before implementing**: Run `uv run --project /home/dzack/gitclones/itree itree next OWNER/REPO` to discover the next open work-unit issue.
-  Focus development on the returned work-unit issue.
-  Keep the plan, checklist, proof obligations, and blocker updates on that issue.
-- **Before claiming completion**: Run `uv run --project /home/dzack/gitclones/itree itree doctor OWNER/REPO` to verify that the issue tree is well-formed (no unreachable issues, correct milestones, and no separate GitHub issues for ordinary implementation tasks).
-  If doctor warnings exist, resolve them.
-- **When creating a repository workspace**: Initialize the root ledger with `uv run --project /home/dzack/gitclones/itree itree root create OWNER/REPO --title "Ledger: OWNER/REPO"`.
-- **When structuring work**: Attach issues with `itree attach` and move/reorder them with `itree move`.
+- A **work unit** is a coherent PR/review/proof boundary and is ALWAYS A LEAF: its acceptance criteria, proof obligations, implementation checklist, and status live in the issue body or comments — never in child issues (violating this is `itree` finding E015).
+- **Grouping issues** (root ledger, milestone, backlog, roadmap, phase) order work units but are not themselves units of work.
+- `next` returns the single next open work unit in preorder. That work unit *is* the next task; there is no separate task enclosed within it.
+- Keep the tree as small as the work is. A candidate smaller than a PR is body content of an existing unit — absorb it, don't fragment.
 
-### Key Commands
+### Commands
 
-- `uv run --project /home/dzack/gitclones/itree itree next OWNER/REPO`: Find the next open work-unit issue in preorder.
-- `uv run --project /home/dzack/gitclones/itree itree doctor OWNER/REPO`: Verify the tree structure and list any warnings or errors.
-  Use `--explain CODE` (e.g. `uv run --project /home/dzack/gitclones/itree itree doctor OWNER/REPO --explain E010`) to see detailed remediation steps.
-- `uv run --project /home/dzack/gitclones/itree itree root create OWNER/REPO --title "..."`: Create a new root ledger issue.
-- `uv run --project /home/dzack/gitclones/itree itree attach OWNER/REPO#PARENT OWNER/REPO#CHILD`: Attach an existing child issue under a parent.
-- `uv run --project /home/dzack/gitclones/itree itree move OWNER/REPO#CHILD --under OWNER/REPO#PARENT [--before SIBLING | --after SIBLING]`: Reparent or reorder an issue.
+- `itree next OWNER/REPO`: the single next open work unit in preorder and its standing instruction.
+- `itree doctor OWNER/REPO`: classify repo state and report structure findings. Use `--explain CODE` (e.g. `--explain E010`, `--explain E015`) for detailed remediation.
+- `itree scan OWNER`: account-wide health, one line per issue-bearing repo.
+- `itree init OWNER/REPO "Ledger: OWNER/REPO"`: create the root ledger for a repo that has no tree yet.
+- `itree triage OWNER/REPO`: repair orphaned issues one at a time (absorb, attach, or close each).
+- `itree new OWNER/REPO "Title" --under OWNER/REPO#PARENT [--body-file FILE]`: file a new work unit under a grouping issue. Without `--under` it creates nothing and prints where the item already fits, so sub-PR items are absorbed rather than fragmented.
+- `itree absorb OWNER/REPO#SOURCE --into OWNER/REPO#UNIT` (or `--into OWNER/REPO#UNIT --title "..." --body-file FILE` for not-yet-filed content): merge sub-PR content into a work unit verbatim; the source issue is cross-linked, detached, and closed as duplicate.
+- `itree attach OWNER/REPO#PARENT OWNER/REPO#CHILD`: attach an existing issue as a child of a grouping issue.
+- `itree move OWNER/REPO#CHILD --under OWNER/REPO#PARENT [--before SIBLING | --after SIBLING]`: reparent or reorder an issue.
+- `itree close OWNER/REPO#N --reason completed`: close a finished work unit.
 
 ## Hard gates
 

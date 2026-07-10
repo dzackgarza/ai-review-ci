@@ -28,9 +28,6 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [tool.pytest.ini_options]
-# This repo's own suite. tools/itree is a nested subproject (git submodule)
-# with its own pyproject/justfile QC surface; collection must not cross the
-# repo boundary.
 testpaths = ["tests"]
 
 [tool.importlinter]

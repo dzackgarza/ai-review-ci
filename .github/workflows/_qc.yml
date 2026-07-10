@@ -24,6 +24,10 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
+      # The suite includes real-boundary tests that read labels via gh
+      # (GET /repos/{owner}/{repo}/labels is issue-scoped). No-mock policy
+      # forbids faking this boundary, so QC reads it for real.
+      issues: read
     env:
       QC_TIER: ${{ inputs.tier }}
       QC_INFRA_REF: ${{ inputs.infra_ref }}
@@ -81,4 +85,8 @@ jobs:
         uses: oven-sh/setup-bun@v2
 
       - name: Run QC tier
+        # gh is invoked by the suite's real-boundary label tests; Actions does
+        # not wire the token into gh automatically. Mirrors _gates.yml / _review.yml.
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: just "$QC_TIER"

@@ -215,7 +215,7 @@ Put those tasks in the parent issue body or comments.
 **With itree (Recommended):** To manage parent/child relationships programmatically, use the `itree` CLI:
 ```bash
 # Create a new child work-unit issue under an organizational parent.
-itree add OWNER/REPO#PARENT_NUMBER "Title of new child" --body-file issue.md
+itree new OWNER/REPO "Title of new child" --under OWNER/REPO#PARENT_NUMBER --body-file issue.md
 
 # Attach an existing child work-unit issue under an organizational parent.
 itree attach OWNER/REPO#PARENT_NUMBER OWNER/REPO#CHILD_NUMBER
