@@ -5,6 +5,8 @@
 fail_on = ["NAKED_EXCEPT", "HEDGE_WORD", "VAGUE_TODO", "VAGUE_COMMIT", "AND_COMMIT", "NO_CONTEXT", "GENERIC_VARNAME"]
 warn_only = ["OBVIOUS_COMMENT", "RESTATED_DOCSTRING", "SINGLE_IMPL_ABC", "TABLE_OVERKILL", "TAG_COMMENT", "THANKS_OPENER"]
 exclude = [
+    "**/lexicon/**",
+    "lexicon/**",
     "tests/*",
     "*_test.py",
     "test_*.py",

@@ -60,7 +60,6 @@ configs: list[ToolConfig] = [
             "**/*.spec.ts",
             "**/__tests__/**",
             "**/env.d.ts",
-            "**/*.tsx",
         ],
     },
     {
@@ -99,6 +98,13 @@ configs: list[ToolConfig] = [
         "key": ["grain", "exclude"],
         "is_dir_fn": lambda d: f"{d}/*",
         "static": [
+            # lexicon subtrees are declared Sage reflection/verification
+            # boundaries; the stub verifier accumulates import failures into a
+            # hard-failing problems list, which grain reads as a naked except.
+            # Both glob depths are needed because grain fnmatches relative
+            # paths (repo-root lexicon/ vs a nested */lexicon/).
+            "**/lexicon/**",
+            "lexicon/**",
             "tests/*",
             "*_test.py",
             "test_*.py",

@@ -292,6 +292,61 @@ def test_sync_qc_excludes_preserves_non_owned_artifacts_and_updates_grain(
     assert rust_justfile.read_text() == "# rust sentinel\n"
 
 
+def test_knip_config_does_not_blanket_ignore_tsx(tmp_path: pathlib.Path) -> None:
+    """#225 Defect 4: knip applies its `ignore` list over its own entry/project
+    tsx globs, so a blanket `**/*.tsx` silently disables dead-code detection for
+    every .tsx file. The regenerated knip config must not carry it, while the
+    real test/generated exclusions it needs stay put."""
+    shipped = json.loads((ROOT / "tool-configs" / "knip.json").read_text())
+    assert "**/*.tsx" not in shipped["ignore"], shipped["ignore"]
+    assert "**/*.test.ts" in shipped["ignore"], "test-file exclusions must remain"
+
+    # The shipped config must be the deterministic output of the sync script
+    # (no hand edits): regenerating in place yields no change.
+    repo = tmp_path / "repo"
+    qc_root = repo / "tool-configs"
+    qc_root.mkdir(parents=True)
+    shutil.copytree(ROOT / "tool-configs", qc_root, dirs_exist_ok=True)
+    result = subprocess.run(
+        ["uv", "run", str(ROOT / "tool-artifacts" / "scripts" / "sync_qc_excludes.py"), str(qc_root / "qc-excludes.toml")],
+        cwd=repo,
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert json.loads((qc_root / "knip.json").read_text())["ignore"] == shipped["ignore"]
+    assert "**/*.tsx" not in json.loads((qc_root / "knip.json").read_text())["ignore"]
+
+
+def test_grain_config_preserves_lexicon_sage_verifier_exemption(
+    tmp_path: pathlib.Path,
+) -> None:
+    """#225 Defect 5: Sage stub verifiers under lexicon/ accumulate import
+    failures into a hard-failing problems list grain misreads as NAKED_EXCEPT.
+    Both glob depths (grain fnmatches relative paths) must survive regeneration,
+    and the shipped config must equal the sync script's deterministic output."""
+    shipped = tomllib.loads((ROOT / "tool-configs" / "grain.toml").read_text())
+    for pattern in ("**/lexicon/**", "lexicon/**"):
+        assert pattern in shipped["grain"]["exclude"], shipped["grain"]["exclude"]
+
+    repo = tmp_path / "repo"
+    qc_root = repo / "tool-configs"
+    qc_root.mkdir(parents=True)
+    shutil.copytree(ROOT / "tool-configs", qc_root, dirs_exist_ok=True)
+    result = subprocess.run(
+        ["uv", "run", str(ROOT / "tool-artifacts" / "scripts" / "sync_qc_excludes.py"), str(qc_root / "qc-excludes.toml")],
+        cwd=repo,
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+    assert result.returncode == 0, result.stdout + result.stderr
+    regenerated = tomllib.loads((qc_root / "grain.toml").read_text())["grain"]["exclude"]
+    for pattern in ("**/lexicon/**", "lexicon/**"):
+        assert pattern in regenerated, regenerated
+
+
 def test_rust_qc_files_consume_central_excludes(tmp_path: pathlib.Path) -> None:
     project = tmp_path / "rust-project"
     source_dir = project / "src"
