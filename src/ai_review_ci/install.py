@@ -162,6 +162,7 @@ def install(
     profile: str,
     ref: str = DEFAULT_INFRA_REF,
     release_channel: str = DEFAULT_INFRA_REF,
+    skip_scaffold: bool = False,
 ) -> None:
     """Install the review trigger workflows and required branch protection.
 
@@ -172,9 +173,17 @@ def install(
         profile: Curated project profile to enforce.
         ref: ai-review-ci git ref used by installed workflows.
         release_channel: Human-readable ai-review-ci release channel recorded in the manifest.
+        skip_scaffold: Brownfield adoption path. A repo that predates ai-review-ci
+            already owns a top-level justfile, and the scaffold step refuses to
+            overwrite it. Pass this to skip writing the delegation scaffold and
+            still install the manifest, triggers, and branch protection; justfile
+            convergence is then left to `doctor` findings. Without it a
+            pre-existing scaffold target remains a hard error (the accidental
+            unsafe-overwrite case).
     """
     target = target.resolve()
-    _write_scaffold(target, profile)
+    if not skip_scaffold:
+        _write_scaffold(target, profile)
     _write_trigger_workflows(target, profile, ref)
     _write_manifest(target, profile, branch, ref, release_channel)
     # PR template last among local writes: it is the opt-in signal for gate
