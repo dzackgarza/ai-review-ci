@@ -643,6 +643,39 @@ def test_semgrep_allows_fail_loud_typescript_guards(tmp_path: pathlib.Path) -> N
     assert result.returncode == 0, output
 
 
+def test_semgrep_scans_tests_tree_for_banned_test_patterns(tmp_path: pathlib.Path) -> None:
+    """#214: semgrep's bundled default .semgrepignore excludes tests/, silently
+    killing the test-antipattern rules (py-no-monkeypatch and siblings) that are
+    designed to fire *in* test files. The gate must scan the tests/ tree, so a
+    repo committing those banned patterns goes red."""
+    project = tmp_path / "semgrep-tests-scope-project"
+    (project / "tests").mkdir(parents=True)
+    (project / "tests" / "test_thing.py").write_text(
+        "\n".join(
+            [
+                "import unittest.mock",
+                "from unittest.mock import patch",
+                "",
+                "def test_x(monkeypatch):",
+                "    monkeypatch.setattr(x, 'y', z)",
+                "    m = MagicMock()",
+                "",
+                "@pytest.mark.skip",
+                "def test_y():",
+                "    pass",
+                "",
+            ]
+        )
+    )
+
+    result = run_just(ROOT / "justfiles" / "shared.just", project, "_semgrep")
+
+    output = result.stdout + result.stderr
+    assert result.returncode != 0, output
+    for rule in ("py-no-monkeypatch", "py-no-mock-import", "py-no-magicmock", "py-no-skip-test"):
+        assert rule in output, f"{rule} did not fire on test-file code:\n{output}"
+
+
 def write_fake_npx_slop_scan(tmp_path: pathlib.Path, payload: dict[str, Any]) -> pathlib.Path:
     bin_dir = tmp_path / "fake-bin"
     bin_dir.mkdir()
