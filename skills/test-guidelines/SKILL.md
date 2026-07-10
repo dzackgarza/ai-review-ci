@@ -208,7 +208,8 @@ This agent must follow these standards:
   A mock-based test proves only that you wrote code that calls the mock — it says nothing about whether the real system works.
   Every hour spent on mock infrastructure is net-negative: the tests pass, the system is unproven, and the mocks must now be maintained.
 
-- **NO MASKING**: Never use `pytest.mark.skip` or `pytest.mark.skipif`; never use `pytest.mark.xfail` EXCEPT as an open-issue red proof gate: `@pytest.mark.xfail(reason="... #<issue> ...", strict=True)` where the cited issue is OPEN. Strictness is mandatory — the suite must go red when the gap closes, forcing the marker's removal in the fixing commit. Suite status otherwise reflects 100% actual runtime reality.
+- **NO MASKING**: Never use `pytest.mark.skip` or `pytest.mark.skipif`; never use `pytest.mark.xfail` EXCEPT as an open-issue red proof gate: `@pytest.mark.xfail(reason="... #<issue> ...", strict=True)` where the cited issue is OPEN. Strictness is mandatory — the suite must go red when the gap closes, forcing the marker's removal in the fixing commit.
+  Suite status otherwise reflects 100% actual runtime reality.
   `skipif` deserves special attention: it is almost always a hedge against a dependency not being installed or a service not being running.
   That is a *setup problem*, not a test design problem.
   Hard dependencies must be present; if they are not, the system is broken and the suite should fail loudly, not silently pass.

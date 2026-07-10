@@ -64,17 +64,21 @@ The command lines below abbreviate that prefix to `itree`.
 
 - A **work unit** is a coherent PR/review/proof boundary and is ALWAYS A LEAF: its acceptance criteria, proof obligations, implementation checklist, and status live in the issue body or comments — never in child issues (violating this is `itree` finding E015).
 - **Grouping issues** (root ledger, milestone, backlog, roadmap, phase) order work units but are not themselves units of work.
-- `next` returns the single next open work unit in preorder. That work unit *is* the next task; there is no separate task enclosed within it.
-- Keep the tree as small as the work is. A candidate smaller than a PR is body content of an existing unit — absorb it, don't fragment.
+- `next` returns the single next open work unit in preorder.
+  That work unit *is* the next task; there is no separate task enclosed within it.
+- Keep the tree as small as the work is.
+  A candidate smaller than a PR is body content of an existing unit — absorb it, don't fragment.
 
 ### Commands
 
 - `itree next OWNER/REPO`: the single next open work unit in preorder and its standing instruction.
-- `itree doctor OWNER/REPO`: classify repo state and report structure findings. Use `--explain CODE` (e.g. `--explain E010`, `--explain E015`) for detailed remediation.
+- `itree doctor OWNER/REPO`: classify repo state and report structure findings.
+  Use `--explain CODE` (e.g. `--explain E010`, `--explain E015`) for detailed remediation.
 - `itree scan OWNER`: account-wide health, one line per issue-bearing repo.
 - `itree init OWNER/REPO "Ledger: OWNER/REPO"`: create the root ledger for a repo that has no tree yet.
 - `itree triage OWNER/REPO`: repair orphaned issues one at a time (absorb, attach, or close each).
-- `itree new OWNER/REPO "Title" --under OWNER/REPO#PARENT [--body-file FILE]`: file a new work unit under a grouping issue. Without `--under` it creates nothing and prints where the item already fits, so sub-PR items are absorbed rather than fragmented.
+- `itree new OWNER/REPO "Title" --under OWNER/REPO#PARENT [--body-file FILE]`: file a new work unit under a grouping issue.
+  Without `--under` it creates nothing and prints where the item already fits, so sub-PR items are absorbed rather than fragmented.
 - `itree absorb OWNER/REPO#SOURCE --into OWNER/REPO#UNIT` (or `--into OWNER/REPO#UNIT --title "..." --body-file FILE` for not-yet-filed content): merge sub-PR content into a work unit verbatim; the source issue is cross-linked, detached, and closed as duplicate.
 - `itree attach OWNER/REPO#PARENT OWNER/REPO#CHILD`: attach an existing issue as a child of a grouping issue.
 - `itree move OWNER/REPO#CHILD --under OWNER/REPO#PARENT [--before SIBLING | --after SIBLING]`: reparent or reorder an issue.

@@ -4,7 +4,7 @@ language: python
 # checks stub claims against the live runtime by reflection (attribute names
 # are data read from the stub AST), which is that boundary's charter.
 ignores:
-  - "**/lexicon/**"
+  - '**/lexicon/**'
 rule:
   pattern: hasattr($$$)
 message: POLICY.NO_TYPE_ESCAPE

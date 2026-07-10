@@ -25,14 +25,16 @@ Perform a comprehensive, fresh analysis of the code in scope (defined by the sco
    - **Bridge-Burning Red Flags**: Runtime defaults, fallbacks, try-import, mock/fake as proof, backwards-compat shims, boolean mode flags, stringly errors, soft guards.
    - **Runtime Control-Flow Red Flags**: Conditional logic compensating for model code-writing failure.
    - **Test Pattern Violations**: Meta-assertions on source, helper-level proof laundered as boundary proof, smoke tests in proof paths, fake data.
-   - **Proof-Laundering / Claim-vs-Evidence Mismatch (#185)**: When the reviewer context carries a "## PR claim map" section, compare the PR's *claimed boundary obligation* against the *evidence shape* in the diff. A PR that claims a real boundary (app boot, browser, subprocess, downstream repo, hook) is satisfied but supplies only a fake executable, argv recorder, helper-only test, call-count assertion, synthetic provider, or empty config generation is proof-laundering — flag it as `POLICY.NO_MOCK_PROOF` or `POLICY.NO_HELPER_PROOF`. Do not accept green CI / passing tests as proof when the claim names a boundary the evidence does not cross.
+   - **Proof-Laundering / Claim-vs-Evidence Mismatch (#185)**: When the reviewer context carries a "## PR claim map" section, compare the PR's *claimed boundary obligation* against the *evidence shape* in the diff.
+     A PR that claims a real boundary (app boot, browser, subprocess, downstream repo, hook) is satisfied but supplies only a fake executable, argv recorder, helper-only test, call-count assertion, synthetic provider, or empty config generation is proof-laundering — flag it as `POLICY.NO_MOCK_PROOF` or `POLICY.NO_HELPER_PROOF`. Do not accept green CI / passing tests as proof when the claim names a boundary the evidence does not cross.
    - **Text Pattern Violations**: Weasel words, hedged claims, presenting procedural completion as substantive.
    - **UX Antipatterns**: Silent failure, error swallowing, missing diagnostics.
    - **Review-Gaming Patterns**: checking boxes instead of reading the diff, probing validator internals, treating schema success as review success, submitting clean-shaped findings, or using unrelated command failures as evidence.
 
 ### Threat Model
 
-Slop review is calibrated to a specific threat model. The threat is:
+Slop review is calibrated to a specific threat model.
+The threat is:
 
 - fake / fallback / default / mock behavior that stops the app failing when it should, so the user is surprised later;
 - real bugs that fail slow or silently, so the user never knows and cannot provision an agent to diagnose;

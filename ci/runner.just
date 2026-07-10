@@ -183,6 +183,10 @@ run-review report_type scope:
       REPORT_TYPE="{{report_type}}" \
       REVIEWER_REPO="{{reviewer_repo}}" \
       CONTROL_REPO="{{control_repo}}" \
+      AI_REVIEW_OPENCODE_BIN="/usr/local/bin/opencode" \
+      AI_REVIEW_OPENCODE_TIMEOUT="600" \
+      AI_REVIEW_MAX_ATTEMPTS="5" \
+      AI_REVIEW_BACKOFF="5" \
       bash -lc 'cd {{reviewer_repo}} && /usr/local/bin/opencode --version && /usr/local/bin/uv run --project {{reviewer_infra}} ai-review-ci run-review \
         --template "{{reviewer_infra}}/reviews/{{report_type}}/template.md" \
         --scope "{{reviewer_infra}}/reviews/scope-{{scope}}.md" \

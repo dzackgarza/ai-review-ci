@@ -197,7 +197,8 @@ Category: Proof and Test Integrity
 
 Rule: `skip`, `xfail`, `todo`, `only`, ignored tests, conditional test gating, and hidden test exclusions mask runtime reality and are not acceptable proof surfaces.
 
-Sanctioned exception (user grant 2026-07-09) — **open-issue red proof gates**: a committed red proof test for an OPEN tracked issue may carry `@pytest.mark.xfail(reason="... #<issue-number> ...", strict=True)`. The reason string must cite the open issue; `strict=True` is mandatory so the suite goes red the moment the gap closes (the marker must then be removed in the fixing commit). This is the coexistence mechanism between the all-green commit gate and the red-test-first bug workflow — nothing else is exempted: `skip`/`skipif`, non-strict xfail, and xfail without an open-issue citation remain violations, and citing a CLOSED issue is a violation (reviewers audit issue state).
+Sanctioned exception (user grant 2026-07-09) — **open-issue red proof gates**: a committed red proof test for an OPEN tracked issue may carry `@pytest.mark.xfail(reason="... #<issue-number> ...", strict=True)`. The reason string must cite the open issue; `strict=True` is mandatory so the suite goes red the moment the gap closes (the marker must then be removed in the fixing commit).
+This is the coexistence mechanism between the all-green commit gate and the red-test-first bug workflow — nothing else is exempted: `skip`/`skipif`, non-strict xfail, and xfail without an open-issue citation remain violations, and citing a CLOSED issue is a violation (reviewers audit issue state).
 
 Invalid local fixes: Moving the skip; adding a reason string without an open-issue red-proof-gate grant; filing an issue while leaving the proof gap masked with `skip` or non-strict `xfail`.
 
@@ -250,7 +251,8 @@ Related remediation: `REMEDIATE.API_SPLIT_OR_VARIANT`
 
 Category: Type and Interface Integrity
 
-Rule: Owned code must not bypass static guarantees with `Any`, casts, double casts, `as any`, `unknown as`, broad `Partial`, stringly errors, untyped blobs for structured state, or runtime duck-typing introspection (`hasattr`, dynamic `getattr`/`setattr`/`delattr`, `vars()`, `type(x) ==`/`is` comparisons, `__class__`/`__dict__` probing) in place of declared types. Sage research code in particular must declare exactly which mathematical objects it expects rather than discovering their capabilities at runtime.
+Rule: Owned code must not bypass static guarantees with `Any`, casts, double casts, `as any`, `unknown as`, broad `Partial`, stringly errors, untyped blobs for structured state, or runtime duck-typing introspection (`hasattr`, dynamic `getattr`/`setattr`/`delattr`, `vars()`, `type(x) ==`/`is` comparisons, `__class__`/`__dict__` probing) in place of declared types.
+Sage research code in particular must declare exactly which mathematical objects it expects rather than discovering their capabilities at runtime.
 
 Invalid local fixes: Adding a narrower cast without proving the boundary; asserting type shape in tests; hiding data in JSON/dicts; replacing `hasattr` with `try`/`except AttributeError`.
 
