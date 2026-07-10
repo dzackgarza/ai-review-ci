@@ -101,6 +101,13 @@ def test_remote_label_parses_real_gh_list_shape() -> None:
     assert parsed == [RemoteLabel(name="bug", color="d73a4a", description="Something isn't working")]
 
 
+def test_remote_label_coerces_null_description() -> None:
+    # gh returns "description": null for a label with no description — the common real
+    # shape on downstream repos. It must parse (to "") rather than raise.
+    raw = json.loads('[{"name":"bug","color":"d73a4a","description":null}]')
+    assert [RemoteLabel.model_validate(entry) for entry in raw] == [RemoteLabel(name="bug", color="d73a4a", description="")]
+
+
 def test_duplicate_taxonomy_names_are_rejected() -> None:
     dup = Label(name="bug", color="d73a4a", description="dup", category="type")
     with pytest.raises((ValidationError, AssertionError)):
@@ -140,11 +147,14 @@ def test_install_labels_is_a_noop_when_all_labels_already_present(tmp_path: Path
     assert "0 created, 0 updated, 1 already current" in capsys.readouterr().out
 
 
-def test_install_labels_fails_loud_when_a_create_is_rejected(tmp_path: Path) -> None:
-    # Real boundary: octocat/Hello-World is public (readable) but not writable by the CI
-    # token, so a label absent there is planned for creation, the create is attempted for
+def test_install_labels_fails_loud_when_a_create_is_rejected(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    # octocat/Hello-World is public (so the read succeeds) but outside this workflow's
+    # repo, which the Actions token cannot write to under GitHub's token model — not
+    # luck. A label absent there is planned for creation; the create is attempted for
     # real, gh exits nonzero, and install_labels fails loud (POLICY.FAIL_OPEN). No mock.
     taxonomy = tmp_path / "labels.json"
     taxonomy.write_text(json.dumps({"labels": [{"name": "zz-ai-review-ci-probe", "color": "ededed", "description": "probe", "category": "type"}]}))
     with pytest.raises(SystemExit):
         install_labels("octocat/Hello-World", taxonomy=taxonomy)
+    # Prove the create step is what failed loud, not the fetch.
+    assert "gh label create failed" in capsys.readouterr().err

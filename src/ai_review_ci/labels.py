@@ -21,7 +21,7 @@ from importlib.resources import files
 from pathlib import Path
 from typing import Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 LabelCategory = Literal["type", "scope", "status", "area"]
 _HEX_COLOR = r"^[0-9a-fA-F]{6}$"
@@ -45,11 +45,20 @@ class Taxonomy(BaseModel):
 
 
 class RemoteLabel(BaseModel):
-    """A label as ``gh label list`` reports it. Descriptions may be empty remotely."""
+    """A label as ``gh label list`` reports it.
+
+    GitHub returns ``"description": null`` for a label with no description (common on
+    real repos), so null is coerced to the empty string rather than rejected.
+    """
 
     name: str = Field(min_length=1)
     color: str = Field(pattern=_HEX_COLOR)
     description: str = ""
+
+    @field_validator("description", mode="before")
+    @classmethod
+    def _null_description_is_empty(cls, value: object) -> object:
+        return "" if value is None else value
 
 
 @dataclass(frozen=True)
