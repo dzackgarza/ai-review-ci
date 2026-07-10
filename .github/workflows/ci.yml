@@ -17,5 +17,7 @@ jobs:
     uses: ./.github/workflows/_qc.yml
     permissions:
       contents: read
+      # Granted through to _qc.yml, whose suite reads labels via gh (issue-scoped).
+      issues: read
     with:
       tier: test-ci
