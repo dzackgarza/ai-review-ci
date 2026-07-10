@@ -17,6 +17,7 @@ from pydantic import ValidationError
 
 from ai_review_ci.labels import (
     Label,
+    LabelMisalignment,
     LabelPlan,
     RemoteLabel,
     Taxonomy,
@@ -25,6 +26,7 @@ from ai_review_ci.labels import (
     compute_label_actions,
     install_labels,
     label_commands,
+    label_misalignment_messages,
     load_taxonomy,
 )
 
@@ -83,6 +85,40 @@ def test_remote_labels_outside_taxonomy_are_left_untouched() -> None:
     assert plan.unchanged == (label,)
     assert plan.create == ()
     assert plan.update == ()
+
+
+def test_canonical_present_only_as_case_variant_is_a_misalignment_not_a_create() -> None:
+    # #217: a repo carrying `Bug` where the canonical name is `bug` must NOT plan a
+    # create (gh rejects it case-insensitively with a cryptic "label already exists").
+    # It is surfaced as an explicit misalignment naming remote+canonical instead.
+    label = Label(name="bug", color="d73a4a", description="Something isn't working", category="type")
+    remote = {"Bug": RemoteLabel(name="Bug", color="d73a4a", description="Something isn't working")}
+    plan = compute_label_actions(remote, [label])
+    assert plan.create == ()
+    assert plan.update == ()
+    assert plan.unchanged == ()
+    assert plan.misaligned == (LabelMisalignment(canonical=label, remote_variants=("Bug",)),)
+
+
+def test_exact_match_is_not_treated_as_a_variant_misalignment() -> None:
+    # Exact matching is preserved: an exact-name match is unchanged, never a variant.
+    label = Label(name="bug", color="d73a4a", description="Something isn't working", category="type")
+    remote = {"bug": RemoteLabel(name="bug", color="d73a4a", description="Something isn't working")}
+    plan = compute_label_actions(remote, [label])
+    assert plan.unchanged == (label,)
+    assert plan.misaligned == ()
+
+
+def test_misalignment_message_names_remote_variant_and_required_canonical() -> None:
+    # The surfaced message must name the remote label and the required canonical name,
+    # framed as a maintainer-fixable misalignment (not laundered into a match).
+    label = Label(name="bug", color="d73a4a", description="Something isn't working", category="type")
+    remote = {"Bug": RemoteLabel(name="Bug", color="d73a4a", description="Something isn't working")}
+    plan = compute_label_actions(remote, [label])
+    messages = label_misalignment_messages(plan)
+    assert len(messages) == 1
+    assert "Bug" in messages[0]
+    assert "bug" in messages[0]
 
 
 def test_label_commands_maps_plan_to_gh_argv_in_order() -> None:
