@@ -9,6 +9,7 @@ import tomllib
 from typing import Any
 
 import pytest
+import yaml
 from pydantic import TypeAdapter
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
@@ -837,6 +838,16 @@ def test_aislop_fails_closed_on_unexpected_schema(tmp_path: pathlib.Path) -> Non
     output = result.stdout + result.stderr
     assert result.returncode != 0, output
     assert "expected schema" in output
+
+
+def test_repo_aislop_config_disables_print_debug_rule() -> None:
+    # The repo's own .aislop/config.yml must parse and keep python-print-debug
+    # off (owner policy: prints are signal here, not slop). This is the whole
+    # payload of the aislop-signal cleanup — guard it against silent breakage.
+    config = yaml.safe_load((ROOT / ".aislop" / "config.yml").read_text())
+    assert config["rules"]["ai-slop/python-print-debug"] == "off"
+    # No score gate: scores are golfable, so nothing gates on them.
+    assert "failBelow" not in (config.get("ci") or {})
 
 
 def test_slop_scan_ignores_non_gating_structural_heuristics(
