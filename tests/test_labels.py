@@ -194,6 +194,7 @@ def test_install_labels_is_a_noop_when_taxonomy_matches_remote(tmp_path: Path, c
     assert "0 created, 0 updated, 1 already current" in capsys.readouterr().out
 
 
+@pytest.mark.gh_boundary
 def test_install_labels_fails_loud_on_a_case_variant_misalignment(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
     # #217, at the real gh boundary (no mock): take a label this repo actually has and
     # ask the taxonomy for the same name in swapped case. The exact name is absent but
