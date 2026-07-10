@@ -52,6 +52,10 @@ ambient:
 install repo branch profile target=".":
     uvx --from . ai-review-ci install --target {{target}} --repo {{repo}} --branch {{branch}} --profile {{profile}}
 
+# Create/update the canonical label taxonomy on a target repo (idempotent).
+install-labels repo:
+    uvx --from . ai-review-ci install-labels --repo {{repo}}
+
 # Install globally managed Git hooks for this user.
 install-global-hooks:
     #!/usr/bin/env bash
