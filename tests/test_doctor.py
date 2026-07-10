@@ -21,6 +21,7 @@ from ai_review_ci.doctor import (
 )
 from ai_review_ci.install import _write_trigger_workflows
 from ai_review_ci.labels import RemoteLabel, load_taxonomy
+from ai_review_ci.review_guidelines import load_canonical_review_guidelines
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 DOCTOR_SCHEMA = ROOT / "schemas" / "doctor-report.schema.json"
@@ -51,6 +52,9 @@ def create_target(tmp_path: pathlib.Path, profile: str) -> pathlib.Path:
     project.mkdir()
     init_git_repo(project)
     write_profile_shape(project, profile)
+    # A conformant target carries the current review-guidelines section; tests that probe
+    # its absence delete this file explicitly (see the missing-AGENTS.md gate tests).
+    (project / "AGENTS.md").write_text(f"# {profile} target\n\nIntro.\n\n{load_canonical_review_guidelines()}\n", encoding="utf-8")
     (project / "justfile").write_text((ROOT / "scaffolds" / profile / "justfile").read_text())
     _write_trigger_workflows(project, profile)
     (project / ".ai-review-ci.toml").write_text(
@@ -151,6 +155,38 @@ def test_doctor_cli_exits_zero_only_for_current_target(tmp_path: pathlib.Path) -
     payload = json.loads(result.stdout)
     assert result.returncode == 0, result.stdout + result.stderr
     assert payload["global_status"] == "current"
+
+
+def test_doctor_flags_missing_agents_md_as_error(tmp_path: pathlib.Path) -> None:
+    # A repo carrying no AGENTS.md carries zero review guidance for the reviewers that
+    # read it — a false-green the always-on doctor must fail loud, not soften (#215).
+    project = create_target(tmp_path, "python")
+    (project / "AGENTS.md").unlink(missing_ok=True)
+
+    status, payload = status_for(project)
+
+    assert status == "misconfigured"
+    review_findings = [f for f in payload["findings"] if f["surface"] == "review_guidelines"]
+    assert len(review_findings) == 1, payload["findings"]
+    assert "missing" in review_findings[0]["evidence"]
+
+
+def test_doctor_cli_fails_the_gate_when_no_agents_md(tmp_path: pathlib.Path) -> None:
+    # The gate boundary: `ai-review-ci doctor` must exit nonzero on a repo with no
+    # AGENTS.md, so the qc-doctor check cannot pass a repo missing review guidance.
+    project = create_target(tmp_path, "python")
+    (project / "AGENTS.md").unlink(missing_ok=True)
+
+    result = subprocess.run(
+        [sys.executable, "-m", "ai_review_ci.cli", "doctor", "--target", str(project), "--json"],
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+
+    payload = json.loads(result.stdout)
+    assert result.returncode != 0, result.stdout + result.stderr
+    assert payload["global_status"] == "misconfigured"
 
 
 def test_doctor_schema_cli_exports_producer_owned_contract() -> None:

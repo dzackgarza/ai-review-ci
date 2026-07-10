@@ -18,6 +18,7 @@ from pydantic import BaseModel, ConfigDict, Field, TypeAdapter
 from ai_review_ci.gates import PROJECT_PROFILES, SUPPORTED_PROFILES, ProjectProfile, required_check_contexts
 from ai_review_ci.install import TEMPLATES
 from ai_review_ci.labels import Label, RemoteLabel, compute_label_actions, load_taxonomy
+from ai_review_ci.review_guidelines import classify_review_guidelines, load_canonical_review_guidelines
 
 MANIFEST_NAME = ".ai-review-ci.toml"
 SCHEMA_VERSION: Literal[1] = 1
@@ -40,6 +41,7 @@ FindingSurface = Literal[
     "justfile_conformance",
     "branch_protection",
     "label_alignment",
+    "review_guidelines",
 ]
 BranchProtectionState = Literal["not_applicable", "compliant", "missing", "missing_contexts", "unverifiable"]
 LabelAlignmentState = Literal["not_applicable", "compliant", "misaligned", "unverifiable"]
@@ -595,6 +597,7 @@ def _findings(
     profile_proof: dict[str, ProfileProofObservation],
 ) -> list[DoctorFinding]:
     findings: list[DoctorFinding] = []
+    findings.extend(_review_guidelines_findings(target_root))
     if not isinstance(manifest, QcManifest):
         findings.append(
             DoctorFinding(
@@ -683,6 +686,32 @@ def _findings(
         )
     findings.extend(_label_alignment_findings(label_alignment))
     return findings
+
+
+def _review_guidelines_findings(target_root: Path) -> list[DoctorFinding]:
+    """Flag a head repo whose local AGENTS.md carries stale/missing/duplicated review guidance.
+
+    Reviewers read the target repo's local AGENTS.md ``# Review Guidelines`` section; a PR
+    that goes out for review without the current canonical copy is a false-green (#215).
+
+    A repo with no AGENTS.md carries zero review guidance for the agents that read it, so it
+    is the strongest false-green, not an out-of-scope case: the missing file is itself the
+    ``missing`` state and MUST fail the gate. ``classify_review_guidelines(None, ...)`` owns
+    that verdict, so the doctor reports it exactly like a stale or duplicated section.
+    """
+    agents_path = target_root / "AGENTS.md"
+    agents_md = agents_path.read_text(encoding="utf-8") if agents_path.is_file() else None
+    status = classify_review_guidelines(agents_md, load_canonical_review_guidelines())
+    if status.state == "current":
+        return []
+    return [
+        DoctorFinding(
+            severity="error",
+            surface="review_guidelines",
+            evidence=f"{agents_path}: {status.state}: {status.detail}",
+            remediation_commands=(status.remediation,),
+        )
+    ]
 
 
 def _justfile_conformance_findings(target: Path, profile: ProfileName) -> list[DoctorFinding]:

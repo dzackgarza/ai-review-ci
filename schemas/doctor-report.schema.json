@@ -140,7 +140,8 @@
             "justfile_delegation",
             "justfile_conformance",
             "branch_protection",
-            "label_alignment"
+            "label_alignment",
+            "review_guidelines"
           ],
           "title": "Surface",
           "type": "string"
