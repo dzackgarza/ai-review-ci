@@ -43,6 +43,27 @@ REMEDIATION = (
 
 _HTML_COMMENT_LINE = re.compile(r"\s*<!--.*-->\s*$")
 
+
+def _fence_marker(line: str) -> tuple[str, int, bool] | None:
+    """Classify a line as a CommonMark fenced-code-block marker, else ``None``.
+
+    Returns ``(fence_char, run_length, is_bare)`` where ``fence_char`` is ``` ``` ``` or
+    ``~``, ``run_length`` is the count of fence characters, and ``is_bare`` is true when the
+    run is followed only by whitespace (a valid *closing* fence). Per CommonMark: up to three
+    leading spaces of indentation, then a run of at least three of the same fence character.
+    """
+    stripped = line.lstrip(" ")
+    if len(line) - len(stripped) > 3:  # 4+ leading spaces is indented code, not a fence
+        return None
+    for ch in ("`", "~"):
+        if stripped.startswith(ch * 3):
+            run = len(stripped) - len(stripped.lstrip(ch))
+            # ponytail: a backtick opening fence may not carry backticks in its info
+            # string; treating such a line as a fence errs on the safe (skip) side.
+            return ch, run, stripped[run:].strip() == ""
+    return None
+
+
 ReviewGuidelinesState = Literal["current", "missing", "stale", "duplicated"]
 
 
@@ -99,14 +120,17 @@ def extract_review_guidelines_sections(doc: str) -> list[str]:
     A section starts at a line that is exactly the level-1 header ``# Review Guidelines``
     (at column 0, not an inline code mention like ``See `# Review Guidelines` ``) and runs
     until the next level-1 ``# `` header or end of document. Content inside fenced code
-    blocks is skipped so an example listing cannot forge a section. Trailing blank and
-    standalone HTML-comment lines (e.g. a following managed block's ``<!-- ... -->``
-    delimiter) are markup, not review prose, and are dropped from the captured section.
+    blocks — backtick (```` ``` ````) *and* tilde (``~~~``) fences, per CommonMark — is
+    skipped so an example listing cannot forge a section; a fence closes only on a bare run
+    of its own fence character at least as long as the opener. Trailing blank and standalone
+    HTML-comment lines (e.g. a following managed block's ``<!-- ... -->`` delimiter) are
+    markup, not review prose, and are dropped from the captured section.
     """
     lines = doc.replace("\r\n", "\n").replace("\r", "\n").split("\n")
     sections: list[str] = []
     current: list[str] | None = None
-    in_fence = False
+    fence_char: str | None = None  # the open fence's character, or None when outside a fence
+    fence_len = 0
 
     def close(section: list[str]) -> None:
         while section and (section[-1].strip() == "" or _HTML_COMMENT_LINE.match(section[-1])):
@@ -114,12 +138,18 @@ def extract_review_guidelines_sections(doc: str) -> list[str]:
         sections.append("\n".join(section))
 
     for line in lines:
-        if line.lstrip().startswith("```"):
-            in_fence = not in_fence
+        marker = _fence_marker(line)
+        if marker is not None:
+            ch, run, is_bare = marker
+            if fence_char is None:
+                fence_char, fence_len = ch, run
+            elif ch == fence_char and is_bare and run >= fence_len:
+                fence_char, fence_len = None, 0
+            # A non-matching or info-string fence line inside an open fence is content.
             if current is not None:
                 current.append(line)
             continue
-        is_level1 = not in_fence and line.startswith("# ") and not line.startswith("##")
+        is_level1 = fence_char is None and line.startswith("# ") and not line.startswith("##")
         if is_level1 and line.rstrip() == _SECTION_HEADER:
             if current is not None:
                 close(current)

@@ -615,15 +615,14 @@ def _review_guidelines_findings(target_root: Path) -> list[DoctorFinding]:
     Reviewers read the target repo's local AGENTS.md ``# Review Guidelines`` section; a PR
     that goes out for review without the current canonical copy is a false-green (#215).
 
-    Scope: a repo that has an AGENTS.md at all must carry the current, unique section — the
-    exact false-green observed on itree #20. A repo with no AGENTS.md is out of scope for the
-    always-on doctor; the dedicated ``check-review-guidelines`` gate owns the presence-of-file
-    contract for the pre-PR/pre-push hook path.
+    A repo with no AGENTS.md carries zero review guidance for the agents that read it, so it
+    is the strongest false-green, not an out-of-scope case: the missing file is itself the
+    ``missing`` state and MUST fail the gate. ``classify_review_guidelines(None, ...)`` owns
+    that verdict, so the doctor reports it exactly like a stale or duplicated section.
     """
     agents_path = target_root / "AGENTS.md"
-    if not agents_path.is_file():
-        return []
-    status = classify_review_guidelines(agents_path.read_text(encoding="utf-8"), load_canonical_review_guidelines())
+    agents_md = agents_path.read_text(encoding="utf-8") if agents_path.is_file() else None
+    status = classify_review_guidelines(agents_md, load_canonical_review_guidelines())
     if status.state == "current":
         return []
     return [

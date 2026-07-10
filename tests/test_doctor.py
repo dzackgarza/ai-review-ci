@@ -9,6 +9,7 @@ import pytest
 
 from ai_review_ci.doctor import DoctorReport, _has_private_attribute, _justfile_recipes, doctor_report, manifest_text
 from ai_review_ci.install import _write_trigger_workflows
+from ai_review_ci.review_guidelines import load_canonical_review_guidelines
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 DOCTOR_SCHEMA = ROOT / "schemas" / "doctor-report.schema.json"
@@ -39,6 +40,9 @@ def create_target(tmp_path: pathlib.Path, profile: str) -> pathlib.Path:
     project.mkdir()
     init_git_repo(project)
     write_profile_shape(project, profile)
+    # A conformant target carries the current review-guidelines section; tests that probe
+    # its absence delete this file explicitly (see the missing-AGENTS.md gate tests).
+    (project / "AGENTS.md").write_text(f"# {profile} target\n\nIntro.\n\n{load_canonical_review_guidelines()}\n", encoding="utf-8")
     (project / "justfile").write_text((ROOT / "scaffolds" / profile / "justfile").read_text())
     _write_trigger_workflows(project, profile)
     (project / ".ai-review-ci.toml").write_text(

@@ -17,6 +17,7 @@ from ai_review_ci.install import (
     _write_scaffold,
     _write_trigger_workflows,
 )
+from ai_review_ci.review_guidelines import load_canonical_review_guidelines
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 
@@ -164,6 +165,9 @@ def test_install_writes_profile_scaffold(tmp_path: pathlib.Path) -> None:
 def test_install_local_files_finalize_with_doctor(tmp_path: pathlib.Path) -> None:
     repo = _git_repo(tmp_path)
     (repo / "pyproject.toml").write_text('[project]\nname = "target"\nversion = "0.1.0"\n')
+    # The final doctor proof now requires a current review-guidelines section, so a
+    # conformant target carries one before finalize (the gate the doctor enforces).
+    (repo / "AGENTS.md").write_text(f"# target\n\nIntro.\n\n{load_canonical_review_guidelines()}\n")
 
     _write_scaffold(repo, "python")
     _write_trigger_workflows(repo, "python")
