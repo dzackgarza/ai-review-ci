@@ -31,10 +31,11 @@ import tomlkit
 #   path       : relative to QC root
 #   format     : "json" or "toml"
 #   key        : [key, ...] path to the exclude array (for json/toml)
-#   is_dir_fn  : lambda(str) -> glob pattern for a TOML directory entry
+#   is_dir_fn  : lambda(str) -> glob pattern(s) for a TOML directory entry;
+#                may return one pattern or a list of patterns per directory
 #   static     : list of entries preserved verbatim, emitted before TOML dirs
 #
-# The generated list is always: static + [is_dir_fn(d) for d in toml_dirs]
+# The generated list is always: static + flatten(is_dir_fn(d) for d in toml_dirs)
 
 ToolConfig = dict
 
@@ -96,7 +97,10 @@ configs: list[ToolConfig] = [
         "path": "grain.toml",
         "format": "toml",
         "key": ["grain", "exclude"],
-        "is_dir_fn": lambda d: f"{d}/*",
+        # grain matches with fnmatch (grain/runner.py), so a root-anchored
+        # `d/*` misses a nested `pkg/sub/d/...`, while `**/d/**` misses the
+        # root-level `d/...`. Emit both depths to match the JSON tools' intent.
+        "is_dir_fn": lambda d: [f"{d}/*", f"**/{d}/**"],
         "static": [
             # lexicon subtrees are declared Sage reflection/verification
             # boundaries; the stub verifier accumulates import failures into a
@@ -157,7 +161,8 @@ def _build_entries(cfg: ToolConfig, dirs: list[str]) -> list[str]:
     result = list(cfg["static"])
     fn = cfg["is_dir_fn"]
     for d in dirs:
-        result.append(fn(d))
+        produced = fn(d)
+        result.extend(produced if isinstance(produced, list) else [produced])
     return result
 
 

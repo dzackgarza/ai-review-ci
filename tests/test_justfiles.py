@@ -347,6 +347,37 @@ def test_grain_config_preserves_lexicon_sage_verifier_exemption(
         assert pattern in regenerated, regenerated
 
 
+def test_grain_config_excludes_nested_directory_occurrences(
+    tmp_path: pathlib.Path,
+) -> None:
+    """#225 Defect 6: grain matches excludes with fnmatch (grain/runner.py),
+    where a root-anchored `node_modules/*` misses a nested
+    `pkg/sub/node_modules/x.py` — unlike the JSON tools' `**/{d}/**`. Vendored
+    and generated trees deep in the layout must stay out of grain's scan, so
+    every TOML-derived directory must be excluded at both depths."""
+    import fnmatch
+
+    nested = "packages/app/node_modules/vendored/mod.py"
+    shipped = tomllib.loads((ROOT / "tool-configs" / "grain.toml").read_text())["grain"]["exclude"]
+    assert any(fnmatch.fnmatch(nested, pat) for pat in shipped), f"nested vendored path not excluded by grain's fnmatch patterns:\n{shipped}"
+
+    # Deterministic SSOT output: regenerating in a temp copy holds the property.
+    repo = tmp_path / "repo"
+    qc_root = repo / "tool-configs"
+    qc_root.mkdir(parents=True)
+    shutil.copytree(ROOT / "tool-configs", qc_root, dirs_exist_ok=True)
+    result = subprocess.run(
+        ["uv", "run", str(ROOT / "tool-artifacts" / "scripts" / "sync_qc_excludes.py"), str(qc_root / "qc-excludes.toml")],
+        cwd=repo,
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+    assert result.returncode == 0, result.stdout + result.stderr
+    regenerated = tomllib.loads((qc_root / "grain.toml").read_text())["grain"]["exclude"]
+    assert any(fnmatch.fnmatch(nested, pat) for pat in regenerated), regenerated
+
+
 def test_rust_qc_files_consume_central_excludes(tmp_path: pathlib.Path) -> None:
     project = tmp_path / "rust-project"
     source_dir = project / "src"
