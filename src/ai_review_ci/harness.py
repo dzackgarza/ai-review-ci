@@ -23,8 +23,9 @@ import subprocess
 import sys
 import time
 from collections.abc import Mapping
-from dataclasses import dataclass
 from pathlib import Path
+
+from pydantic import BaseModel, ConfigDict
 
 IGNORE_DIRS = {
     ".git",
@@ -43,13 +44,15 @@ SUBMIT_CANDIDATE_BIN = Path("/home/reviewer/bin/submit-candidate")
 SUBMITTED_CANDIDATE = "submitted.json"
 
 
-@dataclass(frozen=True)
-class OpencodeConfig:
+class OpencodeConfig(BaseModel):
     """External-process seams for the retry loop: the opencode binary, per-attempt
     timeout, retry count, and inter-attempt backoff. Required config, not defaults —
-    the CI wiring (``ci/runner.just``) supplies every value and a missing or malformed
-    one crashes at the boundary rather than silently falling back to a baked-in guess.
+    the CI wiring (``ci/runner.just``) supplies every value and a missing (KeyError) or
+    malformed (ValueError) one crashes at the boundary rather than silently falling
+    back to a baked-in guess.
     """
+
+    model_config = ConfigDict(frozen=True)
 
     binary: Path
     timeout: int
@@ -58,7 +61,11 @@ class OpencodeConfig:
 
     @classmethod
     def from_env(cls, environ: Mapping[str, str] | None = None) -> OpencodeConfig:
-        """Build from required environment variables; fail loud on any missing/malformed value."""
+        """Build from required environment variables; fail loud on any missing/malformed value.
+
+        Missing key -> KeyError; non-numeric timeout/attempts/backoff -> ValueError. The
+        model enforces the field types and frozen-ness on the parsed values.
+        """
         source = os.environ if environ is None else environ
         return cls(
             binary=Path(source["AI_REVIEW_OPENCODE_BIN"]),
