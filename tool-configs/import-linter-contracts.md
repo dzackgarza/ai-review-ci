@@ -32,12 +32,15 @@ no representation today and is rejected downstream.
 
 ## Why universal-only, not a per-repo channel
 
-1. **Ownership boundary.** A universal contract (first-party independence; the
-   `ai_review_ci.models` no-I/O purity contract in this repo's own `pyproject.toml`)
-   is a QC invariant ai-review-ci owns and every consumer must satisfy. A single
-   repo's internal layer ordering is a project architecture *preference*, not a
-   cross-repo invariant. Centralizing it would either couple the hub to every
-   consumer's module graph or require a repo-owned layer-declaration channel.
+1. **Ownership boundary.** A *universal* contract — first-party package
+   independence, auto-derived for any repo — is a QC invariant ai-review-ci owns
+   and every consumer must satisfy. A *self-enforced* contract — this repo's own
+   `ai_review_ci.models` no-I/O purity rule in its `pyproject.toml` — is an
+   invariant this repo owns and enforces on its own package, not on downstream
+   consumers. A single repo's internal layer ordering is neither: it is a project
+   architecture *preference*, not a cross-repo invariant. Centralizing it would
+   either couple the hub to every consumer's module graph or require a repo-owned
+   layer-declaration channel.
 
 2. **No speculative infrastructure (`POLICY.NO_HYPOTHETICAL_PATH` / YAGNI).** Building
    a repo-owned-contract channel for one consumer's layering is machinery ahead of

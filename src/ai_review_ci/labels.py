@@ -115,7 +115,10 @@ def _gh(args: Sequence[str]) -> str:
 
 
 def _fetch_remote_labels(repo: str) -> dict[str, RemoteLabel]:
-    raw = json.loads(_gh(["label", "list", "--repo", repo, "--limit", "200", "--json", "name,color,description"]))
+    # High limit so the existing-label read is never truncated: a partial read would
+    # plan a spurious create for a canonical label already present past the cutoff.
+    # gh paginates internally up to --limit; no real repo approaches this many labels.
+    raw = json.loads(_gh(["label", "list", "--repo", repo, "--limit", "5000", "--json", "name,color,description"]))
     assert isinstance(raw, list), "gh label list must return a JSON array"
     labels = [RemoteLabel.model_validate(entry) for entry in raw]
     return {label.name: label for label in labels}
