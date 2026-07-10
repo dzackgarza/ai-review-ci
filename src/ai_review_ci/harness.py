@@ -237,8 +237,7 @@ def run_review(template: Path, scope: Path, manifest: Path, reviewer_context: Pa
 
     if last_timeout is not None:
         print(
-            f"FATAL: No report artifact after {MAX_ATTEMPTS} attempts; "
-            f"last attempt timed out after {last_timeout.timeout}s",
+            f"FATAL: No report artifact after {MAX_ATTEMPTS} attempts; last attempt timed out after {last_timeout.timeout}s",
             file=sys.stderr,
         )
     else:

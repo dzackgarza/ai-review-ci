@@ -3,3 +3,4 @@ dist/
 .venv/
 *.egg-info/
 node_modules/
+.coverage
