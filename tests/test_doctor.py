@@ -50,7 +50,6 @@ def create_target(tmp_path: pathlib.Path, profile: str) -> pathlib.Path:
             workflow_template_version=1,
             local_delegation="global-justfile",
             default_branch="main",
-            exceptions=(),
         )
     )
     return project
@@ -105,7 +104,6 @@ def test_manifest_text_round_trips_through_toml_parser() -> None:
         workflow_template_version=1,
         local_delegation="global-justfile",
         default_branch="main",
-        exceptions=(),
     )
 
     parsed = tomllib.loads(text)
@@ -118,7 +116,6 @@ def test_manifest_text_round_trips_through_toml_parser() -> None:
         "workflow_template_version": 1,
         "local_delegation": "global-justfile",
         "default_branch": "main",
-        "exceptions": [],
     }
 
 
@@ -161,7 +158,6 @@ def test_doctor_schema_cli_exports_producer_owned_contract() -> None:
         "stale",
         "misconfigured",
         "unverifiable",
-        "intentional_exception",
     ]
     assert schema["additionalProperties"] is False
 
@@ -190,7 +186,6 @@ def test_doctor_classifies_outdated_workflow_refs_as_stale(tmp_path: pathlib.Pat
             workflow_template_version=1,
             local_delegation="global-justfile",
             default_branch="main",
-            exceptions=(),
         )
     )
 
@@ -224,7 +219,6 @@ def test_doctor_classifies_wrong_profile_shape_as_misconfigured(tmp_path: pathli
             workflow_template_version=1,
             local_delegation="global-justfile",
             default_branch="main",
-            exceptions=(),
         )
     )
 
