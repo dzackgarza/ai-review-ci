@@ -147,7 +147,8 @@ def test_install_labels_is_a_noop_when_taxonomy_matches_remote(tmp_path: Path, c
     # Any real label with a non-empty description works (taxonomy descriptions are
     # required non-empty); selecting dynamically avoids coupling to one label's contents.
     remote = _fetch_remote_labels("dzackgarza/ai-review-ci")
-    sample = next(label for label in remote.values() if label.description)
+    sample = next((label for label in remote.values() if label.description), None)
+    assert sample is not None, "expected this repo to have at least one described label to sample"
     taxonomy = tmp_path / "labels.json"
     taxonomy.write_text(json.dumps({"labels": [{"name": sample.name, "color": sample.color, "description": sample.description, "category": "type"}]}))
     install_labels("dzackgarza/ai-review-ci", taxonomy=taxonomy)
