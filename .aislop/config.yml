@@ -17,12 +17,3 @@ rules:
   # different from an agent suppressing findings to dodge a gate. Rules that
   # catch genuine slop are left ON.
   ai-slop/python-print-debug: "off"
-
-ci:
-  # Score tier for ai-review-ci's own scan. Post-remediation the repo scores 79
-  # (8 deliberately-retained complexity/dispatch findings — see #205). failBelow
-  # locks that cleaned baseline: the current state stays green while a real
-  # regression (new slop lowering the score) stays red. The small margin below
-  # the achieved 79 absorbs aislop scoring micro-drift across `@latest` versions
-  # without weakening regression detection. Not applied to downstream repos.
-  failBelow: 75

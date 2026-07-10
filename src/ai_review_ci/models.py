@@ -99,7 +99,9 @@ def _line_count(path: Path) -> int:
     return len((Path.cwd() / path).read_text(errors="replace").splitlines())
 
 
+# ---------------------------------------------------------------------------
 # Shared validator logic (parameterized by the per-report-type FIX guidance)
+# ---------------------------------------------------------------------------
 
 
 def reject_blanket_invariant(value: str, *, good_example: str) -> str:
@@ -231,7 +233,9 @@ def validate_policy_reference(policy_code: str | None, remediation_code: str | N
         raise ValueError(f"REJECTED: invalid policy/remediation reference. FIX: cite existing vendored POLICY.* and REMEDIATE.* IDs. {exc}") from exc
 
 
+# ---------------------------------------------------------------------------
 # Shared leaf types
+# ---------------------------------------------------------------------------
 
 
 class Location(BaseModel):
@@ -273,7 +277,9 @@ class CheckedSurface(BaseModel):
     result: str = Field(description="Outcome: finding, clean, needs-attention.")
 
 
+# ---------------------------------------------------------------------------
 # General review
+# ---------------------------------------------------------------------------
 
 _GENERAL_TIER_EXAMPLES = "'semantic-regression', 'test-quality'"
 _GENERAL_INVARIANT_GOOD = "The CI runner silently swallows diff-retrieval failures instead of aborting"
@@ -426,7 +432,9 @@ class GeneralReport(BaseModel):
         return self
 
 
+# ---------------------------------------------------------------------------
 # Slop review
+# ---------------------------------------------------------------------------
 
 _SLOP_TIER_EXAMPLES = "'bridge-burning', 'validation-evasion'"
 _SLOP_INVARIANT_GOOD = "The agent suppresses stderr to construct synthetic fallback results instead of failing on missing files"

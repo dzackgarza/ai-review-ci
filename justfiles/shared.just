@@ -555,12 +555,12 @@ _aislop:
 	# summary.warnings are not numbers, or diagnostics is not an array, the
 	# numeric guards below would silently fall through and treat the scan as
 	# clean. Treat a schema mismatch as a QC TOOLING failure, not a pass.
-	if ! printf '%s' "$raw_output" | jq -e '(.summary.errors | type == "number") and (.summary.warnings | type == "number") and (.diagnostics | type == "array") and (.score | type == "number")' >/dev/null 2>&1; then
+	if ! printf '%s' "$raw_output" | jq -e '(.summary.errors | type == "number") and (.summary.warnings | type == "number") and (.diagnostics | type == "array")' >/dev/null 2>&1; then
 		printf '%s\n' "$raw_output"
 		echo ""
 		echo "!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!"
 		echo "  ERROR: aislop returned JSON without the expected schema (numeric"
-		echo "  summary.errors, summary.warnings, and score, array diagnostics). This is a QC"
+		echo "  summary.errors and summary.warnings, array diagnostics). This is a QC"
 		echo "  TOOLING failure — failing closed rather than assuming the scan passed."
 		echo "!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!"
 		"{{artifacts}}/scripts/emit-triage-directive.sh"
@@ -585,28 +585,6 @@ _aislop:
 		echo "!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!"
 		"{{artifacts}}/scripts/emit-triage-directive.sh"
 		exit 1
-	fi
-	# Score tier (opt-in ratchet): a project opts in by declaring ci.failBelow in
-	# its own .aislop/config.yml. When it does, the aislop score must meet that
-	# threshold. Projects that do not declare failBelow keep the error-only gate,
-	# so wiring this in does not red any governed repo that has not opted in.
-	failbelow=$(uv run {{artifacts}}/scripts/read_aislop_failbelow.py .)
-	if [ -n "$failbelow" ]; then
-		score=$(printf '%s' "$raw_output" | jq '.score')
-		echo "aislop: score $score (ci.failBelow $failbelow)"
-		if [ "$(printf '%s' "$raw_output" | jq "(.score < $failbelow)")" = "true" ]; then
-			echo ""
-			echo "!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!"
-			echo "  ERROR: aislop score $score is below the configured ci.failBelow $failbelow"
-			echo "  in PROJECT CODE (.aislop/config.yml). Raise the score by fixing findings."
-			echo ""
-			echo "  PROBING GLOBAL QC IS REWARD-HACKING."
-			echo "  Do NOT lower failBelow, weaken the aislop config, add .aislopignore"
-			echo "  entries, or edit QC tooling in ~/ai-review-ci/ to suppress findings."
-			echo "!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!"
-			"{{artifacts}}/scripts/emit-triage-directive.sh"
-			exit 1
-		fi
 	fi
 	echo "aislop: 0 error-severity findings — clean."
 

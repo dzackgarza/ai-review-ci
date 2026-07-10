@@ -10,6 +10,7 @@ with sync_playwright() as p:
     browser = p.chromium.launch(headless=True)
     page = browser.new_page(viewport={"width": 1920, "height": 1080})
 
+    # Set up console log capture
     def handle_console_message(msg: ConsoleMessage) -> None:
         console_logs.append(f"[{msg.type}] {msg.text}")
         print(f"Console: [{msg.type}] {msg.text}")

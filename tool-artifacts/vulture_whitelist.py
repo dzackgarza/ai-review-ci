@@ -449,7 +449,7 @@ _SPEC_ABSTRACT_NAMES: Final[tuple[object, ...]] = (
     _spec.weil_polynomials,
     _spec.WithValuation,
     _spec.xgcd,
-    # src/lattices/ abstract interface stubs and Sage category patterns
+    # --- src/lattices/ abstract interface stubs and Sage category patterns ---
     _spec.arithmetic_genus,
     _spec.as_lattice,
     _spec.associated_bilinear_module,
@@ -568,12 +568,12 @@ _SPEC_ABSTRACT_NAMES: Final[tuple[object, ...]] = (
     _spec.WithQuadraticForm,
     _spec.is_Q_cartier_divisor,
     _spec.is_étale,
-    # plans/category_specs/sets/ abstract interface stubs
+    # --- plans/category_specs/sets/ abstract interface stubs ---
     _spec.Metric,
     _spec.union,
     _spec.symmetric_difference,
     _spec.unrank,
-    # tests/conftest.py pytest hooks (called by pytest framework)
+    # --- tests/conftest.py pytest hooks (called by pytest framework) ---
     _spec.pytest_addoption,
     _spec.pytest_configure,
     _spec.pytest_sessionstart,
@@ -583,19 +583,19 @@ _SPEC_ABSTRACT_NAMES: Final[tuple[object, ...]] = (
     _spec.pytest_runtest_logreport,
     _spec.pytest_sessionfinish,
     _spec.pytest_terminal_summary,
-    # tests/ helper functions referenced indirectly
+    # --- tests/ helper functions referenced indirectly ---
     _spec._dawes_example_26_barpsi,
     _spec._dawes_example_26_barpsi_reduced,
     _spec._discriminant_hom_from_matrix,
     _spec._native_t_en,
     _spec._native_k3,
-    # theory/spec_backups abstract interface stubs
+    # --- theory/spec_backups abstract interface stubs ---
     _spec.orthogonal_complement_of_image,
     _spec.has_isomorphic_discriminant_group_to,
     _spec.has_isomorphic_discriminant_form_to,
     _spec.stabilizer_of_vector,
     _spec.centralizer_of_involution,
-    # plans/category_specs/modules/named.py abstract stubs
+    # --- plans/category_specs/modules/named.py abstract stubs ---
     _spec.ambient_vector_space,
     _spec.cover,
     _spec.free_cover,
