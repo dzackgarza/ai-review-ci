@@ -17,6 +17,7 @@ from pydantic import BaseModel, ConfigDict, Field, TypeAdapter
 
 from ai_review_ci.gates import PROJECT_PROFILES, SUPPORTED_PROFILES, ProjectProfile, required_check_contexts
 from ai_review_ci.install import TEMPLATES
+from ai_review_ci.review_guidelines import classify_review_guidelines, load_canonical_review_guidelines
 
 MANIFEST_NAME = ".ai-review-ci.toml"
 SCHEMA_VERSION: Literal[1] = 1
@@ -38,6 +39,7 @@ FindingSurface = Literal[
     "justfile_delegation",
     "justfile_conformance",
     "branch_protection",
+    "review_guidelines",
 ]
 BranchProtectionState = Literal["not_applicable", "compliant", "missing", "missing_contexts", "unverifiable"]
 
@@ -517,6 +519,7 @@ def _findings(
     profile_proof: dict[str, ProfileProofObservation],
 ) -> list[DoctorFinding]:
     findings: list[DoctorFinding] = []
+    findings.extend(_review_guidelines_findings(target_root))
     if not isinstance(manifest, QcManifest):
         findings.append(
             DoctorFinding(
@@ -604,6 +607,33 @@ def _findings(
             )
         )
     return findings
+
+
+def _review_guidelines_findings(target_root: Path) -> list[DoctorFinding]:
+    """Flag a head repo whose local AGENTS.md carries stale/missing/duplicated review guidance.
+
+    Reviewers read the target repo's local AGENTS.md ``# Review Guidelines`` section; a PR
+    that goes out for review without the current canonical copy is a false-green (#215).
+
+    Scope: a repo that has an AGENTS.md at all must carry the current, unique section — the
+    exact false-green observed on itree #20. A repo with no AGENTS.md is out of scope for the
+    always-on doctor; the dedicated ``check-review-guidelines`` gate owns the presence-of-file
+    contract for the pre-PR/pre-push hook path.
+    """
+    agents_path = target_root / "AGENTS.md"
+    if not agents_path.is_file():
+        return []
+    status = classify_review_guidelines(agents_path.read_text(encoding="utf-8"), load_canonical_review_guidelines())
+    if status.state == "current":
+        return []
+    return [
+        DoctorFinding(
+            severity="error",
+            surface="review_guidelines",
+            evidence=f"{agents_path}: {status.state}: {status.detail}",
+            remediation_commands=(status.remediation,),
+        )
+    ]
 
 
 def _justfile_conformance_findings(target: Path, profile: ProfileName) -> list[DoctorFinding]:

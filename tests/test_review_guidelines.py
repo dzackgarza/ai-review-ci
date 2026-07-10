@@ -90,7 +90,11 @@ def test_extract_stops_at_next_level1_header() -> None:
 
 def test_normalize_ignores_trailing_whitespace_and_blank_line_runs() -> None:
     canonical = load_canonical_review_guidelines()
-    noisy = "\n\n".join(line + "   " for line in canonical.splitlines()) + "\n\n\n"
+    # Layout-only drift: widen each existing blank gap to a run and add trailing spaces
+    # and a trailing newline run. Paragraph structure is preserved (no blanks inserted
+    # between adjacent prose lines), so this normalizes equal.
+    noisy = canonical.replace("\n\n", "\n\n\n")
+    noisy = "".join(line.rstrip() + "   \n" for line in noisy.split("\n")) + "\n\n"
     assert normalize(noisy) == normalize(canonical)
 
 

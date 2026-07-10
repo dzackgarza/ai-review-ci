@@ -14,6 +14,7 @@ Subcommands:
 - check-pr-description — fail on unchecked checklist items, or (where the gate template is installed) a missing policy-alignment section
 - check-app-boot   — run the target repo's delegated bun-playwright gate
 - check-review-threads — require evidence-backed ai-review thread resolution
+- check-review-guidelines — fail if the head repo's AGENTS.md lacks the current canonical # Review Guidelines section
 - protect-branch   — apply required branch protection contexts
 - doctor-schema    — dump the JSON Schema for the doctor payload
 - validate-report  — validate a candidate report and write the artifact
@@ -48,6 +49,7 @@ from ai_review_ci.report import (
     report_schema,
     validate_report,
 )
+from ai_review_ci.review_guidelines import check_review_guidelines
 from ai_review_ci.sarif import to_sarif
 from ai_review_ci.threads import post_threads
 
@@ -68,6 +70,7 @@ app.command(check_justfile)
 app.command(check_pr_description)
 app.command(check_app_boot)
 app.command(check_review_threads)
+app.command(check_review_guidelines)
 app.command(protect_branch)
 app.command(validate_report)
 app.command(report_schema)
