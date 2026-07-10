@@ -26,6 +26,12 @@ TEMPLATES = ("review-general.yml", "review-slop.yml", "review-pr.yml")
 SCAFFOLD_FILES = ("justfile",)
 PR_TEMPLATE = "pull_request_template.md"
 DEFAULT_INFRA_REF = "main"
+# The exact doctor surfaces whose convergence --skip-scaffold defers to `doctor`:
+# a brownfield repo keeps its own non-delegating justfile, so its delegation and
+# conformance findings are expected under adoption and must NOT fail the install.
+# Every other surface (manifest, profile, workflow, workflow_ref,
+# branch_protection) stays fatal.
+DEFERRED_SCAFFOLD_SURFACES = ("justfile_delegation", "justfile_conformance")
 
 
 def _validate_profile(profile: str) -> None:
@@ -138,20 +144,34 @@ def _write_manifest(target: pathlib.Path, profile: str, branch: str, ref: str, r
     print(f"installed {manifest.name}")
 
 
-def _prove_installation(target: pathlib.Path) -> None:
-    """Run doctor as the final install proof."""
+def _prove_installation(target: pathlib.Path, *, skip_scaffold: bool = False) -> None:
+    """Run doctor as the final install proof.
+
+    Under ``skip_scaffold`` (brownfield adoption) the target keeps its own
+    pre-existing non-delegating justfile, so doctor's justfile
+    delegation/conformance findings are deferred by design and must not fail the
+    install. The tolerance is scoped to exactly those surfaces
+    (``DEFERRED_SCAFFOLD_SURFACES``): any finding on any other surface — including
+    a missing manifest, trigger, or branch protection — is still fatal, so the
+    proof fails loud on every genuine fault.
+    """
     from ai_review_ci.doctor import doctor_report
 
     report = doctor_report(target)
-    if report.global_status != "current":
+    if report.global_status == "current":
+        print(f"doctor final proof: {report.global_status}")
+        return
+    blocking = [finding for finding in report.findings if not (skip_scaffold and finding.surface in DEFERRED_SCAFFOLD_SURFACES)]
+    if blocking:
         print(
             f"FATAL: ai-review-ci doctor final proof failed with status {report.global_status}",
             file=sys.stderr,
         )
-        for finding in report.findings:
+        for finding in blocking:
             print(f"- {finding.surface}: {finding.evidence}", file=sys.stderr)
         sys.exit(1)
-    print(f"doctor final proof: {report.global_status}")
+    deferred = len(report.findings)
+    print(f"doctor final proof: adopted; {deferred} deferred justfile finding(s) left to doctor")
 
 
 def install(
@@ -192,7 +212,7 @@ def install(
     # a repo opted into PR-description enforcement.
     _write_pr_template(target)
     protect_branch(repo, branch, profile)
-    _prove_installation(target)
+    _prove_installation(target, skip_scaffold=skip_scaffold)
 
     print(
         "\nDone. Commit the installed files; they are now repo-owned "
