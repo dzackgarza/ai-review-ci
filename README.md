@@ -94,11 +94,10 @@ release_channel = "main"
 workflow_template_version = 1
 local_delegation = "global-justfile"
 default_branch = "main"
-exceptions = []
 ```
 
 `schema_version`, `profile`, `installed_ref`, `release_channel`, `workflow_template_version`, `local_delegation`, and `default_branch` are required.
-`exceptions` may list explicit active exceptions with `id`, `surface`, `reason`, and `active = true`. Exceptions do not make the repo current; they map only matching active findings to `intentional_exception`.
+A repo declares only what type of project it is; there is no local opt-out of global QC. A repo with active findings is noncompliant — there is no manifest field that suppresses a finding.
 
 Inspect a target repo with:
 
@@ -118,9 +117,8 @@ Status mapping is fixed:
 | installed workflow refs differ from the manifest's required ref | `outdated` | `stale` |
 | manifest missing, required workflow missing, wrong profile, wrong delegation, missing `bun-playwright` app boot, or missing branch-protection contexts | `uninstalled` or `noncompliant` | `misconfigured` |
 | branch protection cannot be verified from the target remote/API state | `unknown` | `unverifiable` |
-| every active finding is covered by a matching active manifest exception | `noncompliant` or `outdated` | `intentional_exception` |
 
-`current` and `intentional_exception` exit zero.
+Only `current` exits zero.
 All other statuses fail the command and the `qc-doctor` PR gate.
 
 ## Installing QC Surfaces

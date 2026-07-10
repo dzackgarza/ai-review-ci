@@ -26,7 +26,6 @@ TEMPLATES = ("review-general.yml", "review-slop.yml", "review-pr.yml")
 SCAFFOLD_FILES = ("justfile",)
 PR_TEMPLATE = "pull_request_template.md"
 DEFAULT_INFRA_REF = "main"
-SUCCESSFUL_DOCTOR_STATUSES = ("current", "intentional_exception")
 
 
 def _validate_profile(profile: str) -> None:
@@ -134,7 +133,6 @@ def _write_manifest(target: pathlib.Path, profile: str, branch: str, ref: str, r
             workflow_template_version=WORKFLOW_TEMPLATE_VERSION,
             local_delegation=LOCAL_DELEGATION_MODE,
             default_branch=branch,
-            exceptions=(),
         )
     )
     print(f"installed {manifest.name}")
@@ -145,7 +143,7 @@ def _prove_installation(target: pathlib.Path) -> None:
     from ai_review_ci.doctor import doctor_report
 
     report = doctor_report(target)
-    if report.global_status not in SUCCESSFUL_DOCTOR_STATUSES:
+    if report.global_status != "current":
         print(
             f"FATAL: ai-review-ci doctor final proof failed with status {report.global_status}",
             file=sys.stderr,
