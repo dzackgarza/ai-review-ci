@@ -19,15 +19,17 @@ dropping recall.
 """
 
 import json
-from dataclasses import dataclass
 from pathlib import Path
+
+from pydantic import BaseModel, ConfigDict
 
 DISPOSITIONS = ("accepted", "rejected", "outdated", "duplicate", "needs-investigation", "unstamped")
 SCOREABLE = ("accepted", "rejected")
 
 
-@dataclass(frozen=True)
-class EvalThread:
+class EvalThread(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
     finding_id: int
     url: str
     path: str
@@ -35,8 +37,9 @@ class EvalThread:
     finding_body: str
 
 
-@dataclass(frozen=True)
-class EvalMetrics:
+class EvalMetrics(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
     true_positives: int
     false_positives: int
     false_negatives: int

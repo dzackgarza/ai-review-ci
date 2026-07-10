@@ -16,12 +16,11 @@ import json
 import subprocess
 import sys
 from collections.abc import Mapping, Sequence
-from dataclasses import dataclass
 from importlib.resources import files
 from pathlib import Path
 from typing import Literal
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 LabelCategory = Literal["type", "scope", "status", "area"]
 _HEX_COLOR = r"^[0-9a-fA-F]{6}$"
@@ -61,8 +60,9 @@ class RemoteLabel(BaseModel):
         return "" if value is None else value
 
 
-@dataclass(frozen=True)
-class LabelPlan:
+class LabelPlan(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
     create: tuple[Label, ...]
     update: tuple[Label, ...]
     unchanged: tuple[Label, ...]

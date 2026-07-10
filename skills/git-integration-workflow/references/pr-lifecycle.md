@@ -161,8 +161,7 @@ Minimum body shape:
 ```
 
 Use closing keywords only for issues the PR fully completes and should close on merge.
-Use `Refs` or prose for parent issues, future work, deferred work, excluded scope, and issues that remain open after this PR.
-Do not use partial-issue closure language.
+Use `Refs` or prose for parent issues, future work, deferred work, excluded scope, and issues that remain open after this PR. Do not use partial-issue closure language.
 If the PR targets a non-default branch or GitHub does not show the expected Development links, add the manual Development links before asking for review.
 
 Use typed nodes.

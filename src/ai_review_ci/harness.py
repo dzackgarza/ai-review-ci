@@ -22,7 +22,10 @@ import os
 import subprocess
 import sys
 import time
+from collections.abc import Mapping
 from pathlib import Path
+
+from pydantic import BaseModel, ConfigDict, NonNegativeFloat, PositiveInt
 
 IGNORE_DIRS = {
     ".git",
@@ -37,11 +40,45 @@ IGNORE_DIRS = {
 
 ARTIFACT_PATH = Path(".review-report-artifact.json")
 DIFF_PATH = Path(".reviewer-diff.patch")
-MAX_ATTEMPTS = 5
-OPENCODE_TIMEOUT = 600
-OPENCODE_BIN = Path("/usr/local/bin/opencode")
 SUBMIT_CANDIDATE_BIN = Path("/home/reviewer/bin/submit-candidate")
 SUBMITTED_CANDIDATE = "submitted.json"
+
+
+class OpencodeConfig(BaseModel):
+    """External-process seams for the retry loop: the opencode binary, per-attempt
+    timeout, retry count, and inter-attempt backoff. Required config, not defaults —
+    the CI wiring (``ci/runner.just``) supplies every value and a missing (KeyError),
+    malformed (ValueError), or out-of-range (ValidationError) one crashes at the
+    boundary rather than silently falling back to a baked-in guess. The value ranges
+    are enforced on the model surface: a non-positive timeout or max_attempts, or a
+    negative backoff, is a degenerate run (an empty ``range(1, max_attempts + 1)``
+    never invokes opencode), so those are rejected at construction, not accepted. A
+    non-finite backoff (``inf``/``nan``) is rejected too (``allow_inf_nan=False``) — an
+    infinite backoff would hang/crash in ``time.sleep`` mid-loop, not at the boundary.
+    """
+
+    model_config = ConfigDict(frozen=True, allow_inf_nan=False)
+
+    binary: Path
+    timeout: PositiveInt
+    max_attempts: PositiveInt
+    backoff: NonNegativeFloat
+
+    @classmethod
+    def from_env(cls, environ: Mapping[str, str] | None = None) -> OpencodeConfig:
+        """Build from required environment variables; fail loud on any missing/malformed value.
+
+        Missing key -> KeyError; non-numeric or out-of-range timeout/attempts/backoff ->
+        ValueError (pydantic ValidationError subclasses ValueError). The model enforces
+        the field types, value ranges, and frozen-ness on the parsed values.
+        """
+        source = os.environ if environ is None else environ
+        return cls(
+            binary=Path(source["AI_REVIEW_OPENCODE_BIN"]),
+            timeout=int(source["AI_REVIEW_OPENCODE_TIMEOUT"]),
+            max_attempts=int(source["AI_REVIEW_MAX_ATTEMPTS"]),
+            backoff=float(source["AI_REVIEW_BACKOFF"]),
+        )
 
 
 def _doc_section(p: Path, repo_root: Path) -> str | None:
@@ -147,15 +184,15 @@ def retry_prompt(submitted_path: Path) -> str:
     )
 
 
-def opencode_command(attempt: int) -> list[str]:
+def opencode_command(config: OpencodeConfig, attempt: int) -> list[str]:
     """opencode invocation for an attempt; retries continue the session."""
-    cmd = [str(OPENCODE_BIN), "run"]
+    cmd = [str(config.binary), "run"]
     if attempt > 1:
         cmd.append("-c")
     return cmd
 
 
-def run_opencode(task_path: Path, attempt: int) -> int:
+def run_opencode(config: OpencodeConfig, task_path: Path, attempt: int) -> int:
     """Run opencode with the task prompt on stdin; returns the exit code."""
     env = {
         **os.environ,
@@ -164,12 +201,12 @@ def run_opencode(task_path: Path, attempt: int) -> int:
     }
     with open(task_path) as f:
         res = subprocess.run(
-            opencode_command(attempt),
+            opencode_command(config, attempt),
             stdin=f,
             capture_output=True,
             text=True,
             check=False,
-            timeout=OPENCODE_TIMEOUT,
+            timeout=config.timeout,
             env=env,
         )
 
@@ -195,6 +232,7 @@ def run_review(template: Path, scope: Path, manifest: Path, reviewer_context: Pa
         manifest: Path to the prompt manifest listing guide documents.
         reviewer_context: Path to reviewer context file (existing tracked findings).
     """
+    config = OpencodeConfig.from_env()
     _require_files(template, scope, manifest, reviewer_context)
 
     run_dir = Path(".agents/review-runner").resolve()
@@ -207,20 +245,20 @@ def run_review(template: Path, scope: Path, manifest: Path, reviewer_context: Pa
     submitted_path = candidates_dir / SUBMITTED_CANDIDATE
 
     last_timeout: subprocess.TimeoutExpired | None = None
-    for attempt in range(1, MAX_ATTEMPTS + 1):
+    for attempt in range(1, config.max_attempts + 1):
         last_timeout = None
         if attempt > 1:
-            time.sleep(5)
+            time.sleep(config.backoff)
             prompt = retry_prompt(submitted_path)
         else:
             prompt = initial_prompt
 
         task_path.write_text(prompt)
-        print(f"--- opencode run attempt {attempt}/{MAX_ATTEMPTS} ---", file=sys.stderr)
+        print(f"--- opencode run attempt {attempt}/{config.max_attempts} ---", file=sys.stderr)
         submitted_path.unlink(missing_ok=True)
         ARTIFACT_PATH.unlink(missing_ok=True)
         try:
-            run_opencode(task_path, attempt)
+            run_opencode(config, task_path, attempt)
         except subprocess.TimeoutExpired as error:
             last_timeout = error
             print(f"--- opencode timed out: {error} ---", file=sys.stderr)
@@ -237,9 +275,9 @@ def run_review(template: Path, scope: Path, manifest: Path, reviewer_context: Pa
 
     if last_timeout is not None:
         print(
-            f"FATAL: No report artifact after {MAX_ATTEMPTS} attempts; last attempt timed out after {last_timeout.timeout}s",
+            f"FATAL: No report artifact after {config.max_attempts} attempts; last attempt timed out after {last_timeout.timeout}s",
             file=sys.stderr,
         )
     else:
-        print(f"FATAL: No report artifact after {MAX_ATTEMPTS} attempts", file=sys.stderr)
+        print(f"FATAL: No report artifact after {config.max_attempts} attempts", file=sys.stderr)
     sys.exit(1)

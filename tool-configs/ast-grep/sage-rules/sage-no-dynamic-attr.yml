@@ -8,7 +8,7 @@ language: python
 # verification of stubs against the live runtime is its charter, so it is
 # excluded from the instance-escape ban.
 ignores:
-  - "**/lexicon/**"
+  - '**/lexicon/**'
 rule:
   any:
     - pattern: getattr($$$)

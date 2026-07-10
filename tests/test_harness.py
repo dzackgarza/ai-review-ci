@@ -3,7 +3,9 @@ import os
 import subprocess
 import sys
 from pathlib import Path
+from textwrap import dedent
 
+import pytest
 import yaml
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -154,6 +156,137 @@ def test_qc_doctor_runner_emits_fenced_payload_and_preserves_failure(tmp_path: P
     assert payload["global_status"] == "misconfigured"
     assert f"```ai-review-ci-doctor-json\n{payload_text}" in result.stdout
     assert result.stdout.rstrip().endswith("```")
+
+
+def test_opencode_config_from_env_requires_every_value() -> None:
+    # Acceptance #1: the opencode seams are a *required* config surface — a missing
+    # value crashes at the boundary, it does not fall back to a baked-in default.
+    from ai_review_ci.harness import OpencodeConfig
+
+    complete = {
+        "AI_REVIEW_OPENCODE_BIN": "/usr/local/bin/opencode",
+        "AI_REVIEW_OPENCODE_TIMEOUT": "600",
+        "AI_REVIEW_MAX_ATTEMPTS": "5",
+        "AI_REVIEW_BACKOFF": "5",
+    }
+    config = OpencodeConfig.from_env(complete)
+    assert config.binary == Path("/usr/local/bin/opencode")
+    assert config.timeout == 600
+
+    for missing in complete:
+        with pytest.raises(KeyError):
+            OpencodeConfig.from_env({k: v for k, v in complete.items() if k != missing})
+
+
+def test_opencode_config_from_env_rejects_malformed_and_out_of_range() -> None:
+    # Acceptance #2: the config boundary is fail-loud on invalid *values*, not just
+    # missing keys. A non-numeric value and every degenerate range value must raise at
+    # construction — never be accepted into a run. ValidationError subclasses ValueError,
+    # as does int('x'), so ValueError covers both. Assert on type, not message strings.
+    from ai_review_ci.harness import OpencodeConfig
+
+    base = {
+        "AI_REVIEW_OPENCODE_BIN": "/usr/local/bin/opencode",
+        "AI_REVIEW_OPENCODE_TIMEOUT": "600",
+        "AI_REVIEW_MAX_ATTEMPTS": "5",
+        "AI_REVIEW_BACKOFF": "5",
+    }
+    invalid_values = [
+        ("AI_REVIEW_OPENCODE_TIMEOUT", "not-a-number"),  # non-numeric
+        ("AI_REVIEW_OPENCODE_TIMEOUT", "0"),  # timeout must be strictly positive
+        ("AI_REVIEW_OPENCODE_TIMEOUT", "-1"),
+        ("AI_REVIEW_MAX_ATTEMPTS", "0"),  # < 1 makes range(1, n+1) empty
+        ("AI_REVIEW_MAX_ATTEMPTS", "-3"),
+        ("AI_REVIEW_BACKOFF", "-0.5"),  # backoff must be non-negative
+        ("AI_REVIEW_BACKOFF", "inf"),  # non-finite escapes ge=0; would hang time.sleep mid-loop
+        ("AI_REVIEW_BACKOFF", "nan"),
+    ]
+    for key, bad in invalid_values:
+        with pytest.raises(ValueError):
+            OpencodeConfig.from_env({**base, key: bad})
+
+    # Boundary values that ARE valid: zero backoff is allowed, one attempt is allowed.
+    edge = OpencodeConfig.from_env({**base, "AI_REVIEW_BACKOFF": "0", "AI_REVIEW_MAX_ATTEMPTS": "1"})
+    assert edge.backoff == 0
+    assert edge.max_attempts == 1
+
+
+def _write_review_inputs(repo: Path) -> dict[str, Path]:
+    """Minimal real reviewer inputs for a non-diff (repo-sweep) run."""
+    reviews = repo / "reviews"
+    (reviews / "general").mkdir(parents=True)
+    manifest = reviews / "general" / "manifest.txt"
+    manifest.write_text("doc.md\n")
+    (reviews / "doc.md").write_text("review doctrine\n")
+    template = repo / "template.md"
+    template.write_text("write the report\n")
+    scope = repo / "scope-general.md"
+    scope.write_text("sweep the whole repo\n")
+    context = repo / "context.md"
+    context.write_text("no prior findings\n")
+    return {"template": template, "scope": scope, "manifest": manifest, "context": context}
+
+
+def test_run_review_final_fatal_reflects_only_last_attempt_outcome(tmp_path: Path) -> None:
+    # Regression lock for the last_timeout reset (commit 47a605b): attempt 1 times out,
+    # attempt 2 fails by producing no artifact (no timeout). The terminal FATAL must
+    # report ONLY the final attempt's outcome — a missing artifact — not the earlier
+    # timeout. Real subprocess, real TimeoutExpired, no mocks.
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    inputs = _write_review_inputs(repo)
+
+    # Fake opencode: first attempt (`run`) hangs past the timeout; the retry (`run -c`)
+    # exits cleanly without ever writing the report artifact.
+    fake = tmp_path / "opencode"
+    fake.write_text(
+        dedent(
+            """\
+            #!/usr/bin/env bash
+            for a in "$@"; do
+              [ "$a" = "-c" ] && exit 0
+            done
+            sleep 30
+            """
+        )
+    )
+    fake.chmod(0o755)
+
+    env = os.environ | {
+        "AI_REVIEW_OPENCODE_BIN": str(fake),
+        "AI_REVIEW_OPENCODE_TIMEOUT": "1",
+        "AI_REVIEW_MAX_ATTEMPTS": "2",
+        "AI_REVIEW_BACKOFF": "0",
+    }
+    result = subprocess.run(
+        [
+            sys.executable,
+            "-c",
+            ("import sys; from pathlib import Path; from ai_review_ci.harness import run_review; run_review(*(Path(arg) for arg in sys.argv[1:]))"),
+            str(inputs["template"]),
+            str(inputs["scope"]),
+            str(inputs["manifest"]),
+            str(inputs["context"]),
+        ],
+        cwd=repo,
+        env=env,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert result.returncode == 1
+
+    # Attempt 1 must genuinely take the timeout path — otherwise the terminal-FATAL
+    # equality below is vacuous, since the non-timeout FATAL is also emitted by a run
+    # where nothing ever timed out. The harness prints a per-attempt timeout diagnostic
+    # to stderr; its presence is the observable proof the timeout branch was hit.
+    assert any(line.startswith("--- opencode timed out:") for line in result.stderr.splitlines())
+
+    # ...and after that timeout, the per-attempt reset means the terminal FATAL reports
+    # only the last attempt's outcome (a missing artifact), not the earlier timeout.
+    fatal = [line for line in result.stderr.splitlines() if line.startswith("FATAL:")]
+    assert fatal == ["FATAL: No report artifact after 2 attempts"]
 
 
 def test_qc_doctor_upload_runs_after_failed_gate_without_weakening_gate() -> None:

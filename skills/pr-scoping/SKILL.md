@@ -87,8 +87,7 @@ Before opening any PR:
    If the cluster is currently scattered across issues, first rewrite or create the work-unit issue so it self-describes the whole cluster.
    Do not preserve the scattered issues as the PR's live decomposition.
 2. **Ask the obviation question.** Is there a rewrite, consolidation, or design change that makes the whole cluster impossible rather than individually patched?
-   If yes, put that rewrite on the work-unit issue, then execute that issue through one PR.
-   The rewrite is the *smaller* change when measured in total system cost: one review cycle instead of N, and the symptom generator removed instead of throttled.
+   If yes, put that rewrite on the work-unit issue, then execute that issue through one PR. The rewrite is the *smaller* change when measured in total system cost: one review cycle instead of N, and the symptom generator removed instead of throttled.
    These are bespoke owner-local tools (see `bespoke-software-policy`): no downstream consumers exist, so break internal APIs freely and rewrite the subsystem when that is simpler than preserving broken structure.
    "Bespoke" means *move aggressively* — not "be careful because policy exists."
 3. **Scope the PR from the issue.** Open the PR when implementation starts.

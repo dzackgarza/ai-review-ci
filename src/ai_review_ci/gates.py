@@ -5,10 +5,10 @@ import re
 import shlex
 import subprocess
 import sys
-from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, NoReturn
 
+from pydantic import BaseModel, ConfigDict
 from unidiff import PatchSet
 
 from ai_review_ci.threads import FINGERPRINT_MARKER
@@ -22,16 +22,18 @@ _SHELL_SUFFIXES = (".sh",)
 _JUST_SUFFIXES = (".just",)
 
 
-@dataclass(frozen=True)
-class DiffRule:
+class DiffRule(BaseModel):
+    model_config = ConfigDict(frozen=True, arbitrary_types_allowed=True)
+
     rule_id: str
     pattern: re.Pattern[str]
     suffixes: tuple[str, ...]
     message: str
 
 
-@dataclass(frozen=True)
-class ProjectProfile:
+class ProjectProfile(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
     name: str
     justfile_name: str
     required_paths: tuple[str, ...]
@@ -41,17 +43,17 @@ class ProjectProfile:
 
 
 PROJECT_PROFILES = {
-    "python": ProjectProfile("python", "python.just", ("pyproject.toml",)),
-    "bun": ProjectProfile("bun", "bun.just", ("package.json",), requires_bun_lock=True),
+    "python": ProjectProfile(name="python", justfile_name="python.just", required_paths=("pyproject.toml",)),
+    "bun": ProjectProfile(name="bun", justfile_name="bun.just", required_paths=("package.json",), requires_bun_lock=True),
     "bun-playwright": ProjectProfile(
-        "bun-playwright",
-        "bun.just",
-        ("package.json", "playwright.config.ts"),
+        name="bun-playwright",
+        justfile_name="bun.just",
+        required_paths=("package.json", "playwright.config.ts"),
         requires_bun_lock=True,
         requires_app_boot=True,
     ),
-    "rust": ProjectProfile("rust", "rust.just", ("Cargo.toml",)),
-    "sage": ProjectProfile("sage", "sage.just", (), requires_sage_file=True),
+    "rust": ProjectProfile(name="rust", justfile_name="rust.just", required_paths=("Cargo.toml",)),
+    "sage": ProjectProfile(name="sage", justfile_name="sage.just", required_paths=(), requires_sage_file=True),
 }
 
 BASE_REQUIRED_CHECK_CONTEXTS = (
@@ -73,70 +75,70 @@ REQUIRED_CHECK_CONTEXTS = BASE_REQUIRED_CHECK_CONTEXTS
 
 DIFF_RULES = (
     DiffRule(
-        "no-nullish-coalescing",
-        re.compile(r"\?\?"),
-        _TS_JS_SUFFIXES,
-        "Nullish coalescing introduces a runtime fallback.",
+        rule_id="no-nullish-coalescing",
+        pattern=re.compile(r"\?\?"),
+        suffixes=_TS_JS_SUFFIXES,
+        message="Nullish coalescing introduces a runtime fallback.",
     ),
     DiffRule(
-        "ts-no-or-default",
-        re.compile(r"\|\|"),
-        _TS_JS_SUFFIXES + _SHELL_SUFFIXES + _JUST_SUFFIXES,
-        "Logical OR introduces a fallback/default path.",
+        rule_id="ts-no-or-default",
+        pattern=re.compile(r"\|\|"),
+        suffixes=_TS_JS_SUFFIXES + _SHELL_SUFFIXES + _JUST_SUFFIXES,
+        message="Logical OR introduces a fallback/default path.",
     ),
     DiffRule(
-        "no-double-cast",
-        re.compile(r"\bas\s+(?:unknown|any|never)\s+as\b"),
-        _TS_JS_SUFFIXES,
-        "Double-casting bypasses TypeScript's type system.",
+        rule_id="no-double-cast",
+        pattern=re.compile(r"\bas\s+(?:unknown|any|never)\s+as\b"),
+        suffixes=_TS_JS_SUFFIXES,
+        message="Double-casting bypasses TypeScript's type system.",
     ),
     DiffRule(
-        "ts-no-any-cast",
-        re.compile(r"\bas\s+any\b"),
-        _TS_JS_SUFFIXES,
-        "as any disables TypeScript evidence at the boundary.",
+        rule_id="ts-no-any-cast",
+        pattern=re.compile(r"\bas\s+any\b"),
+        suffixes=_TS_JS_SUFFIXES,
+        message="as any disables TypeScript evidence at the boundary.",
     ),
     DiffRule(
-        "ts-no-vitest-mock-boundary",
-        re.compile(r"\bvi\.(?:mock|stubGlobal|fn|spyOn|stubEnv)\s*\("),
-        _TS_JS_SUFFIXES,
-        "Vitest mock helpers replace real proof boundaries.",
+        rule_id="ts-no-vitest-mock-boundary",
+        pattern=re.compile(r"\bvi\.(?:mock|stubGlobal|fn|spyOn|stubEnv)\s*\("),
+        suffixes=_TS_JS_SUFFIXES,
+        message="Vitest mock helpers replace real proof boundaries.",
     ),
     DiffRule(
-        "ts-no-jest-mock-boundary",
-        re.compile(r"\bjest\.(?:mock|fn|spyOn)\s*\("),
-        _TS_JS_SUFFIXES,
-        "Jest mock helpers replace real proof boundaries.",
+        rule_id="ts-no-jest-mock-boundary",
+        pattern=re.compile(r"\bjest\.(?:mock|fn|spyOn)\s*\("),
+        suffixes=_TS_JS_SUFFIXES,
+        message="Jest mock helpers replace real proof boundaries.",
     ),
     DiffRule(
-        "no-const-assignment",
-        re.compile(
+        rule_id="no-const-assignment",
+        pattern=re.compile(
             r"^\s*(?:export\s+)?const\s+(?:"
             r"[A-Z][A-Z0-9_]*(?:URL|URI|ENDPOINT|HOST|PORT|SERVER|DATABASE|COMMAND|CWD|PATH|DIR|DIRECTORY|TIMEOUT|RETRY|THRESHOLD|SECRET|TOKEN)[A-Z0-9_]*"
             r"\s*=\s*(?:[\"'`][^\"'`]*[\"'`]|[0-9]+(?:\.[0-9]+)?|\[[^\n]*\]|\{[^\n]*\})"
             r"|[A-Z][A-Z0-9_]*\s*=\s*[\"'`](?:https?://|file://)[^\"'`]*[\"'`]"
             r")",
         ),
-        _TS_JS_SUFFIXES,
-        "Hardcoded config-shaped constants belong in required config.",
+        suffixes=_TS_JS_SUFFIXES,
+        message="Hardcoded config-shaped constants belong in required config.",
     ),
     DiffRule(
-        "py-no-getenv-default",
-        re.compile(r"\bos\.getenv\s*\([^,\n]+,"),
-        _PY_SUFFIXES,
-        "os.getenv with a default creates a runtime fallback.",
+        rule_id="py-no-getenv-default",
+        pattern=re.compile(r"\bos\.getenv\s*\([^,\n]+,"),
+        suffixes=_PY_SUFFIXES,
+        message="os.getenv with a default creates a runtime fallback.",
     ),
     DiffRule(
-        "py-no-dict-get-default",
-        re.compile(r"\.get\s*\([^,\n]+,"),
-        _PY_SUFFIXES,
-        "dict.get with a default hides missing required data.",
+        rule_id="py-no-dict-get-default",
+        pattern=re.compile(r"\.get\s*\([^,\n]+,"),
+        suffixes=_PY_SUFFIXES,
+        message="dict.get with a default hides missing required data.",
     ),
     DiffRule(
-        "rs-no-unwrap-or",
-        re.compile(r"\.unwrap_or(?:_default)?\s*\("),
-        _RUST_SUFFIXES,
-        "unwrap_or fallback paths hide failed Rust results.",
+        rule_id="rs-no-unwrap-or",
+        pattern=re.compile(r"\.unwrap_or(?:_default)?\s*\("),
+        suffixes=_RUST_SUFFIXES,
+        message="unwrap_or fallback paths hide failed Rust results.",
     ),
 )
 

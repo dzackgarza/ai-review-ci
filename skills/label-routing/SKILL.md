@@ -5,22 +5,18 @@ description: Use before opening or triaging a GitHub issue or PR on any repo man
 
 # Label Routing
 
-The canonical label taxonomy is owned by `ai-review-ci` and defined in one place:
-`src/ai_review_ci/data/labels.json`. Every managed repo should carry this set. To
-propagate it to a repo:
+The canonical label taxonomy is owned by `ai-review-ci` and defined in one place: `src/ai_review_ci/data/labels.json`. Every managed repo should carry this set.
+To propagate it to a repo:
 
 ```bash
 just -f ~/ai-review-ci/justfile install-labels owner/repo
 # or:  uvx --from git+https://github.com/dzackgarza/ai-review-ci ai-review-ci install-labels --repo owner/repo
 ```
 
-`install-labels` reconciles the **mandatory** canonical set *exactly*: it creates
-missing canonical labels and updates any whose color/description drifted, and leaves a
-repo's own extra labels untouched. The canonical set is not optional, and it is matched
-by **exact name** — a close-but-unequal variant (e.g. `Bug` vs `bug`) is a *misalignment*
-with global QC, not a match. Exact names are what let a canonical label such as `bug`
-mean the same thing in every repo and aggregate cleanly across them. Extra, repo-specific
-labels are allowed (we cannot predict every repo's needs); the canonical ones are required.
+`install-labels` reconciles the **mandatory** canonical set *exactly*: it creates missing canonical labels and updates any whose color/description drifted, and leaves a repo's own extra labels untouched.
+The canonical set is not optional, and it is matched by **exact name** — a close-but-unequal variant (e.g. `Bug` vs `bug`) is a *misalignment* with global QC, not a match.
+Exact names are what let a canonical label such as `bug` mean the same thing in every repo and aggregate cleanly across them.
+Extra, repo-specific labels are allowed (we cannot predict every repo's needs); the canonical ones are required.
 
 ## Apply at least one `type` label to every issue
 
@@ -47,16 +43,12 @@ labels are allowed (we cannot predict every repo's needs); the canonical ones ar
 
 ## `status` labels (GitHub-default names, kept verbatim)
 
-`help wanted`, `good first issue`, `wontfix`, `duplicate`, `invalid`, `question` — note
-the spaces in the first two; do not create hyphenated variants.
+`help wanted`, `good first issue`, `wontfix`, `duplicate`, `invalid`, `question` — note the spaces in the first two; do not create hyphenated variants.
 
 ## `area:*` labels — ownership
 
-`area:*` maps an issue to the surface that owns it. The taxonomy ships a common pool
-(`area:frontend`, `area:backend`, `area:ci`, `area:deps`, `area:docs`); a repo may add
-its own `area:*` labels for its specific surfaces (as `ai-review-ci` itself does with
-`area:policy-index`, `area:qc-rules`, etc.). Repo-specific area labels are NOT part of
-the canonical taxonomy and are not pushed to other repos.
+`area:*` maps an issue to the surface that owns it.
+The taxonomy ships a common pool (`area:frontend`, `area:backend`, `area:ci`, `area:deps`, `area:docs`); a repo may add its own `area:*` labels for its specific surfaces (as `ai-review-ci` itself does with `area:policy-index`, `area:qc-rules`, etc.). Repo-specific area labels are NOT part of the canonical taxonomy and are not pushed to other repos.
 
 ## Routing checklist when opening an issue
 
@@ -65,5 +57,5 @@ the canonical taxonomy and are not pushed to other repos.
 3. An `area:*` label naming the owning surface, when one applies.
 4. `blocker` only when it actually blocks other tracked work.
 
-To change the taxonomy itself, edit `src/ai_review_ci/data/labels.json` in this repo —
-never redefine labels per-repo. See `git-guidelines` for the issue-filing workflow.
+To change the taxonomy itself, edit `src/ai_review_ci/data/labels.json` in this repo — never redefine labels per-repo.
+See `git-guidelines` for the issue-filing workflow.
