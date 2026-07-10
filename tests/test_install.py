@@ -6,6 +6,8 @@ from typing import Any
 import pytest
 import yaml
 
+from ai_review_ci import install as install_module
+from ai_review_ci import labels as labels_module
 from ai_review_ci.gates import POLICY_GATE_MARKER, SUPPORTED_PROFILES
 from ai_review_ci.install import (
     PR_TEMPLATE,
@@ -16,6 +18,7 @@ from ai_review_ci.install import (
     _write_pr_template,
     _write_scaffold,
     _write_trigger_workflows,
+    install,
 )
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
@@ -188,6 +191,22 @@ def test_cli_install_uses_real_gh_and_fails_before_final_doctor_for_unavailable_
     assert (repo / ".ai-review-ci.toml").exists()
     assert "doctor final proof" not in result.stdout
     assert "\nDone." not in result.stdout
+
+
+@pytest.mark.parametrize("with_labels", [True, False])
+def test_install_runs_label_step_only_when_requested(monkeypatch: pytest.MonkeyPatch, tmp_path: pathlib.Path, with_labels: bool) -> None:
+    repo = _git_repo(tmp_path)
+    # Stub every side-effecting step so install() runs offline; assert only the
+    # --with-labels gating.
+    for name in ("_write_scaffold", "_write_trigger_workflows", "_write_manifest", "_write_pr_template", "_prove_installation"):
+        monkeypatch.setattr(install_module, name, lambda *a, **k: None)
+    monkeypatch.setattr(install_module, "protect_branch", lambda *a, **k: None)
+    invoked: list[str] = []
+    monkeypatch.setattr(labels_module, "install_labels", lambda gh_repo: invoked.append(gh_repo))
+
+    install(target=repo, repo="owner/repo", branch="main", profile="python", with_labels=with_labels)
+
+    assert invoked == (["owner/repo"] if with_labels else [])
 
 
 def test_install_final_doctor_rejects_target_without_profile_shape(
