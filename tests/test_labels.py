@@ -20,6 +20,7 @@ from ai_review_ci.labels import (
     LabelPlan,
     RemoteLabel,
     Taxonomy,
+    _fetch_remote_labels,
     _gh,
     compute_label_actions,
     install_labels,
@@ -137,12 +138,16 @@ def test_gh_is_fatal_on_real_nonzero_exit(capsys: pytest.CaptureFixture[str]) ->
 # --- real gh boundary: install_labels end-to-end against real repositories ---
 
 
-def test_install_labels_is_a_noop_when_all_labels_already_present(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
-    # Read-only real gh: a custom taxonomy whose sole label already exists unchanged on
-    # this repo (a GitHub default) yields an empty plan, so nothing is mutated while the
-    # real fetch/compute/summary path executes.
+def test_install_labels_is_a_noop_when_taxonomy_matches_remote(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    # Read-only *by construction*: build the taxonomy from a label the repo actually has
+    # right now, so the plan is always "unchanged" and nothing is ever mutated —
+    # regardless of live label drift. (A hardcoded expectation could instead plan an
+    # edit and mutate the real repo.) This still exercises the real fetch/compute/summary
+    # path against live gh.
+    sample = _fetch_remote_labels("dzackgarza/ai-review-ci")["bug"]  # a GitHub default, always present
+    assert sample.description, "expected the bug label to carry a description"
     taxonomy = tmp_path / "labels.json"
-    taxonomy.write_text(json.dumps({"labels": [{"name": "bug", "color": "d73a4a", "description": "Something isn't working", "category": "type"}]}))
+    taxonomy.write_text(json.dumps({"labels": [{"name": sample.name, "color": sample.color, "description": sample.description, "category": "type"}]}))
     install_labels("dzackgarza/ai-review-ci", taxonomy=taxonomy)
     assert "0 created, 0 updated, 1 already current" in capsys.readouterr().out
 
