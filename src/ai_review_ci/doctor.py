@@ -29,7 +29,7 @@ MISSING_JUSTFILE_NAME = ".ai-review-ci-missing-justfile"
 ProfileName = Literal["python", "bun", "bun-playwright", "rust", "sage"]
 ObservedProfile = Literal["python", "bun", "bun-playwright", "rust", "sage", "unknown"]
 InstallationState = Literal["compliant", "outdated", "noncompliant", "uninstalled", "unknown"]
-GlobalStatus = Literal["current", "stale", "misconfigured", "unverifiable", "intentional_exception"]
+GlobalStatus = Literal["current", "stale", "misconfigured", "unverifiable"]
 FindingSeverity = Literal["error", "warning"]
 FindingSurface = Literal[
     "manifest",
@@ -49,15 +49,6 @@ ProfileAdapter: TypeAdapter[ProfileName] = TypeAdapter(ProfileName)
 UNKNOWN_PROFILE: ObservedProfile = "unknown"
 
 
-class ManifestException(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-
-    id: str
-    surface: FindingSurface
-    reason: str
-    active: bool
-
-
 class QcManifest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -68,7 +59,6 @@ class QcManifest(BaseModel):
     workflow_template_version: Literal[1]
     local_delegation: Literal["global-justfile"]
     default_branch: str = Field(min_length=1)
-    exceptions: tuple[ManifestException, ...] = ()
 
 
 class MissingManifest(BaseModel):
@@ -192,7 +182,6 @@ class DoctorReport(BaseModel):
     invalidation_inputs: tuple[str, ...]
     installation_state: InstallationState
     global_status: GlobalStatus
-    exceptions: tuple[ManifestException, ...]
 
 
 def manifest_text(
@@ -203,7 +192,6 @@ def manifest_text(
     workflow_template_version: int,
     local_delegation: str,
     default_branch: str,
-    exceptions: tuple[ManifestException, ...],
 ) -> str:
     """Render the repo-owned QC manifest deterministically."""
     ProfileAdapter.validate_python(profile)
@@ -216,20 +204,6 @@ def manifest_text(
         f'local_delegation = "{local_delegation}"',
         f'default_branch = "{default_branch}"',
     ]
-    if not exceptions:
-        lines.append("exceptions = []")
-        return "\n".join(lines) + "\n"
-    for exception in exceptions:
-        lines.extend(
-            [
-                "",
-                "[[exceptions]]",
-                f'id = "{exception.id}"',
-                f'surface = "{exception.surface}"',
-                f'reason = "{exception.reason}"',
-                f"active = {jsonlib.dumps(exception.active)}",
-            ]
-        )
     return "\n".join(lines) + "\n"
 
 
@@ -242,7 +216,7 @@ def doctor(target: Path, *, json: Annotated[int, Parameter(name="--json", count=
         print(f"{report.global_status}: {target.resolve()}")
         for finding in report.findings:
             print(f"- {finding.surface}: {finding.evidence}")
-    if report.global_status not in ("current", "intentional_exception"):
+    if report.global_status != "current":
         sys.exit(1)
 
 
@@ -315,7 +289,6 @@ def doctor_report(target: Path) -> DoctorReport:
         invalidation_inputs=_invalidation_inputs(target_root, declaration_hash),
         installation_state=installation_state,
         global_status=global_status,
-        exceptions=manifest.exceptions if isinstance(manifest, QcManifest) else (),
     )
 
 
@@ -801,10 +774,6 @@ def _has_private_attribute(lines: list[str], line_no: int) -> bool:
 def _classify(manifest: ManifestDeclaration, findings: list[DoctorFinding]) -> tuple[InstallationState, GlobalStatus]:
     if not isinstance(manifest, QcManifest):
         return "uninstalled", "misconfigured"
-    exception_surfaces = {exception.surface for exception in manifest.exceptions if exception.active}
-    if findings and all(finding.surface in exception_surfaces for finding in findings):
-        state: InstallationState = "outdated" if any(finding.surface == "workflow_ref" for finding in findings) else "noncompliant"
-        return state, "intentional_exception"
     if not findings:
         return "compliant", "current"
     if any(finding.surface in ("branch_protection", "label_alignment") and finding.severity == "warning" for finding in findings):

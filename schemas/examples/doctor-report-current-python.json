@@ -16,8 +16,7 @@
       "release_channel": "main",
       "workflow_template_version": 1,
       "local_delegation": "global-justfile",
-      "default_branch": "main",
-      "exceptions": []
+      "default_branch": "main"
     }
   },
   "declaration_hash": "098ccd89f37e1ff7474701c27925a02c74e094d3ce1a9b392704d94415ae6ed4",
@@ -124,6 +123,5 @@
     ".github/workflows/review-pr.yml:5470037662ef18c1351496f428ddf43ef95f67a8f05e1ec78d179a4dff962e5e"
   ],
   "installation_state": "compliant",
-  "global_status": "current",
-  "exceptions": []
+  "global_status": "current"
 }

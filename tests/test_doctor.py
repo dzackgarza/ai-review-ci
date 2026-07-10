@@ -6,6 +6,7 @@ import tomllib
 from typing import Any
 
 import pytest
+from pydantic import ValidationError
 
 from ai_review_ci.doctor import (
     DoctorReport,
@@ -60,7 +61,6 @@ def create_target(tmp_path: pathlib.Path, profile: str) -> pathlib.Path:
             workflow_template_version=1,
             local_delegation="global-justfile",
             default_branch="main",
-            exceptions=(),
         )
     )
     return project
@@ -115,7 +115,6 @@ def test_manifest_text_round_trips_through_toml_parser() -> None:
         workflow_template_version=1,
         local_delegation="global-justfile",
         default_branch="main",
-        exceptions=(),
     )
 
     parsed = tomllib.loads(text)
@@ -128,7 +127,6 @@ def test_manifest_text_round_trips_through_toml_parser() -> None:
         "workflow_template_version": 1,
         "local_delegation": "global-justfile",
         "default_branch": "main",
-        "exceptions": [],
     }
 
 
@@ -171,7 +169,6 @@ def test_doctor_schema_cli_exports_producer_owned_contract() -> None:
         "stale",
         "misconfigured",
         "unverifiable",
-        "intentional_exception",
     ]
     assert schema["additionalProperties"] is False
 
@@ -200,7 +197,6 @@ def test_doctor_classifies_outdated_workflow_refs_as_stale(tmp_path: pathlib.Pat
             workflow_template_version=1,
             local_delegation="global-justfile",
             default_branch="main",
-            exceptions=(),
         )
     )
 
@@ -234,7 +230,6 @@ def test_doctor_classifies_wrong_profile_shape_as_misconfigured(tmp_path: pathli
             workflow_template_version=1,
             local_delegation="global-justfile",
             default_branch="main",
-            exceptions=(),
         )
     )
 
@@ -489,7 +484,8 @@ def test_label_alignment_misalignment_is_a_required_error_feeding_global_status(
     assert global_status == "misconfigured"
 
 
-def test_active_manifest_exception_maps_matching_findings_to_intentional_exception(tmp_path: pathlib.Path) -> None:
+def test_manifest_declaring_exceptions_is_rejected_not_honored(tmp_path: pathlib.Path) -> None:
+    """A manifest that declares an exception is invalid config; there is no suppression path."""
     project = create_target(tmp_path, "bun-playwright")
     (project / "justfile").write_text((ROOT / "scaffolds" / "bun" / "justfile").read_text())
     (project / ".ai-review-ci.toml").write_text(
@@ -513,8 +509,18 @@ def test_active_manifest_exception_maps_matching_findings_to_intentional_excepti
         )
     )
 
+    with pytest.raises(ValidationError):
+        doctor_report(project)
+
+
+def test_active_findings_are_noncompliant_with_no_exception_path(tmp_path: pathlib.Path) -> None:
+    """A repo with active findings is noncompliant; nothing maps findings to a passing status."""
+    project = create_target(tmp_path, "bun-playwright")
+    (project / "justfile").write_text((ROOT / "scaffolds" / "bun" / "justfile").read_text())
+
     status, payload = status_for(project)
 
-    assert status == "intentional_exception"
+    assert status == "misconfigured"
     assert payload["installation_state"] == "noncompliant"
-    assert payload["exceptions"][0]["id"] == "app-boot-bootstrap"
+    assert payload["findings"]
+    assert "exceptions" not in payload

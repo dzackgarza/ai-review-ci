@@ -238,45 +238,6 @@
       "title": "LabelVariant",
       "type": "object"
     },
-    "ManifestException": {
-      "additionalProperties": false,
-      "properties": {
-        "id": {
-          "title": "Id",
-          "type": "string"
-        },
-        "surface": {
-          "enum": [
-            "manifest",
-            "profile",
-            "workflow",
-            "workflow_ref",
-            "justfile_delegation",
-            "justfile_conformance",
-            "branch_protection",
-            "label_alignment"
-          ],
-          "title": "Surface",
-          "type": "string"
-        },
-        "reason": {
-          "title": "Reason",
-          "type": "string"
-        },
-        "active": {
-          "title": "Active",
-          "type": "boolean"
-        }
-      },
-      "required": [
-        "id",
-        "surface",
-        "reason",
-        "active"
-      ],
-      "title": "ManifestException",
-      "type": "object"
-    },
     "MissingManifest": {
       "additionalProperties": false,
       "properties": {
@@ -377,14 +338,6 @@
           "minLength": 1,
           "title": "Default Branch",
           "type": "string"
-        },
-        "exceptions": {
-          "default": [],
-          "items": {
-            "$ref": "#/$defs/ManifestException"
-          },
-          "title": "Exceptions",
-          "type": "array"
         }
       },
       "required": [
@@ -566,18 +519,10 @@
         "current",
         "stale",
         "misconfigured",
-        "unverifiable",
-        "intentional_exception"
+        "unverifiable"
       ],
       "title": "Global Status",
       "type": "string"
-    },
-    "exceptions": {
-      "items": {
-        "$ref": "#/$defs/ManifestException"
-      },
-      "title": "Exceptions",
-      "type": "array"
     }
   },
   "required": [
@@ -596,8 +541,7 @@
     "findings",
     "invalidation_inputs",
     "installation_state",
-    "global_status",
-    "exceptions"
+    "global_status"
   ],
   "title": "DoctorReport",
   "type": "object"

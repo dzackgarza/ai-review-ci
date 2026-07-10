@@ -4,13 +4,30 @@
 # importlib.util spec-loader machinery (module_from_spec / exec_module) are out
 # of scope: matching them requires `$X.import_module(...)` for any receiver,
 # which reintroduces false positives on unrelated `.import_module()` methods.
+#
+# #219: fire only when the imported name is a *static string literal* — a fixed,
+# required dependency hidden behind a runtime import (POLICY.CRITICAL_DEPENDENCY).
+# When the argument is data (a variable, attribute access, or f-string), the
+# import is dynamic-by-design (verifiers, AST/stub introspection, by-name
+# loaders): there is no static import to hoist to, and the call already fails
+# loud, so the rule must not fire. The `not: has: kind: interpolation` guard
+# excludes f-strings (also `kind: string` in tree-sitter-python).
 id: no-dynamic-import-python
 language: python
 rule:
   any:
-    - pattern: importlib.import_module($$$)
-    - pattern: import_module($$$)
-    - pattern: __import__($$$)
+    - pattern: importlib.import_module($ARG)
+    - pattern: importlib.import_module($ARG, $$$REST)
+    - pattern: import_module($ARG)
+    - pattern: import_module($ARG, $$$REST)
+    - pattern: __import__($ARG)
+    - pattern: __import__($ARG, $$$REST)
+constraints:
+  ARG:
+    kind: string
+    not:
+      has:
+        kind: interpolation
 message: POLICY.CRITICAL_DEPENDENCY
 severity: error
 metadata:

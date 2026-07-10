@@ -297,6 +297,45 @@ _semgrep:
 	echo "============================="
 	echo "=== Running: semgrep security pattern verification ==="
 	echo "# Static analysis for code quality and fraud patterns after normalization"
+	# #214: with no project .semgrepignore, semgrep falls back to its bundled
+	# default template, which excludes tests/ — silently killing the
+	# test-antipattern rules (py-no-monkeypatch and its NO_MOCK_PROOF /
+	# NO_SKIP_MASK siblings) that are designed to fire IN test files. Ship the
+	# QC-authoritative ignore set from the single-source-of-truth exclusion list
+	# (vendor/generated dirs only — it does NOT list tests/) so tests/ is scanned.
+	# This also overrides any repo-committed .semgrepignore for the scan
+	# (no-repo-writable-QC-suppression). Restore prior state on exit.
+	# "a tracked file pre-existed" and "we made a backup" are DISTINCT facts.
+	# The restore trap must never conflate them: an empty backup handle must
+	# not license rm-ing a tracked file we did not create. Back up BEFORE the
+	# overwrite below and fail loud if the backup cannot be made, rather than
+	# proceeding into a trap that could delete the user's tracked file.
+	ignore_file=".semgrepignore"
+	had_preexisting=0
+	ignore_backup=""
+	if [ -e "$ignore_file" ]; then
+		had_preexisting=1
+		if ! ignore_backup="$(mktemp)" || ! cp "$ignore_file" "$ignore_backup"; then
+			echo ""
+			echo "!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!"
+			echo "  ERROR: failed to back up the existing $ignore_file."
+			echo "  Aborting before the QC exclude set overwrites it — the tracked file is untouched."
+			echo "!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!"
+			"{{artifacts}}/scripts/emit-triage-directive.sh"
+			exit 1
+		fi
+	fi
+	restore_semgrepignore() {
+		if [ "$had_preexisting" -eq 1 ]; then
+			# A tracked file pre-existed: restore it, never remove it.
+			mv -f "$ignore_backup" "$ignore_file"
+		else
+			# We created it ourselves; removing it is safe.
+			rm -f "$ignore_file"
+		fi
+	}
+	trap restore_semgrepignore EXIT
+	uv run {{artifacts}}/scripts/read_qc_excludes.py {{configs}}/qc-excludes.toml > "$ignore_file"
 	if uvx --from semgrep semgrep scan \
 		--config={{configs}}/semgrep.yml \
 		--config=p/ci \

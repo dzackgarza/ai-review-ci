@@ -85,8 +85,18 @@ jobs:
         uses: oven-sh/setup-bun@v2
 
       - name: Run QC tier
-        # gh is invoked by the suite's real-boundary label tests; Actions does
-        # not wire the token into gh automatically. Mirrors _gates.yml / _review.yml.
+        # No GH_TOKEN here (#218): the tier runs every QC recipe and every
+        # npx/uvx tool runner (semgrep, ai-slop, aislop), which must not execute
+        # with the token in their environment. The gh-dependent label tests are
+        # deselected from this run (gh_boundary marker) and run in the isolated
+        # token-scoped step below.
+        run: just "$QC_TIER"
+
+      - name: Run gh-boundary label tests
+        # Least privilege (#218): only the label suite's real-boundary gh tests
+        # need the token, so it is scoped to this step alone. `test-gh-boundary`
+        # runs exactly the gh_boundary-marked tests that `just "$QC_TIER"`
+        # deselects — Actions does not wire the token into gh automatically.
         env:
           GH_TOKEN: ${{ github.token }}
-        run: just "$QC_TIER"
+        run: just test-gh-boundary

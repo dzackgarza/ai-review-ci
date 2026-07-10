@@ -61,22 +61,26 @@ def _run_cli_install(
     repo: pathlib.Path,
     *,
     github_repo: str = "dzackgarza/ai-review-ci-install-target-does-not-exist",
+    skip_scaffold: bool = False,
 ) -> subprocess.CompletedProcess[str]:
+    args = [
+        sys.executable,
+        "-m",
+        "ai_review_ci.cli",
+        "install",
+        "--target",
+        str(repo),
+        "--repo",
+        github_repo,
+        "--branch",
+        "main",
+        "--profile",
+        "python",
+    ]
+    if skip_scaffold:
+        args.append("--skip-scaffold")
     return subprocess.run(
-        [
-            sys.executable,
-            "-m",
-            "ai_review_ci.cli",
-            "install",
-            "--target",
-            str(repo),
-            "--repo",
-            github_repo,
-            "--branch",
-            "main",
-            "--profile",
-            "python",
-        ],
+        args,
         text=True,
         capture_output=True,
         check=False,
@@ -362,3 +366,138 @@ def test_install_refuses_overwriting_repo_owned_scaffold(
         _write_scaffold(repo, "python")
 
     assert customized.read_text() == "test:\n    @true\n"
+
+
+def test_skip_scaffold_final_proof_adopts_brownfield_non_delegating_justfile(
+    tmp_path: pathlib.Path,
+) -> None:
+    # Brownfield adoption (#202): a repo that predates ai-review-ci owns a
+    # substantive, non-delegating top-level justfile. Under --skip-scaffold the
+    # installer writes the manifest, triggers, and PR template and leaves the
+    # justfile untouched — justfile delegation/conformance convergence is
+    # deferred to a `doctor` finding by design. The final proof step must
+    # therefore reach SUCCESS on exactly this intended-success state: everything
+    # ai-review-ci installs is present, and the ONLY outstanding doctor findings
+    # are the deferred justfile delegation/conformance ones.
+    #
+    # Regression guard: before the fix the proof step ran doctor and hard-exited
+    # on doctor's (by-design) `misconfigured` status, so a fully-adopted repo
+    # reported install failure on the very case --skip-scaffold exists to serve.
+    # This exercises the real proof boundary (a real `doctor` run against the
+    # installed file state) and reds if that abort regresses. It does NOT pass
+    # via an earlier-boundary failure: it runs the proof step directly and
+    # asserts it *returns*, then asserts the success end state.
+    repo = _git_repo(tmp_path)
+    (repo / "pyproject.toml").write_text('[project]\nname = "target"\nversion = "0.1.0"\n')
+    existing = repo / "justfile"
+    brownfield_justfile = "# pre-existing brownfield justfile\ntest:\n    @true\n"
+    existing.write_text(brownfield_justfile)
+    # Everything install writes under --skip-scaffold (the scaffold itself is skipped):
+    _write_trigger_workflows(repo, "python")
+    _write_manifest(repo, "python", "main", "main", "main")
+    _write_pr_template(repo)
+
+    # Must NOT abort: the only outstanding doctor findings are the deferred
+    # justfile delegation/conformance ones. A regressed (strict) proof step
+    # raises SystemExit here.
+    _prove_installation(repo, skip_scaffold=True)
+
+    # Success end state: adoption completed and the brownfield justfile is intact.
+    assert existing.read_text() == brownfield_justfile
+    assert (repo / ".ai-review-ci.toml").exists()
+    for name in TEMPLATES:
+        assert (repo / ".github" / "workflows" / name).is_file()
+
+
+def test_skip_scaffold_final_proof_still_aborts_on_non_justfile_fault(
+    tmp_path: pathlib.Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    # Narrowness invariant (#202): --skip-scaffold defers ONLY justfile
+    # delegation/conformance convergence. Every other doctor misconfiguration
+    # must still make the final proof fail loud — the tolerance is not a blanket
+    # "ignore doctor findings". Here the brownfield repo is missing the installed
+    # trigger workflows (a `workflow`-surface fault, non-deferred), so even under
+    # skip_scaffold the proof step must abort. A blanket-suppression regression
+    # would let this pass; pytest.raises(SystemExit) reds on it.
+    repo = _git_repo(tmp_path)
+    (repo / "pyproject.toml").write_text('[project]\nname = "target"\nversion = "0.1.0"\n')
+    (repo / "justfile").write_text("# pre-existing brownfield justfile\ntest:\n    @true\n")
+    _write_manifest(repo, "python", "main", "main", "main")
+    # Triggers deliberately NOT written: a genuine non-deferred fault remains.
+
+    with pytest.raises(SystemExit):
+        _prove_installation(repo, skip_scaffold=True)
+
+    err = capsys.readouterr().err
+    assert "FATAL: ai-review-ci doctor final proof failed" in err
+    # The non-deferred fault is surfaced, not suppressed.
+    assert "workflow" in err
+
+
+def test_cli_install_skip_scaffold_bypasses_scaffold_overwrite_guard(
+    tmp_path: pathlib.Path,
+) -> None:
+    # Brownfield guard-bypass (#202): --skip-scaffold is the explicit opt-in that
+    # lets install proceed on a repo that already owns a top-level justfile
+    # instead of hard-exiting at the scaffold-overwrite guard. This proves the
+    # CLI threads the flag end to end: the scaffold guard does NOT fire, the
+    # existing justfile is left untouched, and the manifest/triggers are written.
+    # Full adoption completion is proven at the proof-step boundary by
+    # test_skip_scaffold_final_proof_adopts_brownfield_non_delegating_justfile;
+    # here execution reaches the real gh branch-protection boundary and fails
+    # there only because the gh target repo is unavailable.
+    repo = _git_repo(tmp_path)
+    (repo / "pyproject.toml").write_text('[project]\nname = "target"\nversion = "0.1.0"\n')
+    existing = repo / "justfile"
+    existing.write_text("# pre-existing brownfield justfile\ntest:\n    @true\n")
+
+    result = _run_cli_install(repo, skip_scaffold=True)
+
+    combined = result.stdout + result.stderr
+    assert "refusing to overwrite existing scaffold" not in combined, combined
+    assert result.returncode == 1, combined
+    assert "FATAL: gh api --method PUT failed:" in result.stderr, combined
+    assert existing.read_text() == "# pre-existing brownfield justfile\ntest:\n    @true\n"
+    assert (repo / ".ai-review-ci.toml").exists()
+    assert (repo / ".github" / "workflows" / "review-pr.yml").exists()
+
+
+def test_cli_install_without_skip_scaffold_still_refuses_existing_justfile(
+    tmp_path: pathlib.Path,
+) -> None:
+    # Adoption is opt-in: the genuine unsafe-overwrite guard stays live. Without
+    # --skip-scaffold a pre-existing justfile still hard-exits and nothing is
+    # written (#202 keeps the honest refusal for the accidental case).
+    repo = _git_repo(tmp_path)
+    (repo / "justfile").write_text("test:\n    @true\n")
+
+    result = _run_cli_install(repo)
+
+    assert result.returncode == 1
+    assert "refusing to overwrite existing scaffold" in result.stderr
+    assert not (repo / ".ai-review-ci.toml").exists()
+
+
+def test_qc_tier_step_does_not_export_gh_token_tier_wide() -> None:
+    # #218: GH_TOKEN must not sit on the whole "Run QC tier" step (nor the job
+    # env it inherits), where every QC recipe and every npx/uvx tool runner
+    # (semgrep, ai-slop, aislop) would execute with the token in its environment.
+    data = yaml.safe_load((_WORKFLOWS_DIR / "_qc.yml").read_text())
+    job = data["jobs"]["qc"]
+    assert "GH_TOKEN" not in (job.get("env") or {})
+    tier = next(step for step in job["steps"] if isinstance(step, dict) and step.get("name") == "Run QC tier")
+    assert "GH_TOKEN" not in (tier.get("env") or {})
+
+
+def test_qc_scopes_gh_token_to_isolated_gh_boundary_step() -> None:
+    # #218: only the label suite's real-boundary gh tests receive the token, in
+    # their own step running an isolated recipe — not the tier-wide
+    # `just "$QC_TIER"` run that drives the third-party tool runners.
+    job = _workflow_jobs("_qc.yml")["qc"]
+    token_steps = [step for step in job["steps"] if isinstance(step, dict) and (step.get("env") or {}).get("GH_TOKEN") == "${{ github.token }}"]
+    assert len(token_steps) == 1, token_steps
+    step = token_steps[0]
+    run = step.get("run", "")
+    assert "test-gh-boundary" in run
+    assert '"$QC_TIER"' not in run
