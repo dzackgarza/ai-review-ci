@@ -14,8 +14,13 @@ just -f ~/ai-review-ci/justfile install-labels owner/repo
 # or:  uvx --from git+https://github.com/dzackgarza/ai-review-ci ai-review-ci install-labels --repo owner/repo
 ```
 
-`install-labels` is idempotent and additive: it creates missing canonical labels and
-updates drifted colors/descriptions, and never deletes a repo's own extra labels.
+`install-labels` reconciles the **mandatory** canonical set *exactly*: it creates
+missing canonical labels and updates any whose color/description drifted, and leaves a
+repo's own extra labels untouched. The canonical set is not optional, and it is matched
+by **exact name** — a close-but-unequal variant (e.g. `Bug` vs `bug`) is a *misalignment*
+with global QC, not a match. Exact names are what let a canonical label such as `bug`
+mean the same thing in every repo and aggregate cleanly across them. Extra, repo-specific
+labels are allowed (we cannot predict every repo's needs); the canonical ones are required.
 
 ## Apply at least one `type` label to every issue
 

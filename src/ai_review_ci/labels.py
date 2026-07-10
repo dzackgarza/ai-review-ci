@@ -79,12 +79,16 @@ def load_taxonomy(path: Path | None = None) -> tuple[Label, ...]:
 
 
 def compute_label_actions(remote: Mapping[str, RemoteLabel], taxonomy: Sequence[Label]) -> LabelPlan:
-    """Pure idempotent plan: which taxonomy labels to create, update, or leave.
+    """Pure plan reconciling the mandatory canonical set against a repo's labels.
 
-    A label is *created* when absent remotely, *updated* when its color (compared
-    case-insensitively) or description drifts from the taxonomy, and *unchanged*
-    otherwise. Remote labels outside the taxonomy are left untouched — the taxonomy is
-    additive, not a destructive sync.
+    Every canonical (taxonomy) label is required to exist *exactly*: it is *created*
+    when its name is absent, *updated* when its color (compared case-insensitively —
+    hex casing is not semantic) or description drifts, and *unchanged* on an exact
+    match. Non-canonical labels the repo also carries are left untouched — extra labels
+    are allowed since we cannot predict every repo's needs. But the canonical set is not
+    optional and is matched by *exact* name: a close-but-unequal variant (e.g. a
+    different name casing) is a misalignment, not a match, so that a canonical name like
+    ``bug`` means the same label in every repo and aggregates cleanly across them.
     """
     create: list[Label] = []
     update: list[Label] = []
