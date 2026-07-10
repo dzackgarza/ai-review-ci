@@ -198,6 +198,8 @@ def test_opencode_config_from_env_rejects_malformed_and_out_of_range() -> None:
         ("AI_REVIEW_MAX_ATTEMPTS", "0"),  # < 1 makes range(1, n+1) empty
         ("AI_REVIEW_MAX_ATTEMPTS", "-3"),
         ("AI_REVIEW_BACKOFF", "-0.5"),  # backoff must be non-negative
+        ("AI_REVIEW_BACKOFF", "inf"),  # non-finite escapes ge=0; would hang time.sleep mid-loop
+        ("AI_REVIEW_BACKOFF", "nan"),
     ]
     for key, bad in invalid_values:
         with pytest.raises(ValueError):

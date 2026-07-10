@@ -52,10 +52,12 @@ class OpencodeConfig(BaseModel):
     boundary rather than silently falling back to a baked-in guess. The value ranges
     are enforced on the model surface: a non-positive timeout or max_attempts, or a
     negative backoff, is a degenerate run (an empty ``range(1, max_attempts + 1)``
-    never invokes opencode), so those are rejected at construction, not accepted.
+    never invokes opencode), so those are rejected at construction, not accepted. A
+    non-finite backoff (``inf``/``nan``) is rejected too (``allow_inf_nan=False``) — an
+    infinite backoff would hang/crash in ``time.sleep`` mid-loop, not at the boundary.
     """
 
-    model_config = ConfigDict(frozen=True)
+    model_config = ConfigDict(frozen=True, allow_inf_nan=False)
 
     binary: Path
     timeout: PositiveInt
