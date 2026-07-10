@@ -334,18 +334,85 @@ def test_install_refuses_overwriting_repo_owned_scaffold(
     assert customized.read_text() == "test:\n    @true\n"
 
 
-def test_cli_install_skip_scaffold_adopts_repo_with_existing_justfile(
+def test_skip_scaffold_final_proof_adopts_brownfield_non_delegating_justfile(
     tmp_path: pathlib.Path,
 ) -> None:
-    # Brownfield adoption path (#202): a repo that predates ai-review-ci already
-    # owns a substantive top-level justfile. Without an adoption path install
-    # hard-exits ("refusing to overwrite existing scaffold target(s)") before
-    # writing the manifest/triggers/branch protection, so the repo can never be
-    # brought under QC enforcement. --skip-scaffold is the explicit opt-in: the
-    # existing justfile is left untouched (convergence is a doctor finding), and
-    # install proceeds to write the manifest and triggers and reach branch
-    # protection — which fails here only because the gh target repo is
-    # unavailable, proving execution got past the scaffold guard.
+    # Brownfield adoption (#202): a repo that predates ai-review-ci owns a
+    # substantive, non-delegating top-level justfile. Under --skip-scaffold the
+    # installer writes the manifest, triggers, and PR template and leaves the
+    # justfile untouched — justfile delegation/conformance convergence is
+    # deferred to a `doctor` finding by design. The final proof step must
+    # therefore reach SUCCESS on exactly this intended-success state: everything
+    # ai-review-ci installs is present, and the ONLY outstanding doctor findings
+    # are the deferred justfile delegation/conformance ones.
+    #
+    # Regression guard: before the fix the proof step ran doctor and hard-exited
+    # on doctor's (by-design) `misconfigured` status, so a fully-adopted repo
+    # reported install failure on the very case --skip-scaffold exists to serve.
+    # This exercises the real proof boundary (a real `doctor` run against the
+    # installed file state) and reds if that abort regresses. It does NOT pass
+    # via an earlier-boundary failure: it runs the proof step directly and
+    # asserts it *returns*, then asserts the success end state.
+    repo = _git_repo(tmp_path)
+    (repo / "pyproject.toml").write_text('[project]\nname = "target"\nversion = "0.1.0"\n')
+    existing = repo / "justfile"
+    brownfield_justfile = "# pre-existing brownfield justfile\ntest:\n    @true\n"
+    existing.write_text(brownfield_justfile)
+    # Everything install writes under --skip-scaffold (the scaffold itself is skipped):
+    _write_trigger_workflows(repo, "python")
+    _write_manifest(repo, "python", "main", "main", "main")
+    _write_pr_template(repo)
+
+    # Must NOT abort: the only outstanding doctor findings are the deferred
+    # justfile delegation/conformance ones. A regressed (strict) proof step
+    # raises SystemExit here.
+    _prove_installation(repo, skip_scaffold=True)
+
+    # Success end state: adoption completed and the brownfield justfile is intact.
+    assert existing.read_text() == brownfield_justfile
+    assert (repo / ".ai-review-ci.toml").exists()
+    for name in TEMPLATES:
+        assert (repo / ".github" / "workflows" / name).is_file()
+
+
+def test_skip_scaffold_final_proof_still_aborts_on_non_justfile_fault(
+    tmp_path: pathlib.Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    # Narrowness invariant (#202): --skip-scaffold defers ONLY justfile
+    # delegation/conformance convergence. Every other doctor misconfiguration
+    # must still make the final proof fail loud — the tolerance is not a blanket
+    # "ignore doctor findings". Here the brownfield repo is missing the installed
+    # trigger workflows (a `workflow`-surface fault, non-deferred), so even under
+    # skip_scaffold the proof step must abort. A blanket-suppression regression
+    # would let this pass; pytest.raises(SystemExit) reds on it.
+    repo = _git_repo(tmp_path)
+    (repo / "pyproject.toml").write_text('[project]\nname = "target"\nversion = "0.1.0"\n')
+    (repo / "justfile").write_text("# pre-existing brownfield justfile\ntest:\n    @true\n")
+    _write_manifest(repo, "python", "main", "main", "main")
+    # Triggers deliberately NOT written: a genuine non-deferred fault remains.
+
+    with pytest.raises(SystemExit):
+        _prove_installation(repo, skip_scaffold=True)
+
+    err = capsys.readouterr().err
+    assert "FATAL: ai-review-ci doctor final proof failed" in err
+    # The non-deferred fault is surfaced, not suppressed.
+    assert "workflow" in err
+
+
+def test_cli_install_skip_scaffold_bypasses_scaffold_overwrite_guard(
+    tmp_path: pathlib.Path,
+) -> None:
+    # Brownfield guard-bypass (#202): --skip-scaffold is the explicit opt-in that
+    # lets install proceed on a repo that already owns a top-level justfile
+    # instead of hard-exiting at the scaffold-overwrite guard. This proves the
+    # CLI threads the flag end to end: the scaffold guard does NOT fire, the
+    # existing justfile is left untouched, and the manifest/triggers are written.
+    # Full adoption completion is proven at the proof-step boundary by
+    # test_skip_scaffold_final_proof_adopts_brownfield_non_delegating_justfile;
+    # here execution reaches the real gh branch-protection boundary and fails
+    # there only because the gh target repo is unavailable.
     repo = _git_repo(tmp_path)
     (repo / "pyproject.toml").write_text('[project]\nname = "target"\nversion = "0.1.0"\n')
     existing = repo / "justfile"
