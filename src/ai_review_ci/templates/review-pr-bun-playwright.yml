@@ -21,6 +21,9 @@ jobs:
     permissions:
       contents: read
       actions: read
+      # Label-alignment check reads live labels via `gh label list`
+      # (GET /repos/{owner}/{repo}/labels), which requires Issues (read).
+      issues: read
     with:
       gate: qc-doctor
       profile: '{{ profile }}'

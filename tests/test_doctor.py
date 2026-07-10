@@ -8,8 +8,19 @@ from typing import Any
 import pytest
 from pydantic import ValidationError
 
-from ai_review_ci.doctor import DoctorReport, _has_private_attribute, _justfile_recipes, doctor_report, manifest_text
+from ai_review_ci.doctor import (
+    DoctorReport,
+    QcManifest,
+    _classify,
+    _evaluate_label_alignment,
+    _has_private_attribute,
+    _justfile_recipes,
+    _label_alignment_findings,
+    doctor_report,
+    manifest_text,
+)
 from ai_review_ci.install import _write_trigger_workflows
+from ai_review_ci.labels import RemoteLabel, load_taxonomy
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 DOCTOR_SCHEMA = ROOT / "schemas" / "doctor-report.schema.json"
@@ -391,6 +402,86 @@ def test_doctor_classifies_non_github_remote_branch_protection_as_unverifiable(t
     assert payload["installation_state"] == "unknown"
     assert payload["branch_protection"]["observed_state"] == "unverifiable"
     assert payload["findings"][0]["surface"] == "branch_protection"
+
+
+def _compliant_manifest() -> QcManifest:
+    return QcManifest.model_validate(
+        {
+            "schema_version": 1,
+            "profile": "python",
+            "installed_ref": "main",
+            "release_channel": "main",
+            "workflow_template_version": 1,
+            "local_delegation": "global-justfile",
+            "default_branch": "main",
+        }
+    )
+
+
+def test_label_alignment_flags_missing_drifted_variant_and_ignores_extras() -> None:
+    # #216: compare live labels against the canonical taxonomy on name + color +
+    # description. Missing, drifted, and case/spelling variants are misalignments;
+    # extra repo-specific labels are NOT flagged.
+    canonical = load_taxonomy()
+    by_name = {label.name: label for label in canonical}
+    bug = by_name["bug"]
+    enhancement = by_name["enhancement"]
+    remote = {label.name: RemoteLabel(name=label.name, color=label.color, description=label.description) for label in canonical}
+    # drift `enhancement`'s color; delete `bug`, re-add it only as a case variant `Bug`;
+    # add an extra repo-specific label that must be ignored.
+    remote["enhancement"] = RemoteLabel(name="enhancement", color="000000", description=enhancement.description)
+    del remote["bug"]
+    remote["Bug"] = RemoteLabel(name="Bug", color=bug.color, description=bug.description)
+    remote["kilo-triaged"] = RemoteLabel(name="kilo-triaged", color="faf74f", description="repo-specific extra")
+
+    observation = _evaluate_label_alignment(remote, canonical, evidence="test")
+
+    assert observation.observed_state == "misaligned"
+    assert observation.drifted == ("enhancement",)
+    assert any(v.canonical == "bug" and "Bug" in v.remote_variants for v in observation.variants)
+    assert "bug" not in observation.missing  # bug is a variant, not merely missing
+    assert "kilo-triaged" not in observation.missing
+    assert "kilo-triaged" not in observation.drifted
+
+
+def test_label_alignment_compliant_when_repo_carries_canonical_set_exactly() -> None:
+    canonical = load_taxonomy()
+    remote = {label.name: RemoteLabel(name=label.name, color=label.color, description=label.description) for label in canonical}
+    remote["kilo-triaged"] = RemoteLabel(name="kilo-triaged", color="faf74f", description="extra allowed")
+
+    observation = _evaluate_label_alignment(remote, canonical, evidence="test")
+
+    assert observation.observed_state == "compliant"
+    assert observation.missing == ()
+    assert observation.drifted == ()
+    assert observation.variants == ()
+
+
+def test_label_alignment_misalignment_is_a_required_error_feeding_global_status() -> None:
+    # Mirror the qc-doctor contract: a real misalignment is a required (error) finding,
+    # so it drives global_status to misconfigured (doctor exits nonzero / qc-doctor fails).
+    canonical = load_taxonomy()
+    by_name = {label.name: label for label in canonical}
+    remote = {label.name: RemoteLabel(name=label.name, color=label.color, description=label.description) for label in canonical}
+    # Exercise all three misalignment kinds so the finding message names each:
+    # a case variant (bug -> Bug), a missing label (enhancement removed entirely),
+    # and a drifted color (chore).
+    del remote["bug"]
+    remote["Bug"] = RemoteLabel(name="Bug", color=by_name["bug"].color, description=by_name["bug"].description)
+    del remote["enhancement"]
+    remote["chore"] = RemoteLabel(name="chore", color="000000", description=by_name["chore"].description)
+
+    observation = _evaluate_label_alignment(remote, canonical, evidence="test")
+    findings = _label_alignment_findings(observation)
+
+    assert len(findings) == 1
+    assert findings[0].surface == "label_alignment"
+    assert findings[0].severity == "error"
+    assert "missing" in findings[0].evidence
+    assert "drifted" in findings[0].evidence
+    assert "Bug" in findings[0].evidence
+    _, global_status = _classify(_compliant_manifest(), findings)
+    assert global_status == "misconfigured"
 
 
 def test_manifest_declaring_exceptions_is_rejected_not_honored(tmp_path: pathlib.Path) -> None:

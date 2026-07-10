@@ -19,6 +19,7 @@ from pydantic import ValidationError
 
 from ai_review_ci.labels import (
     Label,
+    LabelMisalignment,
     LabelPlan,
     RemoteLabel,
     Taxonomy,
@@ -27,6 +28,7 @@ from ai_review_ci.labels import (
     compute_label_actions,
     install_labels,
     label_commands,
+    label_misalignment_messages,
     load_taxonomy,
 )
 
@@ -85,6 +87,40 @@ def test_remote_labels_outside_taxonomy_are_left_untouched() -> None:
     assert plan.unchanged == (label,)
     assert plan.create == ()
     assert plan.update == ()
+
+
+def test_canonical_present_only_as_case_variant_is_a_misalignment_not_a_create() -> None:
+    # #217: a repo carrying `Bug` where the canonical name is `bug` must NOT plan a
+    # create (gh rejects it case-insensitively with a cryptic "label already exists").
+    # It is surfaced as an explicit misalignment naming remote+canonical instead.
+    label = Label(name="bug", color="d73a4a", description="Something isn't working", category="type")
+    remote = {"Bug": RemoteLabel(name="Bug", color="d73a4a", description="Something isn't working")}
+    plan = compute_label_actions(remote, [label])
+    assert plan.create == ()
+    assert plan.update == ()
+    assert plan.unchanged == ()
+    assert plan.misaligned == (LabelMisalignment(canonical=label, remote_variants=("Bug",)),)
+
+
+def test_exact_match_is_not_treated_as_a_variant_misalignment() -> None:
+    # Exact matching is preserved: an exact-name match is unchanged, never a variant.
+    label = Label(name="bug", color="d73a4a", description="Something isn't working", category="type")
+    remote = {"bug": RemoteLabel(name="bug", color="d73a4a", description="Something isn't working")}
+    plan = compute_label_actions(remote, [label])
+    assert plan.unchanged == (label,)
+    assert plan.misaligned == ()
+
+
+def test_misalignment_message_names_remote_variant_and_required_canonical() -> None:
+    # The surfaced message must name the remote label and the required canonical name,
+    # framed as a maintainer-fixable misalignment (not laundered into a match).
+    label = Label(name="bug", color="d73a4a", description="Something isn't working", category="type")
+    remote = {"Bug": RemoteLabel(name="Bug", color="d73a4a", description="Something isn't working")}
+    plan = compute_label_actions(remote, [label])
+    messages = label_misalignment_messages(plan)
+    assert len(messages) == 1
+    assert "Bug" in messages[0]
+    assert "bug" in messages[0]
 
 
 def test_label_commands_maps_plan_to_gh_argv_in_order() -> None:
@@ -156,6 +192,27 @@ def test_install_labels_is_a_noop_when_taxonomy_matches_remote(tmp_path: Path, c
     taxonomy.write_text(json.dumps({"labels": [{"name": sample.name, "color": sample.color, "description": sample.description, "category": "type"}]}))
     install_labels("dzackgarza/ai-review-ci", taxonomy=taxonomy)
     assert "0 created, 0 updated, 1 already current" in capsys.readouterr().out
+
+
+def test_install_labels_fails_loud_on_a_case_variant_misalignment(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    # #217, at the real gh boundary (no mock): take a label this repo actually has and
+    # ask the taxonomy for the same name in swapped case. The exact name is absent but
+    # present as a case variant, so install_labels must surface an explicit misalignment
+    # (naming remote + canonical) and fail loud WITHOUT attempting any doomed gh create.
+    remote = _fetch_remote_labels("dzackgarza/ai-review-ci")
+    sample = next((label for label in remote.values() if label.description and label.name.swapcase() != label.name and label.name.swapcase() not in remote), None)
+    assert sample is not None, "expected a described label whose swapped-case name is not itself a real label"
+    variant_name = sample.name.swapcase()
+    taxonomy = tmp_path / "labels.json"
+    taxonomy.write_text(json.dumps({"labels": [{"name": variant_name, "color": sample.color, "description": sample.description, "category": "type"}]}))
+    with pytest.raises(SystemExit) as excinfo:
+        install_labels("dzackgarza/ai-review-ci", taxonomy=taxonomy)
+    assert excinfo.value.code == 1
+    err = capsys.readouterr().err
+    assert "FATAL: label misalignment" in err
+    assert sample.name in err  # the actual remote label
+    assert variant_name in err  # the required canonical name
+    assert "gh label create" not in err  # no doomed create was attempted
 
 
 @pytest.mark.gh_boundary

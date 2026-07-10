@@ -321,6 +321,40 @@ def test_trigger_inputs_are_declared_by_reusable_workflow(template: str, profile
     assert checked_a_reusable_call, f"{template} (profile={profile}) calls no in-repo reusable workflow"
 
 
+def test_gates_qc_doctor_grants_labels_read_scope() -> None:
+    """Regression guard for #224.
+
+    doctor's REQUIRED label-alignment check reads the repo's live labels with
+    `gh label list` -> GET /repos/{owner}/{repo}/labels. Per GitHub's
+    fine-grained-PAT permissions reference that endpoint requires the "Issues"
+    repository permission (read). The Actions GITHUB_TOKEN defaults unset scopes
+    to none, so without `issues: read` the check cannot read labels on a
+    correctly-labeled repo, resolves `unverifiable`, and fails the qc-doctor
+    gate — a false-RED. The callee job that runs the gate must grant the scope.
+    """
+    perms = _workflow_jobs("_gates.yml")["qc-doctor"].get("permissions")
+    assert isinstance(perms, dict), "qc-doctor job must declare least-privilege permissions"
+    assert perms.get("issues") == "read", f"qc-doctor job must grant issues: read so the label-alignment check's `gh label list` call is verifiable; got permissions={perms!r}"
+    # Least privilege: read scope only, never widened to write.
+    assert "write" not in perms.values()
+
+
+@pytest.mark.parametrize("profile", SUPPORTED_PROFILES)
+def test_rendered_pr_qc_doctor_grants_labels_read_scope(profile: str) -> None:
+    """Regression guard for #224 (caller side).
+
+    A reusable-workflow token is capped by the caller job's `permissions`, so
+    `issues: read` on the callee (_gates.yml) alone is not enough — every
+    rendered `review-pr.yml` caller must also grant it, or the intersection
+    strips the scope and the qc-doctor label check false-REDs.
+    """
+    workflow = yaml.safe_load(_template_text("review-pr.yml", profile, "main"))
+    perms = workflow["jobs"]["qc-doctor"].get("permissions")
+    assert isinstance(perms, dict), f"review-pr.yml (profile={profile}) qc-doctor job must declare permissions"
+    assert perms.get("issues") == "read", f"review-pr.yml (profile={profile}) qc-doctor caller must grant issues: read; got {perms!r}"
+    assert "write" not in perms.values()
+
+
 def test_install_refuses_overwriting_repo_owned_scaffold(
     tmp_path: pathlib.Path,
 ) -> None:

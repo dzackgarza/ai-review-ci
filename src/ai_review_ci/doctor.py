@@ -6,7 +6,7 @@ import re
 import subprocess
 import sys
 import tomllib
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from importlib.metadata import version
 from pathlib import Path
 from typing import Annotated, Any, Literal
@@ -17,6 +17,7 @@ from pydantic import BaseModel, ConfigDict, Field, TypeAdapter
 
 from ai_review_ci.gates import PROJECT_PROFILES, SUPPORTED_PROFILES, ProjectProfile, required_check_contexts
 from ai_review_ci.install import TEMPLATES
+from ai_review_ci.labels import Label, RemoteLabel, compute_label_actions, load_taxonomy
 
 MANIFEST_NAME = ".ai-review-ci.toml"
 SCHEMA_VERSION: Literal[1] = 1
@@ -38,8 +39,10 @@ FindingSurface = Literal[
     "justfile_delegation",
     "justfile_conformance",
     "branch_protection",
+    "label_alignment",
 ]
 BranchProtectionState = Literal["not_applicable", "compliant", "missing", "missing_contexts", "unverifiable"]
+LabelAlignmentState = Literal["not_applicable", "compliant", "misaligned", "unverifiable"]
 
 JsonDict = dict[str, Any]
 ProfileAdapter: TypeAdapter[ProfileName] = TypeAdapter(ProfileName)
@@ -127,6 +130,30 @@ class BranchProtectionObservation(BaseModel):
     evidence: str
 
 
+class LabelVariant(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    canonical: str
+    remote_variants: tuple[str, ...]
+
+
+class LabelAlignmentObservation(BaseModel):
+    """How the repo's live GitHub labels compare to the canonical taxonomy.
+
+    ``missing`` / ``drifted`` / ``variants`` are the canonical labels absent, present but
+    drifted (color or description), or present only as a case/spelling variant. Extra
+    repo-specific labels are not recorded — extras are allowed.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    observed_state: LabelAlignmentState
+    missing: tuple[str, ...]
+    drifted: tuple[str, ...]
+    variants: tuple[LabelVariant, ...]
+    evidence: str
+
+
 class DoctorFinding(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -149,6 +176,7 @@ class DoctorReport(BaseModel):
     workflow_refs: dict[str, WorkflowRefObservation]
     justfile_delegation: dict[str, DelegationObservation]
     branch_protection: BranchProtectionObservation
+    label_alignment: LabelAlignmentObservation
     profile_proof_requirements: dict[str, ProfileProofObservation]
     findings: tuple[DoctorFinding, ...]
     invalidation_inputs: tuple[str, ...]
@@ -225,6 +253,7 @@ def doctor_report(target: Path) -> DoctorReport:
     workflow_refs = _workflow_refs(target_root, manifest, report_profile)
     justfile_delegation = _justfile_delegation(target_root, report_profile)
     branch_protection = _branch_protection(target_root, manifest, report_profile)
+    label_alignment = _label_alignment(target_root)
     findings = _findings(
         target_root=target_root,
         manifest=manifest,
@@ -234,6 +263,7 @@ def doctor_report(target: Path) -> DoctorReport:
         workflow_refs=workflow_refs,
         justfile_delegation=justfile_delegation,
         branch_protection=branch_protection,
+        label_alignment=label_alignment,
         profile_proof=profile_proof,
     )
     installation_state, global_status = _classify(manifest, findings)
@@ -253,6 +283,7 @@ def doctor_report(target: Path) -> DoctorReport:
         workflow_refs=workflow_refs,
         justfile_delegation=justfile_delegation,
         branch_protection=branch_protection,
+        label_alignment=label_alignment,
         profile_proof_requirements=profile_proof,
         findings=tuple(findings),
         invalidation_inputs=_invalidation_inputs(target_root, declaration_hash),
@@ -477,6 +508,79 @@ def _github_repo(remote: str) -> str:
     return ""
 
 
+def _label_alignment(target: Path) -> LabelAlignmentObservation:
+    """Compare the target repo's live GitHub labels against the canonical taxonomy.
+
+    Mirrors ``_branch_protection``: no remote → not applicable; a non-GitHub or
+    unreachable remote → unverifiable (advisory); otherwise the live labels are
+    reconciled against the canonical set. Uses its own ``gh`` call (not the fail-loud
+    installer wrapper) so an inability to read labels is unverifiable, not fatal.
+    """
+    remote = _remote(target)
+    if remote == "":
+        return LabelAlignmentObservation(observed_state="not_applicable", missing=(), drifted=(), variants=(), evidence="target repository has no origin remote")
+    repo = _github_repo(remote)
+    if repo == "":
+        return LabelAlignmentObservation(observed_state="unverifiable", missing=(), drifted=(), variants=(), evidence=f"origin remote is not a GitHub repository: {remote}")
+    result = subprocess.run(
+        ["gh", "label", "list", "--repo", repo, "--limit", "5000", "--json", "name,color,description"],
+        text=True,
+        capture_output=True,
+    )
+    if result.returncode != 0:
+        return LabelAlignmentObservation(observed_state="unverifiable", missing=(), drifted=(), variants=(), evidence=result.stderr.strip())
+    raw = jsonlib.loads(result.stdout)
+    remote_labels = {label.name: label for label in (RemoteLabel.model_validate(entry) for entry in raw)}
+    return _evaluate_label_alignment(remote_labels, load_taxonomy(), evidence=f"compared {repo} live labels against the canonical taxonomy")
+
+
+def _evaluate_label_alignment(remote: Mapping[str, RemoteLabel], canonical: Sequence[Label], *, evidence: str) -> LabelAlignmentObservation:
+    """Pure: reconcile live labels against the canonical set into an observation.
+
+    Reuses the installer's exact-match planner: created==missing, updated==drifted (on
+    name+color+description), and misaligned==case/spelling variants. Extras are the
+    remote labels the planner leaves untouched, so they never appear here.
+    """
+    plan = compute_label_actions(remote, canonical)
+    missing = tuple(label.name for label in plan.create)
+    drifted = tuple(label.name for label in plan.update)
+    variants = tuple(LabelVariant(canonical=item.canonical.name, remote_variants=item.remote_variants) for item in plan.misaligned)
+    state: LabelAlignmentState = "compliant" if not (missing or drifted or variants) else "misaligned"
+    return LabelAlignmentObservation(observed_state=state, missing=missing, drifted=drifted, variants=variants, evidence=evidence)
+
+
+def _label_alignment_findings(observation: LabelAlignmentObservation) -> list[DoctorFinding]:
+    """A real misalignment is a required (error) finding, mirroring branch protection;
+    an inability to read labels is advisory (warning), like unverifiable protection."""
+    if observation.observed_state == "misaligned":
+        parts: list[str] = []
+        if observation.missing:
+            parts.append(f"missing: {', '.join(observation.missing)}")
+        if observation.drifted:
+            parts.append(f"drifted (color/description): {', '.join(observation.drifted)}")
+        if observation.variants:
+            variant_text = "; ".join(f"{variant.canonical} present only as {', '.join(variant.remote_variants)}" for variant in observation.variants)
+            parts.append(f"case/spelling variant: {variant_text}")
+        return [
+            DoctorFinding(
+                severity="error",
+                surface="label_alignment",
+                evidence=f"canonical label set misaligned — {'; '.join(parts)}",
+                remediation_commands=("ai-review-ci install-labels --repo owner/repo (rename case/spelling variants by hand — they are not auto-renamed)",),
+            )
+        ]
+    if observation.observed_state == "unverifiable":
+        return [
+            DoctorFinding(
+                severity="warning",
+                surface="label_alignment",
+                evidence=observation.evidence,
+                remediation_commands=("run doctor with GitHub label list API access",),
+            )
+        ]
+    return []
+
+
 def _findings(
     *,
     target_root: Path,
@@ -487,6 +591,7 @@ def _findings(
     workflow_refs: dict[str, WorkflowRefObservation],
     justfile_delegation: dict[str, DelegationObservation],
     branch_protection: BranchProtectionObservation,
+    label_alignment: LabelAlignmentObservation,
     profile_proof: dict[str, ProfileProofObservation],
 ) -> list[DoctorFinding]:
     findings: list[DoctorFinding] = []
@@ -576,6 +681,7 @@ def _findings(
                 remediation_commands=("run doctor with GitHub branch protection API access",),
             )
         )
+    findings.extend(_label_alignment_findings(label_alignment))
     return findings
 
 
@@ -670,7 +776,7 @@ def _classify(manifest: ManifestDeclaration, findings: list[DoctorFinding]) -> t
         return "uninstalled", "misconfigured"
     if not findings:
         return "compliant", "current"
-    if any(finding.surface == "branch_protection" and finding.severity == "warning" for finding in findings):
+    if any(finding.surface in ("branch_protection", "label_alignment") and finding.severity == "warning" for finding in findings):
         return "unknown", "unverifiable"
     if any(finding.surface == "workflow_ref" for finding in findings):
         return "outdated", "stale"

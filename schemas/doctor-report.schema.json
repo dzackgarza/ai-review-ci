@@ -139,7 +139,8 @@
             "workflow_ref",
             "justfile_delegation",
             "justfile_conformance",
-            "branch_protection"
+            "branch_protection",
+            "label_alignment"
           ],
           "title": "Surface",
           "type": "string"
@@ -163,6 +164,78 @@
         "remediation_commands"
       ],
       "title": "DoctorFinding",
+      "type": "object"
+    },
+    "LabelAlignmentObservation": {
+      "additionalProperties": false,
+      "description": "How the repo's live GitHub labels compare to the canonical taxonomy.\n\n``missing`` / ``drifted`` / ``variants`` are the canonical labels absent, present but\ndrifted (color or description), or present only as a case/spelling variant. Extra\nrepo-specific labels are not recorded \u2014 extras are allowed.",
+      "properties": {
+        "observed_state": {
+          "enum": [
+            "not_applicable",
+            "compliant",
+            "misaligned",
+            "unverifiable"
+          ],
+          "title": "Observed State",
+          "type": "string"
+        },
+        "missing": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Missing",
+          "type": "array"
+        },
+        "drifted": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Drifted",
+          "type": "array"
+        },
+        "variants": {
+          "items": {
+            "$ref": "#/$defs/LabelVariant"
+          },
+          "title": "Variants",
+          "type": "array"
+        },
+        "evidence": {
+          "title": "Evidence",
+          "type": "string"
+        }
+      },
+      "required": [
+        "observed_state",
+        "missing",
+        "drifted",
+        "variants",
+        "evidence"
+      ],
+      "title": "LabelAlignmentObservation",
+      "type": "object"
+    },
+    "LabelVariant": {
+      "additionalProperties": false,
+      "properties": {
+        "canonical": {
+          "title": "Canonical",
+          "type": "string"
+        },
+        "remote_variants": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Remote Variants",
+          "type": "array"
+        }
+      },
+      "required": [
+        "canonical",
+        "remote_variants"
+      ],
+      "title": "LabelVariant",
       "type": "object"
     },
     "MissingManifest": {
@@ -406,6 +479,9 @@
     "branch_protection": {
       "$ref": "#/$defs/BranchProtectionObservation"
     },
+    "label_alignment": {
+      "$ref": "#/$defs/LabelAlignmentObservation"
+    },
     "profile_proof_requirements": {
       "additionalProperties": {
         "$ref": "#/$defs/ProfileProofObservation"
@@ -460,6 +536,7 @@
     "workflow_refs",
     "justfile_delegation",
     "branch_protection",
+    "label_alignment",
     "profile_proof_requirements",
     "findings",
     "invalidation_inputs",
