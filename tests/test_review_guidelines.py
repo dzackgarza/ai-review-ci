@@ -77,12 +77,32 @@ def test_extract_ignores_fenced_code_block() -> None:
     assert extract_review_guidelines_sections(doc) == []
 
 
-def test_extract_stops_at_next_level1_header() -> None:
+def test_extract_ignores_tilde_fenced_code_block() -> None:
+    # A tilde (~~~) fenced code block is valid CommonMark and equally a code block:
+    # a `# Review Guidelines` heading inside it is example text, not a real section.
+    doc = "# Doc\n\n~~~\n# Review Guidelines\nnot the real thing\n~~~\n"
+    assert extract_review_guidelines_sections(doc) == []
+
+
+def test_tilde_fenced_canonical_does_not_forge_a_section() -> None:
+    # A full copy of the canonical pasted inside a ~~~ fence (an illustrative listing)
+    # must NOT be mistaken for the repo's distribution copy: the repo has no real section.
     canonical = load_canonical_review_guidelines()
-    doc = _agents_md_with(canonical)
+    doc = "# Doc\n\nExample of the section we distribute:\n\n~~~markdown\n" + canonical + "\n~~~\n"
+    assert extract_review_guidelines_sections(doc) == []
+
+
+def test_extract_stops_at_next_level1_header() -> None:
+    # Real section-END termination: a following `# Next Section` after the Review
+    # Guidelines section must close it via the next-level-1-header branch, and its
+    # content must be excluded from the captured section (not merely end-of-document).
+    canonical = load_canonical_review_guidelines()
+    following = "# Next Section\n\nContent that must be excluded from the guidelines section.\n"
+    doc = f"# Project\n\nIntro paragraph.\n\n{canonical}\n\n{following}"
     (section,) = extract_review_guidelines_sections(doc)
-    # The trailing unrelated content after the section must not be swallowed.
-    assert "Unrelated top-level content" not in section
+    assert normalize(section) == normalize(canonical)
+    assert "# Next Section" not in section
+    assert "must be excluded" not in section
 
 
 # --- normalization: robust but non-laundering ---
