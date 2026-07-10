@@ -676,6 +676,37 @@ def test_semgrep_scans_tests_tree_for_banned_test_patterns(tmp_path: pathlib.Pat
         assert rule in output, f"{rule} did not fire on test-file code:\n{output}"
 
 
+def test_semgrep_preserves_tracked_ignore_and_fails_loud_on_backup_failure(
+    tmp_path: pathlib.Path,
+) -> None:
+    """#225 Defect 1: the _semgrep gate overwrites .semgrepignore to force the
+    QC exclude set, backing up any pre-existing file for restore-on-exit. A
+    tracked .semgrepignore the recipe did NOT create must survive even when the
+    backup step fails, and the gate must fail loud (QC triage) instead of dying
+    silently or letting the restore trap rm a file it never created."""
+    project = tmp_path / "semgrep-backup-failure-project"
+    project.mkdir()
+    tracked_ignore = project / ".semgrepignore"
+    sentinel = "tests/fixtures/user-owned-exclusion/**\n"
+    tracked_ignore.write_text(sentinel)
+
+    # Force the backup step to fail with a real on-PATH mktemp shim — no mock of
+    # the recipe itself. The recipe must detect the failure before overwriting.
+    shim_dir = tmp_path / "shim"
+    shim_dir.mkdir()
+    mktemp_shim = shim_dir / "mktemp"
+    mktemp_shim.write_text("#!/usr/bin/env bash\nexit 1\n")
+    mktemp_shim.chmod(0o755)
+    env = os.environ | {"PATH": f"{shim_dir}:{os.environ['PATH']}"}
+
+    result = run_just(ROOT / "justfiles" / "shared.just", project, "_semgrep", env=env)
+
+    output = result.stdout + result.stderr
+    assert result.returncode != 0, output
+    assert tracked_ignore.read_text() == sentinel, f"tracked .semgrepignore was clobbered:\n{output}"
+    assert TRIAGE_MARKER in output, output
+
+
 def write_fake_npx_slop_scan(tmp_path: pathlib.Path, payload: dict[str, Any]) -> pathlib.Path:
     bin_dir = tmp_path / "fake-bin"
     bin_dir.mkdir()
