@@ -3,6 +3,8 @@
   "pythonVersion": "3.14",
   "pythonPlatform": "Linux",
   "exclude": [
+    "**/tests/fixtures/slop-torture",
+    "**/tests/fixtures/ast-grep",
     "**/node_modules",
     "**/.venv",
     "**/.pytest_cache",

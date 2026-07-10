@@ -293,6 +293,92 @@ def test_sync_qc_excludes_preserves_non_owned_artifacts_and_updates_grain(
     assert rust_justfile.read_text() == "# rust sentinel\n"
 
 
+def test_knip_config_does_not_blanket_ignore_tsx(tmp_path: pathlib.Path) -> None:
+    """#225 Defect 4: knip applies its `ignore` list over its own entry/project
+    tsx globs, so a blanket `**/*.tsx` silently disables dead-code detection for
+    every .tsx file. The regenerated knip config must not carry it, while the
+    real test/generated exclusions it needs stay put."""
+    shipped = json.loads((ROOT / "tool-configs" / "knip.json").read_text())
+    assert "**/*.tsx" not in shipped["ignore"], shipped["ignore"]
+    assert "**/*.test.ts" in shipped["ignore"], "test-file exclusions must remain"
+
+    # The shipped config must be the deterministic output of the sync script
+    # (no hand edits): regenerating in place yields no change.
+    repo = tmp_path / "repo"
+    qc_root = repo / "tool-configs"
+    qc_root.mkdir(parents=True)
+    shutil.copytree(ROOT / "tool-configs", qc_root, dirs_exist_ok=True)
+    result = subprocess.run(
+        ["uv", "run", str(ROOT / "tool-artifacts" / "scripts" / "sync_qc_excludes.py"), str(qc_root / "qc-excludes.toml")],
+        cwd=repo,
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert json.loads((qc_root / "knip.json").read_text())["ignore"] == shipped["ignore"]
+    assert "**/*.tsx" not in json.loads((qc_root / "knip.json").read_text())["ignore"]
+
+
+def test_grain_config_preserves_lexicon_sage_verifier_exemption(
+    tmp_path: pathlib.Path,
+) -> None:
+    """#225 Defect 5: Sage stub verifiers under lexicon/ accumulate import
+    failures into a hard-failing problems list grain misreads as NAKED_EXCEPT.
+    Both glob depths (grain fnmatches relative paths) must survive regeneration,
+    and the shipped config must equal the sync script's deterministic output."""
+    shipped = tomllib.loads((ROOT / "tool-configs" / "grain.toml").read_text())
+    for pattern in ("**/lexicon/**", "lexicon/**"):
+        assert pattern in shipped["grain"]["exclude"], shipped["grain"]["exclude"]
+
+    repo = tmp_path / "repo"
+    qc_root = repo / "tool-configs"
+    qc_root.mkdir(parents=True)
+    shutil.copytree(ROOT / "tool-configs", qc_root, dirs_exist_ok=True)
+    result = subprocess.run(
+        ["uv", "run", str(ROOT / "tool-artifacts" / "scripts" / "sync_qc_excludes.py"), str(qc_root / "qc-excludes.toml")],
+        cwd=repo,
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+    assert result.returncode == 0, result.stdout + result.stderr
+    regenerated = tomllib.loads((qc_root / "grain.toml").read_text())["grain"]["exclude"]
+    for pattern in ("**/lexicon/**", "lexicon/**"):
+        assert pattern in regenerated, regenerated
+
+
+def test_grain_config_excludes_nested_directory_occurrences(
+    tmp_path: pathlib.Path,
+) -> None:
+    """#225 Defect 6: grain matches excludes with fnmatch (grain/runner.py),
+    where a root-anchored `node_modules/*` misses a nested
+    `pkg/sub/node_modules/x.py` — unlike the JSON tools' `**/{d}/**`. Vendored
+    and generated trees deep in the layout must stay out of grain's scan, so
+    every TOML-derived directory must be excluded at both depths."""
+    import fnmatch
+
+    nested = "packages/app/node_modules/vendored/mod.py"
+    shipped = tomllib.loads((ROOT / "tool-configs" / "grain.toml").read_text())["grain"]["exclude"]
+    assert any(fnmatch.fnmatch(nested, pat) for pat in shipped), f"nested vendored path not excluded by grain's fnmatch patterns:\n{shipped}"
+
+    # Deterministic SSOT output: regenerating in a temp copy holds the property.
+    repo = tmp_path / "repo"
+    qc_root = repo / "tool-configs"
+    qc_root.mkdir(parents=True)
+    shutil.copytree(ROOT / "tool-configs", qc_root, dirs_exist_ok=True)
+    result = subprocess.run(
+        ["uv", "run", str(ROOT / "tool-artifacts" / "scripts" / "sync_qc_excludes.py"), str(qc_root / "qc-excludes.toml")],
+        cwd=repo,
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+    assert result.returncode == 0, result.stdout + result.stderr
+    regenerated = tomllib.loads((qc_root / "grain.toml").read_text())["grain"]["exclude"]
+    assert any(fnmatch.fnmatch(nested, pat) for pat in regenerated), regenerated
+
+
 def test_rust_qc_files_consume_central_excludes(tmp_path: pathlib.Path) -> None:
     project = tmp_path / "rust-project"
     source_dir = project / "src"
@@ -642,6 +728,70 @@ def test_semgrep_allows_fail_loud_typescript_guards(tmp_path: pathlib.Path) -> N
 
     output = result.stdout + result.stderr
     assert result.returncode == 0, output
+
+
+def test_semgrep_scans_tests_tree_for_banned_test_patterns(tmp_path: pathlib.Path) -> None:
+    """#214: semgrep's bundled default .semgrepignore excludes tests/, silently
+    killing the test-antipattern rules (py-no-monkeypatch and siblings) that are
+    designed to fire *in* test files. The gate must scan the tests/ tree, so a
+    repo committing those banned patterns goes red."""
+    project = tmp_path / "semgrep-tests-scope-project"
+    (project / "tests").mkdir(parents=True)
+    (project / "tests" / "test_thing.py").write_text(
+        "\n".join(
+            [
+                "import unittest.mock",
+                "from unittest.mock import patch",
+                "",
+                "def test_x(monkeypatch):",
+                "    monkeypatch.setattr(x, 'y', z)",
+                "    m = MagicMock()",
+                "",
+                "@pytest.mark.skip",
+                "def test_y():",
+                "    pass",
+                "",
+            ]
+        )
+    )
+
+    result = run_just(ROOT / "justfiles" / "shared.just", project, "_semgrep")
+
+    output = result.stdout + result.stderr
+    assert result.returncode != 0, output
+    for rule in ("py-no-monkeypatch", "py-no-mock-import", "py-no-magicmock", "py-no-skip-test"):
+        assert rule in output, f"{rule} did not fire on test-file code:\n{output}"
+
+
+def test_semgrep_preserves_tracked_ignore_and_fails_loud_on_backup_failure(
+    tmp_path: pathlib.Path,
+) -> None:
+    """#225 Defect 1: the _semgrep gate overwrites .semgrepignore to force the
+    QC exclude set, backing up any pre-existing file for restore-on-exit. A
+    tracked .semgrepignore the recipe did NOT create must survive even when the
+    backup step fails, and the gate must fail loud (QC triage) instead of dying
+    silently or letting the restore trap rm a file it never created."""
+    project = tmp_path / "semgrep-backup-failure-project"
+    project.mkdir()
+    tracked_ignore = project / ".semgrepignore"
+    sentinel = "tests/fixtures/user-owned-exclusion/**\n"
+    tracked_ignore.write_text(sentinel)
+
+    # Force the backup step to fail with a real on-PATH mktemp shim — no mock of
+    # the recipe itself. The recipe must detect the failure before overwriting.
+    shim_dir = tmp_path / "shim"
+    shim_dir.mkdir()
+    mktemp_shim = shim_dir / "mktemp"
+    mktemp_shim.write_text("#!/usr/bin/env bash\nexit 1\n")
+    mktemp_shim.chmod(0o755)
+    env = os.environ | {"PATH": f"{shim_dir}:{os.environ['PATH']}"}
+
+    result = run_just(ROOT / "justfiles" / "shared.just", project, "_semgrep", env=env)
+
+    output = result.stdout + result.stderr
+    assert result.returncode != 0, output
+    assert tracked_ignore.read_text() == sentinel, f"tracked .semgrepignore was clobbered:\n{output}"
+    assert TRIAGE_MARKER in output, output
 
 
 def write_fake_npx_slop_scan(tmp_path: pathlib.Path, payload: dict[str, Any]) -> pathlib.Path:

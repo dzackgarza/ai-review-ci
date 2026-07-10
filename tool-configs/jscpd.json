@@ -7,6 +7,8 @@
     "**/__tests__/**",
     "**/coverage.xml",
     "**/codeql-report.sarif",
+    "**/tests/fixtures/slop-torture/**",
+    "**/tests/fixtures/ast-grep/**",
     "**/node_modules/**",
     "**/.venv/**",
     "**/.pytest_cache/**",
