@@ -297,6 +297,29 @@ _semgrep:
 	echo "============================="
 	echo "=== Running: semgrep security pattern verification ==="
 	echo "# Static analysis for code quality and fraud patterns after normalization"
+	# #214: with no project .semgrepignore, semgrep falls back to its bundled
+	# default template, which excludes tests/ — silently killing the
+	# test-antipattern rules (py-no-monkeypatch and its NO_MOCK_PROOF /
+	# NO_SKIP_MASK siblings) that are designed to fire IN test files. Ship the
+	# QC-authoritative ignore set from the single-source-of-truth exclusion list
+	# (vendor/generated dirs only — it does NOT list tests/) so tests/ is scanned.
+	# This also overrides any repo-committed .semgrepignore for the scan
+	# (no-repo-writable-QC-suppression). Restore prior state on exit.
+	ignore_file=".semgrepignore"
+	ignore_backup=""
+	if [ -e "$ignore_file" ]; then
+		ignore_backup="$(mktemp)"
+		cp "$ignore_file" "$ignore_backup"
+	fi
+	restore_semgrepignore() {
+		if [ -n "$ignore_backup" ]; then
+			mv "$ignore_backup" "$ignore_file"
+		else
+			rm -f "$ignore_file"
+		fi
+	}
+	trap restore_semgrepignore EXIT
+	uv run {{artifacts}}/scripts/read_qc_excludes.py {{configs}}/qc-excludes.toml > "$ignore_file"
 	if uvx --from semgrep semgrep scan \
 		--config={{configs}}/semgrep.yml \
 		--config=p/ci \
