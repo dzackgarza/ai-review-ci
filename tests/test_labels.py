@@ -144,8 +144,10 @@ def test_install_labels_is_a_noop_when_taxonomy_matches_remote(tmp_path: Path, c
     # regardless of live label drift. (A hardcoded expectation could instead plan an
     # edit and mutate the real repo.) This still exercises the real fetch/compute/summary
     # path against live gh.
-    sample = _fetch_remote_labels("dzackgarza/ai-review-ci")["bug"]  # a GitHub default, always present
-    assert sample.description, "expected the bug label to carry a description"
+    # Any real label with a non-empty description works (taxonomy descriptions are
+    # required non-empty); selecting dynamically avoids coupling to one label's contents.
+    remote = _fetch_remote_labels("dzackgarza/ai-review-ci")
+    sample = next(label for label in remote.values() if label.description)
     taxonomy = tmp_path / "labels.json"
     taxonomy.write_text(json.dumps({"labels": [{"name": sample.name, "color": sample.color, "description": sample.description, "category": "type"}]}))
     install_labels("dzackgarza/ai-review-ci", taxonomy=taxonomy)
