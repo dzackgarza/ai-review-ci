@@ -19,7 +19,7 @@ from ai_review_ci.doctor import (
     manifest_text,
 )
 from ai_review_ci.install import _write_trigger_workflows
-from ai_review_ci.labels import Label, RemoteLabel, load_taxonomy
+from ai_review_ci.labels import RemoteLabel, load_taxonomy
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 DOCTOR_SCHEMA = ROOT / "schemas" / "doctor-report.schema.json"
@@ -466,9 +466,15 @@ def test_label_alignment_misalignment_is_a_required_error_feeding_global_status(
     # Mirror the qc-doctor contract: a real misalignment is a required (error) finding,
     # so it drives global_status to misconfigured (doctor exits nonzero / qc-doctor fails).
     canonical = load_taxonomy()
+    by_name = {label.name: label for label in canonical}
     remote = {label.name: RemoteLabel(name=label.name, color=label.color, description=label.description) for label in canonical}
+    # Exercise all three misalignment kinds so the finding message names each:
+    # a case variant (bug -> Bug), a missing label (enhancement removed entirely),
+    # and a drifted color (chore).
     del remote["bug"]
-    remote["Bug"] = RemoteLabel(name="Bug", color=canonical[0].color, description=canonical[0].description)
+    remote["Bug"] = RemoteLabel(name="Bug", color=by_name["bug"].color, description=by_name["bug"].description)
+    del remote["enhancement"]
+    remote["chore"] = RemoteLabel(name="chore", color="000000", description=by_name["chore"].description)
 
     observation = _evaluate_label_alignment(remote, canonical, evidence="test")
     findings = _label_alignment_findings(observation)
@@ -476,6 +482,9 @@ def test_label_alignment_misalignment_is_a_required_error_feeding_global_status(
     assert len(findings) == 1
     assert findings[0].surface == "label_alignment"
     assert findings[0].severity == "error"
+    assert "missing" in findings[0].evidence
+    assert "drifted" in findings[0].evidence
+    assert "Bug" in findings[0].evidence
     _, global_status = _classify(_compliant_manifest(), findings)
     assert global_status == "misconfigured"
 

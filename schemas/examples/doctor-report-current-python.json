@@ -80,6 +80,13 @@
     "observed_state": "not_applicable",
     "evidence": "target repository has no origin remote"
   },
+  "label_alignment": {
+    "observed_state": "not_applicable",
+    "missing": [],
+    "drifted": [],
+    "variants": [],
+    "evidence": "target repository has no origin remote"
+  },
   "profile_proof_requirements": {
     "python": {
       "profile": "python",

@@ -60,12 +60,29 @@ class RemoteLabel(BaseModel):
         return "" if value is None else value
 
 
+class LabelMisalignment(BaseModel):
+    """A canonical label present on the remote only as a case/spelling variant.
+
+    ``remote_variants`` names the repo's actual label(s) that collide with the
+    canonical name case-insensitively (e.g. remote ``Bug`` vs canonical ``bug``).
+    This is a misalignment, never a match: exact-name matching is preserved, so the
+    variant is surfaced for the maintainer to rename rather than laundered into a match
+    or auto-renamed.
+    """
+
+    model_config = ConfigDict(frozen=True)
+
+    canonical: Label
+    remote_variants: tuple[str, ...] = Field(min_length=1)
+
+
 class LabelPlan(BaseModel):
     model_config = ConfigDict(frozen=True)
 
     create: tuple[Label, ...]
     update: tuple[Label, ...]
     unchanged: tuple[Label, ...]
+    misaligned: tuple[LabelMisalignment, ...] = ()
 
 
 def load_taxonomy(path: Path | None = None) -> tuple[Label, ...]:
@@ -93,15 +110,51 @@ def compute_label_actions(remote: Mapping[str, RemoteLabel], taxonomy: Sequence[
     create: list[Label] = []
     update: list[Label] = []
     unchanged: list[Label] = []
+    misaligned: list[LabelMisalignment] = []
     for label in taxonomy:
         existing = remote.get(label.name)
         if existing is None:
-            create.append(label)
+            variants = _case_variants(label.name, remote)
+            if variants:
+                # A canonical label absent by exact name but present as a case variant
+                # would produce a create that gh rejects (labels collide
+                # case-insensitively). Surface it as a misalignment instead of a doomed
+                # create — exact matching stays; the maintainer renames to align.
+                misaligned.append(LabelMisalignment(canonical=label, remote_variants=variants))
+            else:
+                create.append(label)
         elif existing.color.lower() != label.color.lower() or existing.description != label.description:
             update.append(label)
         else:
             unchanged.append(label)
-    return LabelPlan(create=tuple(create), update=tuple(update), unchanged=tuple(unchanged))
+    return LabelPlan(create=tuple(create), update=tuple(update), unchanged=tuple(unchanged), misaligned=tuple(misaligned))
+
+
+def _case_variants(canonical_name: str, remote: Mapping[str, RemoteLabel]) -> tuple[str, ...]:
+    """Remote label names that collide with ``canonical_name`` case-insensitively.
+
+    An exact-name match is excluded (that is a match, handled by the caller). The
+    collision set is exactly what ``gh label create`` rejects for a canonical name whose
+    only near-equal is a case/spelling variant, so detecting it here replaces gh's
+    cryptic "label already exists" with an explicit misalignment.
+    """
+    folded = canonical_name.casefold()
+    return tuple(sorted(name for name in remote if name != canonical_name and name.casefold() == folded))
+
+
+def label_misalignment_messages(plan: LabelPlan) -> tuple[str, ...]:
+    """Explicit, maintainer-facing messages for each case/spelling misalignment.
+
+    Each message names the repo's actual label(s) and the required canonical name so the
+    maintainer can rename to align. Exact matching is preserved — the variant is never
+    accepted or auto-renamed.
+    """
+    return tuple(
+        f"label misalignment: repo has {', '.join(repr(variant) for variant in item.remote_variants)} "
+        f"where the canonical taxonomy requires the exact name {item.canonical.name!r}; "
+        f"rename it to align (a case/spelling variant is a misalignment, not a match)"
+        for item in plan.misaligned
+    )
 
 
 def label_commands(plan: LabelPlan, repo: str) -> tuple[tuple[str, ...], ...]:
@@ -150,6 +203,13 @@ def install_labels(repo: str, *, taxonomy: Path | None = None) -> None:
     """
     labels = load_taxonomy(taxonomy)
     plan = compute_label_actions(_fetch_remote_labels(repo), labels)
+    if plan.misaligned:
+        # A canonical label present only as a case/spelling variant cannot be created
+        # (gh collides case-insensitively) and must not be silently accepted. Fail loud
+        # with an explicit message rather than partially applying a doomed plan.
+        for message in label_misalignment_messages(plan):
+            print(f"FATAL: {message}", file=sys.stderr)
+        sys.exit(1)
     for command in label_commands(plan, repo):
         _gh(command)
     print(f"{len(plan.create)} created, {len(plan.update)} updated, {len(plan.unchanged)} already current ({len(labels)} canonical labels).")
