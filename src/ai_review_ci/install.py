@@ -164,7 +164,6 @@ def install(
     profile: str,
     ref: str = DEFAULT_INFRA_REF,
     release_channel: str = DEFAULT_INFRA_REF,
-    with_labels: bool = False,
 ) -> None:
     """Install the review trigger workflows and required branch protection.
 
@@ -175,7 +174,6 @@ def install(
         profile: Curated project profile to enforce.
         ref: ai-review-ci git ref used by installed workflows.
         release_channel: Human-readable ai-review-ci release channel recorded in the manifest.
-        with_labels: Also create/update the canonical label taxonomy on the repo.
     """
     target = target.resolve()
     _write_scaffold(target, profile)
@@ -187,10 +185,6 @@ def install(
     # a repo opted into PR-description enforcement.
     _write_pr_template(target)
     protect_branch(repo, branch, profile)
-    if with_labels:
-        from ai_review_ci.labels import install_labels
-
-        install_labels(repo)
     _prove_installation(target)
 
     print(

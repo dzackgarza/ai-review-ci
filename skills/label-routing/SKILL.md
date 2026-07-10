@@ -12,7 +12,6 @@ propagate it to a repo:
 ```bash
 just -f ~/ai-review-ci/justfile install-labels owner/repo
 # or:  uvx --from git+https://github.com/dzackgarza/ai-review-ci ai-review-ci install-labels --repo owner/repo
-# or, at install time:  ai-review-ci install --repo owner/repo --branch main --profile <p> --with-labels
 ```
 
 `install-labels` is idempotent and additive: it creates missing canonical labels and

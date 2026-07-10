@@ -1,29 +1,36 @@
-"""Proof for the canonical label taxonomy and its idempotent planner.
+"""Proof for the canonical label taxonomy, its planner, and its gh installer.
 
-The taxonomy is loaded from the real packaged artifact (no fixture copy) and the
-planner is exercised with real inputs. There is no gh mock: the network boundary
-carries no proof burden — the idempotence logic lives entirely in
-``compute_label_actions``, which is pure.
+Semantic behavior is proven in pure functions against the real packaged artifact and
+real gh-shaped data (``compute_label_actions``, ``label_commands``, ``RemoteLabel``
+parsing). The gh boundary is proven against real ``gh`` invocations — offline
+``--version`` success and a real nonzero-exit failure — with no mocks, per
+POLICY.NO_MOCK_PROOF. ``install_labels`` is proven end-to-end against real repositories:
+a read-only no-op against this repo, and a real failing create against a public repo the
+CI token cannot write.
 """
 
-import subprocess
+import json
+from pathlib import Path
 
 import pytest
 from pydantic import ValidationError
 
-from ai_review_ci import labels as labels_module
 from ai_review_ci.labels import (
     Label,
+    LabelPlan,
     RemoteLabel,
     Taxonomy,
-    _fetch_remote_labels,
     _gh,
     compute_label_actions,
     install_labels,
+    label_commands,
     load_taxonomy,
 )
 
 REQUIRED_CATEGORIES = {"type", "scope", "status", "area"}
+
+
+# --- pure: taxonomy + planner + command mapping (real artifact, real data) ---
 
 
 def test_shipped_taxonomy_loads_and_is_well_formed() -> None:
@@ -53,10 +60,8 @@ def test_exact_match_is_unchanged() -> None:
 
 def test_color_drift_is_an_update_case_insensitively() -> None:
     label = Label(name="bug", color="D73A4A", description="Something isn't working", category="type")
-    # Same color, different case -> unchanged.
     same = {"bug": RemoteLabel(name="bug", color="d73a4a", description="Something isn't working")}
     assert compute_label_actions(same, [label]).unchanged == (label,)
-    # Genuinely different color -> update.
     drifted = {"bug": RemoteLabel(name="bug", color="000000", description="Something isn't working")}
     assert compute_label_actions(drifted, [label]).update == (label,)
 
@@ -74,10 +79,26 @@ def test_remote_labels_outside_taxonomy_are_left_untouched() -> None:
         "kilo-triaged": RemoteLabel(name="kilo-triaged", color="faf74f", description="Auto-generated"),
     }
     plan = compute_label_actions(remote, [label])
-    # kilo-triaged appears in no bucket: the taxonomy is additive, not a destructive sync.
     assert plan.unchanged == (label,)
     assert plan.create == ()
     assert plan.update == ()
+
+
+def test_label_commands_maps_plan_to_gh_argv_in_order() -> None:
+    create = Label(name="new", color="aaaaaa", description="fresh", category="type")
+    update = Label(name="old", color="bbbbbb", description="drifted", category="scope")
+    plan = LabelPlan(create=(create,), update=(update,), unchanged=())
+    assert label_commands(plan, "owner/repo") == (
+        ("label", "create", "new", "--repo", "owner/repo", "--color", "aaaaaa", "--description", "fresh"),
+        ("label", "edit", "old", "--repo", "owner/repo", "--color", "bbbbbb", "--description", "drifted"),
+    )
+
+
+def test_remote_label_parses_real_gh_list_shape() -> None:
+    # The exact JSON shape `gh label list --json name,color,description` returns.
+    raw = json.loads('[{"name":"bug","color":"d73a4a","description":"Something isn\'t working"}]')
+    parsed = [RemoteLabel.model_validate(entry) for entry in raw]
+    assert parsed == [RemoteLabel(name="bug", color="d73a4a", description="Something isn't working")]
 
 
 def test_duplicate_taxonomy_names_are_rejected() -> None:
@@ -91,60 +112,39 @@ def test_invalid_color_is_rejected() -> None:
         Label(name="bug", color="not-hex", description="x", category="type")
 
 
-# --- I/O seam coverage: the gh boundary is a thin fail-loud wrapper; the semantic
-# proof lives in compute_label_actions above. These cover control flow, not a mocked
-# claim of owned behavior. ---
+# --- real gh boundary: fail-loud wrapper, exercised against real gh (no mock) ---
 
 
-def test_gh_returns_stdout_on_success(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(
-        "ai_review_ci.labels.subprocess.run",
-        lambda *a, **k: subprocess.CompletedProcess(a, 0, stdout="out", stderr=""),
-    )
-    assert _gh(["label", "list"]) == "out"
+def test_gh_returns_output_on_real_success() -> None:
+    # `gh --version` is offline and always exits 0.
+    assert "gh version" in _gh(["--version"])
 
 
-def test_gh_is_fatal_on_nonzero_returncode(monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]) -> None:
-    monkeypatch.setattr(
-        "ai_review_ci.labels.subprocess.run",
-        lambda *a, **k: subprocess.CompletedProcess(a, 1, stdout="", stderr="boom"),
-    )
+def test_gh_is_fatal_on_real_nonzero_exit(capsys: pytest.CaptureFixture[str]) -> None:
     with pytest.raises(SystemExit) as excinfo:
-        _gh(["label", "create", "x"])
+        _gh(["not-a-real-gh-subcommand-xyzzy"])
     assert excinfo.value.code == 1
-    assert "gh label create failed: boom" in capsys.readouterr().err
+    assert "FATAL: gh not-a-real-gh-subcommand-xyzzy failed" in capsys.readouterr().err
 
 
-def test_fetch_remote_labels_parses_gh_json(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(
-        labels_module,
-        "_gh",
-        lambda args: '[{"name":"bug","color":"d73a4a","description":"Something isn\'t working"}]',
-    )
-    remote = _fetch_remote_labels("owner/repo")
-    assert remote["bug"] == RemoteLabel(name="bug", color="d73a4a", description="Something isn't working")
+# --- real gh boundary: install_labels end-to-end against real repositories ---
 
 
-def test_install_labels_creates_missing_and_updates_drifted(monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]) -> None:
-    taxonomy = load_taxonomy()
-    # bug present but drifted (update); everything else absent (create).
-    remote = {"bug": RemoteLabel(name="bug", color="000000", description="stale")}
-    monkeypatch.setattr(labels_module, "_fetch_remote_labels", lambda repo: remote)
-    calls: list[list[str]] = []
+def test_install_labels_is_a_noop_when_all_labels_already_present(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    # Read-only real gh: a custom taxonomy whose sole label already exists unchanged on
+    # this repo (a GitHub default) yields an empty plan, so nothing is mutated while the
+    # real fetch/compute/summary path executes.
+    taxonomy = tmp_path / "labels.json"
+    taxonomy.write_text(json.dumps({"labels": [{"name": "bug", "color": "d73a4a", "description": "Something isn't working", "category": "type"}]}))
+    install_labels("dzackgarza/ai-review-ci", taxonomy=taxonomy)
+    assert "0 created, 0 updated, 1 already current" in capsys.readouterr().out
 
-    def record_gh(args: list[str]) -> str:
-        calls.append(args)
-        return ""
 
-    monkeypatch.setattr(labels_module, "_gh", record_gh)
-
-    install_labels("owner/repo")
-
-    verbs = {args[1] for args in calls}
-    assert verbs == {"create", "edit"}
-    edited = [args[2] for args in calls if args[1] == "edit"]
-    assert edited == ["bug"]
-    created = [args[2] for args in calls if args[1] == "create"]
-    assert len(created) == len(taxonomy) - 1
-    out = capsys.readouterr().out
-    assert f"{len(taxonomy) - 1} created, 1 updated, 0 already current" in out
+def test_install_labels_fails_loud_when_a_create_is_rejected(tmp_path: Path) -> None:
+    # Real boundary: octocat/Hello-World is public (readable) but not writable by the CI
+    # token, so a label absent there is planned for creation, the create is attempted for
+    # real, gh exits nonzero, and install_labels fails loud (POLICY.FAIL_OPEN). No mock.
+    taxonomy = tmp_path / "labels.json"
+    taxonomy.write_text(json.dumps({"labels": [{"name": "zz-ai-review-ci-probe", "color": "ededed", "description": "probe", "category": "type"}]}))
+    with pytest.raises(SystemExit):
+        install_labels("octocat/Hello-World", taxonomy=taxonomy)

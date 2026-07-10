@@ -91,7 +91,22 @@ def compute_label_actions(remote: Mapping[str, RemoteLabel], taxonomy: Sequence[
     return LabelPlan(create=tuple(create), update=tuple(update), unchanged=tuple(unchanged))
 
 
-def _gh(args: list[str]) -> str:
+def label_commands(plan: LabelPlan, repo: str) -> tuple[tuple[str, ...], ...]:
+    """Pure: translate a plan into the exact ``gh`` argv lists to run, in order.
+
+    Creates precede updates; ``unchanged`` labels emit no command. This is the owned
+    mapping from a reconciliation plan to CLI invocations — provable with real data
+    without touching the network.
+    """
+    commands: list[tuple[str, ...]] = []
+    for label in plan.create:
+        commands.append(("label", "create", label.name, "--repo", repo, "--color", label.color, "--description", label.description))
+    for label in plan.update:
+        commands.append(("label", "edit", label.name, "--repo", repo, "--color", label.color, "--description", label.description))
+    return tuple(commands)
+
+
+def _gh(args: Sequence[str]) -> str:
     result = subprocess.run(["gh", *args], capture_output=True, text=True)
     if result.returncode != 0:
         print(f"FATAL: gh {' '.join(args[:2])} failed: {result.stderr.strip()}", file=sys.stderr)
@@ -119,11 +134,6 @@ def install_labels(repo: str, *, taxonomy: Path | None = None) -> None:
     """
     labels = load_taxonomy(taxonomy)
     plan = compute_label_actions(_fetch_remote_labels(repo), labels)
-
-    for label in plan.create:
-        _gh(["label", "create", label.name, "--repo", repo, "--color", label.color, "--description", label.description])
-        print(f"created  {label.name}")
-    for label in plan.update:
-        _gh(["label", "edit", label.name, "--repo", repo, "--color", label.color, "--description", label.description])
-        print(f"updated  {label.name}")
-    print(f"\n{len(plan.create)} created, {len(plan.update)} updated, {len(plan.unchanged)} already current ({len(labels)} canonical labels).")
+    for command in label_commands(plan, repo):
+        _gh(command)
+    print(f"{len(plan.create)} created, {len(plan.update)} updated, {len(plan.unchanged)} already current ({len(labels)} canonical labels).")
