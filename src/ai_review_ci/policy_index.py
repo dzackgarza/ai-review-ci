@@ -9,9 +9,10 @@ instead of copying local remediation prose.
 from __future__ import annotations
 
 import re
-from dataclasses import dataclass
 from pathlib import Path
 from typing import NoReturn
+
+from pydantic import BaseModel, ConfigDict
 
 POLICY_INDEX_RELATIVE = Path("skills/policy-index")
 POLICIES_FILE = "references/policies.md"
@@ -36,8 +37,9 @@ class PolicyIndexError(ValueError):
         self.error_code = error_code
 
 
-@dataclass(frozen=True)
-class PolicyRecord:
+class PolicyRecord(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
     code: str
     name: str
     category: str
@@ -47,15 +49,17 @@ class PolicyRecord:
     remediation_code: str
 
 
-@dataclass(frozen=True)
-class RemediationRecord:
+class RemediationRecord(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
     code: str
     applies_to: tuple[str, ...]
     required_remediation: str
 
 
-@dataclass(frozen=True)
-class PolicyIndex:
+class PolicyIndex(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
     policies: dict[str, PolicyRecord]
     remediations: dict[str, RemediationRecord]
 
