@@ -178,6 +178,37 @@ def test_opencode_config_from_env_requires_every_value() -> None:
             OpencodeConfig.from_env({k: v for k, v in complete.items() if k != missing})
 
 
+def test_opencode_config_from_env_rejects_malformed_and_out_of_range() -> None:
+    # Acceptance #2: the config boundary is fail-loud on invalid *values*, not just
+    # missing keys. A non-numeric value and every degenerate range value must raise at
+    # construction — never be accepted into a run. ValidationError subclasses ValueError,
+    # as does int('x'), so ValueError covers both. Assert on type, not message strings.
+    from ai_review_ci.harness import OpencodeConfig
+
+    base = {
+        "AI_REVIEW_OPENCODE_BIN": "/usr/local/bin/opencode",
+        "AI_REVIEW_OPENCODE_TIMEOUT": "600",
+        "AI_REVIEW_MAX_ATTEMPTS": "5",
+        "AI_REVIEW_BACKOFF": "5",
+    }
+    invalid_values = [
+        ("AI_REVIEW_OPENCODE_TIMEOUT", "not-a-number"),  # non-numeric
+        ("AI_REVIEW_OPENCODE_TIMEOUT", "0"),  # timeout must be strictly positive
+        ("AI_REVIEW_OPENCODE_TIMEOUT", "-1"),
+        ("AI_REVIEW_MAX_ATTEMPTS", "0"),  # < 1 makes range(1, n+1) empty
+        ("AI_REVIEW_MAX_ATTEMPTS", "-3"),
+        ("AI_REVIEW_BACKOFF", "-0.5"),  # backoff must be non-negative
+    ]
+    for key, bad in invalid_values:
+        with pytest.raises(ValueError):
+            OpencodeConfig.from_env({**base, key: bad})
+
+    # Boundary values that ARE valid: zero backoff is allowed, one attempt is allowed.
+    edge = OpencodeConfig.from_env({**base, "AI_REVIEW_BACKOFF": "0", "AI_REVIEW_MAX_ATTEMPTS": "1"})
+    assert edge.backoff == 0
+    assert edge.max_attempts == 1
+
+
 def _write_review_inputs(repo: Path) -> dict[str, Path]:
     """Minimal real reviewer inputs for a non-diff (repo-sweep) run."""
     reviews = repo / "reviews"
@@ -243,6 +274,15 @@ def test_run_review_final_fatal_reflects_only_last_attempt_outcome(tmp_path: Pat
     )
 
     assert result.returncode == 1
+
+    # Attempt 1 must genuinely take the timeout path — otherwise the terminal-FATAL
+    # equality below is vacuous, since the non-timeout FATAL is also emitted by a run
+    # where nothing ever timed out. The harness prints a per-attempt timeout diagnostic
+    # to stderr; its presence is the observable proof the timeout branch was hit.
+    assert any(line.startswith("--- opencode timed out:") for line in result.stderr.splitlines())
+
+    # ...and after that timeout, the per-attempt reset means the terminal FATAL reports
+    # only the last attempt's outcome (a missing artifact), not the earlier timeout.
     fatal = [line for line in result.stderr.splitlines() if line.startswith("FATAL:")]
     assert fatal == ["FATAL: No report artifact after 2 attempts"]
 

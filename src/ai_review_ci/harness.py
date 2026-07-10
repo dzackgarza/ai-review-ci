@@ -25,7 +25,7 @@ import time
 from collections.abc import Mapping
 from pathlib import Path
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, NonNegativeFloat, PositiveInt
 
 IGNORE_DIRS = {
     ".git",
@@ -47,24 +47,28 @@ SUBMITTED_CANDIDATE = "submitted.json"
 class OpencodeConfig(BaseModel):
     """External-process seams for the retry loop: the opencode binary, per-attempt
     timeout, retry count, and inter-attempt backoff. Required config, not defaults —
-    the CI wiring (``ci/runner.just``) supplies every value and a missing (KeyError) or
-    malformed (ValueError) one crashes at the boundary rather than silently falling
-    back to a baked-in guess.
+    the CI wiring (``ci/runner.just``) supplies every value and a missing (KeyError),
+    malformed (ValueError), or out-of-range (ValidationError) one crashes at the
+    boundary rather than silently falling back to a baked-in guess. The value ranges
+    are enforced on the model surface: a non-positive timeout or max_attempts, or a
+    negative backoff, is a degenerate run (an empty ``range(1, max_attempts + 1)``
+    never invokes opencode), so those are rejected at construction, not accepted.
     """
 
     model_config = ConfigDict(frozen=True)
 
     binary: Path
-    timeout: int
-    max_attempts: int
-    backoff: float
+    timeout: PositiveInt
+    max_attempts: PositiveInt
+    backoff: NonNegativeFloat
 
     @classmethod
     def from_env(cls, environ: Mapping[str, str] | None = None) -> OpencodeConfig:
         """Build from required environment variables; fail loud on any missing/malformed value.
 
-        Missing key -> KeyError; non-numeric timeout/attempts/backoff -> ValueError. The
-        model enforces the field types and frozen-ness on the parsed values.
+        Missing key -> KeyError; non-numeric or out-of-range timeout/attempts/backoff ->
+        ValueError (pydantic ValidationError subclasses ValueError). The model enforces
+        the field types, value ranges, and frozen-ness on the parsed values.
         """
         source = os.environ if environ is None else environ
         return cls(
