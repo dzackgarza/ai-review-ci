@@ -1,0 +1,1 @@
+extend = "tool-configs/ruff-global.toml"

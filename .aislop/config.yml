@@ -1,0 +1,19 @@
+# aislop configuration for ai-review-ci (scanaislop.com).
+#
+# Read from the scanned directory root; aislop `scan`/`ci` have no --config
+# flag, so this governs ai-review-ci's own external scanaislop.com check. It is
+# NOT distributed to downstream governed repos (the shared _aislop gate runs
+# `aislop scan .` inside each repo against that repo's own config); see #205.
+
+rules:
+  # OWNER POLICY — deliberate tool configuration, not a gate dodge.
+  #
+  # python-print-debug encodes a *human* failure mode: leftover debug prints in
+  # production. For this bespoke, agent-driven, single-user software the threat
+  # model is inverted — prints and logging are desirable information, and the
+  # real risk is *silent* code with no logging. Per the bespoke-software-policy,
+  # leftover prints are just more signal, removed only if obstructive. Disabling
+  # this one print/logging rule is an owner-level policy decision, categorically
+  # different from an agent suppressing findings to dodge a gate. Rules that
+  # catch genuine slop are left ON.
+  ai-slop/python-print-debug: "off"

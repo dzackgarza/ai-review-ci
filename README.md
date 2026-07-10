@@ -94,11 +94,10 @@ release_channel = "main"
 workflow_template_version = 1
 local_delegation = "global-justfile"
 default_branch = "main"
-exceptions = []
 ```
 
 `schema_version`, `profile`, `installed_ref`, `release_channel`, `workflow_template_version`, `local_delegation`, and `default_branch` are required.
-`exceptions` may list explicit active exceptions with `id`, `surface`, `reason`, and `active = true`. Exceptions do not make the repo current; they map only matching active findings to `intentional_exception`.
+A repo declares only what type of project it is; there is no local opt-out of global QC. A repo with active findings is noncompliant — there is no manifest field that suppresses a finding.
 
 Inspect a target repo with:
 
@@ -108,19 +107,18 @@ uvx --from git+https://github.com/dzackgarza/ai-review-ci ai-review-ci doctor --
 uvx --from git+https://github.com/dzackgarza/ai-review-ci ai-review-ci doctor-schema
 ```
 
-The doctor reports the tool and schema version, target root, origin remote, HEAD, declaration hash, declared and effective profile, required and observed workflow refs, required and observed justfile delegation, branch-protection requirements and observations, profile proof requirements, findings, remediation commands, invalidation inputs, installation state, and dashboard `global_status`. Consumers should use `global_status` rather than re-infer status from workflow filenames.
+The doctor reports the tool and schema version, target root, origin remote, HEAD, declaration hash, declared and effective profile, required and observed workflow refs, required and observed justfile delegation, branch-protection requirements and observations, canonical label-set alignment (missing, drifted, and case/spelling-variant labels against `data/labels.json`; extra repo-specific labels are allowed), profile proof requirements, findings, remediation commands, invalidation inputs, installation state, and dashboard `global_status`. Consumers should use `global_status` rather than re-infer status from workflow filenames.
 
 Status mapping is fixed:
 
 | Doctor observation | `installation_state` | Dashboard `global_status` |
 | --- | --- | --- |
-| manifest, workflows, delegation, profile proof, and branch protection satisfy the declared contract | `compliant` | `current` |
+| manifest, workflows, delegation, profile proof, branch protection, and canonical label alignment satisfy the declared contract | `compliant` | `current` |
 | installed workflow refs differ from the manifest's required ref | `outdated` | `stale` |
-| manifest missing, required workflow missing, wrong profile, wrong delegation, missing `bun-playwright` app boot, or missing branch-protection contexts | `uninstalled` or `noncompliant` | `misconfigured` |
-| branch protection cannot be verified from the target remote/API state | `unknown` | `unverifiable` |
-| every active finding is covered by a matching active manifest exception | `noncompliant` or `outdated` | `intentional_exception` |
+| manifest missing, required workflow missing, wrong profile, wrong delegation, missing `bun-playwright` app boot, missing branch-protection contexts, or canonical labels missing/drifted/present only as a case or spelling variant | `uninstalled` or `noncompliant` | `misconfigured` |
+| branch protection or canonical label alignment cannot be verified from the target remote/API state | `unknown` | `unverifiable` |
 
-`current` and `intentional_exception` exit zero.
+Only `current` exits zero.
 All other statuses fail the command and the `qc-doctor` PR gate.
 
 ## Installing QC Surfaces
