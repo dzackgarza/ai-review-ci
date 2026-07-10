@@ -18,6 +18,18 @@ def _loaders(module_name, node, pkg, sub, dyn):
     import_module("scipy")
     # ok: no-dynamic-import-python
     import_module(module_name)
+    # A static-literal first arg is a hidden dependency even with a package arg
+    # (relative import, positional package): still flag.
+    # ruleid: no-dynamic-import-python
+    importlib.import_module(".sibling", package=__name__)
+    # ruleid: no-dynamic-import-python
+    import_module("pkg.mod", pkg)
+    # A data first arg stays dynamic-by-design even with a package arg: the
+    # kind:string / not-interpolation constraint must still exempt it.
+    # ok: no-dynamic-import-python
+    importlib.import_module(module_name, package=pkg)
+    # ok: no-dynamic-import-python
+    import_module(f"{pkg}.{sub}", package=pkg)
     # ruleid: no-dynamic-import-python
     __import__("os")
     # ok: no-dynamic-import-python

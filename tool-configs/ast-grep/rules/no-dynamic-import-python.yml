@@ -17,7 +17,9 @@ language: python
 rule:
   any:
     - pattern: importlib.import_module($ARG)
+    - pattern: importlib.import_module($ARG, $$$REST)
     - pattern: import_module($ARG)
+    - pattern: import_module($ARG, $$$REST)
     - pattern: __import__($ARG)
     - pattern: __import__($ARG, $$$REST)
 constraints:
