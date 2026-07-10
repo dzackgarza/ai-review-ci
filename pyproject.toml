@@ -29,6 +29,15 @@ build-backend = "hatchling.build"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+# The real-boundary label tests authenticate to the live GitHub API and so need
+# GH_TOKEN in CI. Least privilege (#218) scopes that token to an isolated
+# `test-gh-boundary` step instead of the whole QC tier, so these tests are
+# deselected from the default (tokenless) run and opted back in with
+# `-m gh_boundary`.
+markers = [
+    "gh_boundary: real GitHub API boundary tests; need GH_TOKEN, deselected by default (#218)",
+]
+addopts = ["-m", "not gh_boundary"]
 
 [tool.importlinter]
 root_packages = ["ai_review_ci"]

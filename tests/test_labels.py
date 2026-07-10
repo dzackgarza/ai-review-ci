@@ -10,6 +10,8 @@ CI token cannot write.
 """
 
 import json
+import subprocess
+import sys
 from pathlib import Path
 
 import pytest
@@ -138,6 +140,7 @@ def test_gh_is_fatal_on_real_nonzero_exit(capsys: pytest.CaptureFixture[str]) ->
 # --- real gh boundary: install_labels end-to-end against real repositories ---
 
 
+@pytest.mark.gh_boundary
 def test_install_labels_is_a_noop_when_taxonomy_matches_remote(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
     # Read-only *by construction*: build the taxonomy from a label the repo actually has
     # right now, so the plan is always "unchanged" and nothing is ever mutated —
@@ -155,6 +158,7 @@ def test_install_labels_is_a_noop_when_taxonomy_matches_remote(tmp_path: Path, c
     assert "0 created, 0 updated, 1 already current" in capsys.readouterr().out
 
 
+@pytest.mark.gh_boundary
 def test_install_labels_fails_loud_when_a_create_is_rejected(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
     # octocat/Hello-World is public (so the read succeeds) but outside this workflow's
     # repo, which the Actions token cannot write to under GitHub's token model — not
@@ -166,3 +170,38 @@ def test_install_labels_fails_loud_when_a_create_is_rejected(tmp_path: Path, cap
         install_labels("octocat/Hello-World", taxonomy=taxonomy)
     # Prove the create step is what failed loud, not the fetch.
     assert "gh label create failed" in capsys.readouterr().err
+
+
+# --- token-scoping isolation (#218): the real-boundary gh tests are deselected
+#     from the default (tokenless) QC tier and only run under the gh_boundary
+#     marker, which the isolated token-scoped `test-gh-boundary` recipe selects.
+
+
+def _collect_test_labels(*extra_args: str) -> str:
+    root = Path(__file__).resolve().parents[1]
+    result = subprocess.run(
+        [sys.executable, "-m", "pytest", "--collect-only", "-q", *extra_args, "tests/test_labels.py"],
+        cwd=root,
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+    return result.stdout + result.stderr
+
+
+def test_gh_boundary_label_tests_are_deselected_by_default_and_marker_selectable() -> None:
+    boundary_tests = (
+        "test_install_labels_is_a_noop_when_taxonomy_matches_remote",
+        "test_install_labels_fails_loud_when_a_create_is_rejected",
+    )
+
+    default_collection = _collect_test_labels()
+    for name in boundary_tests:
+        assert name not in default_collection, f"{name} must be deselected from the default tokenless tier run"
+    # The offline gh-wrapper tests need no token and must keep running by default.
+    assert "test_gh_returns_output_on_real_success" in default_collection
+
+    marked_collection = _collect_test_labels("-m", "gh_boundary")
+    for name in boundary_tests:
+        assert name in marked_collection, f"{name} must be selectable via the gh_boundary marker"
+    assert "test_gh_returns_output_on_real_success" not in marked_collection

@@ -48,6 +48,14 @@ test-ci:
 ambient:
     just -f {{repo}}/justfiles/qc-tooling.just -d . ambient
 
+# gh-boundary gate: the label suite's real-boundary tests that authenticate to
+# the live GitHub API. Isolated from `test`/`test-ci` so GH_TOKEN is scoped to
+# this recipe's CI step alone (_qc.yml), never exported to the QC tier's recipes
+# and npx/uvx tool runners (#218). `-m gh_boundary` overrides the default
+# `not gh_boundary` deselection in pyproject.
+test-gh-boundary:
+    uvx --python 3.14 --with pytest --with-editable . pytest -m gh_boundary
+
 # Install the complete QC enforcement surface into a target repo.
 install repo branch profile target=".":
     uvx --from . ai-review-ci install --target {{target}} --repo {{repo}} --branch {{branch}} --profile {{profile}}
