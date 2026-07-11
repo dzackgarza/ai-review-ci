@@ -542,12 +542,14 @@ def test_fetch_context_omits_pr_claim_map_when_not_a_pr_run(tmp_path: Path, gh_f
     assert "## PR claim map" not in text
 
 
-# --- #242: issue-vs-deliverable coverage — verbatim issue asks in context ----
+# --- #242/#246: issue-vs-deliverable coverage — verbatim issue asks in context
 #
 # Failure class: a PR/commit narrative confidently asserts completion of an
 # issue while delivering a narrowed subset. The claim map (#185) inlines only
 # the PR body — the author's own paraphrase — so the reviewer never sees the
 # issue's own asks and the narrowing passes every claim-vs-evidence check.
+# The closure set is GitHub-computed (closingIssuesReferences), never parsed
+# from the PR's prose (#246).
 
 
 _PR_242_BODY = """## Summary
@@ -555,7 +557,6 @@ _PR_242_BODY = """## Summary
 Retires the stored-ambient substrate.
 
 Closes #100
-Refs #25
 """
 
 _ISSUE_100_BODY = """# Description
@@ -572,13 +573,6 @@ Each of the sites above must be expressed through morphism composition.
 """
 
 
-def test_referenced_issues_parses_keywords_and_dedupes() -> None:
-    from ai_review_ci.context import _referenced_issues
-
-    body = "Closes #100 and refs #25; see #100 again, fixes #7, part of #25"
-    assert _referenced_issues(body) == [(100, True), (25, False), (7, True)]
-
-
 def test_fetch_context_injects_issue_asks_before_claim_map(tmp_path: Path, gh_fixture: Path) -> None:
     """The reviewer must see the issues' own texts, ordered before the PR's paraphrase."""
     _write_json(gh_fixture / "alerts.json", [])
@@ -591,12 +585,11 @@ def test_fetch_context_injects_issue_asks_before_claim_map(tmp_path: Path, gh_fi
         {"number": 242, "title": "Retire stored-ambient substrate", "body": _PR_242_BODY},
     )
     _write_json(
-        gh_fixture / "rest_repos_owner_repo_issues_100.json",
-        {"number": 100, "title": "Morphism-centric subobject substrate", "state": "open", "body": _ISSUE_100_BODY},
-    )
-    _write_json(
-        gh_fixture / "rest_repos_owner_repo_issues_25.json",
-        {"number": 25, "title": "Subobject is data", "state": "open", "body": "A subobject is the pair (A, f)."},
+        gh_fixture / "closing_issues.json",
+        [
+            {"number": 100, "title": "Morphism-centric subobject substrate", "state": "OPEN", "body": _ISSUE_100_BODY},
+            {"number": 25, "title": "Subobject is data", "state": "OPEN", "body": ""},
+        ],
     )
     output = tmp_path / "context.md"
 
@@ -605,61 +598,34 @@ def test_fetch_context_injects_issue_asks_before_claim_map(tmp_path: Path, gh_fi
     text = output.read_text(encoding="utf-8")
     assert "## Original issue asks" in text
     assert text.index("## Original issue asks") < text.index("## PR claim map")
-    # Verbatim issue text, not a paraphrase, and the claim classification per issue.
+    # Verbatim issue text, not a paraphrase, one entry per issue GitHub will close.
     assert "Each of the sites above must be expressed through morphism composition." in text
-    assert "### #100 — Morphism-centric subobject substrate (open; claimed closed by this PR)" in text
-    assert "### #25 — Subobject is data (open; referenced, not claimed closed)" in text
-    # The coverage instruction anchors judgment to the issue text and names the demotion remedy.
+    assert "### #100 — Morphism-centric subobject substrate (open; closed by merging this PR)" in text
+    assert "### #25 — Subobject is data (open; closed by merging this PR)" in text
+    assert "_Issue has no body._" in text
+    # The closure set is GitHub-computed, and the instruction demands completion —
+    # relabeling the closure claim must never be offered as a path to merge.
+    assert "`closingIssuesReferences`" in text
     assert "a subset is partial, not done" in text
-    assert "demoting `Closes #N` to `Refs #N`" in text
+    assert "completing the remaining asks in this PR" in text
+    assert "Never prescribe relabeling the closure claim" in text
 
 
-def test_fetch_context_renders_unfetchable_issue_ref_explicitly(tmp_path: Path, gh_fixture: Path) -> None:
-    """A reference that cannot be fetched is an explicit gap, never silently dropped."""
+def test_fetch_context_fails_loudly_when_closing_issues_unfetchable(tmp_path: Path, gh_fixture: Path) -> None:
+    """The semantic closure set either answers or the run fails — no silent section drop."""
     _write_json(gh_fixture / "alerts.json", [])
     _write_json(
         gh_fixture / "threads.json",
         {"nodes": [], "pageInfo": {"hasNextPage": False, "endCursor": None}},
     )
-    _write_json(
-        gh_fixture / "rest_repos_owner_repo_pulls_243.json",
-        {"number": 243, "title": "x", "body": "Closes #999"},
-    )
-    output = tmp_path / "context.md"
+    (gh_fixture / "closing_issues_failure").write_text("1\n", encoding="utf-8")
 
-    fetch_context("owner/repo", tool_names="ai-review/slop", output=output, pr_number=243)
-
-    text = output.read_text(encoding="utf-8")
-    assert "### #999 — could not be fetched (claimed closed by this PR)" in text
-    assert "Treat the closure claim as unverified." in text
+    with pytest.raises(SystemExit):
+        fetch_context("owner/repo", tool_names="ai-review/slop", output=tmp_path / "context.md", pr_number=243)
 
 
-def test_fetch_context_marks_pr_shaped_issue_refs(tmp_path: Path, gh_fixture: Path) -> None:
-    """A referenced number that is a pull request carries no ask contract."""
-    _write_json(gh_fixture / "alerts.json", [])
-    _write_json(
-        gh_fixture / "threads.json",
-        {"nodes": [], "pageInfo": {"hasNextPage": False, "endCursor": None}},
-    )
-    _write_json(
-        gh_fixture / "rest_repos_owner_repo_pulls_244.json",
-        {"number": 244, "title": "x", "body": "Refs #50"},
-    )
-    _write_json(
-        gh_fixture / "rest_repos_owner_repo_issues_50.json",
-        {"number": 50, "title": "some PR", "state": "closed", "body": "pr body", "pull_request": {"url": "https://api.github.com/repos/owner/repo/pulls/50"}},
-    )
-    output = tmp_path / "context.md"
-
-    fetch_context("owner/repo", tool_names="ai-review/slop", output=output, pr_number=244)
-
-    text = output.read_text(encoding="utf-8")
-    assert "### #50 — is a pull request, not an issue (referenced, not claimed closed)" in text
-    assert "pr body" not in text
-
-
-def test_fetch_context_omits_issue_asks_without_refs_or_pr(tmp_path: Path, gh_fixture: Path) -> None:
-    """No issue references in the PR body, or a repo-sweep run: no asks section."""
+def test_fetch_context_omits_issue_asks_without_closing_issues_or_pr(tmp_path: Path, gh_fixture: Path) -> None:
+    """A PR closing nothing, or a repo-sweep run: no asks section."""
     _write_json(gh_fixture / "alerts.json", [])
     _write_json(
         gh_fixture / "threads.json",
@@ -667,7 +633,7 @@ def test_fetch_context_omits_issue_asks_without_refs_or_pr(tmp_path: Path, gh_fi
     )
     _write_json(
         gh_fixture / "rest_repos_owner_repo_pulls_245.json",
-        {"number": 245, "title": "x", "body": "## Summary\n\nNo issue links here."},
+        {"number": 245, "title": "x", "body": "## Summary\n\nNo linked issues."},
     )
     output = tmp_path / "context.md"
 

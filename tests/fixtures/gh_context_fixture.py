@@ -99,9 +99,22 @@ def _emit_rest_page(argv: list[str], fixture_dir: Path) -> None:
     print(json.dumps(alerts[start : start + per_page]))
 
 
+def _emit_closing_issues(fixture_dir: Path) -> None:
+    """Serve the closingIssuesReferences GraphQL query from closing_issues.json (default: none)."""
+    if (fixture_dir / "closing_issues_failure").exists():
+        print("closing issues request failed", file=sys.stderr)
+        raise SystemExit(2)
+    path = fixture_dir / "closing_issues.json"
+    nodes = _json_object_list(path) if path.exists() else []
+    print(json.dumps({"data": {"repository": {"pullRequest": {"closingIssuesReferences": {"nodes": nodes}}}}}))
+
+
 def _emit_graphql_page(argv: list[str], fixture_dir: Path) -> None:
     fields = _field_values(argv)
     _append_call(fixture_dir, {"kind": "graphql", "fields": fields})
+    if "closingIssuesReferences" in " ".join(argv):
+        _emit_closing_issues(fixture_dir)
+        return
     if (fixture_dir / "graphql_failure").exists():
         print("review threads request failed", file=sys.stderr)
         raise SystemExit(2)
