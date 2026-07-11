@@ -176,6 +176,69 @@ def test_policy_docs_are_inlined_even_in_diff_scope(tmp_path: Path) -> None:
     assert "## Repository Review Focus" not in prompt
 
 
+def test_context_packet_is_inlined_with_prompt_first(tmp_path: Path) -> None:
+    from ai_review_ci.harness import build_initial_prompt
+
+    inputs = _prompt_inputs(tmp_path, "scope-repo.md")
+    packet = inputs["repo"] / ".review-context"
+    (packet / "policies").mkdir(parents=True)
+    (packet / "PROMPT.md").write_text("Review focus: lattice invariants against the spec.\n")
+    (packet / "policies" / "terminology.md").write_text("saturation and discriminant triple are distinct terms\n")
+    (packet / "fixtures.json").write_text("{}\n")
+
+    prompt = build_initial_prompt(
+        inputs["template"],
+        inputs["scope"],
+        inputs["manifest"],
+        inputs["context"],
+        inputs["repo"],
+    )
+
+    assert "## Repository Review Packet" in prompt
+    assert "Review focus: lattice invariants against the spec." in prompt
+    assert "### Review packet document: policies/terminology.md" in prompt
+    assert "saturation and discriminant triple are distinct terms" in prompt
+    assert "- .review-context/fixtures.json" in prompt
+    # PROMPT.md leads the packet section, before the inlined documents.
+    assert prompt.index("Review focus: lattice invariants") < prompt.index("### Review packet document:")
+    assert prompt.index("## Repository Review Packet") < prompt.index("write submitted.json")
+
+
+def test_absent_context_packet_adds_nothing_and_empty_packet_is_fatal(tmp_path: Path) -> None:
+    from ai_review_ci.harness import build_initial_prompt, context_packet_section
+
+    inputs = _prompt_inputs(tmp_path, "scope-repo.md")
+    prompt = build_initial_prompt(
+        inputs["template"],
+        inputs["scope"],
+        inputs["manifest"],
+        inputs["context"],
+        inputs["repo"],
+    )
+    assert "## Repository Review Packet" not in prompt
+
+    # A staged-but-empty packet is a broken assembly, not a valid no-op.
+    (inputs["repo"] / ".review-context").mkdir()
+    with pytest.raises(SystemExit):
+        context_packet_section(inputs["repo"])
+
+
+def test_review_workflow_stages_context_packet_conditionally() -> None:
+    workflow = yaml.safe_load((ROOT / ".github" / "workflows" / "_review.yml").read_text())
+    inputs = workflow[True]["workflow_call"]["inputs"]
+    assert inputs["context_archive"]["type"] == "string"
+    assert inputs["context_archive"]["default"] == ""
+
+    steps = workflow["jobs"]["review"]["steps"]
+    stage = next(step for step in steps if step.get("name") == "Stage review context packet")
+    assert stage["if"] == "inputs.context_archive != ''"
+    assert "stage-context-packet" in stage["run"]
+    # The packet is staged after prepare (which rsyncs the reviewer repo copy)
+    # and before the review runs, so the exploded tree survives into the run.
+    names = [step.get("name") for step in steps]
+    assert names.index("Prepare reviewer") < names.index("Stage review context packet") < names.index("Run review")
+
+
 def test_missing_policy_doc_is_fatal(tmp_path: Path) -> None:
     from ai_review_ci.harness import policy_docs_section
 

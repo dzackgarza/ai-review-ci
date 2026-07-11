@@ -31,6 +31,11 @@ on:
         required: false
         type: string
         default: ''
+      context_archive:
+        description: 'Repo-relative tar archive (the repo-assembled review packet) exploded into .review-context/ in the reviewer repo; its PROMPT.md and Markdown documents are inlined into the reviewer prompt'
+        required: false
+        type: string
+        default: ''
 
 jobs:
   review:
@@ -48,6 +53,7 @@ jobs:
       REVIEW_BASE_REF: ${{ github.base_ref }}
       REVIEW_POLICY_PATHS: ${{ inputs.policy_paths }}
       REVIEW_FOCUS_PROMPT: ${{ inputs.focus_prompt }}
+      REVIEW_CONTEXT_ARCHIVE: ${{ inputs.context_archive }}
 
     steps:
       - uses: actions/checkout@v4
@@ -114,6 +120,10 @@ jobs:
       - name: Stage PR diff
         if: inputs.scope == 'diff'
         run: just -f "$INFRA/ci/runner.just" stage-pr-diff "$REVIEW_BASE_REF"
+
+      - name: Stage review context packet
+        if: inputs.context_archive != ''
+        run: just -f "$INFRA/ci/runner.just" stage-context-packet "$REVIEW_CONTEXT_ARCHIVE"
 
       - name: Run review
         run: just -f "$INFRA/ci/runner.just" run-review "$REVIEW_REPORT_TYPE" "$REVIEW_SCOPE"

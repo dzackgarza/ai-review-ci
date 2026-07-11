@@ -4,8 +4,9 @@ validated report artifact exists.
 Prompt assembly order: reviewer context (existing tracked findings), scope
 instructions (repo-wide sweep or PR diff), focus prompt (repo-declared review
 focus), manifest documents (skills and guides, statically declared per review
-type), policy documents (repo-declared, explicit paths), repo docs, task
-template.
+type), policy documents (repo-declared, explicit paths), review context packet
+(repo-assembled tar exploded into .review-context/ by the runner), repo docs,
+task template.
 
 For PR-diff scope, the staged unified diff is inlined into the prompt and
 repo README/AGENTS docs are not auto-injected. Diff reviewers need the changed
@@ -43,6 +44,8 @@ IGNORE_DIRS = {
 
 ARTIFACT_PATH = Path(".review-report-artifact.json")
 DIFF_PATH = Path(".reviewer-diff.patch")
+CONTEXT_PACKET_DIR = Path(".review-context")
+CONTEXT_PACKET_PROMPT = "PROMPT.md"
 SUBMIT_CANDIDATE_BIN = Path("/home/reviewer/bin/submit-candidate")
 SUBMITTED_CANDIDATE = "submitted.json"
 
@@ -172,6 +175,40 @@ def policy_docs_section(policy_paths: str, repo_root: Path) -> str:
     return "## Repository Policy Documents\n\n" + "\n\n---\n\n".join(sections)
 
 
+def context_packet_section(repo_root: Path) -> str:
+    """Inline the exploded review context packet, if one was staged.
+
+    The packet is repo-owned: a tar archive assembled by the consumer repo
+    (prompt + reference documents, in whatever directory organization the
+    repo chose) and exploded into ``.review-context/`` by the runner. A
+    top-level ``PROMPT.md`` leads the section; every other Markdown file is
+    inlined in sorted path order. Non-Markdown files are listed by path so
+    the reviewer knows they exist and can read them from disk.
+    """
+    packet_root = repo_root / CONTEXT_PACKET_DIR
+    if not packet_root.is_dir():
+        return ""
+    files = sorted(p for p in packet_root.rglob("*") if p.is_file())
+    if not files:
+        print(f"FATAL: staged review context packet is empty: {CONTEXT_PACKET_DIR}", file=sys.stderr)
+        sys.exit(1)
+    lead: list[str] = []
+    docs: list[str] = []
+    listed: list[str] = []
+    for p in files:
+        rel = p.relative_to(packet_root)
+        if str(rel) == CONTEXT_PACKET_PROMPT:
+            lead.append(p.read_text())
+        elif p.suffix == ".md":
+            docs.append(f"### Review packet document: {rel}\n\n{p.read_text()}")
+        else:
+            listed.append(f"- {CONTEXT_PACKET_DIR}/{rel}")
+    sections = ["## Repository Review Packet", *lead, *docs]
+    if listed:
+        sections.append("### Additional packet files (read from disk as needed)\n\n" + "\n".join(listed))
+    return "\n\n".join(sections)
+
+
 def is_diff_scope(scope_path: Path) -> bool:
     """True when the current review is a PR diff review."""
     return scope_path.name == "scope-diff.md"
@@ -208,6 +245,8 @@ def build_initial_prompt(
     sections.append(load_manifest(manifest_path))
     if policy_docs := policy_docs_section(policy_paths, repo_root):
         sections.append(policy_docs)
+    if packet := context_packet_section(repo_root):
+        sections.append(packet)
     if not diff_scope and (repo_docs := collect_repo_docs(repo_root)):
         sections.append(repo_docs)
     sections.append(template_path.read_text())

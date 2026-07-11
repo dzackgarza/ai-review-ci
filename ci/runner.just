@@ -121,6 +121,19 @@ prepare:
     just -f {{infra}}/ci/runner.just install-sudo-rule
     just -f {{infra}}/ci/runner.just copy-reviewer-repo
 
+stage-context-packet archive:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    packet="{{control_repo}}/{{archive}}"
+    if [ ! -f "$packet" ]; then
+      echo "FATAL: review context packet not found: {{archive}}" >&2
+      exit 1
+    fi
+    sudo rm -rf {{reviewer_repo}}/.review-context
+    sudo mkdir -p {{reviewer_repo}}/.review-context
+    sudo tar -xf "$packet" -C {{reviewer_repo}}/.review-context
+    sudo chown -R reviewer:reviewer {{reviewer_repo}}/.review-context
+
 stage-pr-diff base_ref:
     git -C {{control_repo}} diff "origin/{{base_ref}}...HEAD" > "${RUNNER_TEMP}/reviewer-diff.patch"
     test -s "${RUNNER_TEMP}/reviewer-diff.patch"
