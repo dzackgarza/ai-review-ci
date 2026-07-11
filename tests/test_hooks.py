@@ -138,3 +138,63 @@ def path_with_only(tmp_path: pathlib.Path, *commands: str) -> str:
         assert target is not None, f"required command missing for test setup: {command}"
         (bin_dir / command).symlink_to(target)
     return str(bin_dir)
+
+
+def _init_downstream(path: pathlib.Path, recipe: str, body: str, remote: str | None = None) -> pathlib.Path:
+    path.mkdir(parents=True, exist_ok=True)
+    subprocess.run(["git", "init", "-q"], cwd=path, env=git_test_env(), check=True)
+    if remote is not None:
+        subprocess.run(["git", "remote", "add", "origin", remote], cwd=path, env=git_test_env(), check=True)
+    (path / "justfile").write_text(f"{recipe}:\n    {body}\n")
+    return path
+
+
+BYPASS_HOOKS = [
+    ("global-hooks", "pre-commit", "test"),
+    ("global-hooks", "pre-push", "test-ci"),
+    ("repo-hooks", "pre-commit", "test"),
+    ("repo-hooks", "pre-push", "test-ci"),
+]
+
+
+@pytest.mark.parametrize(("hook_dir", "hook", "recipe"), BYPASS_HOOKS)
+def test_hooks_skip_wiki_repositories(hook_source_repo: pathlib.Path, tmp_path: pathlib.Path, hook_dir: str, hook: str, recipe: str) -> None:
+    # A .wiki repository is categorically outside the QC regime. The hook must
+    # skip (exit 0) before ever invoking the recipe — proven by omitting `just`
+    # from PATH: a non-skipping hook would fail command-not-found.
+    wiki = _init_downstream(tmp_path / "research.wiki", recipe, "@echo should-not-run")
+    env = git_test_env(PATH=path_with_only(tmp_path, "sh", "git", "readlink", "dirname"))
+    result = subprocess.run([str(hook_source_repo / hook_dir / hook)], cwd=wiki, env=env, text=True, capture_output=True, check=False)
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert "should-not-run" not in result.stdout
+    assert "wiki repository" in result.stderr
+
+
+@pytest.mark.parametrize(("hook_dir", "hook", "recipe"), BYPASS_HOOKS)
+def test_hooks_skip_repos_not_under_dzackgarza(hook_source_repo: pathlib.Path, tmp_path: pathlib.Path, hook_dir: str, hook: str, recipe: str) -> None:
+    foreign = _init_downstream(tmp_path / "foreign", recipe, "@echo should-not-run", remote="https://github.com/someoneelse/foo.git")
+    env = git_test_env(PATH=path_with_only(tmp_path, "sh", "git", "readlink", "dirname"))
+    result = subprocess.run([str(hook_source_repo / hook_dir / hook)], cwd=foreign, env=env, text=True, capture_output=True, check=False)
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert "should-not-run" not in result.stdout
+    assert "not under the dzackgarza account" in result.stderr
+
+
+@pytest.mark.parametrize(("hook_dir", "hook", "recipe"), BYPASS_HOOKS)
+def test_hooks_still_gate_dzackgarza_repos(hook_source_repo: pathlib.Path, tmp_path: pathlib.Path, hook_dir: str, hook: str, recipe: str) -> None:
+    # A repository under the dzackgarza account is gated normally: the recipe runs.
+    owned = _init_downstream(tmp_path / "owned", recipe, "@echo owned-ran", remote="https://github.com/dzackgarza/foo.git")
+    result = subprocess.run([str(hook_source_repo / hook_dir / hook)], cwd=owned, env=git_test_env(), text=True, capture_output=True, check=False)
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert result.stdout.strip() == "owned-ran"
+
+
+@pytest.mark.parametrize(("hook_dir", "hook", "recipe"), BYPASS_HOOKS)
+def test_hooks_print_red_proof_sanction_on_gated_failure(hook_source_repo: pathlib.Path, tmp_path: pathlib.Path, hook_dir: str, hook: str, recipe: str) -> None:
+    # A genuine QC failure in a gated repo blocks (exit 1) and names the only
+    # bypass reachable here — the TDD red-proof --no-verify route.
+    gated = _init_downstream(tmp_path / "gated", recipe, "@exit 1", remote="https://github.com/dzackgarza/foo.git")
+    result = subprocess.run([str(hook_source_repo / hook_dir / hook)], cwd=gated, env=git_test_env(), text=True, capture_output=True, check=False)
+    assert result.returncode == 1, result.stdout + result.stderr
+    assert "--no-verify" in result.stderr
+    assert "red-proof" in result.stderr

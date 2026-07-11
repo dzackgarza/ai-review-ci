@@ -18,4 +18,40 @@ hook_common_dir="$(CDPATH= cd -- "$hook_common_dir" && pwd -P)"
 if [ "$repo_common_dir" = "$hook_common_dir" ]; then
   exit 0
 fi
-exec just test-ci
+
+# Sanctioned QC-bypass exceptions. Some repositories are categorically outside
+# this QC regime; the inherited gate must not block pushes to them.
+remote="$(git -C "$repo_root" config --get remote.origin.url 2>/dev/null || true)"
+case "${repo_root##*/}" in
+  *.wiki) echo "ai-review-ci hook: wiki repository — QC does not apply; proceeding without verification." >&2; exit 0 ;;
+esac
+case "$remote" in
+  *.wiki|*.wiki.git) echo "ai-review-ci hook: wiki repository — QC does not apply; proceeding without verification." >&2; exit 0 ;;
+esac
+case "$remote" in
+  "") ;;              # no remote: local QC repo, gate normally
+  *dzackgarza/*) ;;   # under the dzackgarza account: gate normally
+  *) echo "ai-review-ci hook: origin is not under the dzackgarza account — QC not owned here; proceeding without verification." >&2; exit 0 ;;
+esac
+
+if just test-ci; then
+  exit 0
+fi
+
+cat >&2 <<'MSG'
+
+────────────────────────────────────────────────────────────────
+ai-review-ci QC gate FAILED (just test-ci).
+
+`git push --no-verify` is a SANCTIONED bypass ONLY for these pushes:
+  • a TDD red-proof audit commit — a deliberately failing test landed
+    before the fix that makes it pass (the failing test IS the artifact);
+  • a push to a wiki repository;
+  • a push to a repository not under the dzackgarza account.
+The last two are auto-detected and skipped above, so if you see this
+message the repo IS gated and only the TDD red-proof exception applies.
+
+Any other failure is a REAL QC failure — do not bypass it, fix it.
+────────────────────────────────────────────────────────────────
+MSG
+exit 1

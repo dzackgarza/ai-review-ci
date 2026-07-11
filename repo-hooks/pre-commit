@@ -18,24 +18,44 @@ hook_common_dir="$(CDPATH= cd -- "$hook_common_dir" && pwd -P)"
 if [ "$repo_common_dir" = "$hook_common_dir" ]; then
   exit 0
 fi
+
+# Sanctioned QC-bypass exceptions. Some repositories are categorically outside
+# this QC regime; the inherited gate must not block commits to them.
+remote="$(git -C "$repo_root" config --get remote.origin.url 2>/dev/null || true)"
+case "${repo_root##*/}" in
+  *.wiki) echo "ai-review-ci hook: wiki repository — QC does not apply; proceeding without verification." >&2; exit 0 ;;
+esac
+case "$remote" in
+  *.wiki|*.wiki.git) echo "ai-review-ci hook: wiki repository — QC does not apply; proceeding without verification." >&2; exit 0 ;;
+esac
+case "$remote" in
+  "") ;;              # no remote: local QC repo, gate normally
+  *dzackgarza/*) ;;   # under the dzackgarza account: gate normally
+  *) echo "ai-review-ci hook: origin is not under the dzackgarza account — QC not owned here; proceeding without verification." >&2; exit 0 ;;
+esac
+
 if just test; then
   exit 0
 fi
 
-cat >&2 <<'EOF'
+cat >&2 <<'MSG'
 
-QC commit gate failed.
+────────────────────────────────────────────────────────────────
+ai-review-ci QC gate FAILED (just test).
 
 If this is an INTENTIONAL red proof — a test that genuinely fails because it
-reproduces a bug, landing before its green fix per the red/green workflow — do
-NOT reach for `git commit --no-verify`. Use the sanctioned, auditable route:
+reproduces a bug, landing before its green fix per the red/green workflow —
+prefer the sanctioned, auditable route (records the owning issue and bypasses
+this gate for that ONE commit only; ordinary hooks stay active):
 
     ai-review-ci red-commit --issue <owning-issue> -m "<message>"
 
-It records the owning issue in the commit and bypasses this gate for that single
-commit only; ordinary hooks stay active. See the git-integration-workflow skill
-(red-proof route) and test-guidelines (RED-GREEN-REVERT).
+`git commit --no-verify` is also a permitted bypass for that same TDD red-proof
+audit case (and for wiki repos / repos not under the dzackgarza account, which
+are auto-detected and skipped above). See the git-integration-workflow skill
+(red-proof route) and test-guidelines.
 
-Otherwise, fix the failing checks above before committing.
-EOF
+Any other failure is a REAL QC failure — do not bypass it, fix it.
+────────────────────────────────────────────────────────────────
+MSG
 exit 1

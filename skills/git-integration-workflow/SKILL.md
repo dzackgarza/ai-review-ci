@@ -69,6 +69,20 @@ uvx --from git+https://github.com/dzackgarza/itree itree [subcommand]
 
 The command lines below abbreviate that prefix to `itree`.
 
+### Governance boundary
+
+A repository is `itree`-governed when its planned work is represented by one rooted,
+ordered GitHub issue tree. Confirm that ownership from repository guidance and
+`itree doctor OWNER/REPO`; a missing root is not permission to create an orphan with raw
+GitHub commands. Initialize the tree or obtain an explicit decision that the repository
+is not `itree`-governed.
+
+In a governed repository, create work units with `itree new` and create delivery
+milestones with `itree milestone`. Raw `gh issue create`, direct issue POSTs, and manual
+GitHub Milestone construction are reserved for repositories explicitly outside `itree`
+governance. See [references/issue-workflow.md](./references/issue-workflow.md) for the
+creation and recovery contract.
+
 ### Doctrine (matches `itree help model`)
 
 - A **work unit** is a coherent PR/review/proof boundary and is ALWAYS A LEAF: its acceptance criteria, proof obligations, implementation checklist, and status live in the issue body or comments — never in child issues (violating this is `itree` finding E015).
@@ -87,7 +101,14 @@ The command lines below abbreviate that prefix to `itree`.
 - `itree init OWNER/REPO "Ledger: OWNER/REPO"`: create the root ledger for a repo that has no tree yet.
 - `itree triage OWNER/REPO`: repair orphaned issues one at a time (absorb, attach, or close each).
 - `itree new OWNER/REPO "Title" --under OWNER/REPO#PARENT [--body-file FILE]`: file a new work unit under a grouping issue.
-  Without `--under` it creates nothing and prints where the item already fits, so sub-PR items are absorbed rather than fragmented.
+  Without `--under` it creates nothing and prints the existing work units, valid grouping targets, and exact placement commands, so sub-PR items are absorbed rather than fragmented.
+- `itree milestone OWNER/REPO "Title" --under OWNER/REPO#PARENT [--body BODY | --body-file FILE] [--issues OWNER/REPO#ISSUE ...]`: create one GitHub Milestone and its matching `Milestone: Title` grouping issue under an explicit parent.
+  Omitting `--under` is a non-mutating placement inquiry: the command prints existing milestone ledgers, valid grouping targets, and an exact invocation, then exits nonzero.
+  Each supplied work unit moves beneath the new ledger in argument order — attach when parentless, replace its parent when already placed — and receives the new milestone assignment.
+  This is one preflighted orchestration command, not a GitHub transaction: preflight failure changes nothing; after mutation begins, the command stops at the first failure without rollback and distinguishes confirmed operations, untouched operations, and an indeterminate current operation.
+  Partial state is never reported as success.
+  Recovery always starts with a live GitHub/tree reread.
+  If installed `itree --help` does not list `milestone`, stop; do not construct a manual fallback.
 - `itree absorb OWNER/REPO#SOURCE --into OWNER/REPO#UNIT` (or `--into OWNER/REPO#UNIT --title "..." --body-file FILE` for not-yet-filed content): merge sub-PR content into a work unit verbatim; the source issue is cross-linked, detached, and closed as duplicate.
 - `itree attach OWNER/REPO#PARENT OWNER/REPO#CHILD`: attach an existing issue as a child of a grouping issue.
 - `itree move OWNER/REPO#CHILD --under OWNER/REPO#PARENT [--before SIBLING | --after SIBLING]`: reparent or reorder an issue.

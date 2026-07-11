@@ -8,10 +8,12 @@ import yaml
 
 from ai_review_ci.gates import POLICY_GATE_MARKER, SUPPORTED_PROFILES
 from ai_review_ci.install import (
+    AISLOP_CONFIG,
     PR_TEMPLATE,
     TEMPLATES,
     _prove_installation,
     _template_text,
+    _write_aislop_config,
     _write_manifest,
     _write_pr_template,
     _write_scaffold,
@@ -102,6 +104,46 @@ def test_install_writes_pr_template_with_gate_marker(tmp_path: pathlib.Path) -> 
     assert "started as a draft" in text
     assert "Ready-for-review was requested only after" in text
     assert "top-level PR comment titled `Review feedback disposition ledger`" in text
+
+
+def test_install_writes_canonical_aislop_config(tmp_path: pathlib.Path) -> None:
+    # #228: aislop has no --config flag — it reads .aislop/config.yml from the
+    # scanned directory root — so the uniform central policy governs a repo only
+    # if install physically lands this file in it. Run the real writer against a
+    # real tmp target and assert the config lands with python-print-debug
+    # disabled (the owner-policy payload). Real file boundary, no mock.
+    repo = _git_repo(tmp_path)
+    _write_aislop_config(repo)
+    dest = repo / AISLOP_CONFIG
+    assert dest.is_file()
+    config = yaml.safe_load(dest.read_text())
+    assert config["rules"]["ai-slop/python-print-debug"] == "off"
+    # No per-repo threshold / opt-in: it is the uniform central standard.
+    assert "failBelow" not in (config.get("ci") or {})
+
+
+def test_distributed_aislop_config_matches_repo_own_config() -> None:
+    # #228: the config install distributes MUST be identical to the one governing
+    # ai-review-ci's own scan — otherwise the fleet standard and the head repo's
+    # own gate silently diverge (the false-green class the review-guidelines gate
+    # guards against). The packaged canonical is the single source; the repo-root
+    # copy that aislop reads for the self-scan must stay byte-identical to it.
+    packaged = (ROOT / "src" / "ai_review_ci" / "data" / "aislop-config.yml").read_text()
+    repo_own = (ROOT / ".aislop" / "config.yml").read_text()
+    assert repo_own == packaged
+    # And the comment must not still claim the config is undistributed (#205 was
+    # reversed by #228); the stale claim would be an outright false statement.
+    assert "NOT distributed" not in packaged
+
+
+def test_install_aislop_config_refuses_overwrite(tmp_path: pathlib.Path) -> None:
+    repo = _git_repo(tmp_path)
+    dest = repo / AISLOP_CONFIG
+    dest.parent.mkdir(parents=True)
+    dest.write_text("rules: {}\n")
+    with pytest.raises(SystemExit):
+        _write_aislop_config(repo)
+    assert dest.read_text() == "rules: {}\n"
 
 
 def test_install_pr_template_refuses_overwrite(tmp_path: pathlib.Path) -> None:

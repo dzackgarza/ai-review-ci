@@ -25,6 +25,10 @@ from ai_review_ci.gates import SUPPORTED_PROFILES, protect_branch
 TEMPLATES = ("review-general.yml", "review-slop.yml", "review-pr.yml")
 SCAFFOLD_FILES = ("justfile",)
 PR_TEMPLATE = "pull_request_template.md"
+# The canonical aislop policy, distributed into every governed repo (#228).
+# aislop has no --config flag; it reads .aislop/config.yml from the scanned
+# directory root, so distribution means writing the file into the target repo.
+AISLOP_CONFIG = ".aislop/config.yml"
 DEFAULT_INFRA_REF = "main"
 # The exact doctor surfaces whose convergence --skip-scaffold defers to `doctor`:
 # a brownfield repo keeps its own non-delegating justfile, so its delegation and
@@ -121,6 +125,28 @@ def _write_pr_template(target: pathlib.Path) -> None:
     print(f"installed .github/{PR_TEMPLATE}")
 
 
+def _write_aislop_config(target: pathlib.Path) -> None:
+    """Write the canonical aislop config into the target repo (#228).
+
+    aislop reads config from the scanned directory root and exposes no --config
+    flag, so the uniform central policy governs a governed repo only if this file
+    physically lands in it. It is the mandatory central standard — no per-repo
+    threshold, no opt-in. Follows the repo-owned-file overwrite convention: an
+    existing config is repo-owned and never clobbered.
+    """
+    target = _git_repo_root(target)
+    dest = target / AISLOP_CONFIG
+    if dest.exists():
+        print(
+            f"FATAL: {dest} already exists — this aislop config is repo-owned configuration; edit it directly, or remove it first to re-initialize.",
+            file=sys.stderr,
+        )
+        sys.exit(1)
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    dest.write_text((files("ai_review_ci") / "data" / "aislop-config.yml").read_text(encoding="utf-8"), encoding="utf-8")
+    print(f"installed {AISLOP_CONFIG}")
+
+
 def _write_manifest(target: pathlib.Path, profile: str, branch: str, ref: str, release_channel: str) -> None:
     from ai_review_ci.doctor import LOCAL_DELEGATION_MODE, WORKFLOW_TEMPLATE_VERSION, manifest_text
 
@@ -205,6 +231,7 @@ def install(
     if not skip_scaffold:
         _write_scaffold(target, profile)
     _write_trigger_workflows(target, profile, ref)
+    _write_aislop_config(target)
     _write_manifest(target, profile, branch, ref, release_channel)
     # PR template last among local writes: it is the opt-in signal for gate
     # enforcement, so create it only after profile validation and every other

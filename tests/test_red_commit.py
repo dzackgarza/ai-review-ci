@@ -37,12 +37,24 @@ def repo(tmp_path: pathlib.Path) -> pathlib.Path:
     repo = tmp_path / "downstream"
     repo.mkdir()
     _git(repo, "init", "-q")
+    # Persist an identity so the CLI's own `git commit` works on identity-less
+    # runners (CI has no global git user); real agents have one configured.
+    _git(repo, "config", "user.name", "T")
+    _git(repo, "config", "user.email", "t@e.x")
     (repo / "justfile").write_text(_GATE_JUSTFILE)
     hooks = repo / ".git" / "hooks"
     hooks.mkdir(parents=True, exist_ok=True)
     hook = hooks / "pre-commit"
-    hook.write_text((ROOT / "repo-hooks" / "pre-commit").read_text())
-    hook.chmod(0o755)
+    # Symlink the hook exactly as `install-repo-hooks` does: readlink -f then
+    # resolves to the ai-review-ci checkout, so the hook's self-skip does NOT
+    # misfire against the downstream repo and the gate genuinely runs. Copying
+    # the file instead makes hook_repo resolve to the downstream .git and the
+    # self-skip short-circuits the gate.
+    hook.symlink_to(ROOT / "repo-hooks" / "pre-commit")
+    # Pin hooks to this repo's own dir so the fixture hook is exercised
+    # deterministically, regardless of any global core.hooksPath on the host
+    # (install-global-hooks sets one; CI has none — this makes both behave alike).
+    _git(repo, "config", "core.hooksPath", str(hooks))
     _git(repo, "add", "justfile")
     # The gate passes here (no RED file), so an ordinary initial commit is fine.
     _git(repo, "commit", "-q", "--no-verify", "-m", "init")
