@@ -42,3 +42,17 @@ Cross-reference the **claimed boundary obligation** (which issue the PR marks sa
 
 Do not accept the green CI / passing test surface as proof when the claim map names a boundary the evidence does not cross.
 The reviewer's job is to flag the mismatch between the *stated obligation* and the *evidence shape*, not to ratify the appearance of progress.
+
+## Original issue asks — coverage cross-reference (#242)
+
+When the reviewer context includes an "## Original issue asks" section, the verbatim bodies of the issues this PR references are inlined there.
+Those texts are the authoritative completion contract; the PR description is the author's untrusted paraphrase of them, and agents systematically narrow the ask when restating it.
+
+For every issue the PR claims to close, enumerate the asks in the issue's own text and classify each against the diff: done (cite the evidence), partial, untouched, or contradicted.
+Do not accept the PR body's characterization of scope as a substitute for this comparison.
+Quantifiers in the issue keep their meaning: "all", "each of the sites", "every" cannot be narrowed to the subset the PR touched — a subset is partial, not done.
+A change that makes a named defect stop being exercised (the defective path goes vacuous, a consumer degenerates silently) is not a fix for that ask; classify it as untouched or contradicted, not done.
+
+If any ask is untouched or partial while the PR claims closure, that is an under-scoped work unit: report it and prescribe demoting `Closes #N` to `Refs #N` so the issue stays open.
+The merged work is then honest partial progress instead of a silently closed contract.
+An issue that is only referenced (`Refs`) carries no closure claim; judge only what the PR does claim.

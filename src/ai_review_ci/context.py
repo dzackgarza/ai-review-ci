@@ -18,6 +18,7 @@ by state. Pass it to the review agent as instructions:
 """
 
 import json
+import re
 import subprocess
 import sys
 from collections.abc import Callable
@@ -357,7 +358,100 @@ def _fetch_pr_body(repo: str, pr_number: int) -> str | None:
     return body
 
 
-def _pr_claim_map_lines(repo: str, pr_number: int) -> list[str]:
+_ISSUE_REF_PATTERN = re.compile(
+    r"\b(closes?|closed|fix(?:es|ed)?|resolves?|resolved|refs?|references?|see|part of)\s+#(\d+)",
+    re.IGNORECASE,
+)
+
+_CLOSING_KEYWORDS = frozenset({"close", "closes", "closed", "fix", "fixes", "fixed", "resolve", "resolves", "resolved"})
+
+
+def _referenced_issues(body: str) -> list[tuple[int, bool]]:
+    """Issue numbers referenced in a PR body, in first-mention order.
+
+    Each entry is (number, claims_closure): claims_closure is True when any
+    reference to that number uses a GitHub closing keyword (Closes/Fixes/Resolves),
+    False when the PR only cites it (Refs/see/part of). The distinction matters
+    downstream: only claimed-closed issues carry a completion contract to audit.
+    """
+    refs: dict[int, bool] = {}
+    for keyword, number in _ISSUE_REF_PATTERN.findall(body):
+        n = int(number)
+        refs[n] = refs.get(n, False) or keyword.lower() in _CLOSING_KEYWORDS
+    return list(refs.items())
+
+
+def _fetch_issue(repo: str, number: int) -> JsonDict | None:
+    """Fetch one issue; None when it cannot be fetched (rendered as an explicit gap, never dropped)."""
+    result = subprocess.run(
+        ["gh", "api", f"repos/{repo}/issues/{number}"],
+        capture_output=True,
+        text=True,
+    )
+    if result.returncode != 0:
+        return None
+    data = json.loads(result.stdout)
+    return data if isinstance(data, dict) else None
+
+
+def _issue_ask_entry(repo: str, number: int, claims_closure: bool) -> list[str]:
+    """Render one referenced issue: verbatim body, or an explicit line for gaps."""
+    claim = "claimed closed by this PR" if claims_closure else "referenced, not claimed closed"
+    issue = _fetch_issue(repo, number)
+    if issue is None:
+        return [
+            f"### #{number} — could not be fetched ({claim})",
+            "",
+            "The PR body references this issue but its text is unavailable. Treat the closure claim as unverified.",
+            "",
+        ]
+    if "pull_request" in issue:
+        return [f"### #{number} — is a pull request, not an issue ({claim})", ""]
+    title = issue.get("title") or ""
+    state = issue.get("state") or "unknown"
+    body = issue.get("body")
+    lines = [f"### #{number} — {title} ({state}; {claim})", ""]
+    if isinstance(body, str) and body.strip():
+        lines.extend(["```markdown", body.strip(), "```", ""])
+    else:
+        lines.extend(["_Issue has no body._", ""])
+    return lines
+
+
+def _issue_asks_lines(repo: str, pr_body: str) -> list[str]:
+    """Render the verbatim bodies of the issues the PR references (#242).
+
+    This section is the anchor for issue-vs-deliverable coverage: without it the
+    reviewer's only view of "what was asked" is the PR body — the author's own
+    paraphrase — so a PR that confidently narrows the ask passes every
+    claim-vs-evidence check while silently closing a wider contract.
+    """
+    refs = _referenced_issues(pr_body)
+    if not refs:
+        return []
+    lines = [
+        "## Original issue asks",
+        "",
+        "The verbatim bodies of the issues this PR references. These texts are "
+        "the authoritative statement of what was asked; the PR description below "
+        "is the author's untrusted paraphrase of them. For each ask stated in an "
+        "issue this PR claims to close, classify it against the diff: done "
+        "(evidence visible in the diff), partial, untouched, or contradicted. "
+        "Quantifiers in the issue keep their meaning — 'all', 'each of the "
+        "sites', 'every' cannot be narrowed to the subset the PR touched; a "
+        "subset is partial, not done. If any ask is untouched or partial while "
+        "the PR claims closure, that is an under-scoped work unit: flag it and "
+        "prescribe demoting `Closes #N` to `Refs #N` so the issue stays open. "
+        "An issue that is only referenced carries no closure claim; judge only "
+        "what the PR does claim.",
+        "",
+    ]
+    for number, claims_closure in refs:
+        lines.extend(_issue_ask_entry(repo, number, claims_closure))
+    return lines
+
+
+def _pr_claim_map_lines(body: str) -> list[str]:
     """Render the PR body's claim map and evidence map as a reviewer-context section.
 
     This section is the #185 fix: it gives the LLM reviewer the PR's *stated*
@@ -366,9 +460,6 @@ def _pr_claim_map_lines(repo: str, pr_number: int) -> list[str]:
     cannot flag a PR that claims a real boundary is crossed but supplies only a fake
     executable, argv recorder, or helper-only test as proof.
     """
-    body = _fetch_pr_body(repo, pr_number)
-    if body is None:
-        return []
     return [
         "## PR claim map",
         "",
@@ -426,7 +517,10 @@ def fetch_context(
 
     if pr_number:
         lines.extend(_pr_thread_lines(repo, pr_number))
-        lines.extend(_pr_claim_map_lines(repo, pr_number))
+        pr_body = _fetch_pr_body(repo, pr_number)
+        if pr_body is not None:
+            lines.extend(_issue_asks_lines(repo, pr_body))
+            lines.extend(_pr_claim_map_lines(pr_body))
 
     text = "\n".join(lines).strip() + "\n"
 

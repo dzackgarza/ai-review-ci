@@ -21,6 +21,7 @@ Gate failures (any one is sufficient):
   → 🔴 Critical: Wrong Path.
   Remedy: this should not be a PR; land it on main and close the PR, or fold it into the root-cause work unit it belongs to.
 - **Sub-issue scope** — the body says `partial #N`, defers the feature the issue actually requests ("not claimed", "follow-up PR", "needs design decision"), or patches one symptom under an open epic.
+  Do not rely on the author self-labeling the narrowing: when the reviewer context carries an "## Original issue asks" section (#242), ground this check in the issue's own text — a PR whose diff covers a subset of a claimed-closed issue's asks is under-scoped no matter how completely its own description reads.
   → 🔴 Critical: Under-scoped Work Unit.
   Remedy: re-scope upward to the whole issue, cluster, or subtree.
   Merging it would create a mixed half-fixed state that generates new issues; the merge is the defect.

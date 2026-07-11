@@ -63,9 +63,7 @@ def test_marked_fingerprint_ignores_unmarked_bodies() -> None:
     assert _marked_fingerprint(f"<!-- {FINGERPRINT_MARKER} abc123 -->\nrest") == "abc123"
 
 
-def test_publish_creates_updates_and_respects_dispositions(
-    tmp_path: Path, monkeypatch: Any, capsys: Any
-) -> None:
+def test_publish_creates_updates_and_respects_dispositions(tmp_path: Path, monkeypatch: Any, capsys: Any) -> None:
     tracked_fp = issue_fingerprint("semantic-regression", "src/lattice.py", "WRONG_DUAL")
     closed_fp = issue_fingerprint("semantic-regression", "src/other.py", "OLD_FINDING")
     ledger = [

@@ -302,9 +302,7 @@ def test_reviewer_command_bans_live_in_safety_net_rulebook() -> None:
     # literal glob patterns. The rulebook must ban the observed time-wasters:
     # git in a .git-less copy, direct sudo around the submit-candidate
     # wrapper, and recursive opencode runs.
-    rulebook = json.loads(
-        Path("ci/reviewer_home/.config/cc-safety-net/rules/project-rules/rulebook.json").read_text()
-    )
+    rulebook = json.loads(Path("ci/reviewer_home/.config/cc-safety-net/rules/project-rules/rulebook.json").read_text())
     rules = {rule["name"]: rule for rule in rulebook["rules"]}
     assert "status" in rules["block-git"]["block_args"]
     assert rules["block-sudo"]["command"] == "sudo"
