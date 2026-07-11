@@ -84,6 +84,13 @@ If the worker cannot place the work under an existing roadmap node, issue subtre
 The canonical model for the issue tree and milestone mapping is owned by the `plan` skill's `references/externalization.md`. Load and follow it; this guide does not restate the model.
 Before implementation, the work-unit issue must already satisfy that reference's Plan Fit Gate: tree root, parent or roadmap node, GitHub Milestone scope, the issue this PR will close, parent issues referenced but not closed, and the proof obligations owned by the issue.
 
+In an `itree`-governed repository, route work-unit creation through `itree new` with an
+explicit grouping parent, and route new GitHub Milestone plus ledger creation through
+`itree milestone` with an explicit grouping parent. Follow the ownership and partial
+failure contract in [issue-workflow.md](./issue-workflow.md). Raw GitHub issue or
+milestone construction is valid only for a repository explicitly outside `itree`
+governance.
+
 This guide adds only the PR-execution specializations: the review-synthesis body shape below, closing-keyword discipline, and the stop rules specific to deriving one PR from one work-unit issue.
 
 The issue-tree, milestone, wiki, and PR projections may add owner, branch, status, blocker, commit, run, artifact, and review-link metadata.
@@ -251,18 +258,22 @@ Do not expose source-by-source diaries, normalization worksheets, raw agent reas
 For nontrivial non-Jules PRs, update the work-unit issue first:
 
 ```bash
-# Create or select the GitHub Milestone object for this delivery slice.
-# State the subtree root or explicit issue set in the description.
-gh api repos/<OWNER>/<REPO>/milestones -f title="<milestone>" -f state=open -f description="<issue-tree scope>"
+# Create a new delivery slice as one GitHub Milestone plus its matching ledger.
+# Existing work units supplied with --issues are reparented and assigned in CLI order.
+itree milestone OWNER/REPO "<milestone>" \
+  --under OWNER/REPO#GROUPING_PARENT \
+  --body-file milestone.md \
+  --issues OWNER/REPO#FIRST OWNER/REPO#SECOND
 
-# Create or update the roadmap/story/work-unit node that owns this work.
-gh issue create --title "<story-shaped outcome>" --body-file issue.md --label enhancement --milestone "<milestone>"
+# Create an additional PR-sized work unit under the returned or existing milestone ledger.
+itree new OWNER/REPO "<story-shaped outcome>" \
+  --under OWNER/REPO#MILESTONE_LEDGER \
+  --body-file issue.md
+gh issue edit NEW_ISSUE --repo OWNER/REPO --add-label enhancement --milestone "<milestone>"
 
-# Create child issues only for separate work units when native sub-issues are available.
-gh issue create --title "<child story or work-unit node>" --body-file child-issue.md --label enhancement --milestone "<milestone>" --parent <PARENT_ISSUE_NUMBER>
-
-# Attach existing issues as sub-issues when needed.
-gh issue edit <PARENT_ISSUE_NUMBER> --add-sub-issue <CHILD_ISSUE_NUMBER>
+# Place existing separate work units through itree, never raw sub-issue construction.
+itree attach OWNER/REPO#PARENT OWNER/REPO#PARENTLESS_CHILD
+itree move OWNER/REPO#PLACED_CHILD --under OWNER/REPO#PARENT
 
 # Encode blockers as dependencies, not as roadmap order.
 gh issue edit <ISSUE_NUMBER> --add-blocked-by <BLOCKER_ISSUE_NUMBER>
@@ -270,6 +281,15 @@ gh issue edit <ISSUE_NUMBER> --add-blocked-by <BLOCKER_ISSUE_NUMBER>
 # Verify tree placement and milestone scope before implementation.
 gh issue view <PARENT_ISSUE_NUMBER> --json title,body,url,milestone
 ```
+
+Omitting `--under` from either creation command performs no mutation and prints placement
+guidance. `itree milestone --issues` means attach-or-replace placement plus milestone
+assignment in argument order, never metadata-only assignment. The command is one
+preflighted orchestration, not a GitHub transaction: after writes begin, it stops at the
+first failure without rollback, distinguishes confirmed, untouched, and indeterminate
+outcomes, never reports partial state as success, and requires a live reread before
+recovery. If installed `itree --help` does not list `milestone`, stop rather than
+constructing the milestone manually.
 
 * * *
 
@@ -649,13 +669,19 @@ A practical sequence:
 $EDITOR issue-root.md
 $EDITOR issue-foundation.md
 $EDITOR issue-workstream.md
-# Create the milestone if it does not already exist.
-gh api repos/<OWNER>/<REPO>/milestones -f title="<milestone>" -f state=open -f description="<issue-tree scope>"
-gh issue create --title "<story-shaped outcome>" --body-file issue-root.md --label enhancement --milestone "<milestone>"
-gh issue create --title "<foundation work unit>" --body-file issue-foundation.md --label enhancement --milestone "<milestone>" --parent <ISSUE_ROOT_NUMBER>
-gh issue create --title "<workstream work unit>" --body-file issue-workstream.md --label enhancement --milestone "<milestone>" --parent <ISSUE_ROOT_NUMBER>
-# Attach existing issues as sub-issues only when they are separate work units, and encode blockers separately.
-gh issue edit <ISSUE_ROOT_NUMBER> --add-sub-issue <CHILD_ISSUE_NUMBER>
+# Create the delivery slice and its ledger under an explicit grouping parent.
+itree milestone OWNER/REPO "<milestone>" \
+  --under OWNER/REPO#GROUPING_PARENT \
+  --body-file issue-root.md \
+  --issues OWNER/REPO#EXISTING_FOUNDATION OWNER/REPO#EXISTING_WORKSTREAM
+# Create additional separate work units under the returned milestone ledger.
+itree new OWNER/REPO "<foundation work unit>" --under OWNER/REPO#MILESTONE_LEDGER --body-file issue-foundation.md
+gh issue edit FOUNDATION_ISSUE --repo OWNER/REPO --add-label enhancement --milestone "<milestone>"
+itree new OWNER/REPO "<workstream work unit>" --under OWNER/REPO#MILESTONE_LEDGER --body-file issue-workstream.md
+gh issue edit WORKSTREAM_ISSUE --repo OWNER/REPO --add-label enhancement --milestone "<milestone>"
+# Place existing separate work units through itree, and encode blockers separately.
+itree attach OWNER/REPO#MILESTONE_LEDGER OWNER/REPO#PARENTLESS_CHILD
+itree move OWNER/REPO#PLACED_CHILD --under OWNER/REPO#MILESTONE_LEDGER
 gh issue edit <ISSUE_W1_NUMBER> --add-blocked-by <ISSUE_F1_NUMBER>
 
 # 1. keep live planning state on the issue before implementation
@@ -1002,7 +1028,10 @@ git checkout -b fix/login-redirect-bug
 # 3. Put the plan on the work-unit issue in the GitHub issue tree and milestone scope.
 #    Include story, scope, acceptance criteria, proof obligations, and implementation
 #    tasks in the issue body/comments before implementation defines its own success criteria.
-gh api repos/<OWNER>/<REPO>/milestones -f title="<milestone>" -f state=open -f description="<issue-tree scope>"
+itree milestone OWNER/REPO "<milestone>" \
+  --under OWNER/REPO#GROUPING_PARENT \
+  --body-file milestone.md \
+  --issues OWNER/REPO#WORK_UNIT_ISSUE
 gh issue view <WORK_UNIT_ISSUE_NUMBER>
 
 # 4. (Agent makes code changes while the issue tracks open work)
