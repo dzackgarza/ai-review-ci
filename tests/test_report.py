@@ -43,3 +43,18 @@ def test_enforce_report_status_fails_only_for_tier1(tmp_path: pathlib.Path, chec
         enforce_report_status(tier1)
 
     enforce_report_status(tier2)
+
+
+def test_empty_report_metadata_and_status(tmp_path: pathlib.Path, checkout: pathlib.Path, capsys: pytest.CaptureFixture[str]) -> None:
+    # An honest empty report flows through metadata and status enforcement
+    # without inventing findings and without failing the run.
+    artifact = tmp_path / "empty.json"
+    artifact.write_text(json.dumps(general_candidate(findings=[])))
+
+    report_metadata(artifact)
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["finding_count"] == 0
+    assert payload["tier1_count"] == 0
+    assert payload["findings"] == []
+
+    enforce_report_status(artifact)

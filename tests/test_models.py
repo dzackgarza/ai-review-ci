@@ -173,6 +173,17 @@ def test_report_of_only_low_signal_findings_rejected(checkout: Path) -> None:
     assert "at least one finding must be substantive" in str(exc.value)
 
 
+def test_empty_findings_report_accepted(checkout: Path) -> None:
+    # An honest empty report must be valid: requiring >=1 finding structurally
+    # pressures every run to invent debt. The substantive-finding rule only
+    # rejects padding in non-empty reports.
+    general = GeneralReport.model_validate(general_candidate(findings=[]))
+    assert general.findings == []
+
+    slop = SlopReport.model_validate(slop_candidate(findings=[]))
+    assert slop.findings == []
+
+
 def test_forbidden_score_and_report_fields_rejected(checkout: Path) -> None:
     with pytest.raises(ValidationError):
         GeneralReport.model_validate(general_candidate(score=95))

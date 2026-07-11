@@ -35,6 +35,11 @@ Findings must stay inside the project's policy axioms; a finding whose implied d
 Diagnose only.
 Do not propose fixes, patches, or code changes — remediation is handled by separate agents after disposition.
 
+### Honest Empty Reports
+
+If the code in scope yields no real finding, submit a report with an empty `findings` array (`"findings": []`), keeping `review_scope` and `checked_surfaces` accurate.
+Never invent or pad findings to make the report look substantive.
+
 ### Output Format
 
 Write a JSON report to `.agents/review-runner/candidates/submitted.json`.

@@ -209,7 +209,15 @@ def validate_checkout_paths(review_scope: Sequence[Path], findings: Sequence[Rep
 
 
 def require_substantive_finding(findings: Sequence[ReportFinding], *, fix_tail: str) -> None:
-    """At least one finding must be Tier 1 or carry a non-low-signal category."""
+    """A non-empty findings list must contain a Tier 1 or non-low-signal finding.
+
+    An empty findings list is a valid, honest report — a review that found
+    nothing must not be pressured into inventing low-signal debt. The
+    substantive-finding requirement only rejects padding: reports whose every
+    finding is a low-signal tier2 observation.
+    """
+    if not findings:
+        return
     if not any(f.tier == "tier1" or f.category.lower() not in LOW_SIGNAL_CATEGORIES for f in findings):
         raise ValueError(
             "REJECTED: at least one finding must be substantive "
@@ -385,7 +393,7 @@ class GeneralReport(BaseModel):
         json_schema_extra={
             "x-custom-validation": {
                 "_require_substantive_finding": {
-                    "rule": "At least one finding must be Tier 1 or non-low-signal category",
+                    "rule": "A non-empty findings list must contain at least one Tier 1 or non-low-signal finding",
                     "validator": "_require_substantive_finding",
                 },
                 "_check_paths": {
@@ -406,8 +414,10 @@ class GeneralReport(BaseModel):
         description="Files examined during review, relative to repo root. All must exist in the reviewed checkout. Typically drawn from the PR diff.",
     )
     findings: list[GeneralFinding] = Field(
-        min_length=1,
-        description="General review findings. At least one required; at least one must be substantive (Tier 1 or non-low-signal category).",
+        description="General review findings. An empty list is a valid, honest "
+        "report — never invent findings to fill it. Any non-empty list must "
+        "contain at least one substantive finding (Tier 1 or non-low-signal "
+        "category).",
     )
     checked_surfaces: list[CheckedSurface] = Field(
         description="Surfaces inspected during review, whether findings were found or not. Documents review thoroughness.",
@@ -571,7 +581,7 @@ class SlopReport(BaseModel):
         json_schema_extra={
             "x-custom-validation": {
                 "_require_substantive_finding": {
-                    "rule": "At least one finding must be Tier 1 or non-low-signal category",
+                    "rule": "A non-empty findings list must contain at least one Tier 1 or non-low-signal finding",
                     "validator": "_require_substantive_finding",
                 },
                 "_check_paths": {
@@ -592,8 +602,10 @@ class SlopReport(BaseModel):
         description="Files examined during review, relative to repo root. All must exist in the reviewed checkout.",
     )
     findings: list[SlopFinding] = Field(
-        min_length=1,
-        description="Slop review findings. At least one required; at least one must be substantive (Tier 1 or non-low-signal category).",
+        description="Slop review findings. An empty list is a valid, honest "
+        "report — never invent slop to fill it. Any non-empty list must "
+        "contain at least one substantive finding (Tier 1 or non-low-signal "
+        "category).",
     )
 
     @model_validator(mode="after")

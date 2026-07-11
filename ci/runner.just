@@ -187,11 +187,15 @@ run-review report_type scope:
       AI_REVIEW_OPENCODE_TIMEOUT="600" \
       AI_REVIEW_MAX_ATTEMPTS="5" \
       AI_REVIEW_BACKOFF="5" \
+      AI_REVIEW_POLICY_PATHS="${REVIEW_POLICY_PATHS:-}" \
+      AI_REVIEW_FOCUS_PROMPT="${REVIEW_FOCUS_PROMPT:-}" \
       bash -lc 'cd {{reviewer_repo}} && /usr/local/bin/opencode --version && /usr/local/bin/uv run --project {{reviewer_infra}} ai-review-ci run-review \
         --template "{{reviewer_infra}}/reviews/{{report_type}}/template.md" \
         --scope "{{reviewer_infra}}/reviews/scope-{{scope}}.md" \
         --manifest "{{reviewer_infra}}/reviews/{{report_type}}/manifest.txt" \
-        --reviewer-context .reviewer-context.md'
+        --reviewer-context .reviewer-context.md \
+        --policy-paths "$AI_REVIEW_POLICY_PATHS" \
+        --focus-prompt "$AI_REVIEW_FOCUS_PROMPT"'
 
 collect-output:
     cp {{reviewer_repo}}/.review-report-artifact.json {{control_repo}}/.review-report-artifact.json

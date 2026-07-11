@@ -16,6 +16,21 @@ on:
         required: false
         type: string
         default: 'main'
+      advisory:
+        description: 'Advisory mode: findings are published to the ledger but never fail the run'
+        required: false
+        type: boolean
+        default: false
+      policy_paths:
+        description: 'Newline-delimited repo-relative policy documents inlined into the reviewer prompt'
+        required: false
+        type: string
+        default: ''
+      focus_prompt:
+        description: 'Short repo-specific review-focus instructions inlined into the reviewer prompt'
+        required: false
+        type: string
+        default: ''
 
 jobs:
   review:
@@ -31,6 +46,8 @@ jobs:
       REVIEW_INFRA_REF: ${{ inputs.infra_ref }}
       REVIEW_PR_NUMBER: ${{ github.event.number || 0 }}
       REVIEW_BASE_REF: ${{ github.base_ref }}
+      REVIEW_POLICY_PATHS: ${{ inputs.policy_paths }}
+      REVIEW_FOCUS_PROMPT: ${{ inputs.focus_prompt }}
 
     steps:
       - uses: actions/checkout@v4
@@ -129,4 +146,8 @@ jobs:
         run: just -f "$INFRA/ci/runner.just" post-threads "$REVIEW_PR_NUMBER"
 
       - name: Enforce review status
+        # Advisory runs publish the ledger snapshot but never let findings
+        # determine the workflow conclusion; infrastructure failures in the
+        # earlier steps still fail the run.
+        if: ${{ !inputs.advisory }}
         run: just -f "$INFRA/ci/runner.just" enforce-review-status

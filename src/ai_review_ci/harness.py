@@ -2,13 +2,16 @@
 validated report artifact exists.
 
 Prompt assembly order: reviewer context (existing tracked findings), scope
-instructions (repo-wide sweep or PR diff), manifest documents (skills and
-guides, statically declared per review type), repo docs, task template.
+instructions (repo-wide sweep or PR diff), focus prompt (repo-declared review
+focus), manifest documents (skills and guides, statically declared per review
+type), policy documents (repo-declared, explicit paths), repo docs, task
+template.
 
 For PR-diff scope, the staged unified diff is inlined into the prompt and
 repo README/AGENTS docs are not auto-injected. Diff reviewers need the changed
 surface and the central review contract, not broad repository instructions that
-compete with the diff.
+compete with the diff. Explicitly-declared policy documents and the focus
+prompt are repo-owned configuration and are inlined in every scope.
 
 The agent writes a candidate report to a fixed path, then calls the reviewer
 submission command (no arguments) to validate and submit. submit-candidate
@@ -138,6 +141,37 @@ def load_manifest(manifest_path: Path) -> str:
     return "\n\n---\n\n".join(sections)
 
 
+def focus_prompt_section(focus_prompt: str) -> str:
+    """Render the repo-declared review focus as a prompt section; empty if unset."""
+    text = focus_prompt.strip()
+    if not text:
+        return ""
+    return "## Repository Review Focus\n\n" + text
+
+
+def policy_docs_section(policy_paths: str, repo_root: Path) -> str:
+    """Inline the repo-declared policy documents; a missing entry is fatal.
+
+    One repo-relative path per line; blank lines and ``#`` comments are
+    skipped. These are explicit repo-owned configuration, so unlike the
+    auto-collected README/AGENTS docs they are inlined in every scope and a
+    dangling path fails the run instead of being silently dropped.
+    """
+    sections: list[str] = []
+    for raw in policy_paths.splitlines():
+        line = raw.strip()
+        if not line or line.startswith("#"):
+            continue
+        p = repo_root / line
+        if not p.is_file():
+            print(f"FATAL: policy document not found: {line}", file=sys.stderr)
+            sys.exit(1)
+        sections.append(f"### Policy document: {line}\n\n{p.read_text()}")
+    if not sections:
+        return ""
+    return "## Repository Policy Documents\n\n" + "\n\n---\n\n".join(sections)
+
+
 def is_diff_scope(scope_path: Path) -> bool:
     """True when the current review is a PR diff review."""
     return scope_path.name == "scope-diff.md"
@@ -158,6 +192,8 @@ def build_initial_prompt(
     manifest_path: Path,
     ctx_path: Path,
     repo_root: Path,
+    policy_paths: str = "",
+    focus_prompt: str = "",
 ) -> str:
     """Assemble the full reviewer prompt in the documented order."""
     diff_scope = is_diff_scope(scope_path)
@@ -165,9 +201,13 @@ def build_initial_prompt(
         ctx_path.read_text(),
         scope_path.read_text(),
     ]
+    if focus := focus_prompt_section(focus_prompt):
+        sections.append(focus)
     if diff_scope:
         sections.append(diff_prompt_section(repo_root))
     sections.append(load_manifest(manifest_path))
+    if policy_docs := policy_docs_section(policy_paths, repo_root):
+        sections.append(policy_docs)
     if not diff_scope and (repo_docs := collect_repo_docs(repo_root)):
         sections.append(repo_docs)
     sections.append(template_path.read_text())
@@ -223,7 +263,14 @@ def _require_files(*paths: Path) -> None:
             sys.exit(1)
 
 
-def run_review(template: Path, scope: Path, manifest: Path, reviewer_context: Path) -> None:
+def run_review(
+    template: Path,
+    scope: Path,
+    manifest: Path,
+    reviewer_context: Path,
+    policy_paths: str = "",
+    focus_prompt: str = "",
+) -> None:
     """Assemble the reviewer prompt and loop opencode until an artifact exists.
 
     Args:
@@ -231,6 +278,10 @@ def run_review(template: Path, scope: Path, manifest: Path, reviewer_context: Pa
         scope: Path to scope instructions markdown (repo sweep or PR diff).
         manifest: Path to the prompt manifest listing guide documents.
         reviewer_context: Path to reviewer context file (existing tracked findings).
+        policy_paths: Newline-delimited repo-relative policy documents to
+            inline into the prompt; a missing entry is fatal.
+        focus_prompt: Short repo-specific review-focus instructions inlined
+            into the prompt.
     """
     config = OpencodeConfig.from_env()
     _require_files(template, scope, manifest, reviewer_context)
@@ -240,7 +291,15 @@ def run_review(template: Path, scope: Path, manifest: Path, reviewer_context: Pa
     candidates_dir.mkdir(parents=True, exist_ok=True)
     task_path = run_dir / "task.md"
 
-    initial_prompt = build_initial_prompt(template, scope, manifest, reviewer_context, Path.cwd())
+    initial_prompt = build_initial_prompt(
+        template,
+        scope,
+        manifest,
+        reviewer_context,
+        Path.cwd(),
+        policy_paths=policy_paths,
+        focus_prompt=focus_prompt,
+    )
 
     submitted_path = candidates_dir / SUBMITTED_CANDIDATE
 

@@ -103,6 +103,107 @@ def test_real_diff_scope_prompt_names_submission_contract(tmp_path: Path) -> Non
     assert "opx submit-candidate" not in prompt
 
 
+def _prompt_inputs(tmp_path: Path, scope_name: str) -> dict[str, Path]:
+    """Real prompt-assembly inputs for direct build_initial_prompt calls."""
+    repo = tmp_path / "repo"
+    repo.mkdir(exist_ok=True)
+    scope = tmp_path / scope_name
+    scope.write_text("scope instructions\n")
+    reviews_root = tmp_path / "reviews"
+    manifest_dir = reviews_root / "general"
+    manifest_dir.mkdir(parents=True, exist_ok=True)
+    manifest = manifest_dir / "manifest.txt"
+    manifest.write_text("manifest-doc.md\n")
+    (reviews_root / "manifest-doc.md").write_text("review doctrine\n")
+    context = tmp_path / "context.md"
+    context.write_text("prior alert context\n")
+    template = tmp_path / "template.md"
+    template.write_text("write submitted.json\n")
+    return {"repo": repo, "scope": scope, "manifest": manifest, "context": context, "template": template}
+
+
+def test_policy_docs_and_focus_prompt_are_inlined(tmp_path: Path) -> None:
+    from ai_review_ci.harness import build_initial_prompt
+
+    inputs = _prompt_inputs(tmp_path, "scope-repo.md")
+    docs = inputs["repo"] / "docs"
+    docs.mkdir()
+    (docs / "STYLE.md").write_text("terminology must match the drift dictionary\n")
+    (inputs["repo"] / "AGENTS.md").write_text("repo agents doc\n")
+
+    prompt = build_initial_prompt(
+        inputs["template"],
+        inputs["scope"],
+        inputs["manifest"],
+        inputs["context"],
+        inputs["repo"],
+        policy_paths="# comment line\ndocs/STYLE.md\n\n",
+        focus_prompt="Focus on mathematical correctness of lattice invariants.",
+    )
+
+    assert "## Repository Review Focus" in prompt
+    assert "Focus on mathematical correctness of lattice invariants." in prompt
+    assert "### Policy document: docs/STYLE.md" in prompt
+    assert "terminology must match the drift dictionary" in prompt
+    # Declared policy docs and focus text precede the task template.
+    assert prompt.index("Focus on mathematical correctness") < prompt.index("write submitted.json")
+    assert prompt.index("terminology must match") < prompt.index("write submitted.json")
+
+
+def test_policy_docs_are_inlined_even_in_diff_scope(tmp_path: Path) -> None:
+    # PR-diff scope skips auto-collected README/AGENTS docs, but explicitly
+    # declared policy documents are repo-owned configuration and must reach
+    # the reviewer in every scope.
+    from ai_review_ci.harness import build_initial_prompt
+
+    inputs = _prompt_inputs(tmp_path, "scope-diff.md")
+    (inputs["repo"] / ".reviewer-diff.patch").write_text("diff --git a/x b/x\n")
+    (inputs["repo"] / "README.md").write_text("auto-collected repo overview\n")
+    (inputs["repo"] / "POLICY.md").write_text("declared policy content\n")
+
+    prompt = build_initial_prompt(
+        inputs["template"],
+        inputs["scope"],
+        inputs["manifest"],
+        inputs["context"],
+        inputs["repo"],
+        policy_paths="POLICY.md",
+        focus_prompt="",
+    )
+
+    assert "declared policy content" in prompt
+    assert "auto-collected repo overview" not in prompt
+    assert "## Repository Review Focus" not in prompt
+
+
+def test_missing_policy_doc_is_fatal(tmp_path: Path) -> None:
+    from ai_review_ci.harness import policy_docs_section
+
+    repo = tmp_path / "repo"
+    repo.mkdir()
+
+    with pytest.raises(SystemExit):
+        policy_docs_section("docs/DOES_NOT_EXIST.md", repo)
+
+
+def test_review_workflow_advisory_skips_only_enforcement() -> None:
+    # Advisory mode must not let findings determine the workflow conclusion,
+    # while every infrastructure step still runs and can fail the run.
+    workflow = yaml.safe_load((ROOT / ".github" / "workflows" / "_review.yml").read_text())
+    inputs = workflow[True]["workflow_call"]["inputs"]
+
+    assert inputs["advisory"]["type"] == "boolean"
+    assert inputs["advisory"]["default"] is False
+    assert inputs["policy_paths"]["type"] == "string"
+    assert inputs["focus_prompt"]["type"] == "string"
+
+    steps = workflow["jobs"]["review"]["steps"]
+    enforce = next(step for step in steps if step.get("name") == "Enforce review status")
+    assert enforce["if"] == "${{ !inputs.advisory }}"
+    guarded = [step["name"] for step in steps if "!inputs.advisory" in str(step.get("if", ""))]
+    assert guarded == ["Enforce review status"]
+
+
 def test_retry_prompt_uses_absolute_submit_candidate_path(tmp_path: Path) -> None:
     from ai_review_ci.harness import retry_prompt
 

@@ -62,8 +62,8 @@ Each finding MUST carry one of these labels in the JSON `label` field:
 - `SLOP SUSPECT` — Likely slop but needs human judgment to confirm.
 
 Do not submit `NOTE`, "clean", "no issues", or all-clear findings.
-Code under review is assumed to contain slop.
-If you cannot identify a real `SLOP` or `SLOP SUSPECT` finding from the in-scope material, do not submit a report; let the CI attempt fail.
+If you cannot identify a real `SLOP` or `SLOP SUSPECT` finding from the in-scope material, submit a report with an empty `findings` array (`"findings": []`) and the `review_scope` you actually examined.
+An honest empty report is always preferable to an invented or padded finding — never manufacture slop to have something to submit.
 
 ### No Remediation
 
@@ -105,5 +105,5 @@ Key rules every finding must satisfy:
 Write your report to `.agents/review-runner/candidates/submitted.json`. Then run `/home/reviewer/bin/submit-candidate` (no arguments).
 
 If the script exits 0, your report was accepted and you are done.
-If it exits non-zero, read the errors, fix the SAME JSON file, and re-run the script only if you have a real slop finding to submit.
-If the error shows that your report is clean-shaped, out of scope, or based on review-runner internals, delete the candidate file and stop without submitting an artifact.
+If it exits non-zero, read the errors, fix the SAME JSON file, and re-run the script.
+If the error shows that a finding is clean-shaped, out of scope, or based on review-runner internals, remove that finding (an empty `findings` array is valid) and resubmit.

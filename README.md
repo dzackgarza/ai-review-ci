@@ -78,6 +78,14 @@ jobs:
 
 The canonical templates live in [`src/ai_review_ci/templates/`](src/ai_review_ci/templates/).
 
+The reusable workflow also accepts three optional repo-owned configuration inputs:
+
+- `advisory` (boolean, default `false`): advisory runs upload the full SARIF ledger snapshot but never let findings determine the workflow conclusion — the tier-1 enforcement step is skipped while every infrastructure step still fails loudly. Use this for a continuous, non-blocking stream of review reports on `main`; findings are then triaged as code scanning alerts (dismissed with reason, or fixed), and dispositions feed later reviewer context as do-not-re-raise instructions.
+- `policy_paths` (string, default empty): newline-delimited repo-relative document paths inlined into the reviewer prompt in every scope (`#` comments and blank lines are skipped; a missing path fails the run). Use it to hand the reviewer a repo-local policy catalogue — style guides, terminology dictionaries, mathematical specifications — beyond the README/AGENTS docs that repo sweeps auto-collect.
+- `focus_prompt` (string, default empty): short repo-specific instructions inlined into the reviewer prompt, for narrowing the review to particular concerns (for example, mathematical correctness against a named specification).
+
+Report schemas accept an honest empty report: `findings: []` is valid, and the substantive-finding requirement only rejects padding in non-empty reports. A reviewer that finds nothing must submit an empty report rather than invent debt.
+
 Requirements in the target repo: GitHub code scanning enabled (free for public repos), GitHub CLI auth with permission to edit branch protection, the target branch named in `--branch`, and a repo shape that satisfies the declared `--profile`. LLM review jobs are signal-only process checks: they upload SARIF and post review threads, but they do not compute or fail on a health score.
 The merge gate is deterministic QC plus evidence-backed resolution of reviewer-authored PR threads.
 
