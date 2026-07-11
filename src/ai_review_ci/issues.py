@@ -151,8 +151,7 @@ def _issue_body(finding: JsonDict, report_type: str, parent_issue: int) -> str:
     lines = [
         f"<!-- {FINGERPRINT_MARKER} {fingerprint} -->",
         f"<!-- ai-review-coarse-fingerprint: {coarse} -->",
-        f"**{finding['label']}** — `{loc['path']}:{loc['start_line']}-{loc['end_line']}` "
-        f"({finding['tier']}, {finding['category']})",
+        f"**{finding['label']}** — `{loc['path']}:{loc['start_line']}-{loc['end_line']}` ({finding['tier']}, {finding['category']})",
         "",
     ]
     for key, heading in _NARRATIVE_KEYS:
@@ -238,7 +237,7 @@ def publish_issues(artifact: Path, repo: str, parent_issue: int = 0) -> None:
         body = _issue_body(finding, report_type, parent_issue)
         existing = by_fingerprint.get(fingerprint)
         if existing is None:
-            issue = _gh_api(
+            created_issue = _gh_api(
                 [f"repos/{repo}/issues", "--input", "-"],
                 input_body={
                     "title": _issue_title(finding, report_type),
@@ -246,10 +245,10 @@ def publish_issues(artifact: Path, repo: str, parent_issue: int = 0) -> None:
                     "labels": [*ISSUE_LABELS, type_label],
                 },
             )
-            if not isinstance(issue, dict):
+            if not isinstance(created_issue, dict):
                 _fail("gh api issue creation returned non-object JSON")
             if parent_issue:
-                _attach_to_parent(repo, parent_issue, int(issue["number"]))
+                _attach_to_parent(repo, parent_issue, int(created_issue["number"]))
             created += 1
         elif existing["state"] == "open":
             _gh_api(
