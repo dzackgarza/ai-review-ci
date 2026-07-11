@@ -71,17 +71,12 @@ The command lines below abbreviate that prefix to `itree`.
 
 ### Governance boundary
 
-A repository is `itree`-governed when its planned work is represented by one rooted,
-ordered GitHub issue tree. Confirm that ownership from repository guidance and
-`itree doctor OWNER/REPO`; a missing root is not permission to create an orphan with raw
-GitHub commands. Initialize the tree or obtain an explicit decision that the repository
-is not `itree`-governed.
+A repository is `itree`-governed when its planned work is represented by one rooted, ordered GitHub issue tree.
+Confirm that ownership from repository guidance and `itree doctor OWNER/REPO`; a missing root is not permission to create an orphan with raw GitHub commands.
+Initialize the tree or obtain an explicit decision that the repository is not `itree`-governed.
 
-In a governed repository, create work units with `itree new` and create delivery
-milestones with `itree milestone`. Raw `gh issue create`, direct issue POSTs, and manual
-GitHub Milestone construction are reserved for repositories explicitly outside `itree`
-governance. See [references/issue-workflow.md](./references/issue-workflow.md) for the
-creation and recovery contract.
+In a governed repository, create work units with `itree new` and create delivery milestones with `itree milestone`. Raw `gh issue create`, direct issue POSTs, and manual GitHub Milestone construction are reserved for repositories explicitly outside `itree` governance.
+See [references/issue-workflow.md](./references/issue-workflow.md) for the creation and recovery contract.
 
 ### Doctrine (matches `itree help model`)
 

@@ -84,12 +84,9 @@ If the worker cannot place the work under an existing roadmap node, issue subtre
 The canonical model for the issue tree and milestone mapping is owned by the `plan` skill's `references/externalization.md`. Load and follow it; this guide does not restate the model.
 Before implementation, the work-unit issue must already satisfy that reference's Plan Fit Gate: tree root, parent or roadmap node, GitHub Milestone scope, the issue this PR will close, parent issues referenced but not closed, and the proof obligations owned by the issue.
 
-In an `itree`-governed repository, route work-unit creation through `itree new` with an
-explicit grouping parent, and route new GitHub Milestone plus ledger creation through
-`itree milestone` with an explicit grouping parent. Follow the ownership and partial
-failure contract in [issue-workflow.md](./issue-workflow.md). Raw GitHub issue or
-milestone construction is valid only for a repository explicitly outside `itree`
-governance.
+In an `itree`-governed repository, route work-unit creation through `itree new` with an explicit grouping parent, and route new GitHub Milestone plus ledger creation through `itree milestone` with an explicit grouping parent.
+Follow the ownership and partial failure contract in [issue-workflow.md](./issue-workflow.md).
+Raw GitHub issue or milestone construction is valid only for a repository explicitly outside `itree` governance.
 
 This guide adds only the PR-execution specializations: the review-synthesis body shape below, closing-keyword discipline, and the stop rules specific to deriving one PR from one work-unit issue.
 
@@ -282,14 +279,10 @@ gh issue edit <ISSUE_NUMBER> --add-blocked-by <BLOCKER_ISSUE_NUMBER>
 gh issue view <PARENT_ISSUE_NUMBER> --json title,body,url,milestone
 ```
 
-Omitting `--under` from either creation command performs no mutation and prints placement
-guidance. `itree milestone --issues` means attach-or-replace placement plus milestone
-assignment in argument order, never metadata-only assignment. The command is one
-preflighted orchestration, not a GitHub transaction: after writes begin, it stops at the
-first failure without rollback, distinguishes confirmed, untouched, and indeterminate
-outcomes, never reports partial state as success, and requires a live reread before
-recovery. If installed `itree --help` does not list `milestone`, stop rather than
-constructing the milestone manually.
+Omitting `--under` from either creation command performs no mutation and prints placement guidance.
+`itree milestone --issues` means attach-or-replace placement plus milestone assignment in argument order, never metadata-only assignment.
+The command is one preflighted orchestration, not a GitHub transaction: after writes begin, it stops at the first failure without rollback, distinguishes confirmed, untouched, and indeterminate outcomes, never reports partial state as success, and requires a live reread before recovery.
+If installed `itree --help` does not list `milestone`, stop rather than constructing the milestone manually.
 
 * * *
 

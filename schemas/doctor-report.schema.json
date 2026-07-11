@@ -18,13 +18,7 @@
           "type": "array"
         },
         "observed_state": {
-          "enum": [
-            "not_applicable",
-            "compliant",
-            "missing",
-            "missing_contexts",
-            "unverifiable"
-          ],
+          "enum": ["not_applicable", "compliant", "missing", "missing_contexts", "unverifiable"],
           "title": "Observed State",
           "type": "string"
         },
@@ -33,12 +27,7 @@
           "type": "string"
         }
       },
-      "required": [
-        "required_contexts",
-        "observed_contexts",
-        "observed_state",
-        "evidence"
-      ],
+      "required": ["required_contexts", "observed_contexts", "observed_state", "evidence"],
       "title": "BranchProtectionObservation",
       "type": "object"
     },
@@ -65,11 +54,7 @@
           "title": "Manifest"
         }
       },
-      "required": [
-        "path",
-        "sha256",
-        "manifest"
-      ],
+      "required": ["path", "sha256", "manifest"],
       "title": "DeclarationObservation",
       "type": "object"
     },
@@ -93,12 +78,7 @@
           "type": "boolean"
         }
       },
-      "required": [
-        "present",
-        "command",
-        "delegates_to_global_qc",
-        "caller_root_preserved"
-      ],
+      "required": ["present", "command", "delegates_to_global_qc", "caller_root_preserved"],
       "title": "DelegationCommandObservation",
       "type": "object"
     },
@@ -113,10 +93,7 @@
           "$ref": "#/$defs/DelegationCommandObservation"
         }
       },
-      "required": [
-        "required_justfile",
-        "observed"
-      ],
+      "required": ["required_justfile", "observed"],
       "title": "DelegationObservation",
       "type": "object"
     },
@@ -124,10 +101,7 @@
       "additionalProperties": false,
       "properties": {
         "severity": {
-          "enum": [
-            "error",
-            "warning"
-          ],
+          "enum": ["error", "warning"],
           "title": "Severity",
           "type": "string"
         },
@@ -158,12 +132,7 @@
           "type": "array"
         }
       },
-      "required": [
-        "severity",
-        "surface",
-        "evidence",
-        "remediation_commands"
-      ],
+      "required": ["severity", "surface", "evidence", "remediation_commands"],
       "title": "DoctorFinding",
       "type": "object"
     },
@@ -172,12 +141,7 @@
       "description": "How the repo's live GitHub labels compare to the canonical taxonomy.\n\n``missing`` / ``drifted`` / ``variants`` are the canonical labels absent, present but\ndrifted (color or description), or present only as a case/spelling variant. Extra\nrepo-specific labels are not recorded \u2014 extras are allowed.",
       "properties": {
         "observed_state": {
-          "enum": [
-            "not_applicable",
-            "compliant",
-            "misaligned",
-            "unverifiable"
-          ],
+          "enum": ["not_applicable", "compliant", "misaligned", "unverifiable"],
           "title": "Observed State",
           "type": "string"
         },
@@ -207,13 +171,7 @@
           "type": "string"
         }
       },
-      "required": [
-        "observed_state",
-        "missing",
-        "drifted",
-        "variants",
-        "evidence"
-      ],
+      "required": ["observed_state", "missing", "drifted", "variants", "evidence"],
       "title": "LabelAlignmentObservation",
       "type": "object"
     },
@@ -232,10 +190,7 @@
           "type": "array"
         }
       },
-      "required": [
-        "canonical",
-        "remote_variants"
-      ],
+      "required": ["canonical", "remote_variants"],
       "title": "LabelVariant",
       "type": "object"
     },
@@ -252,10 +207,7 @@
           "type": "string"
         }
       },
-      "required": [
-        "present",
-        "reason"
-      ],
+      "required": ["present", "reason"],
       "title": "MissingManifest",
       "type": "object"
     },
@@ -263,13 +215,7 @@
       "additionalProperties": false,
       "properties": {
         "profile": {
-          "enum": [
-            "python",
-            "bun",
-            "bun-playwright",
-            "rust",
-            "sage"
-          ],
+          "enum": ["python", "bun", "bun-playwright", "rust", "sage"],
           "title": "Profile",
           "type": "string"
         },
@@ -288,11 +234,7 @@
           "type": "array"
         }
       },
-      "required": [
-        "profile",
-        "required_paths",
-        "missing_paths"
-      ],
+      "required": ["profile", "required_paths", "missing_paths"],
       "title": "ProfileProofObservation",
       "type": "object"
     },
@@ -305,13 +247,7 @@
           "type": "integer"
         },
         "profile": {
-          "enum": [
-            "python",
-            "bun",
-            "bun-playwright",
-            "rust",
-            "sage"
-          ],
+          "enum": ["python", "bun", "bun-playwright", "rust", "sage"],
           "title": "Profile",
           "type": "string"
         },
@@ -341,15 +277,7 @@
           "type": "string"
         }
       },
-      "required": [
-        "schema_version",
-        "profile",
-        "installed_ref",
-        "release_channel",
-        "workflow_template_version",
-        "local_delegation",
-        "default_branch"
-      ],
+      "required": ["schema_version", "profile", "installed_ref", "release_channel", "workflow_template_version", "local_delegation", "default_branch"],
       "title": "QcManifest",
       "type": "object"
     },
@@ -369,11 +297,7 @@
           "type": "string"
         }
       },
-      "required": [
-        "root",
-        "remote",
-        "head"
-      ],
+      "required": ["root", "remote", "head"],
       "title": "TargetObservation",
       "type": "object"
     },
@@ -407,13 +331,7 @@
           "type": "array"
         }
       },
-      "required": [
-        "path",
-        "required_ref",
-        "observed_ref",
-        "required_gates",
-        "observed_gates"
-      ],
+      "required": ["path", "required_ref", "observed_ref", "required_gates", "observed_gates"],
       "title": "WorkflowRefObservation",
       "type": "object"
     }
@@ -440,26 +358,12 @@
       "type": "string"
     },
     "declared_profile": {
-      "enum": [
-        "python",
-        "bun",
-        "bun-playwright",
-        "rust",
-        "sage",
-        "unknown"
-      ],
+      "enum": ["python", "bun", "bun-playwright", "rust", "sage", "unknown"],
       "title": "Declared Profile",
       "type": "string"
     },
     "effective_profile": {
-      "enum": [
-        "python",
-        "bun",
-        "bun-playwright",
-        "rust",
-        "sage",
-        "unknown"
-      ],
+      "enum": ["python", "bun", "bun-playwright", "rust", "sage", "unknown"],
       "title": "Effective Profile",
       "type": "string"
     },
@@ -505,23 +409,12 @@
       "type": "array"
     },
     "installation_state": {
-      "enum": [
-        "compliant",
-        "outdated",
-        "noncompliant",
-        "uninstalled",
-        "unknown"
-      ],
+      "enum": ["compliant", "outdated", "noncompliant", "uninstalled", "unknown"],
       "title": "Installation State",
       "type": "string"
     },
     "global_status": {
-      "enum": [
-        "current",
-        "stale",
-        "misconfigured",
-        "unverifiable"
-      ],
+      "enum": ["current", "stale", "misconfigured", "unverifiable"],
       "title": "Global Status",
       "type": "string"
     }
