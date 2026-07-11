@@ -4,3 +4,4 @@ dist/
 *.egg-info/
 node_modules/
 .coverage
+.claude/
