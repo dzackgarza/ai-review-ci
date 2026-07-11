@@ -121,6 +121,25 @@ def _write_pr_template(target: pathlib.Path) -> None:
     print(f"installed .github/{PR_TEMPLATE}")
 
 
+def _write_review_guidelines(target: pathlib.Path) -> None:
+    """Write/idempotently update the canonical ``# Review Guidelines`` section (#232).
+
+    ai-review-ci owns distributing that canonical section (#215): a freshly-installed repo
+    must PASS its own doctor review-guidelines gate, not fail it until someone hand-copies the
+    section. Unlike the other install writes this is an upsert, never a refuse-on-exists —
+    an existing AGENTS.md keeps all its other content and just gets the section
+    inserted/refreshed. Sources the text from ``load_canonical_review_guidelines()`` so there
+    is one copy of the canonical, and re-running neither duplicates nor drifts it.
+    """
+    from ai_review_ci.review_guidelines import load_canonical_review_guidelines, upsert_review_guidelines_section
+
+    target = _git_repo_root(target)
+    dest = target / "AGENTS.md"
+    existing = dest.read_text(encoding="utf-8") if dest.is_file() else None
+    dest.write_text(upsert_review_guidelines_section(existing, load_canonical_review_guidelines()), encoding="utf-8")
+    print(f"installed # {'updated' if existing else 'created'} Review Guidelines section in AGENTS.md")
+
+
 def _write_manifest(target: pathlib.Path, profile: str, branch: str, ref: str, release_channel: str) -> None:
     from ai_review_ci.doctor import LOCAL_DELEGATION_MODE, WORKFLOW_TEMPLATE_VERSION, manifest_text
 
@@ -211,6 +230,9 @@ def install(
     # repo-owned-file conflict has already passed. A failed install must not leave
     # a repo opted into PR-description enforcement.
     _write_pr_template(target)
+    # Distribute the canonical review guidance so the just-installed repo passes its own
+    # doctor review-guidelines gate instead of failing it (#232).
+    _write_review_guidelines(target)
     protect_branch(repo, branch, profile)
     _prove_installation(target, skip_scaffold=skip_scaffold)
 

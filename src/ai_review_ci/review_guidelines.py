@@ -197,6 +197,65 @@ def classify_review_guidelines(agents_md: str | None, canonical: str) -> ReviewG
     return ReviewGuidelinesStatus(state="current", detail=f"'{_SECTION_HEADER}' section is present, unique, and current")
 
 
+def _review_guidelines_section_ranges(doc: str) -> list[tuple[int, int]]:
+    """Line-index ``[start, end)`` ranges of each top-level ``# Review Guidelines`` section.
+
+    Mirrors ``extract_review_guidelines_sections``' fence-aware, level-1-header boundary
+    logic so the writer removes exactly what the gate would count as a section (and never a
+    fenced-code mention).
+    """
+    lines = doc.replace("\r\n", "\n").replace("\r", "\n").split("\n")
+    ranges: list[tuple[int, int]] = []
+    start: int | None = None
+    fence_char: str | None = None
+    fence_len = 0
+    for i, line in enumerate(lines):
+        marker = _fence_marker(line)
+        if marker is not None:
+            ch, run, is_bare = marker
+            if fence_char is None:
+                fence_char, fence_len = ch, run
+            elif ch == fence_char and is_bare and run >= fence_len:
+                fence_char, fence_len = None, 0
+            continue
+        is_level1 = fence_char is None and line.startswith("# ") and not line.startswith("##")
+        if is_level1 and line.rstrip() == _SECTION_HEADER:
+            if start is not None:
+                ranges.append((start, i))
+            start = i
+            continue
+        if is_level1 and start is not None:
+            ranges.append((start, i))
+            start = None
+    if start is not None:
+        ranges.append((start, len(lines)))
+    return ranges
+
+
+def upsert_review_guidelines_section(agents_md: str | None, canonical: str) -> str:
+    """Return AGENTS.md content carrying exactly one current canonical section.
+
+    Removes any pre-existing ``# Review Guidelines`` section(s) — stale or duplicated — and
+    appends the canonical once at the end, preserving all other content. Idempotent:
+    re-running on already-current content yields the same single current section. This is the
+    writer half of the gate ``classify_review_guidelines`` enforces; both live here so the
+    contract has one source of truth.
+    """
+    canonical_block = canonical.strip()
+    if agents_md is None or agents_md.strip() == "":
+        return canonical_block + "\n"
+    lines = agents_md.replace("\r\n", "\n").replace("\r", "\n").split("\n")
+    drop: set[int] = set()
+    for s, e in _review_guidelines_section_ranges(agents_md):
+        drop.update(range(s, e))
+    kept = [line for idx, line in enumerate(lines) if idx not in drop]
+    while kept and kept[-1].strip() == "":
+        kept.pop()
+    if not kept:
+        return canonical_block + "\n"
+    return "\n".join(kept) + "\n\n" + canonical_block + "\n"
+
+
 def check_review_guidelines(target: Path) -> None:
     """Fail unless the target repo's AGENTS.md carries the current canonical section.
 
