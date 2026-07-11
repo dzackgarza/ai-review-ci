@@ -252,6 +252,66 @@ def _carry_forward_payload(repo: str, cats: list[str], pr_number: int) -> JsonDi
     return {"schema_version": 1, "alerts": entries}
 
 
+def _fetch_ledger_issues(repo: str, type_label: str) -> list[JsonDict]:
+    """All issues-ledger entries (open and closed) for one review type."""
+    issues: list[JsonDict] = []
+    page = 1
+    while True:
+        result = subprocess.run(
+            [
+                "gh",
+                "api",
+                "--method",
+                "GET",
+                f"repos/{repo}/issues",
+                "--field",
+                "state=all",
+                "--field",
+                f"labels=ai-review,{type_label}",
+                "--field",
+                "per_page=100",
+                "--field",
+                f"page={page}",
+            ],
+            capture_output=True,
+            text=True,
+        )
+        if result.returncode != 0:
+            _fail(f"gh api GET repos/{repo}/issues failed: {result.stderr.strip()}")
+        batch = json.loads(result.stdout)
+        if not isinstance(batch, list):
+            _fail(f"gh api GET repos/{repo}/issues returned non-list JSON")
+        issues.extend(_mapping(i, "issue") for i in batch)
+        if len(batch) < 100:
+            return [i for i in issues if "pull_request" not in i]
+        page += 1
+
+
+def _issue_ledger_lines(cat: str, issues: list[JsonDict]) -> list[str]:
+    """Reviewer-context section for the issues ledger of one review type.
+
+    Open entries are already tracked — automation updates them in place, so
+    re-reporting them is duplication. Closed entries are dispositions and
+    must not be re-raised without materially new evidence.
+    """
+    if not issues:
+        return []
+    lines = [f"### {cat} (issues ledger)", ""]
+    open_issues = [i for i in issues if i.get("state") == "open"]
+    closed_issues = [i for i in issues if i.get("state") != "open"]
+    if open_issues:
+        lines.extend(["**Open / tracked findings (do not re-report; automation updates them):**"])
+        lines.extend(f"- {i.get('title')} (#{i.get('number')})" for i in open_issues)
+        lines.append("")
+    if closed_issues:
+        lines.extend(["**Closed findings (dispositions — do not re-raise without materially new evidence):**"])
+        for i in closed_issues:
+            reason = i.get("state_reason") or "closed"
+            lines.append(f"- {i.get('title')} (#{i.get('number')}, {reason})")
+        lines.append("")
+    return lines
+
+
 def _pr_thread_lines(repo: str, pr_number: int) -> list[str]:
     """Digest section of review threads already surfaced on the PR."""
     threads = _fetch_pr_threads(repo, pr_number)
@@ -362,6 +422,7 @@ def fetch_context(
 
     for cat in names:
         lines.extend(_alert_section(cat, _collect_context_alerts(repo, cat, pr_number)))
+        lines.extend(_issue_ledger_lines(cat, _fetch_ledger_issues(repo, cat)))
 
     if pr_number:
         lines.extend(_pr_thread_lines(repo, pr_number))

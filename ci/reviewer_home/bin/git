@@ -1,0 +1,6 @@
+#!/bin/sh
+# Hard ban: the review copy has no .git and the reviewer has no reason to
+# touch version control. First on PATH, so this catches every invocation,
+# including ones embedded in compound commands that permission patterns miss.
+echo "git is disabled in the review sandbox: the review copy has no .git directory; read the files on disk instead." >&2
+exit 1

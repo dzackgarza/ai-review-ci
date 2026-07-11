@@ -36,6 +36,16 @@ on:
         required: false
         type: string
         default: ''
+      delivery:
+        description: 'Findings ledger: sarif (code scanning) or issues (fingerprint-tracked GitHub issues; requires issues: write)'
+        required: false
+        type: string
+        default: 'sarif'
+      parent_issue:
+        description: 'Grouping issue number new issue-ledger findings are attached under as sub-issues (issues delivery only; 0 = none)'
+        required: false
+        type: number
+        default: 0
 
 jobs:
   review:
@@ -45,6 +55,7 @@ jobs:
       security-events: write
       actions: read
       pull-requests: write
+      issues: write
     env:
       REVIEW_REPORT_TYPE: ${{ inputs.report_type }}
       REVIEW_SCOPE: ${{ inputs.scope }}
@@ -54,6 +65,8 @@ jobs:
       REVIEW_POLICY_PATHS: ${{ inputs.policy_paths }}
       REVIEW_FOCUS_PROMPT: ${{ inputs.focus_prompt }}
       REVIEW_CONTEXT_ARCHIVE: ${{ inputs.context_archive }}
+      REVIEW_DELIVERY: ${{ inputs.delivery }}
+      REVIEW_PARENT_ISSUE: ${{ inputs.parent_issue }}
 
     steps:
       - uses: actions/checkout@v4
@@ -89,6 +102,14 @@ jobs:
           fi
           if [[ "$REVIEW_SCOPE" == "diff" && -z "$REVIEW_BASE_REF" ]]; then
             echo "base_ref is required for diff scope" >&2
+            exit 1
+          fi
+          case "$REVIEW_DELIVERY" in
+            sarif|issues) ;;
+            *) echo "invalid delivery: $REVIEW_DELIVERY" >&2; exit 1 ;;
+          esac
+          if [[ ! "$REVIEW_PARENT_ISSUE" =~ ^[0-9]+$ ]]; then
+            echo "invalid parent_issue: $REVIEW_PARENT_ISSUE" >&2
             exit 1
           fi
 
@@ -141,13 +162,21 @@ jobs:
           path: .review-findings.json
 
       - name: Convert report to SARIF
+        if: inputs.delivery == 'sarif'
         run: just -f "$INFRA/ci/runner.just" convert-sarif "ai-$REVIEW_REPORT_TYPE-review"
 
       - name: Upload review findings
+        if: inputs.delivery == 'sarif'
         uses: github/codeql-action/upload-sarif@v4
         with:
           sarif_file: .review-report.sarif
           category: ai-${{ inputs.report_type }}-review
+
+      - name: Publish findings to the issues ledger
+        if: inputs.delivery == 'issues'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: just -f "$INFRA/ci/runner.just" publish-issues "$REVIEW_PARENT_ISSUE"
 
       - name: Post review threads
         if: inputs.scope == 'diff'

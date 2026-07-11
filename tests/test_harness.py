@@ -296,18 +296,31 @@ def test_ensure_blocking_stdio_restores_blocking_streams() -> None:
     assert result.stdout.strip() == "True True"
 
 
-def test_reviewer_opencode_config_denies_wasteful_probing() -> None:
-    # The reviewer's opencode permission config must deny the observed
-    # time-wasters: git in a .git-less copy, direct sudo around the
-    # submit-candidate wrapper, and probing the review infrastructure.
+def test_reviewer_command_bans_live_in_safety_net_rulebook() -> None:
+    # Command-level bans are enforced by cc-safety-net's semantic analyzer
+    # (handles path prefixes, flag reordering, wrappers), not by opencode's
+    # literal glob patterns. The rulebook must ban the observed time-wasters:
+    # git in a .git-less copy, direct sudo around the submit-candidate
+    # wrapper, and recursive opencode runs.
+    rulebook = json.loads(
+        Path("ci/reviewer_home/.config/cc-safety-net/rules/project-rules/rulebook.json").read_text()
+    )
+    rules = {rule["name"]: rule for rule in rulebook["rules"]}
+    assert "status" in rules["block-git"]["block_args"]
+    assert rules["block-sudo"]["command"] == "sudo"
+    assert rules["block-opencode-recursion"]["command"] == "opencode"
+    # Every rule ships fixtures proving it fires (validated by `rule test`).
+    tested = {fixture.get("rule") for fixture in rulebook["tests"]}
+    assert set(rules) <= tested
+
+    # opencode permissions keep only tool-level toggles.
     config = json.loads(Path("ci/reviewer_home/.config/opencode/opencode.json").read_text())
-    bash = config["permission"]["bash"]
-    assert bash["git *"] == "deny"
-    assert bash["sudo *"] == "deny"
-    assert bash["*/opt/ai-review*"] == "deny"
-    assert config["permission"]["webfetch"] == "deny"
-    # The submission wrapper itself stays callable.
-    assert bash["*"] == "allow"
+    assert config["permission"] == {"webfetch": "deny"}
+
+    # The runner must install the rulebook into the reviewer repo (project
+    # scope, cwd-based) — user-scope placement under $HOME does not activate.
+    runner = Path("ci/runner.just").read_text()
+    assert ".cc-safety-net/rules" in runner
 
 
 def test_reviewer_path_contract_does_not_expose_just() -> None:

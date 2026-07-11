@@ -15,6 +15,7 @@ Every command you run should serve a finding. Specifically:
 - The review copy has **no `.git` directory**. Git commands (`git status`, `git log`, `git diff`, …) are denied and answer nothing; work from the files on disk.
 - The complete set of valid `POLICY.*` and `REMEDIATE.*` codes is already inlined in the policy-index documents above. Do not probe Python modules, importable packages, or the review infrastructure to discover policy registries — cite codes from the inlined index or use `null`.
 - Do not re-run `submit-candidate --help` more than once; the schema does not change between calls.
+- **Never read, `cat`, `ls`, `file`, or stat anything outside the repository** — including `/home/reviewer/bin/submit-candidate` itself. Reads outside the repo are auto-rejected and each rejection wastes a turn. `submit-candidate` is only ever *executed*: `--help` for the schema, then with no arguments to submit.
 
 ## Task: Slop Audit
 

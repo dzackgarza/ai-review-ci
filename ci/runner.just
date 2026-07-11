@@ -112,6 +112,11 @@ copy-reviewer-repo:
       {{control_repo}}/ {{reviewer_repo}}/
     sudo mkdir -p {{reviewer_repo}}/.agents/review-runner/candidates
     sudo cp {{control_repo}}/.reviewer-context.md {{reviewer_repo}}/.reviewer-context.md
+    # cc-safety-net loads custom rulebooks from the *project* scope (cwd);
+    # user-scope placement under $HOME does not activate them. The reviewer
+    # runs with cwd={{reviewer_repo}}, so the rulebook must live there.
+    sudo mkdir -p {{reviewer_repo}}/.cc-safety-net
+    sudo cp -r {{reviewer_home}}/.config/cc-safety-net/rules {{reviewer_repo}}/.cc-safety-net/rules
     sudo chown -R reviewer:reviewer {{reviewer_repo}}
 
 prepare:
@@ -228,6 +233,12 @@ convert-sarif category:
       --output "{{control_repo}}/.review-report.sarif" \
       --carry-forward-alerts "{{control_repo}}/.reviewer-alerts.json" \
       --category "{{category}}"
+
+publish-issues parent_issue:
+    uv run --project {{infra}} ai-review-ci publish-issues \
+      --artifact "{{control_repo}}/.review-report-artifact.json" \
+      --repo "${GITHUB_REPOSITORY}" \
+      --parent-issue "{{parent_issue}}"
 
 post-threads pr_number:
     uv run --project {{infra}} ai-review-ci post-threads \

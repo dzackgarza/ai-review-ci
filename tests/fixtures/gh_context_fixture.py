@@ -59,10 +59,24 @@ def _alert_entries(fixture_dir: Path) -> list[dict[str, object]]:
     return _json_object_list(alerts_path) if alerts_path.exists() else []
 
 
+def _emit_issue_page(fixture_dir: Path, fields: dict[str, str]) -> None:
+    issues_path = fixture_dir / "issues.json"
+    issues = _json_object_list(issues_path) if issues_path.exists() else []
+    matching = [i for i in issues if str(i.get("labels_query", "")) == fields.get("labels", "")]
+    per_page = int(fields["per_page"])
+    page = int(fields["page"])
+    start = (page - 1) * per_page
+    print(json.dumps(matching[start : start + per_page]))
+
+
 def _emit_rest_page(argv: list[str], fixture_dir: Path) -> None:
     path = argv[argv.index("GET") + 1]
     fields = _field_values(argv)
     _append_call(fixture_dir, {"kind": "rest", "path": path, "fields": fields})
+
+    if path.endswith("/issues"):
+        _emit_issue_page(fixture_dir, fields)
+        return
 
     if _request_matches(fixture_dir / "failures.json", fields):
         print("code scanning request failed", file=sys.stderr)

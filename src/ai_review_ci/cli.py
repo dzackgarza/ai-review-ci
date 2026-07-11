@@ -25,6 +25,7 @@ Subcommands:
 - to-sarif         — convert a validated artifact to SARIF 2.1.0
 - fetch-context    — build reviewer context from code scanning alerts
 - post-threads     — post validated findings as resolvable PR threads
+- publish-issues   — publish validated findings as fingerprint-tracked issues
 - run-review       — assemble the reviewer prompt and loop opencode
 """
 
@@ -43,6 +44,7 @@ from ai_review_ci.gates import (
 )
 from ai_review_ci.harness import run_review
 from ai_review_ci.install import install
+from ai_review_ci.issues import publish_issues
 from ai_review_ci.labels import install_labels
 from ai_review_ci.red_commit import red_commit
 from ai_review_ci.report import (
@@ -82,6 +84,7 @@ app.command(enforce_report_status)
 app.command(to_sarif)
 app.command(fetch_context)
 app.command(post_threads)
+app.command(publish_issues, name="publish-issues")
 app.command(run_review)
 
 

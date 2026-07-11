@@ -259,7 +259,9 @@ def retry_prompt(submitted_path: Path) -> str:
         f"The previous invocation in this opencode session ended without "
         f"a valid report at {ARTIFACT_PATH}. Continue the existing session. "
         f"Write the report to {submitted_path}, then run "
-        f"{SUBMIT_CANDIDATE_BIN} with no arguments."
+        f"{SUBMIT_CANDIDATE_BIN} with no arguments. Execute it only — do "
+        f"not read, cat, ls, or stat it or anything else outside the "
+        f"repository; such reads are auto-rejected and waste the attempt."
     )
 
 

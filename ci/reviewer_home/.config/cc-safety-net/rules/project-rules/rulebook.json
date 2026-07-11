@@ -1,11 +1,37 @@
 {
   "rulebook_version": 1,
   "name": "project-rules",
-  "version": "1.0.0",
-  "description": "Block trivial linting/quality-tool escapes in CI — prevents reward-hacking by redirecting agents to substantive structural audit",
+  "version": "1.1.0",
+  "description": "Block trivial linting/quality-tool escapes and observed reviewer time-wasters in CI — prevents reward-hacking by redirecting agents to substantive structural audit",
   "author": "ci",
-  "allowed_commands": ["uvx", "npx", "bunx", "python"],
+  "allowed_commands": ["uvx", "npx", "bunx", "python", "git", "sudo", "opencode"],
   "rules": [
+    {
+      "name": "block-git",
+      "command": "git",
+      "block_args": [
+        "status", "log", "diff", "show", "blame", "branch", "rev-parse",
+        "ls-files", "ls-tree", "ls-remote", "remote", "fetch", "pull", "clone",
+        "init", "config", "describe", "tag", "stash", "worktree", "shortlog",
+        "reflog", "grep", "add", "commit", "checkout", "switch", "restore",
+        "reset", "clean", "push", "merge", "rebase", "cherry-pick", "apply",
+        "am", "bisect", "submodule", "notes", "archive", "gc", "fsck",
+        "cat-file", "count-objects", "help", "--version", "--help"
+      ],
+      "reason": "The review copy has no .git directory; git answers nothing here. Read the files on disk instead."
+    },
+    {
+      "name": "block-sudo",
+      "command": "sudo",
+      "block_args": ["-n", "-u", "-i", "-s", "-E", "-k", "-H", "-l", "--preserve-env", "/opt/ai-review/private/ci/private/submit-candidate"],
+      "reason": "Direct sudo is not part of the review task. Submit via /home/reviewer/bin/submit-candidate (execute it, no arguments)."
+    },
+    {
+      "name": "block-opencode-recursion",
+      "command": "opencode",
+      "block_args": ["run", "serve", "attach", "auth", "upgrade", "models", "--version"],
+      "reason": "Do not run opencode from inside the review session. Complete the audit and submit the report."
+    },
     {
       "name": "block-uvx-ruff",
       "command": "uvx",
@@ -120,5 +146,36 @@
       "block_args": ["jscpd"],
       "reason": "Blocked. Your task is structural repository audit, not duplication detection. Read source code, analyze architecture."
     }
+  ],
+  "tests": [
+    { "command": "git status", "expect": "blocked", "rule": "block-git" },
+    { "command": "git log --oneline", "expect": "blocked", "rule": "block-git" },
+    { "command": "/usr/bin/git diff HEAD~1", "expect": "blocked", "rule": "block-git" },
+    { "command": "sudo -n /opt/ai-review/private/ci/private/submit-candidate", "expect": "blocked", "rule": "block-sudo" },
+    { "command": "opencode run 'audit this repo'", "expect": "blocked", "rule": "block-opencode-recursion" },
+    { "command": "uvx ruff check .", "expect": "blocked", "rule": "block-uvx-ruff" },
+    { "command": "uvx mypy src", "expect": "blocked", "rule": "block-uvx-mypy" },
+    { "command": "npx eslint .", "expect": "blocked", "rule": "block-npx-eslint" },
+    { "command": "npx prettier --check .", "expect": "blocked", "rule": "block-npx-prettier" },
+    { "command": "bunx eslint .", "expect": "blocked", "rule": "block-bunx-eslint" },
+    { "command": "bunx prettier --check .", "expect": "blocked", "rule": "block-bunx-prettier" },
+    { "command": "python -m ruff check", "expect": "blocked", "rule": "block-python-module" },
+    { "command": "uvx vulture src", "expect": "blocked", "rule": "block-uvx-vulture" },
+    { "command": "uvx deptry .", "expect": "blocked", "rule": "block-uvx-deptry" },
+    { "command": "uvx semgrep scan", "expect": "blocked", "rule": "block-uvx-semgrep" },
+    { "command": "uvx lizard src", "expect": "blocked", "rule": "block-uvx-lizard" },
+    { "command": "uvx import-linter", "expect": "blocked", "rule": "block-uvx-import-linter" },
+    { "command": "uvx coverage report", "expect": "blocked", "rule": "block-uvx-coverage" },
+    { "command": "uvx diff-cover report.xml", "expect": "blocked", "rule": "block-uvx-diff-cover" },
+    { "command": "uvx ai-slop-detector .", "expect": "blocked", "rule": "block-uvx-ai-slop-detector" },
+    { "command": "bunx biome check .", "expect": "blocked", "rule": "block-bunx-biome" },
+    { "command": "bunx knip", "expect": "blocked", "rule": "block-bunx-knip" },
+    { "command": "bunx jscpd src", "expect": "blocked", "rule": "block-bunx-jscpd" },
+    { "command": "npx jscpd src", "expect": "blocked", "rule": "block-npx-jscpd" },
+    { "command": "rg -n 'def dual' src/lattice.py", "expect": "allowed" },
+    { "command": "/home/reviewer/bin/submit-candidate --help", "expect": "allowed" },
+    { "command": "/home/reviewer/bin/submit-candidate", "expect": "allowed" },
+    { "command": "python scripts/analyze.py", "expect": "allowed" },
+    { "command": "cat README.md", "expect": "allowed" }
   ]
 }
