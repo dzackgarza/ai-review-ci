@@ -20,4 +20,24 @@ if [ "$repo_common_dir" = "$hook_common_dir" ]; then
 fi
 unset GIT_DIR GIT_INDEX_FILE GIT_WORK_TREE GIT_PREFIX GIT_OBJECT_DIRECTORY GIT_ALTERNATE_OBJECT_DIRECTORIES GIT_COMMON_DIR
 
-exec just test
+if just test; then
+  exit 0
+fi
+
+cat >&2 <<'EOF'
+
+QC commit gate failed.
+
+If this is an INTENTIONAL red proof — a test that genuinely fails because it
+reproduces a bug, landing before its green fix per the red/green workflow — do
+NOT reach for `git commit --no-verify`. Use the sanctioned, auditable route:
+
+    ai-review-ci red-commit --issue <owning-issue> -m "<message>"
+
+It records the owning issue in the commit and bypasses this gate for that single
+commit only; ordinary hooks stay active. See the git-integration-workflow skill
+(red-proof route) and test-guidelines (RED-GREEN-REVERT).
+
+Otherwise, fix the failing checks above before committing.
+EOF
+exit 1

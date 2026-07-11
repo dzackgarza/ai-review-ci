@@ -59,6 +59,8 @@ exclude = [
     "**/.lake/**",
     ".worktrees/*",
     "**/.worktrees/**",
+    ".claude/worktrees/*",
+    "**/.claude/worktrees/**",
     "vendor/*",
     "**/vendor/**",
     "third_party/*",
