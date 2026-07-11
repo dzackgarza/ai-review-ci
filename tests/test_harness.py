@@ -278,6 +278,38 @@ def test_retry_prompt_uses_absolute_submit_candidate_path(tmp_path: Path) -> Non
     assert "run submit-candidate with no arguments" not in prompt
 
 
+def test_ensure_blocking_stdio_restores_blocking_streams() -> None:
+    # Node (run as `opencode --version` in the same shell) sets O_NONBLOCK on
+    # the shared stdio file description and never restores it; a non-blocking
+    # stdout makes CPython's exit-time flush fail with EAGAIN and exit 120
+    # AFTER a report was successfully submitted. The harness must restore
+    # blocking mode before writing the large captured transcript and exiting.
+    code = (
+        "import os, sys; "
+        "os.set_blocking(sys.stdout.fileno(), False); "
+        "os.set_blocking(sys.stderr.fileno(), False); "
+        "from ai_review_ci.harness import ensure_blocking_stdio; "
+        "ensure_blocking_stdio(); "
+        "print(os.get_blocking(sys.stdout.fileno()), os.get_blocking(sys.stderr.fileno()))"
+    )
+    result = subprocess.run([sys.executable, "-c", code], capture_output=True, text=True, check=True)
+    assert result.stdout.strip() == "True True"
+
+
+def test_reviewer_opencode_config_denies_wasteful_probing() -> None:
+    # The reviewer's opencode permission config must deny the observed
+    # time-wasters: git in a .git-less copy, direct sudo around the
+    # submit-candidate wrapper, and probing the review infrastructure.
+    config = json.loads(Path("ci/reviewer_home/.config/opencode/opencode.json").read_text())
+    bash = config["permission"]["bash"]
+    assert bash["git *"] == "deny"
+    assert bash["sudo *"] == "deny"
+    assert bash["*/opt/ai-review*"] == "deny"
+    assert config["permission"]["webfetch"] == "deny"
+    # The submission wrapper itself stays callable.
+    assert bash["*"] == "allow"
+
+
 def test_reviewer_path_contract_does_not_expose_just() -> None:
     runner = Path("ci/runner.just").read_text()
 

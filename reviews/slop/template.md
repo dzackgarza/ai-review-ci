@@ -8,6 +8,14 @@ Follow these rules exactly:
   Do not request confirmation.
   Do not pause for input.
 
+### Do not waste effort
+
+Every command you run should serve a finding. Specifically:
+
+- The review copy has **no `.git` directory**. Git commands (`git status`, `git log`, `git diff`, …) are denied and answer nothing; work from the files on disk.
+- The complete set of valid `POLICY.*` and `REMEDIATE.*` codes is already inlined in the policy-index documents above. Do not probe Python modules, importable packages, or the review infrastructure to discover policy registries — cite codes from the inlined index or use `null`.
+- Do not re-run `submit-candidate --help` more than once; the schema does not change between calls.
+
 ## Task: Slop Audit
 
 Perform a comprehensive, fresh analysis of the code in scope (defined by the scope instructions above) focused exclusively on **slop**.

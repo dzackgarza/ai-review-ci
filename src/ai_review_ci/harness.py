@@ -271,6 +271,20 @@ def opencode_command(config: OpencodeConfig, attempt: int) -> list[str]:
     return cmd
 
 
+def ensure_blocking_stdio() -> None:
+    """Restore blocking mode on the harness's own stdout/stderr.
+
+    The CI recipe runs ``opencode --version`` in the same shell before this
+    harness, and Node sets O_NONBLOCK on inherited stdio file descriptions
+    without restoring it. A non-blocking stdout makes Python's writes and
+    exit-time flush of the large captured opencode transcript fail with
+    EAGAIN (BlockingIOError), which CPython reports as exit code 120 —
+    failing the CI run *after* a report was successfully submitted.
+    """
+    for stream in (sys.stdout, sys.stderr):
+        os.set_blocking(stream.fileno(), True)
+
+
 def run_opencode(config: OpencodeConfig, task_path: Path, attempt: int) -> int:
     """Run opencode with the task prompt on stdin; returns the exit code."""
     env = {
@@ -289,6 +303,7 @@ def run_opencode(config: OpencodeConfig, task_path: Path, attempt: int) -> int:
             env=env,
         )
 
+    ensure_blocking_stdio()
     sys.stdout.write(res.stdout)
     sys.stderr.write(res.stderr)
     return res.returncode
@@ -369,6 +384,7 @@ def run_review(
 
         if ARTIFACT_PATH.exists():
             print("--- Report artifact submitted ---", file=sys.stderr)
+            ensure_blocking_stdio()
             sys.exit(0)
 
     if last_timeout is not None:
