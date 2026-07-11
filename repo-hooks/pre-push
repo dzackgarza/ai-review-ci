@@ -34,6 +34,12 @@ case "$remote" in
   *) echo "ai-review-ci hook: origin is not under the dzackgarza account — QC not owned here; proceeding without verification." >&2; exit 0 ;;
 esac
 
+# Closure-claim confrontation (#244): a default-branch push whose commit
+# messages carry GitHub closing keywords closes those issues server-side.
+# Reads the same keyword input GitHub acts on, then blocks once with the
+# issues' verbatim asks. Consumes this hook's stdin (the ref lines).
+python3 "$hook_repo/global-hooks/confront_closes.py" "$1" || exit 1
+
 if just test-ci; then
   exit 0
 fi

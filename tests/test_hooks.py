@@ -55,6 +55,9 @@ def hook_source_repo(tmp_path: pathlib.Path) -> pathlib.Path:
             target = target_dir / hook
             shutil.copy(ROOT / hook_dir / hook, target)
             target.chmod(0o755)
+    # pre-push resolves the closure-claim confrontation script (#244) relative
+    # to the hook repo, so the copied layout must carry it too.
+    shutil.copy(ROOT / "global-hooks" / "confront_closes.py", repo / "global-hooks" / "confront_closes.py")
     return repo
 
 
@@ -86,6 +89,7 @@ def test_ai_review_ci_hooks_skip_linked_ai_review_ci_worktrees(
     result = subprocess.run(
         [str(hook_source_repo / hook_dir / hook)],
         cwd=worktree,
+        input="",
         env=env,
         text=True,
         capture_output=True,
@@ -120,6 +124,7 @@ def test_ai_review_ci_hooks_still_run_in_downstream_repos(
     result = subprocess.run(
         [str(hook_source_repo / hook_dir / hook)],
         cwd=downstream,
+        input="",
         env=git_test_env(),
         text=True,
         capture_output=True,
