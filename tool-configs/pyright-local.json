@@ -25,6 +25,7 @@
     "**/.next",
     "**/.lake",
     "**/.worktrees",
+    "**/.claude/worktrees",
     "**/vendor",
     "**/third_party",
     "**/venv"

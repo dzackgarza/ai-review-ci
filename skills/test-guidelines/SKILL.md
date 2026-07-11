@@ -549,6 +549,21 @@ For E2E or GUI-facing behavior, green proof requires attached evidence artifacts
 For persistence claims, use cross-session or cross-process checks when feasible: create state through the public boundary, reopen through a separate invocation, and assert the same owned state is present.
 This prevents in-memory stand-ins from passing tests that claim durable storage.
 
+### Landing a red proof as its own commit
+
+The commit gate (`just test`, run by the pre-commit hook) rejects any commit whose tests fail.
+When the red/green workflow calls for landing a genuinely-failing red proof *before* its green fix, do NOT reach for `git commit --no-verify` — that is an unaudited bypass with no owning-issue trail.
+Use the single sanctioned, auditable route:
+
+```bash
+ai-review-ci red-commit --issue <owning-issue> -m "<message>"
+```
+
+It runs the same gate, refuses unless the gate genuinely fails (a passing gate is not a red proof — commit normally), stamps an auditable `Red-Proof: #<issue>` trailer, and bypasses the gate for that single commit only.
+Ordinary hooks stay active for every other commit.
+Missing or invalid authorization (no owning issue, empty message, or a gate that actually passes) is rejected with a pointer back to this skill.
+This is the same route named by the pre-commit hook's rejection message and by the git-integration-workflow skill.
+
 ## Live Test Data Lifecycle
 
 Real-boundary tests often create durable state in a database, filesystem, remote service, or task store.

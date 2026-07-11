@@ -29,6 +29,15 @@ Each arrow is a gate, not a suggestion.
    Keep the diff inside the issue boundary.
    Keep issue checklist items open while any in-scope work remains open.
 
+   **Red-proof route.** When the red/green workflow calls for landing the genuinely-failing red proof as its own commit *before* the green fix, the pre-commit gate (`just test`) will reject it.
+   Do NOT reach for `git commit --no-verify` — that is an unaudited bypass.
+   Use the single sanctioned, auditable route:
+   ```bash
+   ai-review-ci red-commit --issue <owning-issue> -m "<message>"
+   ```
+   It runs the same gate, refuses unless the gate genuinely fails (a passing gate is not a red proof), stamps an auditable `Red-Proof: #<issue>` trailer, and bypasses the gate for that one commit only — ordinary hooks stay active.
+   This is the same route named by the pre-commit hook's rejection message and by the `test-guidelines` skill (Red-Green Evidence).
+
 3. **PR review synthesis.** Open or update the PR from the current work-unit issue: summarize the issue scope, close/reference split, proof obligations addressed, evidence, and reviewer checklist.
    The PR body is a review submission derived from the issue, not a second planning tracker.
    Use closing keywords (`Closes`) only for the work-unit issue this PR fully completes on merge; use `Refs` or prose for organizational parents and deferred work.

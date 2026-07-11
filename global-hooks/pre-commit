@@ -44,13 +44,17 @@ cat >&2 <<'MSG'
 ────────────────────────────────────────────────────────────────
 ai-review-ci QC gate FAILED (just test).
 
-`git commit --no-verify` is a SANCTIONED bypass ONLY for these commits:
-  • a TDD red-proof audit commit — a deliberately failing test landed
-    before the fix that makes it pass (the failing test IS the artifact);
-  • a commit to a wiki repository;
-  • a commit to a repository not under the dzackgarza account.
-The last two are auto-detected and skipped above, so if you see this
-message the repo IS gated and only the TDD red-proof exception applies.
+If this is an INTENTIONAL red proof — a test that genuinely fails because it
+reproduces a bug, landing before its green fix per the red/green workflow —
+prefer the sanctioned, auditable route (records the owning issue and bypasses
+this gate for that ONE commit only; ordinary hooks stay active):
+
+    ai-review-ci red-commit --issue <owning-issue> -m "<message>"
+
+`git commit --no-verify` is also a permitted bypass for that same TDD red-proof
+audit case (and for wiki repos / repos not under the dzackgarza account, which
+are auto-detected and skipped above). See the git-integration-workflow skill
+(red-proof route) and test-guidelines.
 
 Any other failure is a REAL QC failure — do not bypass it, fix it.
 ────────────────────────────────────────────────────────────────

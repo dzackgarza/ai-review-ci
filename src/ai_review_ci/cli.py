@@ -6,6 +6,7 @@ docstrings.
 
 Subcommands:
 - install          — write trigger workflows and apply required branch protection
+- red-commit        — sanctioned, auditable route to commit an intentionally hook-failing red proof
 - install-labels    — create/update the canonical label taxonomy on a target repo
 - check-profile    — fail if a target repo does not match its curated profile
 - check-diff       — fail if a PR unified diff introduces deterministic findings
@@ -43,6 +44,7 @@ from ai_review_ci.gates import (
 from ai_review_ci.harness import run_review
 from ai_review_ci.install import install
 from ai_review_ci.labels import install_labels
+from ai_review_ci.red_commit import red_commit
 from ai_review_ci.report import (
     enforce_report_status,
     report_metadata,
@@ -59,6 +61,7 @@ app = App(
 )
 
 app.command(install)
+app.command(red_commit, name="red-commit")
 app.command(install_labels)
 app.command(version_command, name="version")
 app.command(doctor)
