@@ -133,22 +133,37 @@ def first_party_modules(project_root: Path) -> list[str]:
     return list(dict.fromkeys(modules))
 
 
-def import_linter_config(project_root: Path) -> str:
+def _first_party_packages(project_root: Path, modules: list[str]) -> list[str]:
+    """The subset of first-party modules that are packages (have __init__.py).
+
+    import-linter hard-rejects single-file modules in root_packages (#249),
+    so only true packages are lintable.
+    """
+    pyproject = _load_pyproject(project_root)
+    roots = [project_root / "src", *_setuptools_package_roots(project_root, pyproject), project_root]
+    return [m for m in modules if any((root / m / "__init__.py").is_file() for root in roots)]
+
+
+def import_linter_config(project_root: Path) -> str | None:
+    """import-linter config over first-party packages; None when layering is vacuous (#249)."""
     modules = first_party_modules(project_root)
     assert modules, "import-linter: no first-party modules discovered"
+    packages = _first_party_packages(project_root, modules)
+    if not packages:
+        return None
 
     lines = [
         "[tool.importlinter]",
-        f"root_packages = {json.dumps(modules)}",
+        f"root_packages = {json.dumps(packages)}",
         "",
     ]
-    if len(modules) > 1:
+    if len(packages) > 1:
         lines.extend(
             [
                 "[[tool.importlinter.contracts]]",
                 'name = "First-party packages are independent"',
                 'type = "independence"',
-                f"modules = {json.dumps(modules)}",
+                f"modules = {json.dumps(packages)}",
                 "",
             ]
         )
@@ -250,7 +265,14 @@ def main() -> None:
         _print_lines(first_party_modules(Path(sys.argv[2])))
     elif command == "import-linter-config":
         assert len(sys.argv) == 3
-        print(import_linter_config(Path(sys.argv[2])), end="")
+        config = import_linter_config(Path(sys.argv[2]))
+        if config is None:
+            print(
+                "import-linter: no first-party packages (single-file modules only) — import layering is vacuous.",
+                file=sys.stderr,
+            )
+            raise SystemExit(3)
+        print(config, end="")
     elif command == "dependency-group-requirements":
         assert len(sys.argv) == 3
         _print_lines(dependency_group_requirements(Path(sys.argv[2])))

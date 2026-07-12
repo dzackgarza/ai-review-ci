@@ -543,7 +543,14 @@ _import-linter: _install-tools
 	echo "# Enforces layer-based import rules (e.g., core cannot import from plugins, data cannot import from domain)"
 	config="$(mktemp "${TMPDIR:-/tmp}/ai-review-ci-importlinter.XXXXXX.toml")"
 	trap 'rm -f "$config"' EXIT
-	if ! uv run --no-project python "{{artifacts}}/scripts/python_qc_metadata.py" import-linter-config . > "$config"; then
+	if uv run --no-project python "{{artifacts}}/scripts/python_qc_metadata.py" import-linter-config . > "$config"; then
+		:
+	else
+		ec=$?
+		if [ "$ec" -eq 3 ]; then
+			echo "import-linter: skipped — no first-party packages (single-file modules only; #249)."
+			exit 0
+		fi
 		echo "ERROR: import-linter could not build the central config for this project."
 		"{{artifacts}}/scripts/emit-triage-directive.sh"
 		exit 1
