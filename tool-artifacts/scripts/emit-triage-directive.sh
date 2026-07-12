@@ -36,9 +36,12 @@ cat << 'TRIAGE_EOF'
   3.  Present ALL findings to the user immediately, with the full raw
       tool output. Do NOT filter, summarize, or interpret the results.
 
-  4.  Wait for explicit user approval before proceeding.
+  4.  Continue under the authority of the active user-requested work.
+      Do NOT ask for renewed approval for ordinary Route B or Route C work.
+      Ask the user only for a policy exception, out-of-scope remediation,
+      irreversible or externally visible action, or another genuine authority boundary.
 
-  TRIAGE WORKFLOW (after user approval):
+  TRIAGE WORKFLOW (under existing authority):
 
     STEP 0 (MANDATORY, BEFORE SPAWNING ANYTHING) — Read the complete
     protocol and follow it exactly:

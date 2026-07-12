@@ -827,7 +827,7 @@ The QC agent owns rule changes, not individual projects.
 ## When QC Fails
 
 When any QC check fails, the triage directive (the banner beginning with "QC FAILURE — TRIAGE REQUIRED") is emitted alongside the tool output.
-This directive tells agents exactly what to do next: enter triage mode, present findings to the user, and delegate review and fix to separate subagents.
+This directive tells agents exactly what to do next: enter triage mode, preserve the raw findings, and delegate review and fix to separate subagents under the authority of the active work unit.
 
 ### Immediate Response
 
@@ -846,8 +846,8 @@ When a QC check fails:
 
 | Phase | Action | Skill |
 | --- | --- | --- |
-| **Triage** | Present findings to user. Do not self-fix. Delegate to subagents. | `reviewing-llm-code/references/qc-triage.md` |
+| **Triage** | Preserve raw findings. Do not self-fix. Route and delegate under existing work authority; ask only for a genuine exception. | `reviewing-llm-code/references/qc-triage.md` |
 | **Debugging** | Investigate opaque errors after triage is complete. | `reality-grounded-debugging` |
 
 The triage protocol takes priority over debugging.
-Do not start debugging until the triage workflow (present to user → get approval → spawn subagents) has completed.
+Do not start debugging until the triage workflow (preserve raw output → route mechanically → delegate) has completed. Ask the user only when an exception requires new authority.

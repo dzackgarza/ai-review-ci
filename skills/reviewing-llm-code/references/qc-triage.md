@@ -38,11 +38,14 @@ When a QC check fails and the triage directive is emitted, the orchestrator MUST
 5. **Present the raw output.** Show the complete raw QC output to the user.
    Do not filter, summarize, group, reinterpret, or convert it into your own report.
 
-6. **Wait for explicit approval.** Do not proceed until the user directly approves triage.
+6. **Route under existing authority.** A gate failure during active user-authorized
+   work does not require renewed approval. Ask the user only for a policy exception,
+   out-of-scope remediation, irreversible or externally visible action, or another
+   genuine authority boundary.
 
-## Routing Gate After User Approval
+## Routing Gate Within Existing Authority
 
-After approval, route by the shape of the raw QC output.
+Route by the shape of the raw QC output.
 This is a mechanical routing check, not a policy judgment:
 
 - If the raw QC output already contains explicit `POLICY.*` findings with file/line locations, that output is already the disposition artifact.
@@ -137,7 +140,7 @@ Do not include:
 
 | Behavior | Why | Instead |
 | --- | --- | --- |
-| Orchestrator reads `~/ai-review-ci/` during downstream triage | Gives the failing-code producer gate internals it can game | Present raw output, get approval, then delegate |
+| Orchestrator reads `~/ai-review-ci/` during downstream triage | Gives the failing-code producer gate internals it can game | Present raw output, route mechanically, then delegate |
 | Orchestrator reads the remediation policy during downstream triage | That is C's job and contaminates routing | Tell C to load `policy-index/references/remediations.md` |
 | Spawning a slop-report subagent for already policy-coded QC output | Repeats the report and delays remediation | Treat the raw `POLICY.*` output as the disposition artifact and spawn C |
 | Orchestrator forming/stating a finding disposition | The producer's self-judgment is inadmissible | Route without judgment |
@@ -156,7 +159,7 @@ Do not include:
 Before reporting triage complete, these must be true:
 
 - [ ] Raw QC output was presented to the user without filtering or interpretation.
-- [ ] The user explicitly approved triage.
+- [ ] The active work unit authorized triage; any exception requiring new authority was presented to the user.
 - [ ] The orchestrator did not inspect `~/ai-review-ci/` or the remediation policy during downstream triage.
 - [ ] The routing decision was mechanical: explicit `POLICY.*` output went directly to C; un-coded output went to B first.
 - [ ] If B ran, B returned dispositions only and no remediation.
