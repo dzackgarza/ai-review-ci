@@ -293,14 +293,17 @@ def test_sync_qc_excludes_preserves_non_owned_artifacts_and_updates_grain(
     assert rust_justfile.read_text() == "# rust sentinel\n"
 
 
-def test_knip_config_does_not_blanket_ignore_tsx(tmp_path: pathlib.Path) -> None:
+def test_knip_config_does_not_blanket_ignore_owned_typescript(tmp_path: pathlib.Path) -> None:
     """#225 Defect 4: knip applies its `ignore` list over its own entry/project
     tsx globs, so a blanket `**/*.tsx` silently disables dead-code detection for
-    every .tsx file. The regenerated knip config must not carry it, while the
-    real test/generated exclusions it needs stay put."""
+    every .tsx file. Test files are owned code too: they must be entrypoints so
+    test-only dependency use remains visible. The regenerated config must not
+    carry either blanket exclusion."""
     shipped = json.loads((ROOT / "tool-configs" / "knip.json").read_text())
     assert "**/*.tsx" not in shipped["ignore"], shipped["ignore"]
-    assert "**/*.test.ts" in shipped["ignore"], "test-file exclusions must remain"
+    assert "**/*.test.ts" not in shipped["ignore"]
+    assert "**/*.spec.ts" not in shipped["ignore"]
+    assert "**/__tests__/**" not in shipped["ignore"]
 
     # The shipped config must be the deterministic output of the sync script
     # (no hand edits): regenerating in place yields no change.
@@ -318,6 +321,71 @@ def test_knip_config_does_not_blanket_ignore_tsx(tmp_path: pathlib.Path) -> None
     assert result.returncode == 0, result.stdout + result.stderr
     assert json.loads((qc_root / "knip.json").read_text())["ignore"] == shipped["ignore"]
     assert "**/*.tsx" not in json.loads((qc_root / "knip.json").read_text())["ignore"]
+
+
+def test_knip_follows_dependency_imported_through_test_helper(tmp_path: pathlib.Path) -> None:
+    project = tmp_path / "bun-project"
+    tests_dir = project / "tests"
+    node_modules = project / "node_modules"
+    tests_dir.mkdir(parents=True)
+    for dependency in ("browser-boundary", "unused-boundary"):
+        package_dir = node_modules / dependency
+        package_dir.mkdir(parents=True)
+        (package_dir / "package.json").write_text(
+            json.dumps({"name": dependency, "version": "1.0.0", "type": "module"}) + "\n"
+        )
+        (package_dir / "index.js").write_text("export const boundary = true;\n")
+    (project / "package.json").write_text(
+        json.dumps(
+            {
+                "name": "knip-test-graph-fixture",
+                "version": "1.0.0",
+                "devDependencies": {
+                    "browser-boundary": "1.0.0",
+                    "unused-boundary": "1.0.0",
+                },
+            }
+        )
+        + "\n"
+    )
+    (tests_dir / "shared-browser-boundary.ts").write_text(
+        'import { boundary } from "browser-boundary";\nexport const observed = boundary;\n'
+    )
+    (tests_dir / "reader.test.ts").write_text(
+        'import { observed } from "./shared-browser-boundary";\nvoid observed;\n'
+    )
+
+    result = run_just(ROOT / "justfiles" / "bun.just", project, "_knip")
+
+    output = result.stdout + result.stderr
+    assert result.returncode != 0, output
+    assert "unused-boundary" in output
+    assert "browser-boundary" not in output
+
+
+def test_knip_ignores_exact_assembled_pdfjs_module_only(tmp_path: pathlib.Path) -> None:
+    project = tmp_path / "bun-project"
+    reader_dir = project / "extension" / "reader"
+    reader_dir.mkdir(parents=True)
+    (project / "package.json").write_text(
+        json.dumps({"name": "knip-generated-module-fixture", "version": "1.0.0"}) + "\n"
+    )
+    (reader_dir / "reader.js").write_text(
+        '\n'.join(
+            [
+                'import "./vendor/pdfjs/pdf_viewer.mjs";',
+                'import "./vendor/pdfjs/not-assembled.mjs";',
+                "",
+            ]
+        )
+    )
+
+    result = run_just(ROOT / "justfiles" / "bun.just", project, "_knip")
+
+    output = result.stdout + result.stderr
+    assert result.returncode != 0, output
+    assert "./vendor/pdfjs/not-assembled.mjs" in output
+    assert "./vendor/pdfjs/pdf_viewer.mjs" not in output
 
 
 def test_grain_config_preserves_lexicon_sage_verifier_exemption(
