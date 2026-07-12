@@ -96,3 +96,32 @@ def test_pep723_requirements_dedupes_preserving_order(tmp_path: pathlib.Path) ->
     result = _MOD.pep723_requirements([str(one), str(two)])
 
     assert result == ["rich", "httpx", "typer"], result  # shared 'httpx' deduped
+
+
+def test_import_linter_config_skips_single_module_projects(tmp_path: pathlib.Path) -> None:
+    # #249: import-linter hard-rejects single-file modules in root_packages
+    # ("'score' is a module, not a package"), so a src-layout project with only
+    # src/<module>.py could never pass the gate. With no first-party PACKAGES,
+    # import layering is vacuous and the generator must signal a sanctioned
+    # skip (None) instead of emitting a config import-linter always rejects.
+    (tmp_path / "src").mkdir()
+    (tmp_path / "src" / "score.py").write_text("")
+    (tmp_path / "pyproject.toml").write_text('[project]\nname = "x"\nversion = "0"\n')
+
+    assert _MOD.import_linter_config(tmp_path) is None
+
+
+def test_import_linter_config_lints_packages_only(tmp_path: pathlib.Path) -> None:
+    # Mixed shape (#249): the package is lintable; the single-file module is
+    # not a valid root_packages entry and must be excluded from the config and
+    # the independence contract.
+    (tmp_path / "src" / "alpha").mkdir(parents=True)
+    (tmp_path / "src" / "alpha" / "__init__.py").write_text("")
+    (tmp_path / "src" / "beta.py").write_text("")
+    (tmp_path / "pyproject.toml").write_text('[project]\nname = "x"\nversion = "0"\n')
+
+    config = _MOD.import_linter_config(tmp_path)
+
+    assert config is not None
+    assert '"alpha"' in config
+    assert "beta" not in config
