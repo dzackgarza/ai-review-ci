@@ -57,9 +57,6 @@ configs: list[ToolConfig] = [
         "key": ["ignore"],
         "is_dir_fn": lambda d: f"**/{d}/**",
         "static": [
-            "**/*.test.ts",
-            "**/*.spec.ts",
-            "**/__tests__/**",
             "**/env.d.ts",
         ],
     },
