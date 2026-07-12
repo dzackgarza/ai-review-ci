@@ -1,5 +1,6 @@
 #!/usr/bin/env sh
 set -e
+unset GIT_DIR GIT_INDEX_FILE GIT_WORK_TREE GIT_PREFIX GIT_OBJECT_DIRECTORY GIT_ALTERNATE_OBJECT_DIRECTORIES GIT_COMMON_DIR
 repo_root="$(git rev-parse --show-toplevel)"
 hook_file="$(readlink -f "$0")"
 hook_repo="$(CDPATH= cd -- "$(dirname -- "$hook_file")/.." && pwd -P)"
