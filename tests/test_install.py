@@ -426,23 +426,32 @@ def test_trigger_inputs_are_declared_by_reusable_workflow(template: str, profile
 def test_trigger_permissions_cover_reusable_workflow_permissions(template: str, profile: str) -> None:
     """A called workflow cannot elevate permissions omitted by its caller."""
     workflow = yaml.safe_load(_template_text(template, profile, "main"))
-    checked_review_call = False
+    checked_reusable_call = False
+    permission_rank = {"none": 0, "read": 1, "write": 2}
 
     for job_name, job in workflow["jobs"].items():
         target = _reusable_target(job)
-        if target != "_review.yml":
+        if target is None:
             continue
-        checked_review_call = True
+        checked_reusable_call = True
         callee_jobs = _workflow_jobs(target)
-        required = set(next(iter(callee_jobs.values())).get("permissions") or {})
-        granted = set(job.get("permissions") or {})
-        missing = required - granted
-        assert not missing, (
-            f"{template} (profile={profile}) job {job_name!r} omits reusable-workflow "
-            f"permission(s) {sorted(missing)} required by {target}; GitHub rejects this at startup"
+        required: dict[str, str] = {}
+        for callee in callee_jobs.values():
+            for scope, level in (callee.get("permissions") or {}).items():
+                if permission_rank[level] > permission_rank[required.get(scope, "none")]:
+                    required[scope] = level
+        granted = job.get("permissions") or {}
+        insufficient = {
+            scope: {"required": level, "granted": granted.get(scope, "none")}
+            for scope, level in required.items()
+            if permission_rank[granted.get(scope, "none")] < permission_rank[level]
+        }
+        assert not insufficient, (
+            f"{template} (profile={profile}) job {job_name!r} under-grants reusable-workflow "
+            f"permissions {insufficient} required by {target}; GitHub rejects this at startup"
         )
 
-    assert checked_review_call, f"{template} (profile={profile}) calls no review workflow"
+    assert checked_reusable_call, f"{template} (profile={profile}) calls no reusable workflow"
 
 
 def test_gates_qc_doctor_grants_labels_read_scope() -> None:
