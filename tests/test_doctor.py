@@ -81,6 +81,10 @@ def write_profile_shape(project: pathlib.Path, profile: str) -> None:
         (project / "package.json").write_text(json.dumps({"scripts": {}}) + "\n")
         (project / "bun.lock").write_text("")
         (project / "playwright.config.ts").write_text("export default {};\n")
+    elif profile == "bun-python":
+        (project / "pyproject.toml").write_text('[project]\nname = "target"\nversion = "0.1.0"\n')
+        (project / "package.json").write_text(json.dumps({"scripts": {}}) + "\n")
+        (project / "bun.lock").write_text("")
     elif profile == "rust":
         (project / "Cargo.toml").write_text('[package]\nname = "target"\nversion = "0.1.0"\nedition = "2024"\n')
     elif profile == "sage":
@@ -96,7 +100,7 @@ def status_for(project: pathlib.Path) -> tuple[str, dict[str, Any]]:
     return str(payload["global_status"]), payload
 
 
-@pytest.mark.parametrize("profile", ["python", "bun", "bun-playwright", "rust", "sage"])
+@pytest.mark.parametrize("profile", ["python", "bun", "bun-playwright", "bun-python", "rust", "sage"])
 def test_doctor_reports_current_for_installed_profile_targets(tmp_path: pathlib.Path, profile: str) -> None:
     project = create_target(tmp_path, profile)
 
@@ -121,30 +125,31 @@ def test_doctor_preflight_rejects_declared_profile_missing_required_path(
     (project / "pyproject.toml").unlink()
 
     with pytest.raises(SystemExit):
-        doctor_preflight(project, "python")
+        doctor_preflight(project)
 
     assert "QC doctor preflight failed" in capsys.readouterr().err
 
 
-def test_doctor_preflight_rejects_recipe_profile_mismatch(
+def test_doctor_preflight_rejects_undeclared_python_subgate(
     tmp_path: pathlib.Path,
     capsys: pytest.CaptureFixture[str],
 ) -> None:
-    project = create_target(tmp_path, "python")
+    project = create_target(tmp_path, "bun")
+    (project / "justfile").write_text((ROOT / "scaffolds" / "bun-python" / "justfile").read_text())
 
     with pytest.raises(SystemExit):
-        doctor_preflight(project, "sage")
+        doctor_preflight(project)
 
-    assert "declares profile 'python', but this gate requires one of: 'sage'" in capsys.readouterr().err
+    assert "declares 'bun'" in capsys.readouterr().err
 
 
-def test_doctor_preflight_accepts_bun_playwright_manifest_for_bun_recipe(
+def test_doctor_preflight_accepts_central_composite_profile(
     tmp_path: pathlib.Path,
     capsys: pytest.CaptureFixture[str],
 ) -> None:
-    project = create_target(tmp_path, "bun-playwright")
+    project = create_target(tmp_path, "bun-python")
 
-    doctor_preflight(project, "bun")
+    doctor_preflight(project)
 
     assert "QC doctor preflight passed" in capsys.readouterr().out
 

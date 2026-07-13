@@ -15,7 +15,7 @@ import yaml
 from cyclopts import Parameter
 from pydantic import BaseModel, ConfigDict, Field, TypeAdapter, ValidationError
 
-from ai_review_ci.gates import PROJECT_PROFILES, SUPPORTED_PROFILES, ProjectProfile, required_check_contexts
+from ai_review_ci.gates import PROJECT_PROFILES, SUPPORTED_PROFILES, ProjectProfile, delegates_to_global_qc, required_check_contexts
 from ai_review_ci.install import TEMPLATES
 from ai_review_ci.labels import Label, RemoteLabel, compute_label_actions, load_taxonomy
 from ai_review_ci.review_guidelines import classify_review_guidelines, load_canonical_review_guidelines
@@ -27,8 +27,8 @@ LOCAL_DELEGATION_MODE = "global-justfile"
 DOCTOR_CHECK_CONTEXT = "qc-doctor / qc-doctor"
 MISSING_JUSTFILE_NAME = ".ai-review-ci-missing-justfile"
 
-ProfileName = Literal["python", "bun", "bun-playwright", "rust", "sage"]
-ObservedProfile = Literal["python", "bun", "bun-playwright", "rust", "sage", "unknown"]
+ProfileName = Literal["python", "bun", "bun-playwright", "bun-python", "rust", "sage"]
+ObservedProfile = Literal["python", "bun", "bun-playwright", "bun-python", "rust", "sage", "unknown"]
 InstallationState = Literal["compliant", "outdated", "noncompliant", "uninstalled", "unknown"]
 GlobalStatus = Literal["current", "stale", "misconfigured", "unverifiable"]
 FindingSeverity = Literal["error", "warning"]
@@ -119,7 +119,7 @@ class DelegationCommandObservation(BaseModel):
 class DelegationObservation(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    required_justfile: str
+    required_justfiles: tuple[str, ...]
     observed: DelegationCommandObservation
 
 
@@ -222,15 +222,10 @@ def doctor(target: Path, *, json: Annotated[int, Parameter(name="--json", count=
         sys.exit(1)
 
 
-def doctor_preflight(target: Path, profile: str) -> None:
-    """Validate local QC initialization before a profile's code checks run."""
+def doctor_preflight(target: Path) -> None:
+    """Validate central manifest/profile initialization before any QC code checks run."""
     target_root = _target_root(target)
     manifest_path = target_root / MANIFEST_NAME
-    try:
-        expected_profile = ProfileAdapter.validate_python(profile)
-    except ValidationError as exc:
-        print(f"FATAL: QC doctor preflight failed: unsupported profile {profile!r}: {exc}", file=sys.stderr)
-        sys.exit(1)
     if not manifest_path.is_file():
         print(f"FATAL: QC doctor preflight failed: {manifest_path} is missing", file=sys.stderr)
         sys.exit(1)
@@ -239,20 +234,31 @@ def doctor_preflight(target: Path, profile: str) -> None:
     except (tomllib.TOMLDecodeError, ValidationError) as exc:
         print(f"FATAL: QC doctor preflight failed: {manifest_path} is invalid: {exc}", file=sys.stderr)
         sys.exit(1)
-    allowed_profiles = ("bun", "bun-playwright") if expected_profile == "bun" else (expected_profile,)
-    if manifest.profile not in allowed_profiles:
-        allowed = ", ".join(repr(item) for item in allowed_profiles)
-        print(
-            f"FATAL: QC doctor preflight failed: {manifest_path} declares profile {manifest.profile!r}, "
-            f"but this gate requires one of: {allowed}",
-            file=sys.stderr,
-        )
-        sys.exit(1)
     missing = _profile_missing_paths(target_root, PROJECT_PROFILES[manifest.profile])
     if missing:
         print(
-            f"FATAL: QC doctor preflight failed: {target_root} does not satisfy {manifest.profile!r}; "
-            f"missing: {', '.join(missing)}",
+            f"FATAL: QC doctor preflight failed: {target_root} does not satisfy its declared "
+            f"{manifest.profile!r} profile; missing: {', '.join(missing)}",
+            file=sys.stderr,
+        )
+        sys.exit(1)
+    delegation = _justfile_delegation(target_root, manifest.profile)
+    failed = [
+        recipe
+        for recipe, observation in delegation.items()
+        if not (
+            observation.observed.present
+            and observation.observed.delegates_to_global_qc
+            and observation.observed.caller_root_preserved
+        )
+    ]
+    if failed:
+        required = ", ".join(
+            f"~/ai-review-ci/justfiles/{name}" for name in PROJECT_PROFILES[manifest.profile].justfile_names
+        )
+        print(
+            f"FATAL: QC doctor preflight failed: {target_root} declares {manifest.profile!r}, "
+            f"which requires exactly {required} with -d . for: {', '.join(failed)}",
             file=sys.stderr,
         )
         sys.exit(1)
@@ -455,7 +461,7 @@ def _justfile_path(target: Path) -> Path:
 def _recipe_delegation(target: Path, justfile: Path, project_profile: ProjectProfile, recipe: str) -> DelegationObservation:
     if not justfile.is_file():
         return DelegationObservation(
-            required_justfile=project_profile.justfile_name,
+            required_justfiles=project_profile.justfile_names,
             observed=DelegationCommandObservation(
                 present=False,
                 command="",
@@ -470,11 +476,11 @@ def _recipe_delegation(target: Path, justfile: Path, project_profile: ProjectPro
     )
     command = result.stdout + result.stderr
     return DelegationObservation(
-        required_justfile=project_profile.justfile_name,
+        required_justfiles=project_profile.justfile_names,
         observed=DelegationCommandObservation(
             present=result.returncode == 0,
             command=command,
-            delegates_to_global_qc=f"ai-review-ci/justfiles/{project_profile.justfile_name}" in command,
+            delegates_to_global_qc=delegates_to_global_qc(command, project_profile),
             caller_root_preserved=" -d . " in f" {command} ",
         ),
     )
@@ -698,7 +704,11 @@ def _findings(
                 DoctorFinding(
                     severity="error",
                     surface="justfile_delegation",
-                    evidence=f"{recipe} must delegate through ~/ai-review-ci/justfiles/{observation.required_justfile} with -d .",
+                    evidence=(
+                        f"{recipe} must delegate through "
+                        f"{', '.join(f'~/ai-review-ci/justfiles/{name}' for name in observation.required_justfiles)} "
+                        "with -d ."
+                    ),
                     remediation_commands=(f"just install-qc-scaffold {declared} <target-repo>",),
                 )
             )

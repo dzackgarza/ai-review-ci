@@ -35,7 +35,7 @@ class ProjectProfile(BaseModel):
     model_config = ConfigDict(frozen=True)
 
     name: str
-    justfile_name: str
+    justfile_names: tuple[str, ...]
     required_paths: tuple[str, ...]
     requires_bun_lock: bool = False
     requires_sage_file: bool = False
@@ -43,17 +43,23 @@ class ProjectProfile(BaseModel):
 
 
 PROJECT_PROFILES = {
-    "python": ProjectProfile(name="python", justfile_name="python.just", required_paths=("pyproject.toml",)),
-    "bun": ProjectProfile(name="bun", justfile_name="bun.just", required_paths=("package.json",), requires_bun_lock=True),
+    "python": ProjectProfile(name="python", justfile_names=("python.just",), required_paths=("pyproject.toml",)),
+    "bun": ProjectProfile(name="bun", justfile_names=("bun.just",), required_paths=("package.json",), requires_bun_lock=True),
     "bun-playwright": ProjectProfile(
         name="bun-playwright",
-        justfile_name="bun.just",
+        justfile_names=("bun.just",),
         required_paths=("package.json", "playwright.config.ts"),
         requires_bun_lock=True,
         requires_app_boot=True,
     ),
-    "rust": ProjectProfile(name="rust", justfile_name="rust.just", required_paths=("Cargo.toml",)),
-    "sage": ProjectProfile(name="sage", justfile_name="sage.just", required_paths=("pyproject.toml",), requires_sage_file=True),
+    "bun-python": ProjectProfile(
+        name="bun-python",
+        justfile_names=("python.just", "bun.just"),
+        required_paths=("pyproject.toml", "package.json"),
+        requires_bun_lock=True,
+    ),
+    "rust": ProjectProfile(name="rust", justfile_names=("rust.just",), required_paths=("Cargo.toml",)),
+    "sage": ProjectProfile(name="sage", justfile_names=("sage.just",), required_paths=("pyproject.toml",), requires_sage_file=True),
 }
 
 BASE_REQUIRED_CHECK_CONTEXTS = (
@@ -269,8 +275,19 @@ def _dry_run_recipe(target: Path, justfile: Path, recipe: str) -> str:
     return result.stdout + result.stderr
 
 
-def _delegates_to_global_qc(output: str, project_profile: ProjectProfile) -> bool:
-    return f"ai-review-ci/justfiles/{project_profile.justfile_name}" in output and " -d . " in f" {output} "
+def delegates_to_global_qc(output: str, project_profile: ProjectProfile) -> bool:
+    """Require exactly the centrally declared delegation set for a profile."""
+    observed = set(re.findall(r"ai-review-ci/justfiles/([a-z-]+\.just)", output))
+    expected = set(project_profile.justfile_names)
+    command_lines = output.splitlines()
+    return observed == expected and all(
+        any(
+            f"ai-review-ci/justfiles/{justfile_name}" in line
+            and re.search(r"(?:-d|--working-directory)\s+\.", line) is not None
+            for line in command_lines
+        )
+        for justfile_name in project_profile.justfile_names
+    )
 
 
 def check_delegation(target: Path, profile: str) -> None:
@@ -282,10 +299,11 @@ def check_delegation(target: Path, profile: str) -> None:
     failed: list[str] = []
     for recipe in ("test", "test-ci"):
         output = _dry_run_recipe(target, justfile, recipe)
-        if not _delegates_to_global_qc(output, project_profile):
+        if not delegates_to_global_qc(output, project_profile):
             failed.append(recipe)
     if failed:
-        _fail(f"{target} does not delegate {profile} recipe(s) through ~/ai-review-ci/justfiles/{project_profile.justfile_name} with -d .: {', '.join(failed)}")
+        required = ", ".join(f"~/ai-review-ci/justfiles/{name}" for name in project_profile.justfile_names)
+        _fail(f"{target} does not delegate {profile} recipe(s) through {required} with -d .: {', '.join(failed)}")
     print(f"Delegation conformance passed for {target} profile {profile}.")
 
 
@@ -298,8 +316,8 @@ def check_app_boot(target: Path, profile: str) -> None:
     check_profile(target, profile)
     justfile = _justfile_for(target)
     output = _dry_run_recipe(target, justfile, "app-boot")
-    if not _delegates_to_global_qc(output, project_profile):
-        _fail(f"{target} app-boot must delegate through ~/ai-review-ci/justfiles/{project_profile.justfile_name} with -d .")
+    if not delegates_to_global_qc(output, project_profile):
+        _fail(f"{target} app-boot must delegate through ~/ai-review-ci/justfiles/{project_profile.justfile_names[0]} with -d .")
     if _DIRECT_PLAYWRIGHT.search(output):
         _fail(f"{target} app-boot must not invoke Playwright directly; delegate to ~/ai-review-ci/justfiles/bun.just")
     result = subprocess.run(["just", "--justfile", str(justfile), "-d", str(target), "app-boot"])

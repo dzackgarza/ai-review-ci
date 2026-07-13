@@ -38,7 +38,7 @@ cd /path/to/your/repo
 uvx --from git+https://github.com/dzackgarza/ai-review-ci ai-review-ci install --repo owner/repo --branch main --profile bun-playwright
 ```
 
-Pass `--profile <profile>` with one of `python`, `bun`, `bun-playwright`, `rust`, or `sage`. The profile is the enforced project bin: it selects the required project shape, the central justfile delegation target, the installed PR gates, and the branch-protection checks.
+Pass `--profile <profile>` with one of `python`, `bun`, `bun-playwright`, `bun-python`, `rust`, or `sage`. The profile is the enforced project bin: it selects the required project shape, the central justfile delegation target, the installed PR gates, and the branch-protection checks.
 
 This installs the complete QC enforcement surface: it writes the root manifest, writes the three trigger workflows, and applies branch protection requiring the installed PR gate jobs for the declared profile.
 
@@ -113,7 +113,7 @@ Inspect a target repo with:
 ```bash
 uvx --from git+https://github.com/dzackgarza/ai-review-ci ai-review-ci version
 uvx --from git+https://github.com/dzackgarza/ai-review-ci ai-review-ci doctor --target /path/to/repo --json
-uvx --from git+https://github.com/dzackgarza/ai-review-ci ai-review-ci doctor-preflight --target /path/to/repo --profile python
+uvx --from git+https://github.com/dzackgarza/ai-review-ci ai-review-ci doctor-preflight --target /path/to/repo
 uvx --from git+https://github.com/dzackgarza/ai-review-ci ai-review-ci doctor-schema
 ```
 
@@ -131,7 +131,7 @@ Status mapping is fixed:
 Only `current` exits zero.
 All other statuses fail the command and the `qc-doctor` PR gate.
 
-Every public `just test` begins with `doctor-preflight`. It is the local, no-network subset of doctor: it requires a valid manifest, a profile compatible with the delegated language gate, and the declared profile's required project shape before normalization, type checking, or tests run. A preflight failure is project initialization work, not a code-quality finding and must not enter the QC triage routes.
+Every public `just test` begins with `doctor-preflight`. It is the local, no-network subset of doctor: it requires a valid manifest and the declared profile's required project shape before normalization, type checking, or tests run. Composite project shapes are centrally defined profiles; `bun-python` requires both Python and Bun project evidence and delegates to both central gates. A preflight failure is project initialization work, not a code-quality finding and must not enter the QC triage routes.
 
 ## Installing QC Surfaces
 

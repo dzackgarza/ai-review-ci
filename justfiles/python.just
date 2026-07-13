@@ -131,7 +131,7 @@ _normalize-common:
 _doctor-preflight:
 	#!/usr/bin/env bash
 	set -euo pipefail
-	uv run --project {{infra}} ai-review-ci doctor-preflight --target . --profile python
+	uv run --project {{infra}} ai-review-ci doctor-preflight --target .
 
 _mypy: _install-tools
 	#!/usr/bin/env bash

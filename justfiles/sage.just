@@ -114,7 +114,7 @@ _sage-preflight:
 _doctor-preflight:
 	#!/usr/bin/env bash
 	set -euo pipefail
-	uv run --project {{infra}} ai-review-ci doctor-preflight --target . --profile sage
+	uv run --project {{infra}} ai-review-ci doctor-preflight --target .
 
 _sage-bin:
 	#!/usr/bin/env bash

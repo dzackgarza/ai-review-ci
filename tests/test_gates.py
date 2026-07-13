@@ -44,6 +44,17 @@ def test_delegation_accepts_canonical_scaffold(tmp_path: pathlib.Path) -> None:
     gates.check_delegation(project, "bun")
 
 
+def test_delegation_accepts_central_bun_python_composite_profile(tmp_path: pathlib.Path) -> None:
+    project = tmp_path / "project"
+    project.mkdir()
+    (project / "pyproject.toml").write_text('[project]\nname = "project"\nversion = "0.1.0"\n')
+    (project / "package.json").write_text('{"scripts": {}}\n')
+    (project / "bun.lock").write_text("")
+    (project / "justfile").write_text((pathlib.Path(__file__).parents[1] / "scaffolds" / "bun-python" / "justfile").read_text())
+
+    gates.check_delegation(project, "bun-python")
+
+
 def test_delegation_rejects_local_qc_override(tmp_path: pathlib.Path) -> None:
     project = tmp_path / "project"
     project.mkdir()

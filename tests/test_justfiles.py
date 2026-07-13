@@ -2168,6 +2168,7 @@ def test_commit_gate_stops_at_doctor_preflight_before_typechecking(
     (package_dir / "__init__.py").write_text("import yaml\n")
     (tests_dir / "test_placeholder.py").write_text("def test_placeholder() -> None:\n    assert True\n")
 
+    (project / "justfile").write_text((ROOT / "scaffolds" / "python" / "justfile").read_text())
     (project / ".ai-review-ci.toml").write_text(
         "\n".join(
             [
@@ -2188,9 +2189,40 @@ def test_commit_gate_stops_at_doctor_preflight_before_typechecking(
 
     assert result.returncode != 0, output
     assert "QC doctor preflight failed" in output
-    assert "does not satisfy 'python'; missing: pyproject.toml" in output
+    assert "does not satisfy its declared 'python' profile; missing: pyproject.toml" in output
     assert "Running: mypy type checking" not in output
     assert 'Library stubs not installed for "yaml"' not in output
+
+
+def test_python_subgate_doctor_preflight_accepts_central_bun_python_profile(
+    tmp_path: pathlib.Path,
+) -> None:
+    project = tmp_path / "composite-project"
+    project.mkdir()
+    (project / "pyproject.toml").write_text('[project]\nname = "composite-project"\nversion = "0.1.0"\n')
+    (project / "package.json").write_text('{"scripts": {}}\n')
+    (project / "bun.lock").write_text("")
+    (project / "justfile").write_text((ROOT / "scaffolds" / "bun-python" / "justfile").read_text())
+    (project / ".ai-review-ci.toml").write_text(
+        "\n".join(
+            [
+                "schema_version = 1",
+                'profile = "bun-python"',
+                'installed_ref = "main"',
+                'release_channel = "main"',
+                "workflow_template_version = 1",
+                'local_delegation = "global-justfile"',
+                'default_branch = "main"',
+                "",
+            ]
+        )
+    )
+
+    result = run_just(ROOT / "justfiles" / "python.just", project, "_doctor-preflight")
+    output = result.stdout + result.stderr
+
+    assert result.returncode == 0, output
+    assert "QC doctor preflight passed" in output
 
 
 def test_mypy_private_recipe_does_not_apply_python_project_preflight_to_sage_pass(
@@ -2502,11 +2534,12 @@ def test_rust_normalization_formats_nested_manifest_project(
 # entrypoint keeps working. These tests lock both halves of that contract.
 
 SCAFFOLD_DELEGATES = {
-    "python": "python.just",
-    "rust": "rust.just",
-    "bun": "bun.just",
-    "bun-playwright": "bun.just",
-    "sage": "sage.just",
+    "python": ("python.just",),
+    "rust": ("rust.just",),
+    "bun": ("bun.just",),
+    "bun-playwright": ("bun.just",),
+    "bun-python": ("python.just", "bun.just"),
+    "sage": ("sage.just",),
 }
 
 
@@ -2536,7 +2569,8 @@ def test_scaffold_bare_just_entrypoint_survives_working_directory_binding(
     # The bug manifested as a just arg-parse failure ("required ... --justfile")
     # before any recipe ran; a clean parse + route is the fix.
     assert result.returncode == 0, output
-    assert f"-f ~/ai-review-ci/justfiles/{SCAFFOLD_DELEGATES[language]}" in output
+    for justfile_name in SCAFFOLD_DELEGATES[language]:
+        assert f"-f ~/ai-review-ci/justfiles/{justfile_name}" in output
     assert "-d ." in output
     assert recipe in output
 

@@ -228,7 +228,7 @@ _lizard:
 _doctor-preflight:
 	#!/usr/bin/env bash
 	set -euo pipefail
-	uv run --project {{infra}} ai-review-ci doctor-preflight --target . --profile rust
+	uv run --project {{infra}} ai-review-ci doctor-preflight --target .
 
 # public: COMMIT gate — correctness + normalization, plus bypass detection
 test: _doctor-preflight _check-rust-project _normalize-common _normalize _clippy _rustfmt _cargo-test
