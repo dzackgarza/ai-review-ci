@@ -237,8 +237,7 @@ def doctor_preflight(target: Path) -> None:
     missing = _profile_missing_paths(target_root, PROJECT_PROFILES[manifest.profile])
     if missing:
         print(
-            f"FATAL: QC doctor preflight failed: {target_root} does not satisfy its declared "
-            f"{manifest.profile!r} profile; missing: {', '.join(missing)}",
+            f"FATAL: QC doctor preflight failed: {target_root} does not satisfy its declared {manifest.profile!r} profile; missing: {', '.join(missing)}",
             file=sys.stderr,
         )
         sys.exit(1)
@@ -246,19 +245,12 @@ def doctor_preflight(target: Path) -> None:
     failed = [
         recipe
         for recipe, observation in delegation.items()
-        if not (
-            observation.observed.present
-            and observation.observed.delegates_to_global_qc
-            and observation.observed.caller_root_preserved
-        )
+        if not (observation.observed.present and observation.observed.delegates_to_global_qc and observation.observed.caller_root_preserved)
     ]
     if failed:
-        required = ", ".join(
-            f"~/ai-review-ci/justfiles/{name}" for name in PROJECT_PROFILES[manifest.profile].justfile_names
-        )
+        required = ", ".join(f"~/ai-review-ci/justfiles/{name}" for name in PROJECT_PROFILES[manifest.profile].justfile_names)
         print(
-            f"FATAL: QC doctor preflight failed: {target_root} declares {manifest.profile!r}, "
-            f"which requires exactly {required} with -d . for: {', '.join(failed)}",
+            f"FATAL: QC doctor preflight failed: {target_root} declares {manifest.profile!r}, which requires exactly {required} with -d . for: {', '.join(failed)}",
             file=sys.stderr,
         )
         sys.exit(1)
@@ -704,11 +696,7 @@ def _findings(
                 DoctorFinding(
                     severity="error",
                     surface="justfile_delegation",
-                    evidence=(
-                        f"{recipe} must delegate through "
-                        f"{', '.join(f'~/ai-review-ci/justfiles/{name}' for name in observation.required_justfiles)} "
-                        "with -d ."
-                    ),
+                    evidence=(f"{recipe} must delegate through {', '.join(f'~/ai-review-ci/justfiles/{name}' for name in observation.required_justfiles)} with -d ."),
                     remediation_commands=(f"just install-qc-scaffold {declared} <target-repo>",),
                 )
             )

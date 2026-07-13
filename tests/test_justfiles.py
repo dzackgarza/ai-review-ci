@@ -331,9 +331,7 @@ def test_knip_follows_dependency_imported_through_test_helper(tmp_path: pathlib.
     for dependency in ("browser-boundary", "unused-boundary"):
         package_dir = node_modules / dependency
         package_dir.mkdir(parents=True)
-        (package_dir / "package.json").write_text(
-            json.dumps({"name": dependency, "version": "1.0.0", "type": "module"}) + "\n"
-        )
+        (package_dir / "package.json").write_text(json.dumps({"name": dependency, "version": "1.0.0", "type": "module"}) + "\n")
         (package_dir / "index.js").write_text("export const boundary = true;\n")
     (project / "package.json").write_text(
         json.dumps(
@@ -348,12 +346,8 @@ def test_knip_follows_dependency_imported_through_test_helper(tmp_path: pathlib.
         )
         + "\n"
     )
-    (tests_dir / "shared-browser-boundary.ts").write_text(
-        'import { boundary } from "browser-boundary";\nexport const observed = boundary;\n'
-    )
-    (tests_dir / "reader.test.ts").write_text(
-        'import { observed } from "./shared-browser-boundary";\nvoid observed;\n'
-    )
+    (tests_dir / "shared-browser-boundary.ts").write_text('import { boundary } from "browser-boundary";\nexport const observed = boundary;\n')
+    (tests_dir / "reader.test.ts").write_text('import { observed } from "./shared-browser-boundary";\nvoid observed;\n')
 
     result = run_just(ROOT / "justfiles" / "bun.just", project, "_knip")
 
@@ -367,11 +361,9 @@ def test_knip_ignores_exact_assembled_pdfjs_module_only(tmp_path: pathlib.Path) 
     project = tmp_path / "bun-project"
     reader_dir = project / "extension" / "reader"
     reader_dir.mkdir(parents=True)
-    (project / "package.json").write_text(
-        json.dumps({"name": "knip-generated-module-fixture", "version": "1.0.0"}) + "\n"
-    )
+    (project / "package.json").write_text(json.dumps({"name": "knip-generated-module-fixture", "version": "1.0.0"}) + "\n")
     (reader_dir / "reader.js").write_text(
-        '\n'.join(
+        "\n".join(
             [
                 'import "./vendor/pdfjs/pdf_viewer.mjs";',
                 'import "./vendor/pdfjs/not-assembled.mjs";',
@@ -737,6 +729,26 @@ def test_semgrep_autofix_defers_unfixed_findings_to_push_tier(
     assert commit_tier.returncode == 0, commit_tier.stdout + commit_tier.stderr
     assert source.read_text() == 'const API_URL = "https://example.test";\nconsole.log(API_URL);\n'
     assert push_tier.returncode != 0, push_tier.stdout + push_tier.stderr
+
+
+def test_archived_directories_are_excluded_from_qc_file_discovery_and_semgrep(
+    tmp_path: pathlib.Path,
+) -> None:
+    project = tmp_path / "archived-project"
+    archive = project / "archives"
+    archive.mkdir(parents=True)
+    (project / "active.py").write_text("def current() -> str:\n    return 'current'\n")
+    (archive / "historical.py").write_text("from os import getenv\n\nMODE = getenv('MODE', 'historical')\n")
+
+    files = run_just(ROOT / "justfiles" / "python.just", project, "_python-qc-files")
+    assert files.returncode == 0, files.stdout + files.stderr
+    assert files.stdout.splitlines() == ["active.py"]
+
+    autofix = run_just(ROOT / "justfiles" / "shared.just", project, "_semgrep-autofix")
+    verification = run_just(ROOT / "justfiles" / "shared.just", project, "_semgrep")
+    assert autofix.returncode == 0, autofix.stdout + autofix.stderr
+    assert "archives/historical.py" not in autofix.stdout + autofix.stderr
+    assert verification.returncode == 0, verification.stdout + verification.stderr
 
 
 def test_semgrep_blocks_typescript_value_defaults(tmp_path: pathlib.Path) -> None:

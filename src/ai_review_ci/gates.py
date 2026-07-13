@@ -281,11 +281,7 @@ def delegates_to_global_qc(output: str, project_profile: ProjectProfile) -> bool
     expected = set(project_profile.justfile_names)
     command_lines = output.splitlines()
     return observed == expected and all(
-        any(
-            f"ai-review-ci/justfiles/{justfile_name}" in line
-            and re.search(r"(?:-d|--working-directory)\s+\.", line) is not None
-            for line in command_lines
-        )
+        any(f"ai-review-ci/justfiles/{justfile_name}" in line and re.search(r"(?:-d|--working-directory)\s+\.", line) is not None for line in command_lines)
         for justfile_name in project_profile.justfile_names
     )
 
