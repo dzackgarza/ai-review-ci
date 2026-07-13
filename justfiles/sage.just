@@ -71,6 +71,24 @@ _sage-qc-files:
 		-g '!*.sage.py' \
 		"${exclude_args[@]}"
 
+_sage-test-files:
+	#!/usr/bin/env bash
+	set -euo pipefail
+	while IFS= read -r sage_file; do
+		case "${sage_file##*/}" in
+			test_*.sage|*_test.sage) printf '%s\n' "$sage_file" ;;
+		esac
+	done < <(just --justfile {{justfile()}} -d . _sage-qc-files)
+
+_sage-python-test-files:
+	#!/usr/bin/env bash
+	set -euo pipefail
+	while IFS= read -r python_file; do
+		case "$python_file" in
+			tests/test_*.py|tests/*_test.py|tests/*/test_*.py|tests/*/*_test.py) printf '%s\n' "$python_file" ;;
+		esac
+	done < <(just -f {{justfiles}}/python.just -d . _python-qc-files)
+
 # Wiring preflight: every failure prints the exact remediation so a
 # misconfigured repo converges to correct QC wiring instead of guessing.
 _sage-preflight:
@@ -264,10 +282,11 @@ _sage-pytest:
 	echo "# then runs pytest on the generated .py files."
 	sage_bin="$(just --justfile {{justfile()}} -d . _sage-bin)"
 
-	# Collect .sage test files
-	mapfile -t sage_test_files < <(rg --files -g 'test_*.sage' -g '*_test.sage' 2>/dev/null || true)
-	# Also collect any .py test files (mixed projects)
-	mapfile -t py_test_files < <(rg --files tests -g 'test_*.py' -g '*_test.py' -g '!*.sage.py' 2>/dev/null || true)
+	# Collect only files owned by this repository; the shared discovery boundary
+	# excludes gitlinks and independently initialized nested repositories.
+	mapfile -t sage_test_files < <(just --justfile {{justfile()}} -d . _sage-test-files)
+	# Also collect any .py test files (mixed projects).
+	mapfile -t py_test_files < <(just --justfile {{justfile()}} -d . _sage-python-test-files)
 
 	if [ "${#sage_test_files[@]}" -eq 0 ] && [ "${#py_test_files[@]}" -eq 0 ]; then
 		echo "ERROR: pytest: no test files found (.sage or .py)."
@@ -337,8 +356,8 @@ _sage-pytest-coverage:
 	echo "# Same preparse flow as _sage-pytest, run under coverage.py inside Sage's"
 	echo "# Python (uvx CPython cannot import sage.*); emits coverage.xml for diff-cover."
 	sage_bin="$(just --justfile {{justfile()}} -d . _sage-bin)"
-	mapfile -t sage_test_files < <(rg --files -g 'test_*.sage' -g '*_test.sage' 2>/dev/null || true)
-	mapfile -t py_test_files < <(rg --files tests -g 'test_*.py' -g '*_test.py' -g '!*.sage.py' 2>/dev/null || true)
+	mapfile -t sage_test_files < <(just --justfile {{justfile()}} -d . _sage-test-files)
+	mapfile -t py_test_files < <(just --justfile {{justfile()}} -d . _sage-python-test-files)
 	if [ "${#sage_test_files[@]}" -eq 0 ] && [ "${#py_test_files[@]}" -eq 0 ]; then
 		echo "ERROR: pytest/coverage: no test files found (.sage or .py)."
 		"{{artifacts}}/scripts/emit-test-writing-directive.sh"
