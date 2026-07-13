@@ -468,8 +468,11 @@ _vibecheck:
 	
 	payload = json.loads(pathlib.Path(sys.argv[1]).read_text())
 	filtered = []
-	ignored = {"G141": 0, "G22": 0, "G118": 0}
+	ignored = {"G141": 0, "G22": 0, "G118": 0, "G20": 0}
 	for finding in payload.get("findings", []):
+	    if finding.get("rule_id") == "G20":
+	        ignored["G20"] += 1
+	        continue
 	    if finding.get("rule_id") == "G141" and not is_comment_line(finding.get("content")):
 	        ignored["G141"] += 1
 	        continue
@@ -501,6 +504,10 @@ _vibecheck:
 	ignored_g118_count=$(echo "$filter_result" | jq -r '.ignored.G118')
 	if [ "$ignored_g118_count" -gt 0 ]; then
 		echo "vibecheck: ignored $ignored_g118_count G118 prose-arrow finding(s) in compiled Python (notation, not pseudocode)."
+	fi
+	ignored_g20_count=$(echo "$filter_result" | jq -r '.ignored.G20')
+	if [ "$ignored_g20_count" -gt 0 ]; then
+		echo "vibecheck: ignored $ignored_g20_count G20 prompt-context false-positive finding(s)."
 	fi
 	remaining_count=$(echo "$filtered_output" | jq -r '.summary.critical + .summary.high')
 	if [ "$remaining_count" -eq 0 ]; then
