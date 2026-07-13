@@ -2157,7 +2157,7 @@ def test_mypy_recipe_fails_when_mypy_reports_type_errors(
     assert result.returncode != 0, result.stdout + result.stderr
 
 
-def test_mypy_preflight_rejects_project_without_pyproject_before_typechecking(
+def test_commit_gate_stops_at_doctor_preflight_before_typechecking(
     tmp_path: pathlib.Path,
 ) -> None:
     project = tmp_path / "missing-pyproject-project"
@@ -2168,12 +2168,58 @@ def test_mypy_preflight_rejects_project_without_pyproject_before_typechecking(
     (package_dir / "__init__.py").write_text("import yaml\n")
     (tests_dir / "test_placeholder.py").write_text("def test_placeholder() -> None:\n    assert True\n")
 
-    result = run_just(ROOT / "justfiles" / "python.just", project, "_mypy")
+    (project / ".ai-review-ci.toml").write_text(
+        "\n".join(
+            [
+                "schema_version = 1",
+                'profile = "python"',
+                'installed_ref = "main"',
+                'release_channel = "main"',
+                "workflow_template_version = 1",
+                'local_delegation = "global-justfile"',
+                'default_branch = "main"',
+                "",
+            ]
+        )
+    )
+
+    result = run_just(ROOT / "justfiles" / "python.just", project, "test")
     output = result.stdout + result.stderr
 
     assert result.returncode != 0, output
-    assert "Python project must have a pyproject.toml file" in output
+    assert "QC doctor preflight failed" in output
+    assert "does not satisfy 'python'; missing: pyproject.toml" in output
+    assert "Running: mypy type checking" not in output
     assert 'Library stubs not installed for "yaml"' not in output
+
+
+def test_mypy_private_recipe_does_not_apply_python_project_preflight_to_sage_pass(
+    tmp_path: pathlib.Path,
+) -> None:
+    project = project_with_sage_file(tmp_path)
+    (project / "pyproject.toml").write_text(
+        "\n".join(
+            [
+                "[project]",
+                'name = "sage-support"',
+                'version = "0.1.0"',
+                'requires-python = ">=3.14"',
+                "dependencies = []",
+                "",
+                "[build-system]",
+                'requires = ["setuptools"]',
+                'build-backend = "setuptools.build_meta"',
+                "",
+            ]
+        )
+    )
+    (project / "support.py").write_text("VALUE: int = 1\n")
+
+    result = run_just(ROOT / "justfiles" / "python.just", project, "_mypy")
+    output = result.stdout + result.stderr
+
+    assert result.returncode == 0, output
+    assert "Python project preflight check" not in output
 
 
 def test_mypy_uses_declared_dependency_group_type_stubs(

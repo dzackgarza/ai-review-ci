@@ -17,6 +17,7 @@ Subcommands:
 - check-review-threads — require evidence-backed ai-review thread resolution
 - check-review-guidelines — fail if the head repo's AGENTS.md lacks the current canonical # Review Guidelines section
 - protect-branch   — apply required branch protection contexts
+- doctor-preflight — validate local manifest/profile health before code QC
 - doctor-schema    — dump the JSON Schema for the doctor payload
 - validate-report  — validate a candidate report and write the artifact
 - report-schema    — dump the JSON Schema for a report type
@@ -32,7 +33,7 @@ Subcommands:
 from cyclopts import App
 
 from ai_review_ci.context import fetch_context
-from ai_review_ci.doctor import check_justfile, doctor, doctor_schema, version_command
+from ai_review_ci.doctor import check_justfile, doctor, doctor_preflight, doctor_schema, version_command
 from ai_review_ci.gates import (
     check_app_boot,
     check_delegation,
@@ -67,6 +68,7 @@ app.command(red_commit, name="red-commit")
 app.command(install_labels)
 app.command(version_command, name="version")
 app.command(doctor)
+app.command(doctor_preflight, name="doctor-preflight")
 app.command(doctor_schema)
 app.command(check_profile)
 app.command(check_diff)

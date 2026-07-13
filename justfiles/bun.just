@@ -411,8 +411,13 @@ _normalize: _eslint-deps
 		exit $ec
 	fi
 
+_doctor-preflight:
+	#!/usr/bin/env bash
+	set -euo pipefail
+	uv run --project {{infra}} ai-review-ci doctor-preflight --target . --profile bun
+
 # public: COMMIT gate — correctness + normalization, plus bypass detection
-test: _check-ts-project _normalize-common _normalize _tsc _bun-test
+test: _doctor-preflight _check-ts-project _normalize-common _normalize _tsc _bun-test
 	#!/usr/bin/env bash
 	set -euo pipefail
 	just -f {{justfiles}}/shared.just -d . _no-bypass

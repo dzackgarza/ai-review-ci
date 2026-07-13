@@ -113,6 +113,7 @@ Inspect a target repo with:
 ```bash
 uvx --from git+https://github.com/dzackgarza/ai-review-ci ai-review-ci version
 uvx --from git+https://github.com/dzackgarza/ai-review-ci ai-review-ci doctor --target /path/to/repo --json
+uvx --from git+https://github.com/dzackgarza/ai-review-ci ai-review-ci doctor-preflight --target /path/to/repo --profile python
 uvx --from git+https://github.com/dzackgarza/ai-review-ci ai-review-ci doctor-schema
 ```
 
@@ -129,6 +130,8 @@ Status mapping is fixed:
 
 Only `current` exits zero.
 All other statuses fail the command and the `qc-doctor` PR gate.
+
+Every public `just test` begins with `doctor-preflight`. It is the local, no-network subset of doctor: it requires a valid manifest, a profile compatible with the delegated language gate, and the declared profile's required project shape before normalization, type checking, or tests run. A preflight failure is project initialization work, not a code-quality finding and must not enter the QC triage routes.
 
 ## Installing QC Surfaces
 

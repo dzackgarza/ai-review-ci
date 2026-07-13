@@ -111,6 +111,11 @@ _sage-preflight:
 	fi
 	echo "Sage QC wiring OK"
 
+_doctor-preflight:
+	#!/usr/bin/env bash
+	set -euo pipefail
+	uv run --project {{infra}} ai-review-ci doctor-preflight --target . --profile sage
+
 _sage-bin:
 	#!/usr/bin/env bash
 	set -euo pipefail
@@ -428,7 +433,7 @@ _sage-diff-cover: _sage-pytest-coverage
 	fi
 
 # public: COMMIT gate — Sage syntax + Python correctness/normalization
-test: _sage-preflight _normalize-common _sage-syntax
+test: _doctor-preflight _sage-preflight _normalize-common _sage-syntax
 	#!/usr/bin/env bash
 	set -euo pipefail
 	python_qc_repo="{{justfiles}}/python.just"

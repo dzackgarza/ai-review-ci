@@ -225,8 +225,13 @@ _lizard:
 		"${lizard_excludes[@]}" \
 		"${rust_files[@]}"
 
+_doctor-preflight:
+	#!/usr/bin/env bash
+	set -euo pipefail
+	uv run --project {{infra}} ai-review-ci doctor-preflight --target . --profile rust
+
 # public: COMMIT gate — correctness + normalization, plus bypass detection
-test: _check-rust-project _normalize-common _normalize _clippy _rustfmt _cargo-test
+test: _doctor-preflight _check-rust-project _normalize-common _normalize _clippy _rustfmt _cargo-test
 	#!/usr/bin/env bash
 	set -euo pipefail
 	just -f {{justfiles}}/shared.just -d . _no-bypass

@@ -128,7 +128,12 @@ _normalize-common:
 	set -euo pipefail
 	just -f {{justfiles}}/shared.just -d . _normalize-common
 
-_mypy: _check-python-project _install-tools
+_doctor-preflight:
+	#!/usr/bin/env bash
+	set -euo pipefail
+	uv run --project {{infra}} ai-review-ci doctor-preflight --target . --profile python
+
+_mypy: _install-tools
 	#!/usr/bin/env bash
 	set -euo pipefail
 	echo "============================="
@@ -655,7 +660,7 @@ _codeql:
 	PY
 
 # public: COMMIT gate — correctness + normalization, plus bypass detection
-test: _check-python-project _normalize-common _normalize _python-syntax _mypy _pytest
+test: _doctor-preflight _check-python-project _normalize-common _normalize _python-syntax _mypy _pytest
 	#!/usr/bin/env bash
 	set -euo pipefail
 	just -f {{justfiles}}/shared.just -d . _no-bypass

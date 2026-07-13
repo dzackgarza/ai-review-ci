@@ -13,7 +13,7 @@ from typing import Annotated, Any, Literal
 
 import yaml
 from cyclopts import Parameter
-from pydantic import BaseModel, ConfigDict, Field, TypeAdapter
+from pydantic import BaseModel, ConfigDict, Field, TypeAdapter, ValidationError
 
 from ai_review_ci.gates import PROJECT_PROFILES, SUPPORTED_PROFILES, ProjectProfile, required_check_contexts
 from ai_review_ci.install import TEMPLATES
@@ -220,6 +220,43 @@ def doctor(target: Path, *, json: Annotated[int, Parameter(name="--json", count=
             print(f"- {finding.surface}: {finding.evidence}")
     if report.global_status != "current":
         sys.exit(1)
+
+
+def doctor_preflight(target: Path, profile: str) -> None:
+    """Validate local QC initialization before a profile's code checks run."""
+    target_root = _target_root(target)
+    manifest_path = target_root / MANIFEST_NAME
+    try:
+        expected_profile = ProfileAdapter.validate_python(profile)
+    except ValidationError as exc:
+        print(f"FATAL: QC doctor preflight failed: unsupported profile {profile!r}: {exc}", file=sys.stderr)
+        sys.exit(1)
+    if not manifest_path.is_file():
+        print(f"FATAL: QC doctor preflight failed: {manifest_path} is missing", file=sys.stderr)
+        sys.exit(1)
+    try:
+        manifest = _load_manifest(manifest_path)
+    except (tomllib.TOMLDecodeError, ValidationError) as exc:
+        print(f"FATAL: QC doctor preflight failed: {manifest_path} is invalid: {exc}", file=sys.stderr)
+        sys.exit(1)
+    allowed_profiles = ("bun", "bun-playwright") if expected_profile == "bun" else (expected_profile,)
+    if manifest.profile not in allowed_profiles:
+        allowed = ", ".join(repr(item) for item in allowed_profiles)
+        print(
+            f"FATAL: QC doctor preflight failed: {manifest_path} declares profile {manifest.profile!r}, "
+            f"but this gate requires one of: {allowed}",
+            file=sys.stderr,
+        )
+        sys.exit(1)
+    missing = _profile_missing_paths(target_root, PROJECT_PROFILES[manifest.profile])
+    if missing:
+        print(
+            f"FATAL: QC doctor preflight failed: {target_root} does not satisfy {manifest.profile!r}; "
+            f"missing: {', '.join(missing)}",
+            file=sys.stderr,
+        )
+        sys.exit(1)
+    print(f"QC doctor preflight passed for {target_root} ({manifest.profile}).")
 
 
 def check_justfile(target: Path) -> None:

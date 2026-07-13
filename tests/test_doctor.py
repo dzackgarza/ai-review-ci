@@ -16,6 +16,7 @@ from ai_review_ci.doctor import (
     _has_private_attribute,
     _justfile_recipes,
     _label_alignment_findings,
+    doctor_preflight,
     doctor_report,
     manifest_text,
 )
@@ -83,6 +84,7 @@ def write_profile_shape(project: pathlib.Path, profile: str) -> None:
     elif profile == "rust":
         (project / "Cargo.toml").write_text('[package]\nname = "target"\nversion = "0.1.0"\nedition = "2024"\n')
     elif profile == "sage":
+        (project / "pyproject.toml").write_text('[project]\nname = "target"\nversion = "0.1.0"\n')
         (project / "example.sage").write_text("x = 1\n")
     else:
         raise AssertionError(f"unsupported test profile {profile}")
@@ -109,6 +111,42 @@ def test_doctor_reports_current_for_installed_profile_targets(tmp_path: pathlib.
     assert "qc-doctor / qc-doctor" in payload["branch_protection"]["required_contexts"]
     assert payload["justfile_delegation"]["test"]["observed"]["caller_root_preserved"] is True
     assert payload["workflow_refs"]["review-pr.yml"]["observed_ref"] == "main"
+
+
+def test_doctor_preflight_rejects_declared_profile_missing_required_path(
+    tmp_path: pathlib.Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    project = create_target(tmp_path, "python")
+    (project / "pyproject.toml").unlink()
+
+    with pytest.raises(SystemExit):
+        doctor_preflight(project, "python")
+
+    assert "QC doctor preflight failed" in capsys.readouterr().err
+
+
+def test_doctor_preflight_rejects_recipe_profile_mismatch(
+    tmp_path: pathlib.Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    project = create_target(tmp_path, "python")
+
+    with pytest.raises(SystemExit):
+        doctor_preflight(project, "sage")
+
+    assert "declares profile 'python', but this gate requires one of: 'sage'" in capsys.readouterr().err
+
+
+def test_doctor_preflight_accepts_bun_playwright_manifest_for_bun_recipe(
+    tmp_path: pathlib.Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    project = create_target(tmp_path, "bun-playwright")
+
+    doctor_preflight(project, "bun")
+
+    assert "QC doctor preflight passed" in capsys.readouterr().out
 
 
 def test_manifest_text_round_trips_through_toml_parser() -> None:

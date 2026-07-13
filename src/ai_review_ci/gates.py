@@ -53,7 +53,7 @@ PROJECT_PROFILES = {
         requires_app_boot=True,
     ),
     "rust": ProjectProfile(name="rust", justfile_name="rust.just", required_paths=("Cargo.toml",)),
-    "sage": ProjectProfile(name="sage", justfile_name="sage.just", required_paths=(), requires_sage_file=True),
+    "sage": ProjectProfile(name="sage", justfile_name="sage.just", required_paths=("pyproject.toml",), requires_sage_file=True),
 }
 
 BASE_REQUIRED_CHECK_CONTEXTS = (
