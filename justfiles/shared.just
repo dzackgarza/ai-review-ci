@@ -85,10 +85,14 @@ _semgrep-autofix:
 	echo "============================="
 	echo "=== Running: semgrep auto-fix ==="
 	echo "# Applies Semgrep autofixes; push-tier Semgrep verification owns remaining findings"
+	exclude_args=()
+	while IFS= read -r dir; do
+		exclude_args+=("--exclude=$dir")
+	done < <(uv run {{artifacts}}/scripts/read_qc_excludes.py {{configs}}/qc-excludes.toml)
 	if uvx --from semgrep semgrep scan \
 		--config={{configs}}/semgrep.yml \
 		--config=p/ci \
-		--exclude=codeql-db \
+		"${exclude_args[@]}" \
 		--scan-unknown-extensions \
 		--autofix; then
 		:

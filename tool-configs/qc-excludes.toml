@@ -52,4 +52,7 @@ directories = [
     "vendor",
     "third_party",
     "venv",
+    # Archived source trees are preserved reference material, not active code.
+    "archives",
+    "src.bak",
 ]
