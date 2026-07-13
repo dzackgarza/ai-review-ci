@@ -222,6 +222,19 @@ def doctor(target: Path, *, json: Annotated[int, Parameter(name="--json", count=
         sys.exit(1)
 
 
+def doctor_ci(target: Path, *, json: Annotated[int, Parameter(name="--json", count=True)] = 0) -> None:
+    """Evaluate repository-owned QC health without failing on advisory remote-state gaps."""
+    report = doctor_report(target)
+    if json > 0:
+        print(report.model_dump_json(indent=2))
+    else:
+        print(f"{report.global_status}: {target.resolve()}")
+        for finding in report.findings:
+            print(f"- {finding.surface}: {finding.evidence}")
+    if report.global_status in ("stale", "misconfigured"):
+        sys.exit(1)
+
+
 def doctor_preflight(target: Path) -> None:
     """Validate central manifest/profile initialization before any QC code checks run."""
     target_root = _target_root(target)

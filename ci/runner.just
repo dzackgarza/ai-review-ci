@@ -161,7 +161,7 @@ check-qc-doctor:
     set -euo pipefail
 
     doctor_payload="{{control_repo}}/.ai-review-ci-doctor.json"
-    if uv run --project {{infra}} ai-review-ci doctor \
+    if uv run --project {{infra}} ai-review-ci doctor-ci \
       --target "{{control_repo}}" \
       --json > "$doctor_payload"; then
         doctor_status=0
