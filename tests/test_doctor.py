@@ -117,6 +117,36 @@ def test_doctor_reports_current_for_installed_profile_targets(tmp_path: pathlib.
     assert payload["workflow_refs"]["review-pr.yml"]["observed_ref"] == "main"
 
 
+def test_doctor_ci_preserves_advisory_unverifiable_report_without_failing_gate(
+    tmp_path: pathlib.Path,
+) -> None:
+    project = create_target(tmp_path, "python")
+    remote = run_git(project, "remote", "add", "origin", "https://example.invalid/owner/repo.git")
+    assert remote.returncode == 0, remote.stderr
+
+    result = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "ai_review_ci.cli",
+            "doctor-ci",
+            "--target",
+            str(project),
+            "--json",
+        ],
+        cwd=ROOT,
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    payload = json.loads(result.stdout)
+    assert payload["global_status"] == "unverifiable"
+    assert payload["findings"]
+    assert {finding["severity"] for finding in payload["findings"]} == {"warning"}
+
+
 def test_doctor_preflight_rejects_declared_profile_missing_required_path(
     tmp_path: pathlib.Path,
     capsys: pytest.CaptureFixture[str],
