@@ -16,6 +16,8 @@ When no path is given, looks for qc-excludes.toml in ancestor directories.
 
 import argparse
 import json
+import os
+import subprocess
 import sys
 from pathlib import Path
 from typing import Never
@@ -54,6 +56,47 @@ def load_excludes(config: Path) -> list[str]:
             sys.exit(1)
         validated.append(directory)
     return validated
+
+
+def discover_nested_repositories(root: Path, configured: list[str]) -> list[str]:
+    """Return repository roots below the project root.
+
+    Gitlinks and independently initialized repositories own their own QC runs.
+    The enclosing project must not inspect their files.
+    """
+    discovered = set(_gitlink_paths(root))
+    excluded_names = {entry for entry in configured if "/" not in entry and "*" not in entry}
+    for current, directories, files in os.walk(root, followlinks=False):
+        current_path = Path(current)
+        relative = current_path.relative_to(root)
+        if relative != Path() and (".git" in directories or ".git" in files):
+            discovered.add(relative.as_posix())
+            directories.clear()
+            continue
+        directories[:] = [
+            directory
+            for directory in directories
+            if directory != ".git" and directory not in excluded_names
+        ]
+    return sorted(discovered)
+
+
+def _gitlink_paths(root: Path) -> list[str]:
+    result = subprocess.run(
+        ["git", "-C", str(root), "ls-files", "--stage", "-z"],
+        check=False,
+        capture_output=True,
+    )
+    if result.returncode != 0:
+        return []
+    paths: list[str] = []
+    for record in result.stdout.split(b"\0"):
+        if not record.startswith(b"160000 "):
+            continue
+        _, separator, encoded_path = record.partition(b"\t")
+        if separator:
+            paths.append(encoded_path.decode(errors="surrogateescape"))
+    return paths
 
 
 class _ArgumentParser(argparse.ArgumentParser):
@@ -118,7 +161,9 @@ def _render_excludes(fmt: str, dirs: list[str]) -> None:
 def main() -> None:
     args = _parse_args(sys.argv[1:])
     config_path = _resolve_config_path(args.config_paths)
-    _render_excludes(args.fmt, load_excludes(config_path))
+    configured = load_excludes(config_path)
+    nested_repositories = discover_nested_repositories(Path.cwd(), configured)
+    _render_excludes(args.fmt, [*configured, *nested_repositories])
 
 
 if __name__ == "__main__":
