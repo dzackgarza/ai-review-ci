@@ -128,7 +128,7 @@ _normalize-common:
 	set -euo pipefail
 	just -f {{justfiles}}/shared.just -d . _normalize-common
 
-_mypy: _install-tools
+_mypy: _check-python-project _install-tools
 	#!/usr/bin/env bash
 	set -euo pipefail
 	echo "============================="

@@ -2157,6 +2157,25 @@ def test_mypy_recipe_fails_when_mypy_reports_type_errors(
     assert result.returncode != 0, result.stdout + result.stderr
 
 
+def test_mypy_preflight_rejects_project_without_pyproject_before_typechecking(
+    tmp_path: pathlib.Path,
+) -> None:
+    project = tmp_path / "missing-pyproject-project"
+    package_dir = project / "src" / "missing_pyproject_project"
+    tests_dir = project / "tests"
+    package_dir.mkdir(parents=True)
+    tests_dir.mkdir()
+    (package_dir / "__init__.py").write_text("import yaml\n")
+    (tests_dir / "test_placeholder.py").write_text("def test_placeholder() -> None:\n    assert True\n")
+
+    result = run_just(ROOT / "justfiles" / "python.just", project, "_mypy")
+    output = result.stdout + result.stderr
+
+    assert result.returncode != 0, output
+    assert "Python project must have a pyproject.toml file" in output
+    assert 'Library stubs not installed for "yaml"' not in output
+
+
 def test_mypy_uses_declared_dependency_group_type_stubs(
     tmp_path: pathlib.Path,
 ) -> None:
