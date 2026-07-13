@@ -421,6 +421,30 @@ def test_trigger_inputs_are_declared_by_reusable_workflow(template: str, profile
     assert checked_a_reusable_call, f"{template} (profile={profile}) calls no in-repo reusable workflow"
 
 
+@pytest.mark.parametrize("profile", SUPPORTED_PROFILES)
+@pytest.mark.parametrize("template", TEMPLATES)
+def test_trigger_permissions_cover_reusable_workflow_permissions(template: str, profile: str) -> None:
+    """A called workflow cannot elevate permissions omitted by its caller."""
+    workflow = yaml.safe_load(_template_text(template, profile, "main"))
+    checked_review_call = False
+
+    for job_name, job in workflow["jobs"].items():
+        target = _reusable_target(job)
+        if target != "_review.yml":
+            continue
+        checked_review_call = True
+        callee_jobs = _workflow_jobs(target)
+        required = set(next(iter(callee_jobs.values())).get("permissions") or {})
+        granted = set(job.get("permissions") or {})
+        missing = required - granted
+        assert not missing, (
+            f"{template} (profile={profile}) job {job_name!r} omits reusable-workflow "
+            f"permission(s) {sorted(missing)} required by {target}; GitHub rejects this at startup"
+        )
+
+    assert checked_review_call, f"{template} (profile={profile}) calls no review workflow"
+
+
 def test_gates_qc_doctor_grants_labels_read_scope() -> None:
     """Regression guard for #224.
 

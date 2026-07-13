@@ -49,6 +49,7 @@ jobs:
       security-events: write
       actions: read
       pull-requests: write
+      issues: write
     with:
       report_type: general
       scope: diff
@@ -59,6 +60,7 @@ jobs:
       security-events: write
       actions: read
       pull-requests: write
+      issues: write
     with:
       report_type: slop
       scope: diff
