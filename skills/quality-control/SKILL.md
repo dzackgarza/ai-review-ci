@@ -18,18 +18,18 @@ A domain skill may narrow these policies for its domain but may not weaken them.
 | Rank | Skill | Owns |
 | --- | --- | --- |
 | **1** | `quality-control` | Generic QC invocation, public recipes, tool pins, configs, and justfile architecture (shared + language-specific). No local reimplementation. |
-| **2** | `test-guidelines` | Testing epistemology: what constitutes a proof, no mocks, no exceptions, no masking. |
-| **3** | `tool-provisioning-and-environment-hygiene` | How tools run: ephemeral by default, uv-only Python, no pipx/pip/global npm. |
-| **4** | `known-solution-first` | External tool/compiler/API uncertainty: public contracts before local probing. |
-| **5** | `reality-grounded-debugging` | Diagnostic command discipline: stderr preservation, surface classification before mutation. |
-| **6** | `writing-scripts-and-cli-interfaces` | CLI design patterns, project-owned dependency decisions, standalone script templates. |
+| **2** | [[test-guidelines/SKILL|test-guidelines]] | Testing epistemology: what constitutes a proof, no mocks, no exceptions, no masking. |
+| **3** | [[tool-provisioning-and-environment-hygiene/SKILL|tool-provisioning-and-environment-hygiene]] | How tools run: ephemeral by default, uv-only Python, no pipx/pip/global npm. |
+| **4** | [[known-solution-first/SKILL|known-solution-first]] | External tool/compiler/API uncertainty: public contracts before local probing. |
+| **5** | [[reality-grounded-debugging/SKILL|reality-grounded-debugging]] | Diagnostic command discipline: stderr preservation, surface classification before mutation. |
+| **6** | [[writing-scripts-and-cli-interfaces/SKILL|writing-scripts-and-cli-interfaces]] | CLI design patterns, project-owned dependency decisions, standalone script templates. |
 | **7** | Domain skills | May narrow higher-ranked policies within their domain but may not weaken them. |
 
-**Policy narrowing rule:** A domain skill may impose stricter requirements than a higher-ranked skill (e.g., `test-guidelines` may add prohibitions beyond `quality-control`'s defaults).
+**Policy narrowing rule:** A domain skill may impose stricter requirements than a higher-ranked skill (e.g., [[test-guidelines/SKILL|test-guidelines]] may add prohibitions beyond `quality-control`'s defaults).
 It may not relax them (e.g., no skill may permit mocks or pytest-mock).
 
-**When a lower-ranked skill contradicts a higher-ranked skill, the higher-ranked skill wins.** If `test-driven-development` says "mocks if unavoidable" and `test-guidelines` says "no mocks, no exceptions," `test-guidelines` wins.
-If `clean-code` says "start with try/catch" and `python-patterns` says "fail fast, no speculative try/catch," `python-patterns` (as a domain skill narrowing tool-provisioning's fail-loud doctrine) wins.
+**When a lower-ranked skill contradicts a higher-ranked skill, the higher-ranked skill wins.** If [[test-driven-development/SKILL|test-driven-development]] says "mocks if unavoidable" and [[test-guidelines/SKILL|test-guidelines]] says "no mocks, no exceptions," [[test-guidelines/SKILL|test-guidelines]] wins.
+If [[clean-code/SKILL|clean-code]] says "start with try/catch" and [[python-patterns/SKILL|python-patterns]] says "fail fast, no speculative try/catch," [[python-patterns/SKILL|python-patterns]] (as a domain skill narrowing tool-provisioning's fail-loud doctrine) wins.
 
 The hierarchy is designed so that no skill below rank 3 can re-introduce mock seams, local QC reimplementation, or global tool installation.
 
@@ -203,11 +203,11 @@ The error message must name the tool, the missing prerequisite, and (when applic
 **Rule:** Every language `test` recipe runs preflight checks before any QC tooling.
 These checks validate project configuration and fail fast on misconfiguration, producing clear error messages instead of confusing tool failures.
 
-Each language justfile has a dedicated `_check-*-project` recipe that runs first in the `test` dependency chain, followed by the shared `_check-no-local-qc-override` (imported from `justfile`). These run before `_normalize`, linters, typecheckers, tests, or any other QC tool.
+Each language justfile has a dedicated `_check-*-project` recipe that runs first in the `test` dependency chain, followed by the shared `_check-no-local-qc-override` (imported from [[justfile/SKILL|justfile]]). These run before `_normalize`, linters, typecheckers, tests, or any other QC tool.
 
 #### Shared Preflight: `_check-no-local-qc-override`
 
-Location: `justfile` (imported by all language justfiles).
+Location: [[justfile/SKILL|justfile]] (imported by all language justfiles).
 
 Detects local copies of global QC config files in the project root.
 Global QC owns these tool configs — local overrides are forbidden:
@@ -268,7 +268,7 @@ Validates:
 Missing tests are not routed through ordinary QC triage.
 A project with source code and no tests needs a separate proof-design workflow, because immediately fixing application code or adding placeholder tests launders the absence of proof into a generic QC failure.
 
-When a language preflight reports missing tests, it emits the `TEST-WRITING TRIAGE REQUIRED` directive and points agents to the global `test-writing` and `test-guidelines` skills.
+When a language preflight reports missing tests, it emits the `TEST-WRITING TRIAGE REQUIRED` directive and points agents to the global [[test-writing/SKILL|test-writing]] and [[test-guidelines/SKILL|test-guidelines]] skills.
 The required workflow is:
 
 - A subagent defines the repository's real-world proof obligations: owned behavior, user-visible boundaries, real fixtures/data, and assertions that would prove the behavior.
@@ -298,7 +298,7 @@ The correct action is to escalate to the QC owner, who may update the global con
 
 ### ML Model Preflight: `_slop` requires trained classifier
 
-**Rule:** The `_slop` recipe in the shared `justfile` runs an ML-based code quality detector (`ai-slop-detector`) which requires a trained classifier model at `models/slop_classifier.pkl`. The recipe checks for this file before running the detector and fails hard if it is missing:
+**Rule:** The `_slop` recipe in the shared [[justfile/SKILL|justfile]] runs an ML-based code quality detector (`ai-slop-detector`) which requires a trained classifier model at `models/slop_classifier.pkl`. The recipe checks for this file before running the detector and fails hard if it is missing:
 
 ```
 ERROR: ai-slop-detector ML model not found: /home/dzack/ai-review-ci/tool-artifacts/models/slop_classifier.pkl
@@ -402,7 +402,7 @@ Global installs pollute the system Python and node environments, create version 
 Every tool in the QC stack has a working ephemeral runner (`uvx`, `bun x`, `npx -y`). If a tool cannot run ephemerally, it is the wrong tool — replace it, don't install it globally.
 
 **Rule:** All tools run via ephemeral runners (`uvx`, `bun x`, `npx -y`). No permanent global or local installation of QC tools is permitted.
-See `tool-provisioning-and-environment-hygiene` (rank 3 in the authority hierarchy).
+See [[tool-provisioning-and-environment-hygiene/SKILL|tool-provisioning-and-environment-hygiene]] (rank 3 in the authority hierarchy).
 
 | Correct | Incorrect |
 | --- | --- |
@@ -442,7 +442,7 @@ Any exception to these rules must strictly follow the **Policy Exception Protoco
 The QC system uses one shared justfile (`shared.just`) and multiple language-specific justfiles.
 Language justfiles call shared recipes explicitly with `just -f shared.just` so language-specific recipe names can remain isolated without import conflicts.
 
-### Shared Justfile (`justfile`)
+### Shared Justfile ([[justfile/SKILL|justfile]])
 
 Location: `~/ai-review-ci/justfiles/shared.just`
 
@@ -853,7 +853,7 @@ When a QC check fails:
 1. **The triage directive is already in the output.** Read it.
    Follow it.
 2. **Load `reviewing-llm-code/references/qc-triage.md`** for the complete triage protocol — the rules about not probing QC configs, not self-fixing, and the subagent workflow.
-3. **Load `reality-grounded-debugging`** only after the triage workflow is underway, if the failure requires deeper diagnostic work.
+3. **Load [[reality-grounded-debugging/SKILL|reality-grounded-debugging]]** only after the triage workflow is underway, if the failure requires deeper diagnostic work.
    It provides:
    - Command-output discipline (preserve stdout, stderr, exit code)
    - Surface classification (fixture, boundary log, intermediate dump, schema dump, diagnostic recipe, subprocess capture)
@@ -864,7 +864,7 @@ When a QC check fails:
 | Phase | Action | Skill |
 | --- | --- | --- |
 | **Triage** | Preserve raw findings. Do not self-fix. Route and delegate under existing work authority; ask only for a genuine exception. | `reviewing-llm-code/references/qc-triage.md` |
-| **Debugging** | Investigate opaque errors after triage is complete. | `reality-grounded-debugging` |
+| **Debugging** | Investigate opaque errors after triage is complete. | [[reality-grounded-debugging/SKILL|reality-grounded-debugging]] |
 
 The triage protocol takes priority over debugging.
 Do not start debugging until the triage workflow (preserve raw output → route mechanically → delegate) has completed. Ask the user only when an exception requires new authority.

@@ -352,7 +352,7 @@ If you cannot identify the live goal and proof loop, you are not ready to analyz
 - State, in plain nouns, what the thing is before using any project-coined term: "this appears to be a ___ used by ___ to do ___." If no ordinary noun fits, that is already a finding.
 - Treat internal consistency as weak evidence.
   Many generated documents agreeing with one another may all descend from the same ungrounded premise; cross-references are pointers, not corroboration.
-- Treat a bizarre visible artifact as a **sample of the production process**, not an isolated defect (see the Blast Radius Rule in `fixing-slop`).
+- Treat a bizarre visible artifact as a **sample of the production process**, not an isolated defect (see the Blast Radius Rule in [[fixing-slop/SKILL|fixing-slop]]).
 - Do not debate the merits of a project-invented construct on its own terms ("is the seven-gate matrix complete?"). Reconcile it against reality instead: "which observable workflow requires a custom gate system rather than ordinary validation, review, access control, or release state?"
   The bespoke construct carries the burden of proof for existing.
 
@@ -360,17 +360,17 @@ If you cannot identify the live goal and proof loop, you are not ready to analyz
 
 For code, tests, QC, and documentation, **always** load:
 
-- `reviewing-llm-code` and its `references/pattern-catalog.md` for LLM-specific review patterns.
+- [[reviewing-llm-code/SKILL|reviewing-llm-code]] and its `references/pattern-catalog.md` for LLM-specific review patterns.
 
 - `policy-index/references/red-flags.md` for validation-evasion red flags and `policy-index/references/runtime-control-flow.md` for runtime control-flow rules.
 
 - `policy-index/references/error-handling-as-control-flow.md` for exception-selected ordinary branches, state probing, guess-catch-retry trees, and the explicit models those patterns displace.
 
-- `llm-failure-modes` — the cognitive failure modes that produce slop (overconfidence, confabulation, premature solution generation, replacement instinct).
+- [[llm-failure-modes/SKILL|llm-failure-modes]] — the cognitive failure modes that produce slop (overconfidence, confabulation, premature solution generation, replacement instinct).
 
-- `test-guidelines` — the canonical test quality framework.
+- [[test-guidelines/SKILL|test-guidelines]] — the canonical test quality framework.
 
-Do NOT rely solely on this skill’s `references/code-patterns.md` or `references/test-patterns.md`. Those are secondary references; the central catalogs are in `reviewing-llm-code`.
+Do NOT rely solely on this skill’s `references/code-patterns.md` or `references/test-patterns.md`. Those are secondary references; the central catalogs are in [[reviewing-llm-code/SKILL|reviewing-llm-code]].
 
 ### Phase 3: Structural Analysis (The Anti-Checklist)
 
@@ -539,11 +539,11 @@ If you catch yourself doing any of these, you have slipped from analysis into ja
 
 - **Myopic patching** (stacked conditionals around prior mistakes, parallel helpers)
 
-- **Prior-shaped probes** (commands encoding the expected answer and suppressing contrary evidence — guessed flags with `2>/dev/null`, greps whose failure is treated as absence, `jq` paths run before response-shape inspection, endpoint guesses treated as API facts) See `reality-grounded-debugging` for the behavioral fix.
+- **Prior-shaped probes** (commands encoding the expected answer and suppressing contrary evidence — guessed flags with `2>/dev/null`, greps whose failure is treated as absence, `jq` paths run before response-shape inspection, endpoint guesses treated as API facts) See [[reality-grounded-debugging/SKILL|reality-grounded-debugging]] for the behavioral fix.
 
 - **Exception-driven ordinary control flow** (catch order selects expected behavior, operations are attempted until one survives, or retries begin before classifying a typed transient failure and proving idempotency). Classify as `POLICY.NO_EXCEPTION_CONTROL_FLOW`; use `policy-index/references/error-handling-as-control-flow.md` for the architectural and readability burden.
 
-- **Debug-surface debt** (failures addressed by mutating global code, adding one-off scripts, or repeatedly running opaque whole-system commands instead of creating isolated reproducers, structured logs, artifact dumps, schema inspections, or canonical diagnostic recipes) See `reality-grounded-debugging` for the surface-upgrade requirements.
+- **Debug-surface debt** (failures addressed by mutating global code, adding one-off scripts, or repeatedly running opaque whole-system commands instead of creating isolated reproducers, structured logs, artifact dumps, schema inspections, or canonical diagnostic recipes) See [[reality-grounded-debugging/SKILL|reality-grounded-debugging]] for the surface-upgrade requirements.
 
 - **Bespoke reinvention** (custom `AcademicCard` when `card.tsx` exists)
 
@@ -607,7 +607,7 @@ A project can have clean functions and still be slop at the structural level.
 This is a **different axis** from the dependency-complexity signal above.
 There, complex *owned code* usually means a missed library.
 Here, the tell is **organizational and process complexity that is disproportionate to a demonstrated problem**: the control plane outgrows the payload.
-Hold the proportionality rule from `bespoke-software-policy` → **Proportionality: Earned vs. Manufactured Complexity**: the question is whether this is the simplest standard mechanism for a demonstrated failure mode, not whether it is complex.
+Hold the proportionality rule from [[bespoke-software-policy/SKILL|bespoke-software-policy]] → **Proportionality: Earned vs. Manufactured Complexity**: the question is whether this is the simplest standard mechanism for a demonstrated failure mode, not whether it is complex.
 
 Structural tells (each is a pointer to verify, not a verdict):
 
@@ -625,7 +625,7 @@ Apply the same false-positive discipline as for code: a deliberately elaborate s
 Run the **Design Choices Are Not Slop** gate.
 The finding is structural slop only when the machinery precedes the incident, the categories precede the instances, or the organization is justified by internal documents rather than an observable need.
 
-For agent-generated documents specifically (READMEs, architecture docs, roadmaps), the concrete patterns and forcing questions live in `llm-failure-modes/documentation-failures.md`. When a structural artifact's whole frame is contaminated, the remediation is a fresh-context greenfield rebuild, not in-place editing — see `fixing-slop` → **Contaminated Artifacts Cannot Be Repaired In Place**.
+For agent-generated documents specifically (READMEs, architecture docs, roadmaps), the concrete patterns and forcing questions live in `llm-failure-modes/documentation-failures.md`. When a structural artifact's whole frame is contaminated, the remediation is a fresh-context greenfield rebuild, not in-place editing — see [[fixing-slop/SKILL|fixing-slop]] → **Contaminated Artifacts Cannot Be Repaired In Place**.
 
 ## Reference Files
 
@@ -738,7 +738,7 @@ This links to the existing goal-integrity rule: changing labels, comments, issue
 The canonical bridge-burning policy registry has moved to [policy-index/SKILL.md#policy-registry](../policy-index/SKILL.md#policy-registry).
 
 This skill no longer owns the enumerated policy text.
-Use `policy-index` for `POLICY.*` codes and the exception protocol.
+Use [[policy-index/SKILL|policy-index]] for `POLICY.*` codes and the exception protocol.
 For failure-driven ordinary branching, classify `POLICY.NO_EXCEPTION_CONTROL_FLOW` and load [Error Handling as Control Flow](../policy-index/references/error-handling-as-control-flow.md).
 Anti-slop review uses those policies to classify slop, reconstruct the original obligation, and decide whether a finding is a real bridge-burning violation.
 Remediation instructions are intentionally separate and belong to the fixer-side reference under `policy-index/references/`.

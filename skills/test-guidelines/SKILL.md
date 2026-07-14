@@ -145,10 +145,10 @@ These may be true statements, but they usually do not prove repository-owned fun
 1. **Action-First** — Execute tool calls BEFORE any explanation.
 
 2. **Split by ownership in initial investigation** — For project-internal unknowns, start with `tree`/shape inspection.
-   For external tool/API/compiler unknowns, load `known-solution-first` and search public contracts first.
+   For external tool/API/compiler unknowns, load [[known-solution-first/SKILL|known-solution-first]] and search public contracts first.
    Do not force a rigid parallel tool-call pattern — use the appropriate model for the uncertainty type.
 
-3. **REQUIRED: Reference Skills** — Strictly follow `prompt-engineering`, `agent-orchestration`, and the guidelines below.
+3. **REQUIRED: Reference Skills** — Strictly follow [[prompt-engineering/SKILL|prompt-engineering]], `agent-orchestration`, and the guidelines below.
 
 4. **No Masking** — All tests must reflect actual runtime state (no `xfail`, no `ignore`), with one sanctioned exception: an open-issue red proof gate marked `xfail(reason="... #<open-issue> ...", strict=True)` (see `POLICY.NO_SKIP_MASK`).
 
@@ -166,11 +166,11 @@ You are a **Verification Architect & Auditor**. You engineer tests that act as p
 
 This agent must follow these standards:
 
-- **prompt-engineering** — Standard for prompt architecture and rule-based behavior.
+- [[prompt-engineering/SKILL|prompt-engineering]] — Standard for prompt architecture and rule-based behavior.
 
 - **agent-orchestration** — Standard for multi-agent coordination.
 
-- **clean-code** — Standard for test readability and maintenance.
+- [[clean-code/SKILL|clean-code]] — Standard for test readability and maintenance.
 
 * * *
 
@@ -736,7 +736,7 @@ If that sentence cannot be written clearly, the test is likely not well-targeted
 ## Comprehensive Quality Gates
 
 All code must be hard-gated by the complete three-tier suite.
-These gates are owned by the global QC system at `~/ai-review-ci` — see the `quality-control` skill.
+These gates are owned by the global QC system at `~/ai-review-ci` — see the [[quality-control/SKILL|quality-control]] skill.
 The project justfile delegates to global QC and may add only domain-specific private checks per the QC Extension Gate.
 
 **Do not** reconfigure these gates locally (no per-repo tool installs, no local config overrides for generic QC tools).
@@ -901,18 +901,18 @@ For example, an exception allowing a fallback provider is only allowed if the pr
 - **llm-failure-modes/field-observations** → Load alongside during review of test suites, CI configuration, or error-handling code.
   Catalogs field-observed testing failures: checker removal, test expectation modification, and plausible fixture injection.
 
-- **reviewing-llm-code** → Load alongside when reviewing tests or test-related documentation produced by an LLM. Provides the canonical pattern catalog for LLM-generated test artifacts: developer-controlled assertions, fallback laundering, no-op behavior, and recipe bypasses.
+- [[reviewing-llm-code/SKILL|reviewing-llm-code]] → Load alongside when reviewing tests or test-related documentation produced by an LLM. Provides the canonical pattern catalog for LLM-generated test artifacts: developer-controlled assertions, fallback laundering, no-op behavior, and recipe bypasses.
 
-- **reality-grounded-debugging** → Load alongside when a test failure must be reproduced as a faithful red test (the "RED" in RED-GREEN-REFACTOR). Provides command-output discipline, surface-classification matrix, and the rule that a red test must encode the observed failure — not a scenario guessed from priors.
+- [[reality-grounded-debugging/SKILL|reality-grounded-debugging]] → Load alongside when a test failure must be reproduced as a faithful red test (the "RED" in RED-GREEN-REFACTOR). Provides command-output discipline, surface-classification matrix, and the rule that a red test must encode the observed failure — not a scenario guessed from priors.
   Ensures the failing boundary is visible before writing or mutating application code.
 
-- **anti-slop** → Load alongside when tests show generated-code residue: tautological assertions, mock-first evasion, content-free verification, or test-cheat escalation.
+- [[anti-slop/SKILL|anti-slop]] → Load alongside when tests show generated-code residue: tautological assertions, mock-first evasion, content-free verification, or test-cheat escalation.
   Provides the Dependency Inversion Rule and structural analysis frame for evaluating whether tests prove real behavior or merely hack the proof loop.
 
-- **reviewing-subagent-work** → Load alongside when reviewing tests produced by a subagent.
+- [[reviewing-subagent-work/SKILL|reviewing-subagent-work]] → Load alongside when reviewing tests produced by a subagent.
   Provides the Synthesis Gate for verifying that tests actually prove correctness rather than just existing.
 
-- **thermo-nuclear-code-quality-review** → Load alongside when test code itself has maintainability problems: giant test files, spaghetti condition growth, duplicated setup logic, or abstraction inflation in test utilities.
+- [[thermo-nuclear-code-quality-review/SKILL|thermo-nuclear-code-quality-review]] → Load alongside when test code itself has maintainability problems: giant test files, spaghetti condition growth, duplicated setup logic, or abstraction inflation in test utilities.
 
-- **addressing-shallow-work** → Load alongside when test output is shallow, superficial, or box-checking.
+- [[addressing-shallow-work/SKILL|addressing-shallow-work]] → Load alongside when test output is shallow, superficial, or box-checking.
   Provides structural-scrutiny patterns for detecting tests that satisfy coverage metrics without proving real behavior.
