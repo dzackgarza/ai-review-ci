@@ -255,6 +255,61 @@ def test_sage_vulture_files_ignore_scripts_and_global_notebooks_directories(
     assert result.stdout.splitlines() == ["src/app.sage"]
 
 
+@pytest.mark.parametrize(
+    ("justfile_name", "recipe", "suffix", "expected_active"),
+    [
+        ("python.just", "_python-qc-files", ".py", "src/active.py"),
+        ("sage.just", "_sage-qc-files", ".sage", "src/active.sage"),
+        ("bun.just", "_js-qc-files", ".ts", "src/active.ts"),
+        ("rust.just", "_rust-qc-files", ".rs", "./src/active.rs"),
+    ],
+)
+def test_qc_file_selection_excludes_user_authored_scripts_and_notebooks(
+    tmp_path: pathlib.Path,
+    justfile_name: str,
+    recipe: str,
+    suffix: str,
+    expected_active: str,
+) -> None:
+    project = tmp_path / "project"
+    for relative in (
+        f"src/active{suffix}",
+        f"scripts/derivation{suffix}",
+        f"research/scripts/nested_derivation{suffix}",
+        f"notebooks/exploration{suffix}",
+        f"research/notebooks/nested_exploration{suffix}",
+    ):
+        path = project / relative
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text("source\n")
+
+    result = run_just(ROOT / "justfiles" / justfile_name, project, recipe)
+
+    output = result.stdout + result.stderr
+    assert result.returncode == 0, output
+    assert result.stdout.splitlines() == [expected_active]
+
+
+def test_qc_file_selection_fails_loudly_when_exclusion_lookup_fails(
+    tmp_path: pathlib.Path,
+) -> None:
+    project = tmp_path / "project"
+    (project / "src").mkdir(parents=True)
+    (project / "src" / "active.py").write_text("source\n")
+    shim_dir = tmp_path / "shim"
+    shim_dir.mkdir()
+    uv_shim = shim_dir / "uv"
+    uv_shim.write_text("#!/usr/bin/env bash\necho forced exclusion lookup failure >&2\nexit 86\n")
+    uv_shim.chmod(0o755)
+    env = os.environ | {"PATH": f"{shim_dir}:{os.environ['PATH']}"}
+
+    result = run_just(ROOT / "justfiles" / "python.just", project, "_python-qc-files", env=env)
+
+    output = result.stdout + result.stderr
+    assert result.returncode != 0, output
+    assert "forced exclusion lookup failure" in output
+
+
 def test_tsc_requires_ags_when_tsconfig_declares_ags(tmp_path: pathlib.Path) -> None:
     project = tmp_path / "ags-project"
     project.mkdir()
