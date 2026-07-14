@@ -1,14 +1,15 @@
 # Implementation Style Guide
 
-Load this guide before implementing a design that reaches one of its pattern families. It is also the canonical repair source after triage provides a policy code.
+Load this guide before implementing a design that reaches one of its pattern families.
+It is also the canonical repair source after triage provides a policy code.
 
-The route table is the remediation catalogue. Style cards elaborate recurring
-bad shapes, rearchitecture, and proof burdens, but they do not select or
-override the route owned by the canonical policy record.
+The route table is the remediation catalogue.
+Style cards elaborate recurring bad shapes, rearchitecture, and proof burdens, but they do not select or override the route owned by the canonical policy record.
 
 ## Language Profiles
 
-Select the language profile before applying a card. The card owns the invariant and proof obligation; the profile owns the concrete construction and migration shape.
+Select the language profile before applying a card.
+The card owns the invariant and proof obligation; the profile owns the concrete construction and migration shape.
 
 - [[style-guide/python/SKILL|Python]] — Pydantic/dataclasses, enums, typed outcomes, and real Python boundaries.
 - [[style-guide/typescript/SKILL|TypeScript and Bun]] — Zod, discriminated unions, typed outcomes, and real TypeScript/Bun boundaries.
@@ -17,8 +18,8 @@ Select the language profile before applying a card. The card owns the invariant 
 
 ## Remediation Routes
 
-The canonical policy record names the route code. This index defines only the
-construction named by that code; it does not repeat an inverse policy map.
+The canonical policy record names the route code.
+This index defines only the construction named by that code; it does not repeat an inverse policy map.
 
 | Route code | Preferred construction |
 | --- | --- |
@@ -41,11 +42,11 @@ construction named by that code; it does not repeat an inverse policy map.
 
 ## Selection Rule
 
-Before implementation, select supplemental cards by the boundary and intended
-construction. After triage, the fixer follows the remediation code named by the
-canonical policy record to the exact route here.
+Before implementation, select supplemental cards by the boundary and intended construction.
+After triage, the fixer follows the remediation code named by the canonical policy record to the exact route here.
 
-If more than one card applies, choose the one that restores the original obligation at the widest real boundary. Do not pick the smallest local edit.
+If more than one card applies, choose the one that restores the original obligation at the widest real boundary.
+Do not pick the smallest local edit.
 
 * * *
 

@@ -249,42 +249,42 @@ def _collect_semgrep_rules(config_path: Path, root: Path, policy_index: PolicyIn
         _fail(f"{config_path}: missing rules", error_code="INVALID_RULE_SOURCE")
     raw_rules = _sequence(raw_config["rules"], source=config_path, label="rules")
     for position, raw_rule in enumerate(raw_rules):
-        rule = _mapping(raw_rule, source=config_path, label=f"rules[{position}]")
-        rule_id_value = rule["id"] if "id" in rule else f"rules[{position}]"
+        raw_rule_mapping = _mapping(raw_rule, source=config_path, label=f"rules[{position}]")
+        rule_id_value = raw_rule_mapping["id"] if "id" in raw_rule_mapping else f"rules[{position}]"
         rule_id = str(rule_id_value)
-        if "metadata" not in rule:
+        if "metadata" not in raw_rule_mapping:
             _fail(f"{config_path}: rule {rule_id} has no policy metadata", error_code="RULE_WITHOUT_POLICY")
-        _reject_authored_remediation(rule, rule_id=rule_id, source=config_path)
+        _reject_authored_remediation(raw_rule_mapping, rule_id=rule_id, source=config_path)
     try:
         config = _SemgrepConfig.model_validate(raw_config)
     except ValidationError as exc:
         _fail(f"{config_path}: invalid Semgrep rule contract: {exc}", error_code="INVALID_RULE_SOURCE")
 
     records: list[TripwireRecord] = []
-    for raw_rule, rule in zip(raw_rules, config.rules, strict=True):
-        raw_mapping = _mapping(raw_rule, source=config_path, label=rule.id)
-        if rule.message != rule.metadata.policy_code:
+    for raw_rule, semgrep_rule in zip(raw_rules, config.rules, strict=True):
+        raw_mapping = _mapping(raw_rule, source=config_path, label=semgrep_rule.id)
+        if semgrep_rule.message != semgrep_rule.metadata.policy_code:
             _fail(
-                f"{config_path}: rule {rule.id} message must equal its policy_code",
+                f"{config_path}: rule {semgrep_rule.id} message must equal its policy_code",
                 error_code="POLICY_MESSAGE_MISMATCH",
             )
         remediation_code = _validate_policy(
-            policy_code=rule.metadata.policy_code,
-            rule_id=rule.id,
+            policy_code=semgrep_rule.metadata.policy_code,
+            rule_id=semgrep_rule.id,
             source=config_path,
             policy_index=policy_index,
         )
         capability: AnalysisCapability = "syntax-tree-query" if _has_semantic_pattern(raw_mapping) else "line-regex"
         records.append(
             TripwireRecord(
-                rule_id=rule.id,
+                rule_id=semgrep_rule.id,
                 source=_display_path(config_path, root),
                 engine_class="semgrep",
                 analysis_capability=capability,
                 execution_scope="repository",
-                language_scope=_scope_from_rule(raw_mapping, source=config_path, languages=rule.languages),
-                signal_keys=(rule.id,),
-                policy_code=rule.metadata.policy_code,
+                language_scope=_scope_from_rule(raw_mapping, source=config_path, languages=semgrep_rule.languages),
+                signal_keys=(semgrep_rule.id,),
+                policy_code=semgrep_rule.metadata.policy_code,
                 remediation_code=remediation_code,
             )
         )
@@ -483,17 +483,9 @@ def build_tripwire_index(root: Path) -> TripwireIndex:
         references = tuple(_tripwire_reference(record) for record in records)
         overlaps.append(OverlapCandidate(signal_key=signal_key, policy_code=policy_code, tripwires=references))
         strongest_rank = max(_CAPABILITY_RANK[record.analysis_capability] for record in records)
-        inferior_records = tuple(
-            _tripwire_reference(record)
-            for record in records
-            if _CAPABILITY_RANK[record.analysis_capability] < strongest_rank
-        )
+        inferior_records = tuple(_tripwire_reference(record) for record in records if _CAPABILITY_RANK[record.analysis_capability] < strongest_rank)
         if inferior_records:
-            stronger_records = tuple(
-                _tripwire_reference(record)
-                for record in records
-                if _CAPABILITY_RANK[record.analysis_capability] == strongest_rank
-            )
+            stronger_records = tuple(_tripwire_reference(record) for record in records if _CAPABILITY_RANK[record.analysis_capability] == strongest_rank)
             inferior.append(
                 InferiorToolCandidate(
                     signal_key=signal_key,

@@ -537,11 +537,13 @@ If you catch yourself doing any of these, you have slipped from analysis into ja
 
 - **Needless complexity that could be idiomatic** (imperative loops that should be functional, nested branching that should be data-aware dispatch, manual iteration that should be library calls, string manipulation that should be typed operations — the complexity is slop when the idiom exists and the agent did not know it)
 
-- **Myopic patching** (stacked conditionals around prior mistakes, parallel helpers). Classify as `POLICY.NO_MYOPIC_PATCHING`.
+- **Myopic patching** (stacked conditionals around prior mistakes, parallel helpers).
+  Classify as `POLICY.NO_MYOPIC_PATCHING`.
 
 - **Prior-shaped probes** (commands encoding the expected answer and suppressing contrary evidence — guessed flags with `2>/dev/null`, greps whose failure is treated as absence, `jq` paths run before response-shape inspection, endpoint guesses treated as API facts) See [[reality-grounded-debugging/SKILL|reality-grounded-debugging]] for the behavioral fix.
 
-- **Exception-driven ordinary control flow** (catch order selects expected behavior, operations are attempted until one survives, or retries begin before classifying a typed transient failure and proving idempotency). Classify as `POLICY.NO_EXCEPTION_CONTROL_FLOW`; use `policy-index/references/error-handling-as-control-flow.md` for the architectural and readability burden.
+- **Exception-driven ordinary control flow** (catch order selects expected behavior, operations are attempted until one survives, or retries begin before classifying a typed transient failure and proving idempotency).
+  Classify as `POLICY.NO_EXCEPTION_CONTROL_FLOW`; use `policy-index/references/error-handling-as-control-flow.md` for the architectural and readability burden.
 
 - **Debug-surface debt** (failures addressed by mutating global code, adding one-off scripts, or repeatedly running opaque whole-system commands instead of creating isolated reproducers, structured logs, artifact dumps, schema inspections, or canonical diagnostic recipes) See [[reality-grounded-debugging/SKILL|reality-grounded-debugging]] for the surface-upgrade requirements.
 
@@ -660,13 +662,12 @@ Secondary references (use when the central catalog does not cover the specific d
 
 ## Review Boundary
 
-This skill is analysis only. It detects and classifies slop; it does not select
-or restate remediation. Findings cite the owning `POLICY.*` record for a
-separate fixer context.
+This skill is analysis only.
+It detects and classifies slop; it does not select or restate remediation.
+Findings cite the owning `POLICY.*` record for a separate fixer context.
 
-Do not rename or delete a criticized artifact during review. After disposition,
-the separate fixer loads [[fixing-slop/SKILL|fixing-slop]] and follows the route
-owned by the cited policy record.
+Do not rename or delete a criticized artifact during review.
+After disposition, the separate fixer loads [[fixing-slop/SKILL|fixing-slop]] and follows the route owned by the cited policy record.
 
 ## Deletion Laundering / Problem-Erasure Deletion
 

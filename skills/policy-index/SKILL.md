@@ -11,14 +11,12 @@ Other skills may teach how to review, test, debug, or remediate within their dom
 They must not define competing bridge-burning policy text.
 They point here for policy codes, red flags, runtime control-flow rules, banned test shapes, exception rules, and remediation routing.
 
-Each full policy record names exactly one canonical remediation route. The
-disposition agent classifies the source against the policy and its adjacent red
-flags; it does not choose a route. The fixer follows the route named by that
-record into the [[style-guide/SKILL|style guide]].
+Each full policy record names exactly one canonical remediation route.
+The disposition agent classifies the source against the policy and its adjacent red flags; it does not choose a route.
+The fixer follows the route named by that record into the [[style-guide/SKILL|style guide]].
 
-Policy material must remain independent of the machinery that raised a
-finding. Implementation details invite source disposition based on tooling
-limits instead of the bespoke policy and the complete local workflow.
+Policy material must remain independent of the machinery that raised a finding.
+Implementation details invite source disposition based on tooling limits instead of the bespoke policy and the complete local workflow.
 
 ## Use Protocol
 
@@ -45,7 +43,7 @@ limits instead of the bespoke policy and the complete local workflow.
 | `references/runtime-control-flow.md` | Reviewers, disposition agents, and fixers after code assignment | Runtime branch admission rules, banned branch shapes, ADDD assertion style, and examples. |
 | `references/error-handling-as-control-flow.md` | Reviewers, disposition agents, test writers, and coding-style authors | Canonical rationale for banning exception-driven ordinary control flow and guess-check-retry state probing. |
 | `references/test-proof-rules.md` | Test writers, test reviewers, and disposition agents | Banned test/assertion shapes and proof-admission rules. |
-| [[style-guide/references/style-guide-index|style-guide index]] | Before implementation and during repair | Canonical preferred constructions, bad patterns, rearchitecture, and proof obligations. |
+| [style-guide index](../style-guide/references/style-guide-index.md) | Before implementation and during repair | Canonical preferred constructions, bad patterns, rearchitecture, and proof obligations. |
 
 ## Policy Categories
 
@@ -61,9 +59,8 @@ limits instead of the bespoke policy and the complete local workflow.
 
 ## Policy Registry
 
-The complete registry lives in `references/policies.md`. Each record owns its
-policy text, invalid local fixes, adjacent detection handles, and exact
-remediation route. Other documents cite the code; they do not copy the record.
+The complete registry lives in `references/policies.md`. Each record owns its policy text, invalid local fixes, adjacent detection handles, and exact remediation route.
+Other documents cite the code; they do not copy the record.
 
 ## Exception Protocol
 
@@ -86,17 +83,17 @@ A policy exception requires all of:
 | Why is exception-driven ordinary control flow banned, and what explicit models does it displace? | `references/error-handling-as-control-flow.md` and `POLICY.NO_EXCEPTION_CONTROL_FLOW`. |
 | What is the coding style for assertions and invariant failures? | `references/runtime-control-flow.md#addd-assert-dump-data-direct`. |
 | What test assertion patterns are banned? | `references/test-proof-rules.md`. |
-| What codenamed remediation applies? | The policy record's `Related remediation` field; follow that exact code into the [[style-guide/references/style-guide-index|style-guide index]]. |
+| What codenamed remediation applies? | The policy record's `Related remediation` field; follow that exact code into the [style-guide index](../style-guide/references/style-guide-index.md). |
 | What policy applies to creating files dynamically from code? | `POLICY.NO_DYNAMIC_ARTIFACTS` in `references/policies.md`. |
 | What policy applies to embedding large strings/prompts/messages inline in code? | `POLICY.NO_DYNAMIC_ARTIFACTS` in `references/policies.md`. |
 | What policy applies to embedding one language inside another? | `POLICY.NO_DYNAMIC_ARTIFACTS` in `references/policies.md`. |
 | What policy applies to mypy `import-untyped`, missing stubs, or missing `py.typed`? | `POLICY.NO_UNTYPED_IMPORT_LEAK`; follow that full record's remediation route rather than changing dependencies. |
 | What policy applies to token-local fixes that preserve the architectural failure process? | `POLICY.NO_MYOPIC_PATCHING` in `references/policies.md`. |
-| How do I review LLM-produced code? | [[reviewing-llm-code/SKILL|reviewing-llm-code/SKILL.md]]. |
-| How do I fix slop without laundering? | [[fixing-slop/SKILL|fixing-slop/SKILL.md]] plus [[style-guide/references/style-guide-index|style-guide index]]. |
-| What makes a test valid proof? | [[test-guidelines/SKILL|test-guidelines/SKILL.md]] plus `references/test-proof-rules.md`. |
-| Who owns QC invocation/config/tooling? | `POLICY.GLOBAL_QC_AUTHORITY`; operational QC invocation remains in the global [[quality-control/SKILL|quality-control]] skill. |
-| How do I triage PR feedback? | [[git-guidelines/feedback/SKILL|pr-feedback-triage]]. |
-| How do I debug without prior-shaped probing? | [[reality-grounded-debugging/SKILL|reality-grounded-debugging]] + [[systematic-debugging/SKILL|systematic-debugging]]. |
-| How do I handle external tool/library/compiler uncertainty? | [[known-solution-first/SKILL|known-solution-first]]. |
-| How do I provision tools? | [[tool-provisioning-and-environment-hygiene/SKILL|tool-provisioning-and-environment-hygiene]]. |
+| How do I review LLM-produced code? | [reviewing-llm-code/SKILL.md](../reviewing-llm-code/SKILL.md). |
+| How do I fix slop without laundering? | [fixing-slop/SKILL.md](../fixing-slop/SKILL.md) plus the [style-guide index](../style-guide/references/style-guide-index.md). |
+| What makes a test valid proof? | [test-guidelines/SKILL.md](../test-guidelines/SKILL.md) plus `references/test-proof-rules.md`. |
+| Who owns QC invocation/config/tooling? | `POLICY.GLOBAL_QC_AUTHORITY`; operational QC invocation remains in the global [quality-control](../quality-control/SKILL.md) skill. |
+| How do I triage PR feedback? | `pr-feedback-triage` ([[git-guidelines/feedback/SKILL]]). |
+| How do I debug without prior-shaped probing? | `reality-grounded-debugging` ([[reality-grounded-debugging/SKILL]]) plus `systematic-debugging` ([[systematic-debugging/SKILL]]). |
+| How do I handle external tool/library/compiler uncertainty? | `known-solution-first` ([[known-solution-first/SKILL]]). |
+| How do I provision tools? | [tool-provisioning-and-environment-hygiene](../tool-provisioning-and-environment-hygiene/SKILL.md). |

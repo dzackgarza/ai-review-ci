@@ -16,52 +16,29 @@ ROOT = Path(__file__).parent.parent
 def test_inventory_derives_remediation_and_reports_cross_capability_overlap() -> None:
     inventory = build_tripwire_index(ROOT)
 
-    or_tripwires = [
-        tripwire
-        for tripwire in inventory.tripwires
-        if tripwire.rule_id == "ts-no-or-default"
-    ]
+    or_tripwires = [tripwire for tripwire in inventory.tripwires if tripwire.rule_id == "ts-no-or-default"]
     expected_remediation = canonical_route("POLICY.RUNTIME_DEFAULT").remediation_code
-    assert {tripwire.remediation_code for tripwire in or_tripwires} == {
-        expected_remediation
-    }
+    assert {tripwire.remediation_code for tripwire in or_tripwires} == {expected_remediation}
     assert {tripwire.engine_class for tripwire in or_tripwires} == {
         "python-re",
         "semgrep",
     }
 
-    overlap = next(
-        candidate
-        for candidate in inventory.overlap_candidates
-        if candidate.signal_key == "ts-no-or-default"
-    )
+    overlap = next(candidate for candidate in inventory.overlap_candidates if candidate.signal_key == "ts-no-or-default")
     assert {tripwire.engine_class for tripwire in overlap.tripwires} == {
         "python-re",
         "semgrep",
     }
 
-    weaker = next(
-        candidate
-        for candidate in inventory.inferior_tool_candidates
-        if candidate.signal_key == "ts-no-or-default"
-    )
-    assert {tripwire.analysis_capability for tripwire in weaker.inferior_tripwires} == {
-        "line-regex"
-    }
-    assert {tripwire.analysis_capability for tripwire in weaker.stronger_tripwires} == {
-        "syntax-tree-query"
-    }
+    weaker = next(candidate for candidate in inventory.inferior_tool_candidates if candidate.signal_key == "ts-no-or-default")
+    assert {tripwire.analysis_capability for tripwire in weaker.inferior_tripwires} == {"line-regex"}
+    assert {tripwire.analysis_capability for tripwire in weaker.stronger_tripwires} == {"syntax-tree-query"}
 
 
 def test_inventory_includes_staged_bypass_rules_from_their_executable_registry() -> None:
     inventory = build_tripwire_index(ROOT)
 
-    staged_double_cast = [
-        tripwire
-        for tripwire in inventory.tripwires
-        if tripwire.rule_id == "no-double-cast"
-        and tripwire.execution_scope == "staged-added-lines"
-    ]
+    staged_double_cast = [tripwire for tripwire in inventory.tripwires if tripwire.rule_id == "no-double-cast" and tripwire.execution_scope == "staged-added-lines"]
     assert len(staged_double_cast) == 1
     assert staged_double_cast[0].policy_code == "POLICY.NO_TYPE_ESCAPE"
 

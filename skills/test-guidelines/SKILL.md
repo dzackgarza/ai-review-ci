@@ -3,7 +3,8 @@ name: test-guidelines
 description: 'Use any and every time you interact with a test file, period.'
 ---
 
-For PR-scoped test or QC work, follow the [Git integration workflow](../git-integration-workflow/SKILL.md) for the PR lifecycle and returned review/check feedback. This skill remains the source of truth for test and proof quality.
+For PR-scoped test or QC work, follow the [Git integration workflow](../git-integration-workflow/SKILL.md) for the PR lifecycle and returned review/check feedback.
+This skill remains the source of truth for test and proof quality.
 
 # HIGH-QUALITY TESTING STANDARDS (GUIDELINES)
 
@@ -372,7 +373,8 @@ Banned:
 Expected failures must be asserted by structured test-framework mechanisms or structured error values.
 Unexpected failures must propagate.
 
-Tests must construct expected domain states and typed outcomes directly; they must not provoke exceptions to force an ordinary branch or validate catch order. Classify that shape as `POLICY.NO_EXCEPTION_CONTROL_FLOW` and use [Error Handling as Control Flow](../policy-index/references/error-handling-as-control-flow.md) for the displaced state-machine, result-type, transition, transaction, idempotency, and retry obligations.
+Tests must construct expected domain states and typed outcomes directly; they must not provoke exceptions to force an ordinary branch or validate catch order.
+Classify that shape as `POLICY.NO_EXCEPTION_CONTROL_FLOW` and use [Error Handling as Control Flow](../policy-index/references/error-handling-as-control-flow.md) for the displaced state-machine, result-type, transition, transaction, idempotency, and retry obligations.
 
 The only possible exception is an explicitly approved boundary renderer whose sole job is to translate a structured internal error into a user-facing protocol.
 That boundary must not continue execution, must not default, and must not return partial success.
@@ -555,7 +557,8 @@ This prevents in-memory stand-ins from passing tests that claim durable storage.
 
 ### Landing a red proof as its own commit
 
-The commit gate (`just test-commit`) rejects immediate correctness failures. The full test suite runs at `just test-push`; a deliberately failing red proof therefore still requires the sanctioned red-commit route when either local gate rejects the checkpoint.
+The commit gate (`just test-commit`) rejects immediate correctness failures.
+The full test suite runs at `just test-push`; a deliberately failing red proof therefore still requires the sanctioned red-commit route when either local gate rejects the checkpoint.
 When the red/green workflow calls for landing a genuinely-failing red proof *before* its green fix, do NOT reach for `git commit --no-verify` — that is an unaudited bypass with no owning-issue trail.
 Use the single sanctioned, auditable route:
 
@@ -744,9 +747,12 @@ The global QC system owns tool pins, configs, and invocation patterns.
 
 The tiers separate feedback latency without dropping any mandatory burden:
 
-- `test-commit`: preflight, normalization, syntax/compile, type checking, and bypass detection. Repair failures directly.
-- `test-push`: the commit gate plus the full project-owned test suite. Ordinary test failures remain direct implementation work.
-- `test-ci`: the push gate plus coverage, architecture, dead-code, duplication, complexity, policy/slop, security, and hosted checks. Policy-sensitive findings use independent anti-golfing triage.
+- `test-commit`: preflight, normalization, syntax/compile, type checking, and bypass detection.
+  Repair failures directly.
+- `test-push`: the commit gate plus the full project-owned test suite.
+  Ordinary test failures remain direct implementation work.
+- `test-ci`: the push gate plus coverage, architecture, dead-code, duplication, complexity, policy/slop, security, and hosted checks.
+  Policy-sensitive findings use independent anti-golfing triage.
 
 The following checks are **mandatory** across those gates (all owned by global QC):
 
@@ -893,7 +899,8 @@ For example, an exception allowing a fallback provider is only allowed if the pr
 
 ## Cross-References
 
-- **[[policy-index/SKILL|policy-index]]/references/error-handling-as-control-flow** → Load when tests or runtime code use exceptions, failed attempts, or retries to choose ordinary behavior. Tests must prove explicit domain states, legal transitions, typed outcomes, and retry safety rather than catch ordering.
+- **[[policy-index/SKILL|policy-index]]/references/error-handling-as-control-flow** → Load when tests or runtime code use exceptions, failed attempts, or retries to choose ordinary behavior.
+  Tests must prove explicit domain states, legal transitions, typed outcomes, and retry safety rather than catch ordering.
 
 - **[[llm-failure-modes/SKILL|llm-failure-modes]]/testing-failures** → Load alongside during test audit or test writing tasks.
   Catalogs failure patterns agents produce in test code: content-free verification, tautological testing, mock-first evasion, tolerance substitution, instrumental deception, and the 7-tactic test-cheat escalation ladder.

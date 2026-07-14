@@ -1073,8 +1073,8 @@ def test_vibecheck_installs_central_exclusions_without_persisting_them(
     uvx.write_text(
         "#!/usr/bin/env bash\n"
         "for expected in scripts notebooks; do\n"
-        "  if ! grep -Fxq \"$expected\" .ignore; then\n"
-        "    echo \"missing temporary exclusion: $expected\" >&2\n"
+        '  if ! grep -Fxq "$expected" .ignore; then\n'
+        '    echo "missing temporary exclusion: $expected" >&2\n'
         "    exit 86\n"
         "  fi\n"
         "done\n"
@@ -1200,9 +1200,9 @@ def test_aislop_receives_central_script_and_notebook_exclusions(
     npx.write_text(
         "#!/usr/bin/env bash\n"
         "for expected in '**/scripts/**' '**/notebooks/**'; do\n"
-        "  case \"$*\" in\n"
-        "    *\"$expected\"*) ;;\n"
-        "    *) echo \"missing aislop exclusion: $expected\" >&2; exit 86 ;;\n"
+        '  case "$*" in\n'
+        '    *"$expected"*) ;;\n'
+        '    *) echo "missing aislop exclusion: $expected" >&2; exit 86 ;;\n'
         "  esac\n"
         "done\n"
         f"cat <<'JSON'\n{json.dumps(aislop_payload())}\nJSON\n",

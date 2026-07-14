@@ -3,9 +3,8 @@
 This file is the canonical database of named bridge-burning policies.
 Other skills may teach review, testing, debugging, or remediation workflows, but policy identity and policy text live here.
 
-Disposition and reviewer agents load this file to classify the source and inspect
-adjacent obligations. Fixer agents follow the assigned policy's exact route into
-`../../style-guide/references/style-guide-index.md`.
+Disposition and reviewer agents load this file to classify the source and inspect adjacent obligations.
+Fixer agents follow the assigned policy's exact route into `../../style-guide/references/style-guide-index.md`.
 
 ## Record Schema
 
@@ -15,7 +14,8 @@ Each policy record contains:
 - `Rule`: the canonical obligation.
 - `Invalid local fixes`: local edits that preserve the violation.
 - `Detection handles`: red-flag or banned-shape labels that map to the policy.
-- `Related remediation`: the exact fixer-side route owned by this policy. The named construction is defined in `../../style-guide/references/style-guide-index.md`.
+- `Related remediation`: the exact fixer-side route owned by this policy.
+  The named construction is defined in `../../style-guide/references/style-guide-index.md`.
 
 ## Policy Records
 
@@ -285,15 +285,11 @@ Related remediation: `REMEDIATE.TYPED_DEPENDENCY_BOUNDARY`
 
 Category: Architecture Ownership
 
-Rule: Before implementing a capability, inspect the language, framework,
-installed dependencies, and project-owned component inventory. When an existing
-surface owns the capability, use it. Custom implementation is admissible only
-after a concrete contract gap is established.
+Rule: Before implementing a capability, inspect the language, framework, installed dependencies, and project-owned component inventory.
+When an existing surface owns the capability, use it.
+Custom implementation is admissible only after a concrete contract gap is established.
 
-Invalid local fixes: Calling the available surface too abstract or complex
-without comparing its contract; wrapping a bespoke implementation in an
-adapter; retaining both implementations; removing the dependency because the
-reinvention left it unused.
+Invalid local fixes: Calling the available surface too abstract or complex without comparing its contract; wrapping a bespoke implementation in an adapter; retaining both implementations; removing the dependency because the reinvention left it unused.
 
 Detection handles: `DEPENDENCY-AVERSION`, `BESPOKE-DEP`, `COMPLEXITY-SIGNAL`
 
@@ -303,14 +299,11 @@ Related remediation: `REMEDIATE.USE_EXISTING_CAPABILITY`
 
 Category: Architecture Ownership
 
-Rule: Treat a finding as evidence of a weakened obligation, not as a token to
-silence. Inspect the owning boundary, adjacent callers, tests, configuration,
-and repeated instances of the same failure process. Repair the complete
-obligation rather than only the cited line.
+Rule: Treat a finding as evidence of a weakened obligation, not as a token to silence.
+Inspect the owning boundary, adjacent callers, tests, configuration, and repeated instances of the same failure process.
+Repair the complete obligation rather than only the cited line.
 
-Invalid local fixes: Replacing only the matched syntax; adding a guard,
-special case, adapter, suppression, or parallel helper around the reported
-site; fixing one call site while the same failure process remains elsewhere.
+Invalid local fixes: Replacing only the matched syntax; adding a guard, special case, adapter, suppression, or parallel helper around the reported site; fixing one call site while the same failure process remains elsewhere.
 
 Detection handles: `MYOPIC-PATCHING`, `BLAST-RADIUS`, `PATCH-ACCUMULATION`, `WHACK-A-MOLE`
 

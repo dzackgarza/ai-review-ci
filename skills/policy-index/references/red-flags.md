@@ -491,9 +491,8 @@ The correct pattern is: feedback claim disposition, remediation disposition, pol
 
 ## **[CROSS-LANGUAGE-SIGNATURES]** Cross-Language Review Signatures
 
-These signatures prompt source inspection. A textual or structural match is not
-itself a disposition; inspect the complete local workflow and classify the
-weakened obligation through the policy catalog.
+These signatures prompt source inspection.
+A textual or structural match is not itself a disposition; inspect the complete local workflow and classify the weakened obligation through the policy catalog.
 
 ### **[TEXT-SIGNATURES]** Textual Signatures
 
@@ -581,6 +580,5 @@ For the canonical inventory of these banned patterns and their allowed replaceme
 
 ## Remediation Boundary
 
-This catalog teaches suspicious constructs. The canonical policy records index
-their named handles and own the exact fixer-side route into
-`../../style-guide/references/style-guide-index.md`.
+This catalog teaches suspicious constructs.
+The canonical policy records index their named handles and own the exact fixer-side route into `../../style-guide/references/style-guide-index.md`.

@@ -34,9 +34,7 @@ def test_diff_gate_blocks_added_mock_and_ignores_context_backlog() -> None:
  context();
 """
 
-    assert gates.diff_findings(diff) == [
-        "src/App.test.tsx:3: ts-no-vitest-mock-boundary: POLICY.NO_MOCK_PROOF"
-    ]
+    assert gates.diff_findings(diff) == ["src/App.test.tsx:3: ts-no-vitest-mock-boundary: POLICY.NO_MOCK_PROOF"]
 
 
 def test_bypass_diff_rules_block_only_added_bypass_markers() -> None:
@@ -50,9 +48,7 @@ def test_bypass_diff_rules_block_only_added_bypass_markers() -> None:
 +value = 1
 """
 
-    assert gates.bypass_diff_findings(diff) == [
-        "src/app.py:2: no-coverage-pragma: POLICY.NO_QC_SILENCING"
-    ]
+    assert gates.bypass_diff_findings(diff) == ["src/app.py:2: no-coverage-pragma: POLICY.NO_QC_SILENCING"]
 
 
 def test_diff_gate_blocks_uppercase_literals_but_not_local_const_calls() -> None:
@@ -65,9 +61,7 @@ def test_diff_gate_blocks_uppercase_literals_but_not_local_const_calls() -> None
  export const existing = buildValue();
 """
 
-    assert gates.diff_findings(diff) == [
-        "src/settings.ts:1: no-const-assignment: POLICY.NO_HIDDEN_CONFIG"
-    ]
+    assert gates.diff_findings(diff) == ["src/settings.ts:1: no-const-assignment: POLICY.NO_HIDDEN_CONFIG"]
 
 
 def test_delegation_accepts_canonical_scaffold(tmp_path: pathlib.Path) -> None:
