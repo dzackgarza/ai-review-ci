@@ -1,3 +1,6 @@
+# Maximally strict production config for ai-slop-detector
+# Based on AI-SLOP-Detector Strict Mode + maximally informative extensions
+# https://github.com/flamehaven01/AI-SLOP-Detector/blob/main/docs/CONFIGURATION.md
 weights:
   ldr: 0.5
   inflation: 0.3
