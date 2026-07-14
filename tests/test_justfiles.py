@@ -331,9 +331,7 @@ def test_knip_follows_dependency_imported_through_test_helper(tmp_path: pathlib.
     for dependency in ("browser-boundary", "unused-boundary"):
         package_dir = node_modules / dependency
         package_dir.mkdir(parents=True)
-        (package_dir / "package.json").write_text(
-            json.dumps({"name": dependency, "version": "1.0.0", "type": "module"}) + "\n"
-        )
+        (package_dir / "package.json").write_text(json.dumps({"name": dependency, "version": "1.0.0", "type": "module"}) + "\n")
         (package_dir / "index.js").write_text("export const boundary = true;\n")
     (project / "package.json").write_text(
         json.dumps(
@@ -348,12 +346,8 @@ def test_knip_follows_dependency_imported_through_test_helper(tmp_path: pathlib.
         )
         + "\n"
     )
-    (tests_dir / "shared-browser-boundary.ts").write_text(
-        'import { boundary } from "browser-boundary";\nexport const observed = boundary;\n'
-    )
-    (tests_dir / "reader.test.ts").write_text(
-        'import { observed } from "./shared-browser-boundary";\nvoid observed;\n'
-    )
+    (tests_dir / "shared-browser-boundary.ts").write_text('import { boundary } from "browser-boundary";\nexport const observed = boundary;\n')
+    (tests_dir / "reader.test.ts").write_text('import { observed } from "./shared-browser-boundary";\nvoid observed;\n')
 
     result = run_just(ROOT / "justfiles" / "bun.just", project, "_knip")
 
@@ -367,11 +361,9 @@ def test_knip_ignores_exact_assembled_pdfjs_module_only(tmp_path: pathlib.Path) 
     project = tmp_path / "bun-project"
     reader_dir = project / "extension" / "reader"
     reader_dir.mkdir(parents=True)
-    (project / "package.json").write_text(
-        json.dumps({"name": "knip-generated-module-fixture", "version": "1.0.0"}) + "\n"
-    )
+    (project / "package.json").write_text(json.dumps({"name": "knip-generated-module-fixture", "version": "1.0.0"}) + "\n")
     (reader_dir / "reader.js").write_text(
-        '\n'.join(
+        "\n".join(
             [
                 'import "./vendor/pdfjs/pdf_viewer.mjs";',
                 'import "./vendor/pdfjs/not-assembled.mjs";',
@@ -2169,20 +2161,6 @@ def test_commit_gate_stops_at_doctor_preflight_before_typechecking(
     (tests_dir / "test_placeholder.py").write_text("def test_placeholder() -> None:\n    assert True\n")
 
     (project / "justfile").write_text((ROOT / "scaffolds" / "python" / "justfile").read_text())
-    (project / ".ai-review-ci.toml").write_text(
-        "\n".join(
-            [
-                "schema_version = 1",
-                'profile = "python"',
-                'installed_ref = "main"',
-                'release_channel = "main"',
-                "workflow_template_version = 1",
-                'local_delegation = "global-justfile"',
-                'default_branch = "main"',
-                "",
-            ]
-        )
-    )
 
     result = run_just(ROOT / "justfiles" / "python.just", project, "test")
     output = result.stdout + result.stderr
@@ -2203,20 +2181,6 @@ def test_python_subgate_doctor_preflight_accepts_central_bun_python_profile(
     (project / "package.json").write_text('{"scripts": {}}\n')
     (project / "bun.lock").write_text("")
     (project / "justfile").write_text((ROOT / "scaffolds" / "bun-python" / "justfile").read_text())
-    (project / ".ai-review-ci.toml").write_text(
-        "\n".join(
-            [
-                "schema_version = 1",
-                'profile = "bun-python"',
-                'installed_ref = "main"',
-                'release_channel = "main"',
-                "workflow_template_version = 1",
-                'local_delegation = "global-justfile"',
-                'default_branch = "main"',
-                "",
-            ]
-        )
-    )
 
     result = run_just(ROOT / "justfiles" / "python.just", project, "_doctor-preflight")
     output = result.stdout + result.stderr

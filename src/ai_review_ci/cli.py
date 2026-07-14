@@ -18,7 +18,7 @@ Subcommands:
 - check-review-guidelines — fail if the head repo's AGENTS.md lacks the current canonical # Review Guidelines section
 - protect-branch   — apply required branch protection contexts
 - doctor-ci       — validate repository-owned doctor checks for CI
-- doctor-preflight — validate local manifest/profile health before code QC
+- doctor-preflight — validate local justfile/profile health before code QC
 - doctor-schema    — dump the JSON Schema for the doctor payload
 - validate-report  — validate a candidate report and write the artifact
 - report-schema    — dump the JSON Schema for a report type

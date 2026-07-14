@@ -33,9 +33,9 @@ DEFAULT_INFRA_REF = "main"
 # The exact doctor surfaces whose convergence --skip-scaffold defers to `doctor`:
 # a brownfield repo keeps its own non-delegating justfile, so its delegation and
 # conformance findings are expected under adoption and must NOT fail the install.
-# Every other surface (manifest, profile, workflow, workflow_ref,
+# Every other surface (justfile_contract, profile, workflow, workflow_ref,
 # branch_protection) stays fatal.
-DEFERRED_SCAFFOLD_SURFACES = ("justfile_delegation", "justfile_conformance")
+DEFERRED_SCAFFOLD_SURFACES = ("justfile_contract", "justfile_delegation", "justfile_conformance")
 
 
 def _validate_profile(profile: str) -> None:
@@ -61,12 +61,43 @@ def _template_text(name: str, profile: str, ref: str = DEFAULT_INFRA_REF) -> str
     return text.replace("{{ profile }}", profile).replace("{{ ref }}", ref)
 
 
-def _scaffold_text(profile: str, name: str) -> str:
+def _replace_just_variable(text: str, variable: str, value: str) -> str:
+    lines = [f'{variable} := "{value}"' if line.startswith(f"{variable} :=") else line for line in text.splitlines()]
+    return "\n".join(lines) + "\n"
+
+
+def _scaffold_text(
+    profile: str,
+    name: str,
+    *,
+    ref: str = DEFAULT_INFRA_REF,
+    release_channel: str = DEFAULT_INFRA_REF,
+    branch: str = "main",
+) -> str:
     _validate_profile(profile)
-    return (files("ai_review_ci") / "scaffolds" / profile / name).read_text()
+    text = (files("ai_review_ci") / "scaffolds" / profile / name).read_text()
+    replacements = {
+        "ai_review_ci_schema_version": "1",
+        "ai_review_ci_profile": profile,
+        "ai_review_ci_ref": ref,
+        "ai_review_ci_release_channel": release_channel,
+        "ai_review_ci_workflow_template_version": "1",
+        "ai_review_ci_local_delegation": "global-justfile",
+        "ai_review_ci_default_branch": branch,
+    }
+    for variable, value in replacements.items():
+        text = _replace_just_variable(text, variable, value)
+    return text
 
 
-def _write_scaffold(target: pathlib.Path, profile: str) -> None:
+def _write_scaffold(
+    target: pathlib.Path,
+    profile: str,
+    *,
+    branch: str = "main",
+    ref: str = DEFAULT_INFRA_REF,
+    release_channel: str = DEFAULT_INFRA_REF,
+) -> None:
     """Write the profile-local QC delegation scaffold."""
     _validate_profile(profile)
     target = _git_repo_root(target)
@@ -78,7 +109,7 @@ def _write_scaffold(target: pathlib.Path, profile: str) -> None:
         )
         sys.exit(1)
     for name in SCAFFOLD_FILES:
-        (target / name).write_text(_scaffold_text(profile, name))
+        (target / name).write_text(_scaffold_text(profile, name, branch=branch, ref=ref, release_channel=release_channel))
         print(f"installed {name}")
 
 
@@ -166,29 +197,6 @@ def _write_aislop_config(target: pathlib.Path) -> None:
     print(f"installed {AISLOP_CONFIG}")
 
 
-def _write_manifest(target: pathlib.Path, profile: str, branch: str, ref: str, release_channel: str) -> None:
-    from ai_review_ci.doctor import LOCAL_DELEGATION_MODE, WORKFLOW_TEMPLATE_VERSION, manifest_text
-
-    manifest = target / ".ai-review-ci.toml"
-    if manifest.exists():
-        print(
-            f"FATAL: {manifest} already exists — this manifest is repo-owned configuration; edit it directly, or remove it first to re-initialize.",
-            file=sys.stderr,
-        )
-        sys.exit(1)
-    manifest.write_text(
-        manifest_text(
-            profile=profile,
-            installed_ref=ref,
-            release_channel=release_channel,
-            workflow_template_version=WORKFLOW_TEMPLATE_VERSION,
-            local_delegation=LOCAL_DELEGATION_MODE,
-            default_branch=branch,
-        )
-    )
-    print(f"installed {manifest.name}")
-
-
 def _prove_installation(target: pathlib.Path, *, skip_scaffold: bool = False) -> None:
     """Run doctor as the final install proof.
 
@@ -197,7 +205,7 @@ def _prove_installation(target: pathlib.Path, *, skip_scaffold: bool = False) ->
     delegation/conformance findings are deferred by design and must not fail the
     install. The tolerance is scoped to exactly those surfaces
     (``DEFERRED_SCAFFOLD_SURFACES``): any finding on any other surface — including
-    a missing manifest, trigger, or branch protection — is still fatal, so the
+    a missing trigger or branch protection — is still fatal, so the
     proof fails loud on every genuine fault.
     """
     from ai_review_ci.doctor import doctor_report
@@ -237,21 +245,20 @@ def install(
         branch: Branch name protected by the required QC gates.
         profile: Curated project profile to enforce.
         ref: ai-review-ci git ref used by installed workflows.
-        release_channel: Human-readable ai-review-ci release channel recorded in the manifest.
+        release_channel: Human-readable ai-review-ci release channel recorded in the justfile contract.
         skip_scaffold: Brownfield adoption path. A repo that predates ai-review-ci
             already owns a top-level justfile, and the scaffold step refuses to
             overwrite it. Pass this to skip writing the delegation scaffold and
-            still install the manifest, triggers, and branch protection; justfile
+            still install the triggers and branch protection; justfile
             convergence is then left to `doctor` findings. Without it a
             pre-existing scaffold target remains a hard error (the accidental
             unsafe-overwrite case).
     """
     target = target.resolve()
     if not skip_scaffold:
-        _write_scaffold(target, profile)
+        _write_scaffold(target, profile, branch=branch, ref=ref, release_channel=release_channel)
     _write_trigger_workflows(target, profile, ref)
     _write_aislop_config(target)
-    _write_manifest(target, profile, branch, ref, release_channel)
     # PR template last among local writes: it is the opt-in signal for gate
     # enforcement, so create it only after profile validation and every other
     # repo-owned-file conflict has already passed. A failed install must not leave

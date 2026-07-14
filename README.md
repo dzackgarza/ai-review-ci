@@ -5,7 +5,7 @@
 The durable doctrine for global QC and review behavior lives in the [Global QC and Review Doctrine](https://github.com/dzackgarza/ai-review-ci/wiki/Global-QC-and-Review-Doctrine) wiki page.
 Use it when changing gates, scaffolds, review runners, reviewer state, or downstream enforcement contracts.
 
-Centrally-managed, OpenCode-powered review CI. Target repositories carry three thin trigger workflows plus a root `.ai-review-ci.toml` declaration; everything else — the reusable workflow, the review runner, the validator, the reviewer home template, the prompt corpus — lives here and is cloned inside the CI runner at execution time.
+Centrally-managed, OpenCode-powered review CI. Target repositories carry three thin trigger workflows plus explicit `ai_review_ci_*` contract variables in their root `justfile`; everything else — the reusable workflow, the review runner, the validator, the reviewer home template, the prompt corpus — lives here and is cloned inside the CI runner at execution time.
 Updating this repo updates every consumer on their next run.
 
 Two review types:
@@ -40,7 +40,7 @@ uvx --from git+https://github.com/dzackgarza/ai-review-ci ai-review-ci install -
 
 Pass `--profile <profile>` with one of `python`, `bun`, `bun-playwright`, `bun-python`, `rust`, or `sage`. The profile is the enforced project bin: it selects the required project shape, the central justfile delegation target, the installed PR gates, and the branch-protection checks.
 
-This installs the complete QC enforcement surface: it writes the root manifest, writes the three trigger workflows, and applies branch protection requiring the installed PR gate jobs for the declared profile.
+This installs the complete QC enforcement surface: it writes the root `justfile` contract, writes the three trigger workflows, and applies branch protection requiring the installed PR gate jobs for the declared profile.
 
 | File | Triggers |
 | --- | --- |
@@ -90,23 +90,32 @@ Report schemas accept an honest empty report: `findings: []` is valid, and the s
 Requirements in the target repo: GitHub code scanning enabled (free for public repos), GitHub CLI auth with permission to edit branch protection, the target branch named in `--branch`, and a repo shape that satisfies the declared `--profile`. LLM review jobs are signal-only process checks: they upload SARIF and post review threads, but they do not compute or fail on a health score.
 The merge gate is deterministic QC plus evidence-backed resolution of reviewer-authored PR threads.
 
-### QC manifest and doctor
+### QC justfile contract and doctor
 
-Each installed target repo carries `.ai-review-ci.toml` at repository root.
-The manifest is the dashboard and gate declaration of record:
+Each installed target repo carries an executable QC contract in its repository-root `justfile`.
+The `ai_review_ci_*` variables are the declaration surface that `doctor` evaluates, and the public recipes are the execution surface that `doctor` cross-checks:
 
-```toml
-schema_version = 1
-profile = "bun-playwright"
-installed_ref = "main"
-release_channel = "main"
-workflow_template_version = 1
-local_delegation = "global-justfile"
-default_branch = "main"
+```justfile
+ai_review_ci_schema_version := "1"
+ai_review_ci_profile := "bun-playwright"
+ai_review_ci_ref := "main"
+ai_review_ci_release_channel := "main"
+ai_review_ci_workflow_template_version := "1"
+ai_review_ci_local_delegation := "global-justfile"
+ai_review_ci_default_branch := "main"
+
+test:
+    @just -f ~/ai-review-ci/justfiles/bun.just -d . test
+
+test-ci:
+    @just -f ~/ai-review-ci/justfiles/bun.just -d . test-ci
+
+app-boot:
+    @just -f ~/ai-review-ci/justfiles/bun.just -d . app-boot
 ```
 
-`schema_version`, `profile`, `installed_ref`, `release_channel`, `workflow_template_version`, `local_delegation`, and `default_branch` are required.
-A repo declares only what type of project it is; there is no local opt-out of global QC. A repo with active findings is noncompliant — there is no manifest field that suppresses a finding.
+`ai_review_ci_schema_version`, `ai_review_ci_profile`, `ai_review_ci_ref`, `ai_review_ci_release_channel`, `ai_review_ci_workflow_template_version`, `ai_review_ci_local_delegation`, and `ai_review_ci_default_branch` are required.
+A repo declares its executable QC contract; there is no local opt-out of global QC. A repo with active findings is noncompliant — extra justfile variables do not suppress findings.
 
 Inspect a target repo with:
 
@@ -117,21 +126,21 @@ uvx --from git+https://github.com/dzackgarza/ai-review-ci ai-review-ci doctor-pr
 uvx --from git+https://github.com/dzackgarza/ai-review-ci ai-review-ci doctor-schema
 ```
 
-The doctor reports the tool and schema version, target root, origin remote, HEAD, declaration hash, declared and effective profile, required and observed workflow refs, required and observed justfile delegation, branch-protection requirements and observations, canonical label-set alignment (missing, drifted, and case/spelling-variant labels against `data/labels.json`; extra repo-specific labels are allowed), profile proof requirements, findings, remediation commands, invalidation inputs, installation state, and dashboard `global_status`. Consumers should use `global_status` rather than re-infer status from workflow filenames.
+The doctor reports the tool and schema version, target root, origin remote, HEAD, justfile declaration hash, declared and effective profile, required and observed workflow refs, required and observed justfile delegation, branch-protection requirements and observations, canonical label-set alignment (missing, drifted, and case/spelling-variant labels against `data/labels.json`; extra repo-specific labels are allowed), profile proof requirements, findings, remediation commands, invalidation inputs, installation state, and dashboard `global_status`. Consumers should use `global_status` rather than re-infer status from workflow filenames.
 
 Status mapping is fixed:
 
 | Doctor observation | `installation_state` | Dashboard `global_status` |
 | --- | --- | --- |
-| manifest, workflows, delegation, profile proof, branch protection, and canonical label alignment satisfy the declared contract | `compliant` | `current` |
-| installed workflow refs differ from the manifest's required ref | `outdated` | `stale` |
-| manifest missing, required workflow missing, wrong profile, wrong delegation, missing `bun-playwright` app boot, missing branch-protection contexts, or canonical labels missing/drifted/present only as a case or spelling variant | `uninstalled` or `noncompliant` | `misconfigured` |
+| justfile contract, workflows, delegation, profile proof, branch protection, and canonical label alignment satisfy the declared contract | `compliant` | `current` |
+| installed workflow refs differ from the justfile contract's required ref | `outdated` | `stale` |
+| justfile contract missing, required workflow missing, wrong profile, wrong delegation, missing `bun-playwright` app boot, missing branch-protection contexts, or canonical labels missing/drifted/present only as a case or spelling variant | `uninstalled` or `noncompliant` | `misconfigured` |
 | branch protection or canonical label alignment cannot be verified from the target remote/API state | `unknown` | `unverifiable` |
 
 Only `current` exits zero.
 All other statuses fail the command and the `qc-doctor` PR gate.
 
-Every public `just test` begins with `doctor-preflight`. It is the local, no-network subset of doctor: it requires a valid manifest and the declared profile's required project shape before normalization, type checking, or tests run. Composite project shapes are centrally defined profiles; `bun-python` requires both Python and Bun project evidence and delegates to both central gates. A preflight failure is project initialization work, not a code-quality finding and must not enter the QC triage routes.
+Every public `just test` begins with `doctor-preflight`. It is the local, no-network subset of doctor: it requires a valid justfile contract and the declared profile's required project shape before normalization, type checking, or tests run. Composite project shapes are centrally defined profiles; `bun-python` requires both Python and Bun project evidence and delegates to both central gates. A preflight failure is project initialization work, not a code-quality finding and must not enter the QC triage routes.
 
 ## Installing QC Surfaces
 
@@ -385,4 +394,4 @@ Resolved PR threads and dismissed/fixed code-scanning alerts are dispositions, n
 ## Developing
 
 Edit here, push to `main`, and every consumer's next run uses the new behavior (consumers that pinned a different `@ref` in their trigger files update on their chosen ref).
-The reusable workflow and the runner recipes take all paths from the CI-time clone, so downstream repos contain only their trigger files and root `.ai-review-ci.toml` declaration.
+The reusable workflow and the runner recipes take all paths from the CI-time clone, so downstream repos contain only their trigger files and root `justfile` contract.

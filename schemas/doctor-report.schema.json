@@ -53,22 +53,22 @@
           "title": "Sha256",
           "type": "string"
         },
-        "manifest": {
+        "justfile_contract": {
           "anyOf": [
             {
-              "$ref": "#/$defs/QcManifest"
+              "$ref": "#/$defs/QcJustfileContract"
             },
             {
-              "$ref": "#/$defs/MissingManifest"
+              "$ref": "#/$defs/MissingJustfileContract"
             }
           ],
-          "title": "Manifest"
+          "title": "Justfile Contract"
         }
       },
       "required": [
         "path",
         "sha256",
-        "manifest"
+        "justfile_contract"
       ],
       "title": "DeclarationObservation",
       "type": "object"
@@ -136,7 +136,7 @@
         },
         "surface": {
           "enum": [
-            "manifest",
+            "justfile_contract",
             "profile",
             "workflow",
             "workflow_ref",
@@ -242,7 +242,7 @@
       "title": "LabelVariant",
       "type": "object"
     },
-    "MissingManifest": {
+    "MissingJustfileContract": {
       "additionalProperties": false,
       "properties": {
         "present": {
@@ -259,7 +259,7 @@
         "present",
         "reason"
       ],
-      "title": "MissingManifest",
+      "title": "MissingJustfileContract",
       "type": "object"
     },
     "ProfileProofObservation": {
@@ -300,7 +300,7 @@
       "title": "ProfileProofObservation",
       "type": "object"
     },
-    "QcManifest": {
+    "QcJustfileContract": {
       "additionalProperties": false,
       "properties": {
         "schema_version": {
@@ -355,7 +355,7 @@
         "local_delegation",
         "default_branch"
       ],
-      "title": "QcManifest",
+      "title": "QcJustfileContract",
       "type": "object"
     },
     "TargetObservation": {
