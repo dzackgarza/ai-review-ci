@@ -737,7 +737,7 @@ If that sentence cannot be written clearly, the test is likely not well-targeted
 
 All code must be hard-gated by the complete three-tier suite.
 These gates are owned by the global QC system at `~/ai-review-ci` — see the [[quality-control/SKILL|quality-control]] skill.
-The project justfile delegates to global QC and may add only domain-specific private checks per the QC Extension Gate.
+The project [[justfile/SKILL|justfile]] delegates to global QC and may add only domain-specific private checks per the QC Extension Gate.
 
 **Do not** reconfigure these gates locally (no per-repo tool installs, no local config overrides for generic QC tools).
 The global QC system owns tool pins, configs, and invocation patterns.

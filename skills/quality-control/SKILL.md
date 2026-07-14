@@ -1,6 +1,6 @@
 ---
 name: quality-control
-description: Use when implementing, understanding, or delegating to the global quality control system in ~/ai-review-ci. Also use when setting up new projects with CI/CD, or when a local justfile needs to reference global QC recipes.
+description: Use when implementing, understanding, or delegating to the global quality control system in ~/ai-review-ci. Also use when setting up new projects with CI/CD, or when a local [[justfile/SKILL|justfile]] needs to reference global QC recipes.
 ---
 
 # Quality Control System
@@ -17,7 +17,7 @@ A domain skill may narrow these policies for its domain but may not weaken them.
 
 | Rank | Skill | Owns |
 | --- | --- | --- |
-| **1** | `quality-control` | Generic QC invocation, public recipes, tool pins, configs, and justfile architecture (shared + language-specific). No local reimplementation. |
+| **1** | `quality-control` | Generic QC invocation, public recipes, tool pins, configs, and [[justfile/SKILL|justfile]] architecture (shared + language-specific). No local reimplementation. |
 | **2** | [[test-guidelines/SKILL|test-guidelines]] | Testing epistemology: what constitutes a proof, no mocks, no exceptions, no masking. |
 | **3** | [[tool-provisioning-and-environment-hygiene/SKILL|tool-provisioning-and-environment-hygiene]] | How tools run: ephemeral by default, uv-only Python, no pipx/pip/global npm. |
 | **4** | [[known-solution-first/SKILL|known-solution-first]] | External tool/compiler/API uncertainty: public contracts before local probing. |
@@ -96,7 +96,7 @@ The auto-fixers in the tables above run in `test-commit`; the project suite runs
   Commit them.
 
 - **If a tool has an auto-fix flag that is not wired into the recipe, wire it in.** Do not apply it manually and leave the recipe stale.
-  The justfile is the single source of truth.
+  The [[justfile/SKILL|justfile]] is the single source of truth.
   Add the flag and document it in this table.
 
 - **Never use bypass comments (`# noqa`, `@ts-ignore`, `# type: ignore`, etc.) as a substitute for letting auto-fix do its job.** The [No-Bypass Policy](#no-bypass-policy) is stricter than any individual tool's silence mechanism.
@@ -165,7 +165,7 @@ If a prerequisite is missing, the project is misconfigured — the correct respo
 These are concrete misunderstandings that occurred during development and must not recur:
 
 1. **"Missing source files are OK — the tool has nothing to scan, so skip silently."** Wrong.
-   If the QC justfile for a language runs on a project and finds no source files of that language, that means either the project is using the wrong justfile (should map to a different language stack) or the project has no source code (not a real project).
+   If the QC [[justfile/SKILL|justfile]] for a language runs on a project and finds no source files of that language, that means either the project is using the wrong [[justfile/SKILL|justfile]] (should map to a different language stack) or the project has no source code (not a real project).
    Both are configuration errors that must fail loudly.
 
 2. **"Missing tool installations are OK — skip gracefully if the CLI is not on PATH."** Wrong.
@@ -203,7 +203,7 @@ The error message must name the tool, the missing prerequisite, and (when applic
 **Rule:** Every language `test` recipe runs preflight checks before any QC tooling.
 These checks validate project configuration and fail fast on misconfiguration, producing clear error messages instead of confusing tool failures.
 
-Each language justfile has a dedicated `_check-*-project` recipe that runs first in the `test` dependency chain, followed by the shared `_check-no-local-qc-override` (imported from [[justfile/SKILL|justfile]]). These run before `_normalize`, linters, typecheckers, tests, or any other QC tool.
+Each language [[justfile/SKILL|justfile]] has a dedicated `_check-*-project` recipe that runs first in the `test` dependency chain, followed by the shared `_check-no-local-qc-override` (imported from [[justfile/SKILL|justfile]]). These run before `_normalize`, linters, typecheckers, tests, or any other QC tool.
 
 #### Shared Preflight: `_check-no-local-qc-override`
 
@@ -332,9 +332,9 @@ On Linux, `xgboost` pulls in `nvidia-nccl-cu12` — this is a declared dependenc
 
 ### Language Isolation: One Language per Justfile
 
-**Rule:** Each justfile owns exactly one language stack.
-No recipe in the Python justfile may depend on JS/TS files existing.
-No recipe in the TS justfile may depend on Python files existing.
+**Rule:** Each [[justfile/SKILL|justfile]] owns exactly one language stack.
+No recipe in the Python [[justfile/SKILL|justfile]] may depend on JS/TS files existing.
+No recipe in the TS [[justfile/SKILL|justfile]] may depend on Python files existing.
 
 | Justfile | Type | Recipes |
 | --- | --- | --- |
@@ -342,13 +342,13 @@ No recipe in the TS justfile may depend on Python files existing.
 | `python.just` | Python | Python-specific: `_python-syntax`, `_mypy`, `_normalize`, etc. Calls shared normalization and shared global QC by `just -f shared.just`. |
 | `bun.just` | TypeScript/JS | TypeScript-specific: `_biome`, `_eslint`, `_tsc`, `_knip`, etc. Calls shared normalization and shared global QC by `just -f shared.just`. |
 | `rust.just` | Rust | Rust-specific: `_normalize`, `_clippy`, `_rustfmt`, `_cargo-test`, etc. Calls shared normalization and shared global QC by `just -f shared.just`. |
-| `sage.just` | SageMath | Sage-specific: `_sage-syntax`, `_vulture` (Sage-aware). Calls shared normalization and shared QC; calls Python QC via `just -f python.just`. |
+| `sage.just` | [[sagemath/SKILL|SageMath]] | Sage-specific: `_sage-syntax`, `_vulture` (Sage-aware). Calls shared normalization and shared QC; calls Python QC via `just -f python.just`. |
 
 #### Failure mode this policy exists to prevent
 
-**"It doesn't matter which justfile a recipe lives in — recipes are just scripts."** Wrong.
-A Python-justfile recipe that checks for `.ts` files will hard-fail on a pure Python project (no `.ts` files exist), falsely indicating a QC failure.
-This is a configuration error: the recipe belongs in the TS justfile, not the Python one.
+**"It doesn't matter which [[justfile/SKILL|justfile]] a recipe lives in — recipes are just scripts."** Wrong.
+A Python-[[justfile/SKILL|justfile]] recipe that checks for `.ts` files will hard-fail on a pure Python project (no `.ts` files exist), falsely indicating a QC failure.
+This is a configuration error: the recipe belongs in the TS [[justfile/SKILL|justfile]], not the Python one.
 Cross-contamination creates false negatives on correct projects and makes the QC system impossible to reason about.
 
 **Cross-contamination pattern (prohibited):**
@@ -369,7 +369,7 @@ test-commit: _normalize-common _normalize _python-syntax _mypy ...
 test-ci: test-push _knip _biome _slop-scan ...
 ```
 
-Running the wrong justfile for a project also fails — if Python QC runs on a project with no Python files, every recipe that checks for `.py` files will exit 1. This is correct: the developer is using the wrong justfile.
+Running the wrong [[justfile/SKILL|justfile]] for a project also fails — if Python QC runs on a project with no Python files, every recipe that checks for `.py` files will exit 1. This is correct: the developer is using the wrong [[justfile/SKILL|justfile]].
 
 ### No Optional Tools
 
@@ -426,7 +426,7 @@ Any exception to these rules must strictly follow the **Policy Exception Protoco
 
 ## Purpose
 
-1. **Enshrine workflows** — Every workflow lives in the justfile.
+1. **Enshrine workflows** — Every workflow lives in the [[justfile/SKILL|justfile]].
    No ad-hoc scripts, no “I’ll just run this command directly”.
    Justfile is the single source of truth for project operations.
 
@@ -439,7 +439,7 @@ Any exception to these rules must strictly follow the **Policy Exception Protoco
 
 ## Justfile Architecture
 
-The QC system uses one shared justfile (`shared.just`) and multiple language-specific justfiles.
+The QC system uses one shared [[justfile/SKILL|justfile]] (`shared.just`) and multiple language-specific justfiles.
 Language justfiles call shared recipes explicitly with `just -f shared.just` so language-specific recipe names can remain isolated without import conflicts.
 
 ### Shared Justfile ([[justfile/SKILL|justfile]])
@@ -498,7 +498,7 @@ Invocations:
 - `just -f ~/ai-review-ci/justfiles/rust.just -d . test`
 - `just -f ~/ai-review-ci/justfiles/rust.just -d . test-ci`
 
-### SageMath: `justfile-sage`
+### [[sagemath/SKILL|SageMath]]: `justfile-sage`
 
 Location: `~/ai-review-ci/justfiles/sage.just`
 
@@ -523,7 +523,7 @@ Language-specific recipes like `_jscpd-python`, `_lizard-python`, `_jscpd-bun`, 
 
 ## Usage in Local Projects
 
-**Never reimplement QC locally.** Local justfiles must delegate to the appropriate language justfile:
+**Never reimplement QC locally.** Local justfiles must delegate to the appropriate language [[justfile/SKILL|justfile]]:
 
 **Python projects:**
 
@@ -567,7 +567,7 @@ test-ci:
   @just -f ~/ai-review-ci/justfiles/rust.just -d . test-ci
 ```
 
-**SageMath projects:**
+**[[sagemath/SKILL|SageMath]] projects:**
 
 ```justfile
 # my-project/justfile

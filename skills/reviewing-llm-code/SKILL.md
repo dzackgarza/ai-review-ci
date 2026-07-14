@@ -130,7 +130,7 @@ Also load as applicable:
 
 - [[thermo-nuclear-code-quality-review/SKILL|thermo-nuclear-code-quality-review]] when the review includes maintainability, architecture, abstractions, giant files, or code that feels obviously badly shaped.
 
-- **Jules Review Delegation** (if the user asks to use [[jules/SKILL|Jules]] for review): Load:
+- **[[jules/SKILL|Jules]] Review Delegation** (if the user asks to use [[jules/SKILL|Jules]] for review): Load:
   - [[jules/SKILL|jules]]
   - `jules/references/anti-slop-report-review.md`
   - [[reviewing-llm-code/SKILL|reviewing-llm-code]]
