@@ -69,6 +69,17 @@ _python-qc-files:
 		-g '!tool-artifacts/vulture_whitelist.py' \
 		"${exclude_args[@]}"
 
+_python-vulture-files:
+	#!/usr/bin/env bash
+	set -euo pipefail
+	if ! mapfile -t python_files < <(just --justfile {{justfile()}} -d . _python-qc-files 2>/dev/null); then :; fi
+	for python_file in "${python_files[@]}"; do
+		case "$python_file" in
+			scripts/*|*/scripts/*) continue ;;
+		esac
+		printf '%s\n' "$python_file"
+	done
+
 _python-syntax:
 	#!/usr/bin/env bash
 	set -euo pipefail
@@ -383,12 +394,17 @@ _vulture: _install-tools
 	echo "============================="
 	echo "=== Running: vulture dead code detection ==="
 	echo "# Finds unused code (functions, classes, variables) that can be safely removed"
-	if ! mapfile -t python_files < <(just --justfile {{justfile()}} -d . _python-qc-files 2>/dev/null); then :; fi
+	if ! mapfile -t all_python_files < <(just --justfile {{justfile()}} -d . _python-qc-files 2>/dev/null); then :; fi
+	if ! mapfile -t python_files < <(just --justfile {{justfile()}} -d . _python-vulture-files 2>/dev/null); then :; fi
 	whitelist_file="{{artifacts}}/vulture_whitelist.py"
-	if [ "${#python_files[@]}" -eq 0 ]; then
+	if [ "${#all_python_files[@]}" -eq 0 ]; then
 		echo "ERROR: vulture: no Python files found in a Python project."
 		"{{artifacts}}/scripts/emit-triage-directive.sh"
 		exit 1
+	fi
+	if [ "${#python_files[@]}" -eq 0 ]; then
+		echo "# No Python files eligible for vulture after excluding scripts/."
+		exit 0
 	fi
 
 	if uvx --from vulture vulture \

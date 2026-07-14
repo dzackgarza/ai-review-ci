@@ -52,4 +52,10 @@ directories = [
     "vendor",
     "third_party",
     "venv",
+    # Archived source trees are preserved reference material, not active code.
+    "archives",
+    "src.bak",
+    # Notebooks are user-authored exploratory/research work, not agent-owned QC
+    # product code. Shared QC must not police notebooks or their exports.
+    "notebooks",
 ]

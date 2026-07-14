@@ -71,6 +71,17 @@ _sage-qc-files:
 		-g '!*.sage.py' \
 		"${exclude_args[@]}"
 
+_sage-vulture-files:
+	#!/usr/bin/env bash
+	set -euo pipefail
+	if ! mapfile -t sage_files < <(just --justfile {{justfile()}} -d . _sage-qc-files 2>/dev/null); then :; fi
+	for sage_file in "${sage_files[@]}"; do
+		case "$sage_file" in
+			scripts/*|*/scripts/*) continue ;;
+		esac
+		printf '%s\n' "$sage_file"
+	done
+
 _sage-test-files:
 	#!/usr/bin/env bash
 	set -euo pipefail
@@ -230,14 +241,20 @@ _vulture: _sage-qc-files
 	echo "============================="
 	echo "=== Running: vulture dead code detection (Sage-aware) ==="
 	echo "# Finds unused code in Python and Sage files"
-	mapfile -t python_files < <(just -f {{justfiles}}/python.just -d . _python-qc-files)
-	mapfile -t sage_files < <(just --justfile {{justfile()}} -d . _sage-qc-files)
+	mapfile -t all_python_files < <(just -f {{justfiles}}/python.just -d . _python-qc-files)
+	mapfile -t all_sage_files < <(just --justfile {{justfile()}} -d . _sage-qc-files)
+	mapfile -t python_files < <(just -f {{justfiles}}/python.just -d . _python-vulture-files)
+	mapfile -t sage_files < <(just --justfile {{justfile()}} -d . _sage-vulture-files)
 	generated_sage_python_files=()
 	whitelist_file="{{artifacts}}/vulture_whitelist.py"
-	if [ "${#python_files[@]}" -eq 0 ] && [ "${#sage_files[@]}" -eq 0 ]; then
+	if [ "${#all_python_files[@]}" -eq 0 ] && [ "${#all_sage_files[@]}" -eq 0 ]; then
 		echo "ERROR: vulture: no Python or Sage files found in a Sage project."
 		"{{artifacts}}/scripts/emit-triage-directive.sh"
 		exit 1
+	fi
+	if [ "${#python_files[@]}" -eq 0 ] && [ "${#sage_files[@]}" -eq 0 ]; then
+		echo "# No Python or Sage files eligible for vulture after excluding scripts/."
+		exit 0
 	fi
 
 	if [ "${#sage_files[@]}" -gt 0 ]; then

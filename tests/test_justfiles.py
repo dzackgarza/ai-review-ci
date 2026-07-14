@@ -203,6 +203,58 @@ def test_sage_recipes_require_configured_executable_sage_path(
     assert TRIAGE_MARKER in output
 
 
+def test_qc_excludes_notebooks_as_user_work() -> None:
+    data = tomllib.loads((ROOT / "tool-configs" / "qc-excludes.toml").read_text())
+
+    assert "notebooks" in data["directories"]
+
+
+def test_python_vulture_files_ignore_scripts_and_global_notebooks_directories(
+    tmp_path: pathlib.Path,
+) -> None:
+    project = tmp_path / "project"
+    project.mkdir()
+    for relative in (
+        "src/app.py",
+        "scripts/tool.py",
+        "pkg/scripts/nested_tool.py",
+        "notebooks/analysis.py",
+        "pkg/notebooks/nested_analysis.py",
+    ):
+        path = project / relative
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text("def target() -> None:\n    pass\n")
+
+    result = run_just(ROOT / "justfiles" / "python.just", project, "_python-vulture-files")
+
+    output = result.stdout + result.stderr
+    assert result.returncode == 0, output
+    assert result.stdout.splitlines() == ["src/app.py"]
+
+
+def test_sage_vulture_files_ignore_scripts_and_global_notebooks_directories(
+    tmp_path: pathlib.Path,
+) -> None:
+    project = tmp_path / "project"
+    project.mkdir()
+    for relative in (
+        "src/app.sage",
+        "scripts/tool.sage",
+        "pkg/scripts/nested_tool.sage",
+        "notebooks/analysis.sage",
+        "pkg/notebooks/nested_analysis.sage",
+    ):
+        path = project / relative
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text("def target():\n    pass\n")
+
+    result = run_just(ROOT / "justfiles" / "sage.just", project, "_sage-vulture-files")
+
+    output = result.stdout + result.stderr
+    assert result.returncode == 0, output
+    assert result.stdout.splitlines() == ["src/app.sage"]
+
+
 def test_tsc_requires_ags_when_tsconfig_declares_ags(tmp_path: pathlib.Path) -> None:
     project = tmp_path / "ags-project"
     project.mkdir()
@@ -821,6 +873,21 @@ def test_semgrep_scans_tests_tree_for_banned_test_patterns(tmp_path: pathlib.Pat
     assert result.returncode != 0, output
     for rule in ("py-no-monkeypatch", "py-no-mock-import", "py-no-magicmock", "py-no-skip-test"):
         assert rule in output, f"{rule} did not fire on test-file code:\n{output}"
+
+
+def test_semgrep_ignores_exported_html_under_notebooks(
+    tmp_path: pathlib.Path,
+) -> None:
+    project = tmp_path / "semgrep-notebook-html-project"
+    notebook_export = project / "computations" / "notebooks" / "periods" / "fermat-periods-nbviewer.html"
+    notebook_export.parent.mkdir(parents=True)
+    notebook_export.write_text('<a href="http://example.com">nbviewer export</a>\n')
+
+    result = run_just(ROOT / "justfiles" / "shared.just", project, "_semgrep")
+
+    output = result.stdout + result.stderr
+    assert result.returncode == 0, output
+    assert "fermat-periods-nbviewer.html" not in output
 
 
 def test_semgrep_preserves_tracked_ignore_and_fails_loud_on_backup_failure(

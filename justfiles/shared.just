@@ -85,10 +85,16 @@ _semgrep-autofix:
 	echo "============================="
 	echo "=== Running: semgrep auto-fix ==="
 	echo "# Applies Semgrep autofixes; push-tier Semgrep verification owns remaining findings"
+	exclude_args=()
+	while IFS= read -r dir; do
+		exclude_args+=("--exclude=$dir")
+	done < <(uv run {{artifacts}}/scripts/read_qc_excludes.py {{configs}}/qc-excludes.toml)
+	exclude_args+=("--exclude=*.html")
+	exclude_args+=("--exclude=**/*.html")
 	if uvx --from semgrep semgrep scan \
 		--config={{configs}}/semgrep.yml \
 		--config=p/ci \
-		--exclude=codeql-db \
+		"${exclude_args[@]}" \
 		--scan-unknown-extensions \
 		--autofix; then
 		:
@@ -336,6 +342,7 @@ _semgrep:
 	}
 	trap restore_semgrepignore EXIT
 	uv run {{artifacts}}/scripts/read_qc_excludes.py {{configs}}/qc-excludes.toml > "$ignore_file"
+	printf '%s\n' '*.html' '**/*.html' >> "$ignore_file"
 	if uvx --from semgrep semgrep scan \
 		--config={{configs}}/semgrep.yml \
 		--config=p/ci \

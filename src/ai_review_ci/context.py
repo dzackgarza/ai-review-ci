@@ -357,93 +357,7 @@ def _fetch_pr_body(repo: str, pr_number: int) -> str | None:
     return body
 
 
-_CLOSING_ISSUES_QUERY = """
-query($owner: String!, $name: String!, $number: Int!) {
-  repository(owner: $owner, name: $name) {
-    pullRequest(number: $number) {
-      closingIssuesReferences(first: 50) {
-        nodes { number title state body }
-      }
-    }
-  }
-}
-"""
-
-
-def _fetch_closing_issues(repo: str, pr_number: int) -> list[JsonDict]:
-    """Issues GitHub will close when this PR merges (`closingIssuesReferences`).
-
-    This is the semantic closure set, computed by GitHub itself from both body
-    keywords and manual Development-sidebar links — not a prose parse of the PR
-    body. One query returns the numbers and verbatim bodies together, and the
-    members are issues by construction.
-    """
-    owner, name = repo.split("/")
-    args = [
-        "gh",
-        "api",
-        "graphql",
-        "-f",
-        f"query={_CLOSING_ISSUES_QUERY}",
-        "-F",
-        f"owner={owner}",
-        "-F",
-        f"name={name}",
-        "-F",
-        f"number={pr_number}",
-    ]
-    result = subprocess.run(args, capture_output=True, text=True)
-    if result.returncode != 0:
-        _fail(f"gh api graphql closingIssuesReferences failed: {result.stderr.strip()}")
-    nodes = json.loads(result.stdout)["data"]["repository"]["pullRequest"]["closingIssuesReferences"]["nodes"]
-    return [_mapping(node, "closing issue") for node in nodes]
-
-
-def _issue_asks_lines(repo: str, pr_number: int) -> list[str]:
-    """Render the verbatim bodies of the issues this PR will close (#246).
-
-    This section is the anchor for issue-vs-deliverable coverage: without it the
-    reviewer's only view of "what was asked" is the PR body — the author's own
-    paraphrase — so a PR that confidently narrows the ask passes every
-    claim-vs-evidence check while silently closing a wider contract.
-    """
-    issues = _fetch_closing_issues(repo, pr_number)
-    if not issues:
-        return []
-    lines = [
-        "## Original issue asks",
-        "",
-        "GitHub will close the issues below when this PR merges — the set is "
-        "GitHub-computed (`closingIssuesReferences`, covering closing keywords "
-        "and manual issue links), not parsed from the PR's prose. Their "
-        "verbatim bodies are the authoritative statement of what was asked; "
-        "the PR description below is the author's untrusted paraphrase. For "
-        "each ask stated in each issue, classify it against the diff: done "
-        "(evidence visible in the diff), partial, untouched, or contradicted. "
-        "Quantifiers in the issue keep their meaning — 'all', 'each of the "
-        "sites', 'every' cannot be narrowed to the subset the PR touched; a "
-        "subset is partial, not done. If any ask is untouched or partial, the "
-        "work unit is incomplete and the merge itself is the defect: the only "
-        "remedies are completing the remaining asks in this PR, or an "
-        "evidence-backed falsification of the ask against the issue's own "
-        "standard. Never prescribe relabeling the closure claim (demoting "
-        "`Closes` to `Refs`, 'partial' notes, scope caveats) as a path to "
-        "merge — a PR exists because it claimed the full work unit, and "
-        "making incomplete work honestly-labeled does not make it mergeable.",
-        "",
-    ]
-    for issue in issues:
-        state = str(issue.get("state") or "unknown").lower()
-        lines.extend([f"### #{issue.get('number')} — {issue.get('title')} ({state}; closed by merging this PR)", ""])
-        body = issue.get("body")
-        if isinstance(body, str) and body.strip():
-            lines.extend(["```markdown", body.strip(), "```", ""])
-        else:
-            lines.extend(["_Issue has no body._", ""])
-    return lines
-
-
-def _pr_claim_map_lines(body: str) -> list[str]:
+def _pr_claim_map_lines(repo: str, pr_number: int) -> list[str]:
     """Render the PR body's claim map and evidence map as a reviewer-context section.
 
     This section is the #185 fix: it gives the LLM reviewer the PR's *stated*
@@ -452,6 +366,9 @@ def _pr_claim_map_lines(body: str) -> list[str]:
     cannot flag a PR that claims a real boundary is crossed but supplies only a fake
     executable, argv recorder, or helper-only test as proof.
     """
+    body = _fetch_pr_body(repo, pr_number)
+    if body is None:
+        return []
     return [
         "## PR claim map",
         "",
@@ -509,10 +426,7 @@ def fetch_context(
 
     if pr_number:
         lines.extend(_pr_thread_lines(repo, pr_number))
-        lines.extend(_issue_asks_lines(repo, pr_number))
-        pr_body = _fetch_pr_body(repo, pr_number)
-        if pr_body is not None:
-            lines.extend(_pr_claim_map_lines(pr_body))
+        lines.extend(_pr_claim_map_lines(repo, pr_number))
 
     text = "\n".join(lines).strip() + "\n"
 

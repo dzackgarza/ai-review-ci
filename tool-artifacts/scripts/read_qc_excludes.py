@@ -73,11 +73,7 @@ def discover_nested_repositories(root: Path, configured: list[str]) -> list[str]
             discovered.add(relative.as_posix())
             directories.clear()
             continue
-        directories[:] = [
-            directory
-            for directory in directories
-            if directory != ".git" and directory not in excluded_names
-        ]
+        directories[:] = [directory for directory in directories if directory != ".git" and directory not in excluded_names]
     return sorted(discovered)
 
 

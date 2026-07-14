@@ -67,6 +67,12 @@ exclude = [
     "**/third_party/**",
     "venv/*",
     "**/venv/**",
+    "archives/*",
+    "**/archives/**",
+    "src.bak/*",
+    "**/src.bak/**",
+    "notebooks/*",
+    "**/notebooks/**",
 ]
 
 [grain.python]

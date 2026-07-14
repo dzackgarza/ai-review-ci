@@ -38,6 +38,7 @@ _ci-recipes := "_pytest_with_coverage _diff-cover _deptry _import-linter"
 test:
     #!/usr/bin/env bash
     set -euo pipefail
+    just --justfile {{infra}}/justfile -d . check
     just -f {{justfiles}}/python.just -d . {{_commit-recipes}}
     just -f {{justfiles}}/shared.just -d . _no-bypass
     echo "QC-tooling commit-tier checks completed"
@@ -46,6 +47,7 @@ test:
 test-ci:
     #!/usr/bin/env bash
     set -euo pipefail
+    just --justfile {{infra}}/justfile -d . check
     just -f {{justfiles}}/python.just -d . {{_commit-recipes}} {{_ci-recipes}}
     just -f {{justfiles}}/shared.just -d . _no-bypass
     echo "QC-tooling push/CI checks completed"
