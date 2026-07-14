@@ -536,21 +536,12 @@ def _reply_has_resolution_evidence(body: str) -> bool:
         return False
     if not (_POLICY_BASIS_FIELD.search(body) or _FACTUAL_CONTRACT_BASIS_FIELD.search(body)):
         return False
-    if not (
-        _PREFILTER_FIELD.search(body)
-        and _CLAIM_FIELD.search(body)
-        and _ACTION_FIELD.search(body)
-        and _AUDIT_ANCHOR_FIELD.search(body)
-    ):
+    if not (_PREFILTER_FIELD.search(body) and _CLAIM_FIELD.search(body) and _ACTION_FIELD.search(body) and _AUDIT_ANCHOR_FIELD.search(body)):
         return False
 
     disposition = disposition_match.group("disposition").lower()
     if disposition.startswith("accepted"):
-        return bool(
-            _REMEDIATION_FIELD.search(body)
-            and _PROOF_FIELD.search(body)
-            and _COMMIT_FIELD.search(body)
-        )
+        return bool(_REMEDIATION_FIELD.search(body) and _PROOF_FIELD.search(body) and _COMMIT_FIELD.search(body))
     if disposition == "duplicate":
         return bool(_CANONICAL_THREAD_FIELD.search(body))
     if disposition == "outdated":

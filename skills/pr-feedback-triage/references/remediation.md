@@ -1,7 +1,7 @@
 # Remediate Accepted PR Feedback
 
-Only accepted current-PR findings enter this stage. Role C implements a first-principles
-specification; it does not “address a comment.”
+Only accepted current-PR findings enter this stage.
+Role C implements a first-principles specification; it does not “address a comment.”
 
 ## Build the specification
 
@@ -38,20 +38,17 @@ Scope:
 <Files and subsystems in scope; explicit non-goals.>
 ```
 
-Do not turn reviewer patch text into the spec. A good spec names the invariant and owned
-proof boundary. For example, “replace `.flatten()` with `map_err`” is patch text;
-“directory reads must never turn an I/O failure into a partial successful listing, and a
-boundary test must reject that broken behavior” is a specification.
+Do not turn reviewer patch text into the spec.
+A good spec names the invariant and owned proof boundary.
+For example, “replace `.flatten()` with `map_err`” is patch text; “directory reads must never turn an I/O failure into a partial successful listing, and a boundary test must reject that broken behavior” is a specification.
 
 ## Route policy into the style guide
 
-For every `POLICY.*` code, load its mapping from [[policy-index/SKILL|policy-index]],
-then load the mapped card through [[style-guide/SKILL|style-guide]]. The card is the
-canonical remediation source: preferred construction, bad pattern, rearchitecture, and
-proof obligation. Do not invent a separate remediation interpretation.
+For every `POLICY.*` code, load its mapping from [[policy-index/SKILL|policy-index]], then load the mapped card through [[style-guide/SKILL|style-guide]]. The card is the canonical remediation source: preferred construction, bad pattern, rearchitecture, and proof obligation.
+Do not invent a separate remediation interpretation.
 
-If the accepted concern is factual or contract-only, identify the owned boundary and
-derive the spec from that contract. Do not manufacture a policy code.
+If the accepted concern is factual or contract-only, identify the owned boundary and derive the spec from that contract.
+Do not manufacture a policy code.
 
 ## C input firewall
 
@@ -63,8 +60,7 @@ C receives only:
 - exact `POLICY.*` records and mapped style cards;
 - applicable [[test-guidelines/SKILL|test proof rules]].
 
-C must not receive exact reviewer wording, suggested patch text, B's rejected
-remediation, thread status, A's preferred fix, or “just address this comment” framing.
+C must not receive exact reviewer wording, suggested patch text, B's rejected remediation, thread status, A's preferred fix, or “just address this comment” framing.
 
 ## Required C output
 
@@ -74,10 +70,9 @@ remediation, thread status, A's preferred fix, or “just address this comment�
 - explicit banned-pattern audit;
 - blocker, with no partial patch, if the spec cannot be met.
 
-Tests added in response to review must prove the owned boundary. Source-shape, exact
-string, existence, visibility, helper-branch, and “no banned token” assertions are not
-product proof.
+Tests added in response to review must prove the owned boundary.
+Source-shape, exact string, existence, visibility, helper-branch, and “no banned token” assertions are not product proof.
 
-Deletion is a remediation claim. It is valid only when the original burden is solved,
-invalidated by contract evidence, transferred to another owned surface, or remains an
-explicit blocker. Deletion cannot make an accepted obligation disappear.
+Deletion is a remediation claim.
+It is valid only when the original burden is solved, invalidated by contract evidence, transferred to another owned surface, or remains an explicit blocker.
+Deletion cannot make an accepted obligation disappear.

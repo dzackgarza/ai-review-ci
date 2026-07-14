@@ -1,7 +1,7 @@
 # Collect Returned PR Feedback
 
-Role A owns collection. Collection is read-only: do not disposition, edit, reply, or
-resolve while building the worklist.
+Role A owns collection.
+Collection is read-only: do not disposition, edit, reply, or resolve while building the worklist.
 
 ## Read every live surface
 
@@ -14,8 +14,7 @@ Capture the current PR head SHA and all of these surfaces:
 - check runs, annotations, and failed required checks;
 - bot comments that update in place.
 
-Do not infer the whole review state from inbox summaries, a single API surface, the web
-page's unresolved count, or the latest review only.
+Do not infer the whole review state from inbox summaries, a single API surface, the web page's unresolved count, or the latest review only.
 
 ## Stable inline-thread state
 
@@ -26,13 +25,12 @@ python3 "$AI_SKILLS_DIR/pr-feedback-triage/scripts/triage_state.py" \
   --repo <owner/repo> --pr <number> --json
 ```
 
-It paginates beyond GitHub's first 100 threads, keys AI-review findings by
-`ai-review-fingerprint`, and otherwise uses a content identity that survives line
-shifts. It stores resumable machine state under the repository's Git metadata, never in a
-tracked review ledger. Use `--no-write` for a read-only one-shot result.
+It paginates beyond GitHub's first 100 threads, keys AI-review findings by `ai-review-fingerprint`, and otherwise uses a content identity that survives line shifts.
+It stores resumable machine state under the repository's Git metadata, never in a tracked review ledger.
+Use `--no-write` for a read-only one-shot result.
 
-The collector owns inline-thread identity, not the other GitHub surfaces. Read the
-remaining surfaces in the same round:
+The collector owns inline-thread identity, not the other GitHub surfaces.
+Read the remaining surfaces in the same round:
 
 ```bash
 gh pr view <number> --repo <owner/repo> \
@@ -44,9 +42,8 @@ gh api --paginate repos/<owner>/<repo>/commits/<head-sha>/check-runs
 gh api --paginate repos/<owner>/<repo>/check-runs/<check-run-id>/annotations
 ```
 
-Use [[git-integration-workflow/SKILL|git-integration-workflow]] only for GitHub
-authentication and PR mechanics. This stage owns which feedback surfaces must be
-collected and how their results join the round worklist.
+Use [[git-integration-workflow/SKILL|git-integration-workflow]] only for GitHub authentication and PR mechanics.
+This stage owns which feedback surfaces must be collected and how their results join the round worklist.
 
 ## Worklist fields
 
@@ -65,10 +62,8 @@ They are not dispositions.
 
 ## Dispatch to B
 
-Transmit raw review text, relevant source locations, the current PR contract, named
-policy surfaces, and verbatim owner statements. Do not transmit A's verdict, leaning,
-hypotheses, preferred fix, paraphrased owner premise, or resolution preference.
+Transmit raw review text, relevant source locations, the current PR contract, named policy surfaces, and verbatim owner statements.
+Do not transmit A's verdict, leaning, hypotheses, preferred fix, paraphrased owner premise, or resolution preference.
 
-A collection round is ready for disposition only after every surface above has been
-read. Missing API access or an unsettled review run is an explicit open collection state,
-not permission to call the window clean.
+A collection round is ready for disposition only after every surface above has been read.
+Missing API access or an unsettled review run is an explicit open collection state, not permission to call the window clean.

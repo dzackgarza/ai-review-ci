@@ -1,9 +1,9 @@
 # QC Triage Protocol
 
-This document defines the mandatory triage procedure when `test-ci` or `ambient` emits `QC FAILURE — TRIAGE REQUIRED`.
-It is a reference for the `reviewing-llm-code` skill and for the directive emitted by central QC.
+This document defines the mandatory triage procedure when `test-ci` or `ambient` emits `QC FAILURE — TRIAGE REQUIRED`. It is a reference for the `reviewing-llm-code` skill and for the directive emitted by central QC.
 
-It does not apply to `test-commit` or `test-push`. Those gates emit `DIRECT REPAIR REQUIRED`: the current agent fixes the reported compiler, formatter, type, build, or test error directly. Local type/test failures do not enter the returned-PR-feedback triage workflow.
+It does not apply to `test-commit` or `test-push`. Those gates emit `DIRECT REPAIR REQUIRED`: the current agent fixes the reported compiler, formatter, type, build, or test error directly.
+Local type/test failures do not enter the returned-PR-feedback triage workflow.
 
 ## Role Boundary
 
@@ -40,10 +40,8 @@ When the triage directive is emitted, the orchestrator MUST:
 5. **Present the raw output.** Show the complete raw QC output to the user.
    Do not filter, summarize, group, reinterpret, or convert it into your own report.
 
-6. **Route under existing authority.** A gate failure during active user-authorized
-   work does not require renewed approval. Ask the user only for a policy exception,
-   out-of-scope remediation, irreversible or externally visible action, or another
-   genuine authority boundary.
+6. **Route under existing authority.** A gate failure during active user-authorized work does not require renewed approval.
+   Ask the user only for a policy exception, out-of-scope remediation, irreversible or externally visible action, or another genuine authority boundary.
 
 ## Routing Gate Within Existing Authority
 

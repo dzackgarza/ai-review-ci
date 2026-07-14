@@ -85,8 +85,7 @@ The canonical model for the issue tree and milestone mapping is owned by the `pl
 Before implementation, the work-unit issue must already satisfy that reference's Plan Fit Gate: tree root, parent or roadmap node, GitHub Milestone scope, the issue this PR will close, parent issues referenced but not closed, and the proof obligations owned by the issue.
 
 In an `itree`-governed repository, route work-unit creation through `itree new` with an explicit grouping parent, and route new GitHub Milestone plus ledger creation through `itree milestone` with an explicit grouping parent.
-Follow the ownership and partial failure contract in [[git-integration-workflow/references/issue-workflow|issue workflow]].
-Raw GitHub issue or milestone construction is valid only for a repository explicitly outside `itree` governance.
+Follow the ownership and partial failure contract in [[git-integration-workflow/references/issue-workflow|issue workflow]]. Raw GitHub issue or milestone construction is valid only for a repository explicitly outside `itree` governance.
 
 This guide adds only the PR-execution specializations: the review-synthesis body shape below, closing-keyword discipline, and the stop rules specific to deriving one PR from one work-unit issue.
 
@@ -379,26 +378,22 @@ The PR must remain easy to evaluate against the work-unit issue.
 
 ## Phase 4: Route returned review feedback to its canonical workflow
 
-Load [[pr-feedback-triage/SKILL|pr-feedback-triage]] when review or check feedback
-arrives. That skill owns exhaustive collection, stable identities, independent
-disposition, policy-to-style-card remediation, thread-local replies, resolution, and
-convergence. Do not copy its commands, fields, state machine, or reply contract into this
-lifecycle.
+Load [[pr-feedback-triage/SKILL|pr-feedback-triage]] when review or check feedback arrives.
+That skill owns exhaustive collection, stable identities, independent disposition, policy-to-style-card remediation, thread-local replies, resolution, and convergence.
+Do not copy its commands, fields, state machine, or reply contract into this lifecycle.
 
 ## Phase 5: Reflect reopened obligations in public PR state
 
-This lifecycle resumes only at the ownership handoff declared by the triage workflow. If
-an accepted finding changes the PR contract or reopens a claimed proof burden:
+This lifecycle resumes only at the ownership handoff declared by the triage workflow.
+If an accepted finding changes the PR contract or reopens a claimed proof burden:
 
 1. update the work-unit issue with the corrected obligation;
 2. update the PR body from the issue;
 3. mark the PR not ready until the obligation is implemented and evidenced;
-4. return control to [[pr-feedback-triage/references/remediation|remediation]] and
-   [[pr-feedback-triage/references/convergence|convergence]].
+4. return control to [[pr-feedback-triage/references/remediation|remediation]] and [[pr-feedback-triage/references/convergence|convergence]].
 
-A thread reply is not a replacement for an issue update when the underlying contract
-changed. Conversely, an issue update is not a disposition or substitute for the reply on
-the finding's own surface.
+A thread reply is not a replacement for an issue update when the underlying contract changed.
+Conversely, an issue update is not a disposition or substitute for the reply on the finding's own surface.
 
 ## Phase 6: Keep reviewers anchored to outcome, not process theater
 

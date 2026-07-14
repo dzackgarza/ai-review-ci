@@ -87,13 +87,9 @@ Audit anchor: tests/test_reader.py::test_failure
 
     assert triage.disposition_of(root_only) is None
     assert triage.disposition_of(incomplete_reply)["complete"] is False
-    assert triage.classify(
-        incomplete_reply, triage.disposition_of(incomplete_reply), None
-    ) == "OPEN-PENDING"
+    assert triage.classify(incomplete_reply, triage.disposition_of(incomplete_reply), None) == "OPEN-PENDING"
     assert triage.disposition_of(complete_reply)["complete"] is True
-    assert triage.classify(
-        complete_reply, triage.disposition_of(complete_reply), None
-    ) == "CLOSED"
+    assert triage.classify(complete_reply, triage.disposition_of(complete_reply), None) == "CLOSED"
 
 
 def test_re_emitted_finding_uses_prior_complete_disposition_as_resume_state() -> None:

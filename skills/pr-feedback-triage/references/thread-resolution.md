@@ -1,7 +1,7 @@
 # Verify, Reply, and Resolve Each Feedback Item
 
-Role A verifies C's work against the spec and actual diff. Green tests are a precondition,
-not the judgment.
+Role A verifies C's work against the spec and actual diff.
+Green tests are a precondition, not the judgment.
 
 ## Verification gate
 
@@ -16,19 +16,19 @@ Record an explicit answer to each question:
 7. Does the declared remediation match the implementation actually being committed?
 8. Does the result depend on the reviewer's wording?
 
-Reject failed verification and correct the spec or assign fresh remediation. Do not patch
-C's output locally to clear the thread.
+Reject failed verification and correct the spec or assign fresh remediation.
+Do not patch C's output locally to clear the thread.
 
 ## Commit before positive disposition
 
-Commit accepted remediation before replying. The commit and its proof must exist before
-the words “accepted,” “fixed,” or “addressed” appear on the thread. A plan, issue,
-uncommitted diff, launched agent, or future promise cannot close accepted feedback.
+Commit accepted remediation before replying.
+The commit and its proof must exist before the words “accepted,” “fixed,” or “addressed” appear on the thread.
+A plan, issue, uncommitted diff, launched agent, or future promise cannot close accepted feedback.
 
 ## Canonical thread-local reply contract
 
-Post the reply on the finding's own thread or comment surface. The field names below are
-the deterministic gate contract.
+Post the reply on the finding's own thread or comment surface.
+The field names below are the deterministic gate contract.
 
 Accepted or accepted-with-modification:
 
@@ -44,8 +44,8 @@ Commit: <7-40 hex SHA>
 Audit anchor: <commit, file, test, run, or source URL>
 ```
 
-Use `Disposition: Accepted with modified remediation` when the reviewer's proposed fix
-was rejected. The remediation field describes only the policy-aligned implementation.
+Use `Disposition: Accepted with modified remediation` when the reviewer's proposed fix was rejected.
+The remediation field describes only the policy-aligned implementation.
 
 When no policy governs, replace `Policy basis:` with:
 
@@ -64,8 +64,8 @@ Code/action taken or explicit non-change: No code change. <why>
 Audit anchor: <source that defeats the claim>
 ```
 
-Use `Factual/contract basis:` instead when the rejection is purely factual or
-contractual. A generic “stale,” “already handled,” or “not warranted” is not evidence.
+Use `Factual/contract basis:` instead when the rejection is purely factual or contractual.
+A generic “stale,” “already handled,” or “not warranted” is not evidence.
 
 Duplicate:
 
@@ -137,9 +137,8 @@ Include the applicable line or lines; do not claim “removed” as resolution.
 ## Resolution
 
 Only after the visible reply exists should A resolve an inline thread through GitHub.
-The resolve mutation's justification is not visible thread evidence. Top-level comments,
-review summaries, check annotations, and linked issues have distinct surfaces; reply or
-update the object itself rather than pretending GraphQL thread resolution clears it.
+The resolve mutation's justification is not visible thread evidence.
+Top-level comments, review summaries, check annotations, and linked issues have distinct surfaces; reply or update the object itself rather than pretending GraphQL thread resolution clears it.
 
-The thread-local reply is the canonical audit record. Do not duplicate it into a
-top-level disposition ledger or tracked review-log file.
+The thread-local reply is the canonical audit record.
+Do not duplicate it into a top-level disposition ledger or tracked review-log file.

@@ -284,7 +284,6 @@ Audit anchor: tests/test_reader.py
     )
 
 
-
 def test_thread_resolution_gate_blocks_unresolved_non_ai_review_threads(
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],

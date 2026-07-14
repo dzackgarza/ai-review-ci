@@ -1,7 +1,7 @@
 # Disposition Returned PR Feedback
 
-Role B judges each finding independently. B may see a batch, but returns one record per
-stable finding ID and never proposes a patch, refactor, or remediation shape.
+Role B judges each finding independently.
+B may see a batch, but returns one record per stable finding ID and never proposes a patch, refactor, or remediation shape.
 
 ## Separate the decisions
 
@@ -14,34 +14,29 @@ For every item classify:
 Then select one:
 
 - **Accepted as written** — the claim is true and the proposed fix preserves policy.
-- **Accepted with modified remediation** — the claim is true but the proposed fix violates
-  policy or product semantics.
-- **Rejected** — the claim is false, unsupported, irrelevant, design-hostile, or defeated
-  by stronger policy or contract evidence.
-- **Investigate before action** — evidence is insufficient. Keep the thread open.
-- **Backlogged as minor technical debt** — the claim is true but satisfies every spend
-  gate below and is linked to an owning debt issue.
+- **Accepted with modified remediation** — the claim is true but the proposed fix violates policy or product semantics.
+- **Rejected** — the claim is false, unsupported, irrelevant, design-hostile, or defeated by stronger policy or contract evidence.
+- **Investigate before action** — evidence is insufficient.
+  Keep the thread open.
+- **Backlogged as minor technical debt** — the claim is true but satisfies every spend gate below and is linked to an owning debt issue.
 
-Duplicate, outdated, and superseded threads still receive per-thread dispositions:
-`Duplicate` points to the canonical thread; `Outdated` points to the superseding
-commit. Never silently skip them.
+Duplicate, outdated, and superseded threads still receive per-thread dispositions: `Duplicate` points to the canonical thread; `Outdated` points to the superseding commit.
+Never silently skip them.
 
 ## Mandatory pre-filter
 
-Run these gates in order before choosing the disposition. Record exactly one line:
+Run these gates in order before choosing the disposition.
+Record exactly one line:
 
 `Pre-filter: <gate rule that fired> | <current-PR remediation or backlog result>`
 
 ### Gate 1 — threat-model relevance
 
-The review apparatus targets slop and real correctness/proof defects: fallback/default/
-mock behavior, fail-open or error-hiding paths, cross-file fragility, non-proof tests, a
-lying UI, stale-state races, swallowed errors, proof-surface gaps, and unbounded hangs.
+The review apparatus targets slop and real correctness/proof defects: fallback/default/ mock behavior, fail-open or error-hiding paths, cross-file fragility, non-proof tests, a lying UI, stale-state races, swallowed errors, proof-surface gaps, and unbounded hangs.
 
 - A supported slop, correctness, or proof issue continues to Gate 2.
 - A generic bug/performance/style preference with no supported defect or debt is rejected.
-- Supported localized maintainability, naming, readability, or duplication debt continues
-  to Gate 3.
+- Supported localized maintainability, naming, readability, or duplication debt continues to Gate 3.
 
 Do not reject a real defect because a generic reviewer found it.
 
@@ -63,11 +58,10 @@ First match wins:
 
 ### Optional-field axiom
 
-A field is required by default, and the data is fixed so it is always present. Genuine
-absence is a narrow explicitly modeled state, not a shared optional that every consumer
-must tolerate. “Models real absent data” is not sufficient: identify why absence is
-irreducible and why require-and-fix is wrong. Otherwise accept the finding and route
-`POLICY.NO_UNJUSTIFIED_OPTIONALITY`.
+A field is required by default, and the data is fixed so it is always present.
+Genuine absence is a narrow explicitly modeled state, not a shared optional that every consumer must tolerate.
+“Models real absent data” is not sufficient: identify why absence is irreducible and why require-and-fix is wrong.
+Otherwise accept the finding and route `POLICY.NO_UNJUSTIFIED_OPTIONALITY`.
 
 ### Gate 3 — current-PR spend gate
 
@@ -78,18 +72,13 @@ A true finding requires current-PR remediation when it affects any of:
 - user-visible correctness, security, safety, or data integrity;
 - a regression introduced or worsened by the PR.
 
-Backlog is legal only when none applies, the concern is localized low-risk
-maintainability debt, batching with the same work family is more proportionate, and the
-PR remains semantically complete without the change. The disposition must link an
-existing or newly filed work-family debt issue and record why every current-PR criterion
-failed to trigger. A missing issue or missing evidence makes backlog illegal.
+Backlog is legal only when none applies, the concern is localized low-risk maintainability debt, batching with the same work family is more proportionate, and the PR remains semantically complete without the change.
+The disposition must link an existing or newly filed work-family debt issue and record why every current-PR criterion failed to trigger.
+A missing issue or missing evidence makes backlog illegal.
 
 ### Gate 4 — proposed-fix policy check
 
-When the claim is true but the suggested fix adds a fallback, default, mock, in-code
-constant, defensive catch, cast, optional core state, proof-laundering test, or other
-invalid local fix, choose **Accepted with modified remediation**. Route the exact policy
-code; do not teach C the rejected fix.
+When the claim is true but the suggested fix adds a fallback, default, mock, in-code constant, defensive catch, cast, optional core state, proof-laundering test, or other invalid local fix, choose **Accepted with modified remediation**. Route the exact policy code; do not teach C the rejected fix.
 
 ## Disposition pressure test
 
@@ -101,9 +90,8 @@ Before returning a judgment, answer:
 - What source fact would falsify this disposition?
 - What audit anchor lets the maintainer verify the judgment without trusting B?
 
-Scanner status, process compliance, a future re-review, and “already handled” are not
-answers. If the source evidence cannot answer these questions, choose **Investigate
-before action**.
+Scanner status, process compliance, a future re-review, and “already handled” are not answers.
+If the source evidence cannot answer these questions, choose **Investigate before action**.
 
 ## Required B output
 
@@ -114,8 +102,7 @@ For each finding return:
 - claim disposition;
 - suggested-remediation disposition;
 - `Pre-filter:` result;
-- exact `POLICY.*` codes when policy governs, otherwise an explicit sourced
-  factual/contract basis;
+- exact `POLICY.*` codes when policy governs, otherwise an explicit sourced factual/contract basis;
 - evidence anchors;
 - current-PR action: remediate, backlog, no change, or investigate;
 - canonical thread, superseding commit, or debt issue when applicable;

@@ -152,8 +152,7 @@ All code evaluation rules, anti-slop guidelines, and validation-evasion auditing
 Always consult `policy-index` to find the canonical skill for any code review, testing, or remediation question.
 
 When you need "how to review a suspect PR" — the slop field guide, bridge-burning red flags, and validation-evasion auditing — do NOT rebuild it here.
-Load [[reviewing-llm-code/SKILL|reviewing-llm-code]] and [[anti-slop/SKILL|anti-slop]].
-This file owns the review *mechanics*; those skills own the review *judgment*.
+Load [[reviewing-llm-code/SKILL|reviewing-llm-code]] and [[anti-slop/SKILL|anti-slop]]. This file owns the review *mechanics*; those skills own the review *judgment*.
 
 * * *
 
