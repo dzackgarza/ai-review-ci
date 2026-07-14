@@ -62,10 +62,15 @@ setup:
 _sage-qc-files:
 	#!/usr/bin/env bash
 	set -euo pipefail
+	exclude_dirs_output="$(uv run {{artifacts}}/scripts/read_qc_excludes.py {{configs}}/qc-excludes.toml)"
+	exclude_dirs=()
+	if [ -n "$exclude_dirs_output" ]; then
+		mapfile -t exclude_dirs <<<"$exclude_dirs_output"
+	fi
 	exclude_args=()
-	while IFS= read -r dir; do
+	for dir in "${exclude_dirs[@]}"; do
 		exclude_args+=(-g "!**/$dir/**")
-	done < <(uv run {{artifacts}}/scripts/read_qc_excludes.py {{configs}}/qc-excludes.toml)
+	done
 	rg --files \
 		-g '*.sage' \
 		-g '!*.sage.py' \
@@ -74,20 +79,30 @@ _sage-qc-files:
 _sage-test-files:
 	#!/usr/bin/env bash
 	set -euo pipefail
-	while IFS= read -r sage_file; do
+	sage_files_output="$(just --justfile {{justfile()}} -d . _sage-qc-files)"
+	sage_files=()
+	if [ -n "$sage_files_output" ]; then
+		mapfile -t sage_files <<<"$sage_files_output"
+	fi
+	for sage_file in "${sage_files[@]}"; do
 		case "${sage_file##*/}" in
 			test_*.sage|*_test.sage) printf '%s\n' "$sage_file" ;;
 		esac
-	done < <(just --justfile {{justfile()}} -d . _sage-qc-files)
+	done
 
 _sage-python-test-files:
 	#!/usr/bin/env bash
 	set -euo pipefail
-	while IFS= read -r python_file; do
+	python_files_output="$(just -f {{justfiles}}/python.just -d . _python-qc-files)"
+	python_files=()
+	if [ -n "$python_files_output" ]; then
+		mapfile -t python_files <<<"$python_files_output"
+	fi
+	for python_file in "${python_files[@]}"; do
 		case "$python_file" in
 			tests/test_*.py|tests/*_test.py|tests/*/test_*.py|tests/*/*_test.py) printf '%s\n' "$python_file" ;;
 		esac
-	done < <(just -f {{justfiles}}/python.just -d . _python-qc-files)
+	done
 
 # Wiring preflight: every failure prints the exact remediation so a
 # misconfigured repo converges to correct QC wiring instead of guessing.
@@ -155,7 +170,11 @@ _sage-syntax:
 	echo "============================="
 	echo "=== Running: Sage syntax validation ==="
 	echo "# Preparses .sage files and byte-compiles the generated Python to catch syntax errors early"
-	mapfile -t sage_files < <(just --justfile {{justfile()}} -d . _sage-qc-files)
+	sage_files_output="$(just --justfile {{justfile()}} -d . _sage-qc-files)"
+	sage_files=()
+	if [ -n "$sage_files_output" ]; then
+		mapfile -t sage_files <<<"$sage_files_output"
+	fi
 	if [ "${#sage_files[@]}" -eq 0 ]; then
 		echo "ERROR: Sage syntax validation: no .sage files found in a Sage project."
 		"{{artifacts}}/scripts/emit-triage-directive.sh"
@@ -230,8 +249,16 @@ _vulture: _sage-qc-files
 	echo "============================="
 	echo "=== Running: vulture dead code detection (Sage-aware) ==="
 	echo "# Finds unused code in Python and Sage files"
-	mapfile -t python_files < <(just -f {{justfiles}}/python.just -d . _python-qc-files)
-	mapfile -t sage_files < <(just --justfile {{justfile()}} -d . _sage-qc-files)
+	python_files_output="$(just -f {{justfiles}}/python.just -d . _python-qc-files)"
+	python_files=()
+	if [ -n "$python_files_output" ]; then
+		mapfile -t python_files <<<"$python_files_output"
+	fi
+	sage_files_output="$(just --justfile {{justfile()}} -d . _sage-qc-files)"
+	sage_files=()
+	if [ -n "$sage_files_output" ]; then
+		mapfile -t sage_files <<<"$sage_files_output"
+	fi
 	generated_sage_python_files=()
 	whitelist_file="{{artifacts}}/vulture_whitelist.py"
 	if [ "${#python_files[@]}" -eq 0 ] && [ "${#sage_files[@]}" -eq 0 ]; then
@@ -284,9 +311,17 @@ _sage-pytest:
 
 	# Collect only files owned by this repository; the shared discovery boundary
 	# excludes gitlinks and independently initialized nested repositories.
-	mapfile -t sage_test_files < <(just --justfile {{justfile()}} -d . _sage-test-files)
+	sage_test_files_output="$(just --justfile {{justfile()}} -d . _sage-test-files)"
+	sage_test_files=()
+	if [ -n "$sage_test_files_output" ]; then
+		mapfile -t sage_test_files <<<"$sage_test_files_output"
+	fi
 	# Also collect any .py test files (mixed projects).
-	mapfile -t py_test_files < <(just --justfile {{justfile()}} -d . _sage-python-test-files)
+	py_test_files_output="$(just --justfile {{justfile()}} -d . _sage-python-test-files)"
+	py_test_files=()
+	if [ -n "$py_test_files_output" ]; then
+		mapfile -t py_test_files <<<"$py_test_files_output"
+	fi
 
 	if [ "${#sage_test_files[@]}" -eq 0 ] && [ "${#py_test_files[@]}" -eq 0 ]; then
 		echo "ERROR: pytest: no test files found (.sage or .py)."
@@ -356,8 +391,16 @@ _sage-pytest-coverage:
 	echo "# Same preparse flow as _sage-pytest, run under coverage.py inside Sage's"
 	echo "# Python (uvx CPython cannot import sage.*); emits coverage.xml for diff-cover."
 	sage_bin="$(just --justfile {{justfile()}} -d . _sage-bin)"
-	mapfile -t sage_test_files < <(just --justfile {{justfile()}} -d . _sage-test-files)
-	mapfile -t py_test_files < <(just --justfile {{justfile()}} -d . _sage-python-test-files)
+	sage_test_files_output="$(just --justfile {{justfile()}} -d . _sage-test-files)"
+	sage_test_files=()
+	if [ -n "$sage_test_files_output" ]; then
+		mapfile -t sage_test_files <<<"$sage_test_files_output"
+	fi
+	py_test_files_output="$(just --justfile {{justfile()}} -d . _sage-python-test-files)"
+	py_test_files=()
+	if [ -n "$py_test_files_output" ]; then
+		mapfile -t py_test_files <<<"$py_test_files_output"
+	fi
 	if [ "${#sage_test_files[@]}" -eq 0 ] && [ "${#py_test_files[@]}" -eq 0 ]; then
 		echo "ERROR: pytest/coverage: no test files found (.sage or .py)."
 		"{{artifacts}}/scripts/emit-test-writing-directive.sh"
@@ -470,8 +513,16 @@ _sage-ast-grep:
 	echo "# Bans runtime type introspection (hasattr/getattr/setattr/delattr, type(x) comparisons,"
 	echo "# __class__/__dict__ probing). Sage research code must declare the mathematical objects it"
 	echo "# expects through the type system, not discover them at runtime."
-	mapfile -t python_files < <(just -f {{justfiles}}/python.just -d . _python-qc-files)
-	mapfile -t sage_files < <(just --justfile {{justfile()}} -d . _sage-qc-files)
+	python_files_output="$(just -f {{justfiles}}/python.just -d . _python-qc-files)"
+	python_files=()
+	if [ -n "$python_files_output" ]; then
+		mapfile -t python_files <<<"$python_files_output"
+	fi
+	sage_files_output="$(just --justfile {{justfile()}} -d . _sage-qc-files)"
+	sage_files=()
+	if [ -n "$sage_files_output" ]; then
+		mapfile -t sage_files <<<"$sage_files_output"
+	fi
 	scan_files=("${python_files[@]}")
 	if [ "${#python_files[@]}" -eq 0 ] && [ "${#sage_files[@]}" -eq 0 ]; then
 		echo "ERROR: ast-grep duck-typing audit: no Python or Sage files found in a Sage project."

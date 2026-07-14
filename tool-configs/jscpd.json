@@ -1,6 +1,8 @@
 {
   "threshold": 10,
-  "reporters": ["console"],
+  "reporters": [
+    "console"
+  ],
   "ignore": [
     "**/*.test.ts",
     "**/*.spec.ts",
@@ -32,7 +34,9 @@
     "**/.claude/worktrees/**",
     "**/vendor/**",
     "**/third_party/**",
-    "**/venv/**"
+    "**/venv/**",
+    "**/scripts/**",
+    "**/notebooks/**"
   ],
   "absolute": true,
   "gitignore": true

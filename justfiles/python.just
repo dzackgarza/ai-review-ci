@@ -59,10 +59,15 @@ setup:
 _python-qc-files:
 	#!/usr/bin/env bash
 	set -euo pipefail
+	exclude_dirs_output="$(uv run {{artifacts}}/scripts/read_qc_excludes.py {{configs}}/qc-excludes.toml)"
+	exclude_dirs=()
+	if [ -n "$exclude_dirs_output" ]; then
+		mapfile -t exclude_dirs <<<"$exclude_dirs_output"
+	fi
 	exclude_args=()
-	while IFS= read -r dir; do
+	for dir in "${exclude_dirs[@]}"; do
 		exclude_args+=(-g "!**/$dir/**")
-	done < <(uv run {{artifacts}}/scripts/read_qc_excludes.py {{configs}}/qc-excludes.toml)
+	done
 	rg --files \
 		-g '*.py' \
 		-g '!*.sage.py' \
@@ -75,7 +80,11 @@ _python-syntax:
 	echo "============================="
 	echo "=== Running: Python syntax validation ==="
 	echo "# Compiles Python source with the configured target interpreter before linting or analysis"
-	if ! mapfile -t python_files < <(just --justfile {{justfile()}} -d . _python-qc-files 2>/dev/null); then :; fi
+	python_files_output="$(just --justfile {{justfile()}} -d . _python-qc-files)"
+	python_files=()
+	if [ -n "$python_files_output" ]; then
+		mapfile -t python_files <<<"$python_files_output"
+	fi
 	if [ "${#python_files[@]}" -eq 0 ]; then
 		echo "ERROR: Python syntax validation: no Python files found in a Python project."
 		"{{artifacts}}/scripts/emit-triage-directive.sh"
@@ -247,7 +256,11 @@ _normalize: _install-tools
 	echo "============================="
 	echo "=== Running: ruff format and check (auto-fix) ==="
 	echo "# Enforces PEP 8 style + auto-fixes common issues (import sorting, unused imports, pyupgrade patterns)"
-	if ! mapfile -t python_files < <(just --justfile {{justfile()}} -d . _python-qc-files 2>/dev/null); then :; fi
+	python_files_output="$(just --justfile {{justfile()}} -d . _python-qc-files)"
+	python_files=()
+	if [ -n "$python_files_output" ]; then
+		mapfile -t python_files <<<"$python_files_output"
+	fi
 	if [ "${#python_files[@]}" -eq 0 ]; then
 		echo "ERROR: ruff normalization: no Python files found in a Python project."
 		"{{artifacts}}/scripts/emit-triage-directive.sh"
@@ -383,7 +396,11 @@ _vulture: _install-tools
 	echo "============================="
 	echo "=== Running: vulture dead code detection ==="
 	echo "# Finds unused code (functions, classes, variables) that can be safely removed"
-	if ! mapfile -t python_files < <(just --justfile {{justfile()}} -d . _python-qc-files 2>/dev/null); then :; fi
+	python_files_output="$(just --justfile {{justfile()}} -d . _python-qc-files)"
+	python_files=()
+	if [ -n "$python_files_output" ]; then
+		mapfile -t python_files <<<"$python_files_output"
+	fi
 	whitelist_file="{{artifacts}}/vulture_whitelist.py"
 	if [ "${#python_files[@]}" -eq 0 ]; then
 		echo "ERROR: vulture: no Python files found in a Python project."
@@ -428,10 +445,15 @@ _deptry: _install-tools
 	# qc-excludes.toml is the single source of truth for never-scanned
 	# directories; deptry takes path regexes, so literal dots are escaped
 	# and glob stars widen to `.*`.
-	while IFS= read -r exclude_dir; do
+	exclude_dirs_output="$(uv run --no-project python "{{artifacts}}/scripts/read_qc_excludes.py" "{{configs}}/qc-excludes.toml")"
+	exclude_dirs=()
+	if [ -n "$exclude_dirs_output" ]; then
+		mapfile -t exclude_dirs <<<"$exclude_dirs_output"
+	fi
+	for exclude_dir in "${exclude_dirs[@]}"; do
 		exclude_regex="${exclude_dir//./\\.}"
 		deptry_args+=(--extend-exclude "(^|.*/)${exclude_regex//\*/.*}")
-	done < <(uv run --no-project python "{{artifacts}}/scripts/read_qc_excludes.py" "{{configs}}/qc-excludes.toml")
+	done
 	first_party_modules_output="$(uv run --no-project python "{{artifacts}}/scripts/python_qc_metadata.py" first-party-modules .)"
 	if [ -n "$first_party_modules_output" ]; then
 		mapfile -t first_party_modules <<<"$first_party_modules_output"
@@ -461,7 +483,11 @@ _ast-grep: _install-tools
 	echo "============================="
 	echo "=== Running: ast-grep code quality audit ==="
 	echo "# Custom AST rules for fraud detection (boolean assignment, loops without asserts, numeric bounds, self-reinforcing prints)"
-	if ! mapfile -t python_files < <(just --justfile {{justfile()}} -d . _python-qc-files 2>/dev/null); then :; fi
+	python_files_output="$(just --justfile {{justfile()}} -d . _python-qc-files)"
+	python_files=()
+	if [ -n "$python_files_output" ]; then
+		mapfile -t python_files <<<"$python_files_output"
+	fi
 	if [ "${#python_files[@]}" -eq 0 ]; then
 		echo "ERROR: ast-grep: no Python files found in a Python project."
 		"{{artifacts}}/scripts/emit-triage-directive.sh"
@@ -490,7 +516,11 @@ _jscpd-python:
 	echo "============================="
 	echo "=== Running: jscpd copy-paste detection ==="
 	echo "# Finds duplicate code blocks across the codebase that may indicate copypaste or missing refactoring"
-	if ! mapfile -t python_files < <(just --justfile {{justfile()}} -d . _python-qc-files 2>/dev/null); then :; fi
+	python_files_output="$(just --justfile {{justfile()}} -d . _python-qc-files)"
+	python_files=()
+	if [ -n "$python_files_output" ]; then
+		mapfile -t python_files <<<"$python_files_output"
+	fi
 	if [ "${#python_files[@]}" -eq 0 ]; then
 		echo "ERROR: jscpd: no Python files found in a Python project."
 		"{{artifacts}}/scripts/emit-triage-directive.sh"
@@ -515,7 +545,11 @@ _lizard-python ccn="7": _install-tools
 	echo "============================="
 	echo "=== Running: lizard complexity analysis ==="
 	echo "# Computes cyclomatic complexity number (CCN) and line count to flag overly complex functions"
-	if ! mapfile -t python_files < <(just --justfile {{justfile()}} -d . _python-qc-files 2>/dev/null); then :; fi
+	python_files_output="$(just --justfile {{justfile()}} -d . _python-qc-files)"
+	python_files=()
+	if [ -n "$python_files_output" ]; then
+		mapfile -t python_files <<<"$python_files_output"
+	fi
 	if [ "${#python_files[@]}" -eq 0 ]; then
 		echo "ERROR: lizard: no Python files found in a Python project."
 		"{{artifacts}}/scripts/emit-triage-directive.sh"

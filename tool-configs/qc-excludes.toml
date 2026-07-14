@@ -1,7 +1,8 @@
 # QC vendor/external directory exclusions — single source of truth.
 #
-# Directories listed here contain third-party, generated, or vendored code
-# that must never be linted, type-checked, scanned, or analyzed by any QC tool.
+# Directories listed here contain third-party, generated, vendored, or
+# user-authored exploratory code that must never be linted, type-checked,
+# scanned, formatted, or analyzed by generic QC.
 #
 # UNION of all excepted directories across:
 #   - justfile-python     _python-qc-files   (-g '!**/dir/**')
@@ -52,4 +53,9 @@ directories = [
     "vendor",
     "third_party",
     "venv",
+    # Research scripts and notebooks are user-authored exploratory artifacts,
+    # not QC-owned product code. Generic checkers must not rewrite or diagnose
+    # them; research-specific tooling owns their validation.
+    "scripts",
+    "notebooks",
 ]

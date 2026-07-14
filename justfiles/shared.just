@@ -31,10 +31,15 @@ _format-structured-text:
 	echo "============================="
 	echo "=== Running: structured text formatting ==="
 	echo "# Formats Markdown (flowmark), JSON, and YAML (prettier) before agents spend time on whitespace"
+	exclude_dirs_output="$(uv run {{artifacts}}/scripts/read_qc_excludes.py {{configs}}/qc-excludes.toml)"
+	exclude_dirs=()
+	if [ -n "$exclude_dirs_output" ]; then
+		mapfile -t exclude_dirs <<<"$exclude_dirs_output"
+	fi
 	prune_args=()
-	while IFS= read -r dir; do
+	for dir in "${exclude_dirs[@]}"; do
 		prune_args+=(-path "./$dir" -o -path "*/$dir" -o -path "*/$dir/*" -o)
-	done < <(uv run {{artifacts}}/scripts/read_qc_excludes.py {{configs}}/qc-excludes.toml)
+	done
 	if [ "${#prune_args[@]}" -eq 0 ]; then
 		echo "ERROR: qc-excludes.toml produced no exclusions for structured text formatting."
 		"{{artifacts}}/scripts/emit-triage-directive.sh"
@@ -85,10 +90,20 @@ _semgrep-autofix:
 	echo "============================="
 	echo "=== Running: semgrep auto-fix ==="
 	echo "# Applies Semgrep autofixes; push-tier Semgrep verification owns remaining findings"
+	exclude_dirs_output="$(uv run {{artifacts}}/scripts/read_qc_excludes.py {{configs}}/qc-excludes.toml)"
+	exclude_dirs=()
+	if [ -n "$exclude_dirs_output" ]; then
+		mapfile -t exclude_dirs <<<"$exclude_dirs_output"
+	fi
+	exclude_args=()
+	for dir in "${exclude_dirs[@]}"; do
+		exclude_args+=("--exclude=$dir")
+	done
 	if uvx --from semgrep semgrep scan \
 		--config={{configs}}/semgrep.yml \
 		--config=p/ci \
 		--exclude=codeql-db \
+		"${exclude_args[@]}" \
 		--scan-unknown-extensions \
 		--autofix; then
 		:
@@ -363,7 +378,16 @@ _ast-grep:
 	echo "# Structural code pattern analysis for bridge-burning policy violations"
 	sg_config="{{configs}}/ast-grep/sgconfig.yml"
 	if [ -f "$sg_config" ]; then
-		if npx -y --package @ast-grep/cli ast-grep scan --config "$sg_config" .; then
+		exclude_dirs_output="$(uv run {{artifacts}}/scripts/read_qc_excludes.py {{configs}}/qc-excludes.toml)"
+		exclude_dirs=()
+		if [ -n "$exclude_dirs_output" ]; then
+			mapfile -t exclude_dirs <<<"$exclude_dirs_output"
+		fi
+		ast_grep_globs=()
+		for dir in "${exclude_dirs[@]}"; do
+			ast_grep_globs+=(--globs "!**/$dir/**")
+		done
+		if npx -y --package @ast-grep/cli ast-grep scan --config "$sg_config" "${ast_grep_globs[@]}" .; then
 			:
 		else
 			ec=$?
@@ -395,6 +419,40 @@ _vibecheck:
 	echo "============================="
 	echo "=== Running: vibecheck anti-slop pattern detection ==="
 	echo "# Runs qinnovates/vibecheck-slop-stopper via uvx against the project root"
+	# vibecheck delegates file discovery to ripgrep. Install the QC-owned
+	# exclusions as a temporary project-root .ignore file so ripgrep excludes
+	# user-authored research scripts and notebooks before it parses them.
+	ignore_file=".ignore"
+	had_preexisting_ignore=0
+	ignore_backup=""
+	if [ -L "$ignore_file" ]; then
+		echo "ERROR: cannot temporarily install QC exclusions: $ignore_file is a symlink."
+		echo "       Refusing to follow a user-owned symlink while configuring vibecheck."
+		"{{artifacts}}/scripts/emit-triage-directive.sh"
+		exit 1
+	fi
+	if [ -e "$ignore_file" ]; then
+		had_preexisting_ignore=1
+		if ! ignore_backup="$(mktemp)" || ! cp "$ignore_file" "$ignore_backup"; then
+			echo "ERROR: failed to back up existing $ignore_file before running vibecheck."
+			"{{artifacts}}/scripts/emit-triage-directive.sh"
+			exit 1
+		fi
+	fi
+	restore_ignore() {
+		if [ "$had_preexisting_ignore" -eq 1 ]; then
+			cat "$ignore_backup" > "$ignore_file"
+			rm -f "$ignore_backup"
+		else
+			rm -f "$ignore_file"
+		fi
+	}
+	trap restore_ignore EXIT
+	if [ "$had_preexisting_ignore" -eq 1 ]; then
+		cat "$ignore_backup" > "$ignore_file"
+	fi
+	printf '\n' >> "$ignore_file"
+	uv run {{artifacts}}/scripts/read_qc_excludes.py {{configs}}/qc-excludes.toml >> "$ignore_file"
 	if raw_output=$(uvx --from git+https://github.com/qinnovates/vibecheck-slop-stopper vibecheck . --severity high --json); then
 		ec=0
 	else
@@ -412,7 +470,11 @@ _vibecheck:
 		exit "$ec"
 	fi
 	filter_input=$(mktemp)
-	trap 'rm -f -- "$filter_input"' EXIT
+	cleanup_vibecheck() {
+		rm -f -- "$filter_input"
+		restore_ignore
+	}
+	trap cleanup_vibecheck EXIT
 	printf '%s\n' "$raw_output" > "$filter_input"
 	filter_result=$(python3 - "$filter_input" <<-'PY'
 	import json
@@ -571,7 +633,17 @@ _aislop:
 	echo "============================="
 	echo "=== Running: aislop AI-slop quality scan ==="
 	echo "# Runs scanaislop.com's aislop scanner; blocks on error-severity findings (warnings surface but do not block)"
-	if raw_output=$(npx -y aislop@latest scan --json .); then
+	exclude_dirs_output="$(uv run {{artifacts}}/scripts/read_qc_excludes.py {{configs}}/qc-excludes.toml)"
+	exclude_dirs=()
+	if [ -n "$exclude_dirs_output" ]; then
+		mapfile -t exclude_dirs <<<"$exclude_dirs_output"
+	fi
+	aislop_exclude_patterns=()
+	for dir in "${exclude_dirs[@]}"; do
+		aislop_exclude_patterns+=("**/$dir/**")
+	done
+	aislop_exclude_csv="$(IFS=,; printf '%s' "${aislop_exclude_patterns[*]}")"
+	if raw_output=$(npx -y aislop@latest scan --json --exclude "$aislop_exclude_csv" .); then
 		:
 	else
 		ec=$?

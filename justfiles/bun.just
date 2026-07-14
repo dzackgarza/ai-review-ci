@@ -138,7 +138,17 @@ _biome:
 _ast-grep:
 	#!/usr/bin/env bash
 	set -euo pipefail
-	npx -y --package @ast-grep/cli ast-grep scan --config {{configs}}/sgconfig.yml
+	js_files_output="$(just --justfile {{justfile()}} -d . _js-qc-files)"
+	js_files=()
+	if [ -n "$js_files_output" ]; then
+		mapfile -t js_files <<<"$js_files_output"
+	fi
+	if [ "${#js_files[@]}" -eq 0 ]; then
+		echo "ERROR: ast-grep: no JS/TS files found."
+		"{{artifacts}}/scripts/emit-triage-directive.sh"
+		exit 1
+	fi
+	npx -y --package @ast-grep/cli ast-grep scan --config {{configs}}/sgconfig.yml "${js_files[@]}"
 
 _eslint: _eslint-deps
 	#!/usr/bin/env bash
@@ -210,7 +220,11 @@ _jscpd-bun:
 	echo "============================="
 	echo "=== Running: jscpd copy-paste detection ==="
 	echo "# Finds duplicate code blocks across JS/TS files"
-	mapfile -t js_files < <(just --justfile {{justfile()}} -d . _js-qc-files)
+	js_files_output="$(just --justfile {{justfile()}} -d . _js-qc-files)"
+	js_files=()
+	if [ -n "$js_files_output" ]; then
+		mapfile -t js_files <<<"$js_files_output"
+	fi
 	if [ "${#js_files[@]}" -eq 0 ]; then
 		echo "ERROR: jscpd: no JS/TS files found."
 		"{{artifacts}}/scripts/emit-triage-directive.sh"
@@ -223,20 +237,30 @@ _jscpd-bun:
 _lizard-bun:
 	#!/usr/bin/env bash
 	set -euo pipefail
+	exclude_dirs_output="$(uv run {{artifacts}}/scripts/read_qc_excludes.py {{configs}}/qc-excludes.toml)"
+	exclude_dirs=()
+	if [ -n "$exclude_dirs_output" ]; then
+		mapfile -t exclude_dirs <<<"$exclude_dirs_output"
+	fi
 	lizard_excludes=()
-	while IFS= read -r dir; do
+	for dir in "${exclude_dirs[@]}"; do
 		lizard_excludes+=(-x "*/$dir/*")
-	done < <(uv run {{artifacts}}/scripts/read_qc_excludes.py {{configs}}/qc-excludes.toml)
+	done
 	uvx lizard . -l typescript -C 8 -L 200 -a 7 -i 0 \
 		"${lizard_excludes[@]}"
 
 _js-qc-files:
 	#!/usr/bin/env bash
 	set -euo pipefail
+	exclude_dirs_output="$(just --justfile {{justfile()}} -d . _qc-excludes)"
+	exclude_dirs=()
+	if [ -n "$exclude_dirs_output" ]; then
+		mapfile -t exclude_dirs <<<"$exclude_dirs_output"
+	fi
 	exclude_args=()
-	while IFS= read -r dir; do
+	for dir in "${exclude_dirs[@]}"; do
 		exclude_args+=(-g "!**/$dir/**")
-	done < <(just --justfile {{justfile()}} -d . _qc-excludes)
+	done
 	rg --files \
 		-g '*.ts' \
 		-g '*.tsx' \
@@ -252,7 +276,11 @@ _slop-scan:
 	echo "============================="
 	echo "=== Running: slop-scan JS/TS anti-pattern detection ==="
 	echo "# Scans JS/TS files for AI-associated slop patterns (error-swallowing, duplicate signatures, generic casts, etc.)"
-	mapfile -t js_files < <(just --justfile {{justfile()}} -d . _js-qc-files)
+	js_files_output="$(just --justfile {{justfile()}} -d . _js-qc-files)"
+	js_files=()
+	if [ -n "$js_files_output" ]; then
+		mapfile -t js_files <<<"$js_files_output"
+	fi
 	if [ "${#js_files[@]}" -eq 0 ]; then
 		echo "ERROR: slop-scan: no JS/TS files found in a TypeScript project."
 		"{{artifacts}}/scripts/emit-triage-directive.sh"

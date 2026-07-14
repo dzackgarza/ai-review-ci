@@ -67,6 +67,10 @@ exclude = [
     "**/third_party/**",
     "venv/*",
     "**/venv/**",
+    "scripts/*",
+    "**/scripts/**",
+    "notebooks/*",
+    "**/notebooks/**",
 ]
 
 [grain.python]
