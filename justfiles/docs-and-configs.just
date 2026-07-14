@@ -22,12 +22,12 @@ _check-links:
 
 # Reformat Markdown and structured configuration before commit.
 test-commit:
-    @just _format-structured-text
+    @just --justfile {{ justfile() }} _format-structured-text
 
 # Validate tracked documentation links before push.
 test-push:
-    @just _check-links
+    @just --justfile {{ justfile() }} _check-links
 
 # Validate tracked documentation links in CI.
 test-ci:
-    @just _check-links
+    @just --justfile {{ justfile() }} _check-links

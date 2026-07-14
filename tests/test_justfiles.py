@@ -2896,9 +2896,11 @@ def test_docs_and_configs_qc_routes_formatting_and_link_validation(tmp_path: pat
         check=False,
     )
 
+    profile_justfile = str(ROOT / "justfiles" / "docs-and-configs.just")
+
     assert commit.returncode == 0, commit.stderr
-    assert "_format-structured-text" in commit.stderr
+    assert f"--justfile {profile_justfile} _format-structured-text" in commit.stderr
     assert push.returncode == 0, push.stderr
-    assert "_check-links" in push.stderr
+    assert f"--justfile {profile_justfile} _check-links" in push.stderr
     assert links.returncode == 0, links.stderr
     assert "lychee --no-progress" in links.stderr
