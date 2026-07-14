@@ -71,6 +71,8 @@ exclude = [
     "**/archives/**",
     "src.bak/*",
     "**/src.bak/**",
+    "scripts/*",
+    "**/scripts/**",
     "notebooks/*",
     "**/notebooks/**",
 ]

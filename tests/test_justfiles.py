@@ -290,8 +290,19 @@ def test_qc_file_selection_excludes_user_authored_scripts_and_notebooks(
     assert result.stdout.splitlines() == [expected_active]
 
 
+@pytest.mark.parametrize(
+    ("justfile_name", "recipe"),
+    [
+        ("python.just", "_python-qc-files"),
+        ("sage.just", "_sage-qc-files"),
+        ("bun.just", "_js-qc-files"),
+        ("rust.just", "_rust-qc-files"),
+    ],
+)
 def test_qc_file_selection_fails_loudly_when_exclusion_lookup_fails(
     tmp_path: pathlib.Path,
+    justfile_name: str,
+    recipe: str,
 ) -> None:
     project = tmp_path / "project"
     (project / "src").mkdir(parents=True)
@@ -303,7 +314,7 @@ def test_qc_file_selection_fails_loudly_when_exclusion_lookup_fails(
     uv_shim.chmod(0o755)
     env = os.environ | {"PATH": f"{shim_dir}:{os.environ['PATH']}"}
 
-    result = run_just(ROOT / "justfiles" / "python.just", project, "_python-qc-files", env=env)
+    result = run_just(ROOT / "justfiles" / justfile_name, project, recipe, env=env)
 
     output = result.stdout + result.stderr
     assert result.returncode != 0, output
@@ -369,6 +380,7 @@ def test_sync_qc_excludes_preserves_non_owned_artifacts_and_updates_grain(
         "jscpd.json",
         "slop-scan.config.json",
         "pyright-local.json",
+        "slopconfig.yaml",
         "grain.toml",
     ):
         shutil.copy(ROOT / "tool-configs" / file_name, qc_root / file_name)
@@ -396,6 +408,8 @@ def test_sync_qc_excludes_preserves_non_owned_artifacts_and_updates_grain(
     grain = tomllib.loads((qc_root / "grain.toml").read_text())
     assert "fail_on" in grain["grain"]
     assert "central-owned/*" in grain["grain"]["exclude"]
+    slopconfig = yaml.safe_load((qc_root / "slopconfig.yaml").read_text())
+    assert slopconfig["ignore"] == ["central-owned/**", "**/central-owned/**"]
     assert eslint_config.read_text() == "export default [{ ignores: ['sentinel'] }];\n"
     assert rust_justfile.read_text() == "# rust sentinel\n"
 
@@ -675,6 +689,29 @@ def test_shared_ast_grep_uses_official_cli_and_central_rules_without_parsing_mar
     assert result.returncode != 0, output
     assert "no-dynamic-import" in output
     assert "SyntaxError" not in output
+
+
+def test_shared_ast_grep_excludes_user_authored_scripts_and_notebooks(
+    tmp_path: pathlib.Path,
+) -> None:
+    project = tmp_path / "project"
+    source_dir = project / "src"
+    script_dir = project / "research" / "scripts"
+    notebook_dir = project / "notebooks"
+    source_dir.mkdir(parents=True)
+    script_dir.mkdir(parents=True)
+    notebook_dir.mkdir(parents=True)
+    (source_dir / "app.py").write_text("VALUE = 1\n")
+    # The rule is intentionally real and blocking. A generic AST scan must
+    # not turn an exploratory research artifact into a defect in that artifact.
+    (script_dir / "derivation.py").write_text("CONFIG_VALUE = Field(default=1)\n")
+    (notebook_dir / "exploration.py").write_text("CONFIG_VALUE = Field(default=1)\n")
+
+    result = run_just(ROOT / "justfiles" / "shared.just", project, "_ast-grep")
+
+    output = result.stdout + result.stderr
+    assert result.returncode == 0, output
+    assert "no-field-default" not in output
 
 
 def test_python_ast_grep_uses_official_cli_and_central_rules(
@@ -1014,6 +1051,37 @@ def vibecheck_payload(*findings: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def test_vibecheck_installs_central_exclusions_without_persisting_them(
+    tmp_path: pathlib.Path,
+) -> None:
+    project = tmp_path / "vibe-project"
+    project.mkdir()
+    ignore_file = project / ".ignore"
+    sentinel = "user-owned-pattern"
+    ignore_file.write_text(sentinel)
+    fake_bin = tmp_path / "fake-bin"
+    fake_bin.mkdir()
+    uvx = fake_bin / "uvx"
+    uvx.write_text(
+        "#!/usr/bin/env bash\n"
+        "for expected in scripts notebooks; do\n"
+        "  if ! grep -Fxq \"$expected\" .ignore; then\n"
+        "    echo \"missing temporary exclusion: $expected\" >&2\n"
+        "    exit 86\n"
+        "  fi\n"
+        "done\n"
+        f"cat <<'JSON'\n{json.dumps(vibecheck_payload())}\nJSON\n",
+    )
+    uvx.chmod(0o755)
+    env = os.environ | {"PATH": f"{fake_bin}:{os.environ['PATH']}"}
+
+    result = run_just(ROOT / "justfiles" / "shared.just", project, "_vibecheck", env=env)
+
+    output = result.stdout + result.stderr
+    assert result.returncode == 0, output
+    assert ignore_file.read_text() == sentinel
+
+
 def test_vibecheck_ignores_g141_non_comment_matches(tmp_path: pathlib.Path) -> None:
     project = tmp_path / "vibe-project"
     project.mkdir()
@@ -1111,6 +1179,33 @@ def aislop_payload(*diagnostics: dict[str, Any]) -> dict[str, Any]:
         },
         "diagnostics": list(diagnostics),
     }
+
+
+def test_aislop_receives_central_script_and_notebook_exclusions(
+    tmp_path: pathlib.Path,
+) -> None:
+    project = tmp_path / "aislop-project"
+    project.mkdir()
+    fake_bin = tmp_path / "fake-bin"
+    fake_bin.mkdir()
+    npx = fake_bin / "npx"
+    npx.write_text(
+        "#!/usr/bin/env bash\n"
+        "for expected in '**/scripts/**' '**/notebooks/**'; do\n"
+        "  case \"$*\" in\n"
+        "    *\"$expected\"*) ;;\n"
+        "    *) echo \"missing aislop exclusion: $expected\" >&2; exit 86 ;;\n"
+        "  esac\n"
+        "done\n"
+        f"cat <<'JSON'\n{json.dumps(aislop_payload())}\nJSON\n",
+    )
+    npx.chmod(0o755)
+    env = os.environ | {"PATH": f"{fake_bin}:{os.environ['PATH']}"}
+
+    result = run_just(ROOT / "justfiles" / "shared.just", project, "_aislop", env=env)
+
+    output = result.stdout + result.stderr
+    assert result.returncode == 0, output
 
 
 def test_aislop_blocks_on_error_severity_findings(tmp_path: pathlib.Path) -> None:

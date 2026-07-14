@@ -59,6 +59,7 @@
     "**/venv/**",
     "**/archives/**",
     "**/src.bak/**",
+    "**/scripts/**",
     "**/notebooks/**"
   ],
   "ignoreDependencies": [

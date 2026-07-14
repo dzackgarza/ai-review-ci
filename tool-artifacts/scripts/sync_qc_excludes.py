@@ -2,6 +2,7 @@
 # /// script
 # requires-python = ">=3.11"
 # dependencies = [
+#   "pyyaml>=6.0.2",
 #   "tomlkit>=0.13.2",
 # ]
 # ///
@@ -24,6 +25,7 @@ from pathlib import Path
 from typing import Never
 
 import tomlkit
+import yaml
 
 # ── Tool config descriptors ──────────────────────────────────────────────────
 # Each entry describes how to update one config file.
@@ -88,6 +90,16 @@ configs: list[ToolConfig] = [
         "format": "json",
         "key": ["exclude"],
         "is_dir_fn": lambda d: f"**/{d}",
+        "static": [],
+    },
+    {
+        "path": "slopconfig.yaml",
+        "format": "yaml",
+        "key": ["ignore"],
+        # The detector's config accepts gitignore-style globs. Emit both
+        # root and nested forms so user-authored research trees stay outside
+        # the scanner wherever they occur in a target repository.
+        "is_dir_fn": lambda d: [f"{d}/**", f"**/{d}/**"],
         "static": [],
     },
     {
@@ -209,6 +221,34 @@ def write_toml_config(qc_root: Path, cfg: ToolConfig, dirs: list[str]) -> None:
     print(f"  Updated {cfg['path']} ({len(entries)} entries)")
 
 
+def write_yaml_config(qc_root: Path, cfg: ToolConfig, dirs: list[str]) -> None:
+    path = qc_root / cfg["path"]
+    with path.open() as f:
+        data = yaml.safe_load(f)
+    if not isinstance(data, dict):
+        print(f"ERROR: {path} must contain a YAML mapping", file=sys.stderr)
+        sys.exit(1)
+
+    entries = _build_entries(cfg, dirs)
+    parent = data
+    for key in cfg["key"][:-1]:
+        candidate = parent.get(key)
+        if not isinstance(candidate, dict):
+            print(f"ERROR: {path} must define mapping key {key}", file=sys.stderr)
+            sys.exit(1)
+        parent = candidate
+    last_key = cfg["key"][-1]
+
+    if parent.get(last_key) == entries:
+        print(f"  No change: {cfg['path']}")
+        return
+
+    parent[last_key] = entries
+    with path.open("w") as f:
+        yaml.safe_dump(data, f, default_flow_style=False, sort_keys=False)
+    print(f"  Updated {cfg['path']} ({len(entries)} entries)")
+
+
 class _ArgumentParser(argparse.ArgumentParser):
     def error(self, message: str) -> Never:
         print(f"ERROR: {message}", file=sys.stderr)
@@ -244,6 +284,7 @@ def _print_dry_run_status() -> None:
 _CONFIG_WRITERS = {
     "json": write_json_config,
     "toml": write_toml_config,
+    "yaml": write_yaml_config,
 }
 
 
