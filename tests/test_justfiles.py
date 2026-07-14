@@ -5,6 +5,7 @@ import re
 import shlex
 import shutil
 import subprocess
+import sys
 import tomllib
 from typing import Any
 
@@ -91,6 +92,34 @@ def commit_without_hooks(project: pathlib.Path, message: str) -> None:
 
 def top_level_skill_dirs() -> list[pathlib.Path]:
     return sorted(path for path in (ROOT / "skills").iterdir() if path.is_dir() and (path / "SKILL.md").is_file())
+
+
+def test_yaml_check_uses_declared_project_environment(tmp_path: pathlib.Path) -> None:
+    ambient_environment = tmp_path / "ambient-python"
+    create_environment = subprocess.run(
+        [sys.executable, "-m", "venv", str(ambient_environment)],
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+    assert create_environment.returncode == 0, create_environment.stdout + create_environment.stderr
+
+    ambient_python = ambient_environment / "bin" / "python3"
+    yaml_probe = subprocess.run(
+        [str(ambient_python), "-c", "import yaml"],
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+    assert yaml_probe.returncode != 0, "test precondition requires an ambient interpreter without PyYAML"
+
+    env = os.environ.copy()
+    env["PATH"] = f"{ambient_environment / 'bin'}{os.pathsep}{env['PATH']}"
+    env.pop("VIRTUAL_ENV", None)
+
+    result = run_just(ROOT / "justfile", ROOT, "_check-yaml", env=env)
+
+    assert result.returncode == 0, result.stdout + result.stderr
 
 
 def test_install_skills_symlinks_every_top_level_skill(tmp_path: pathlib.Path) -> None:
