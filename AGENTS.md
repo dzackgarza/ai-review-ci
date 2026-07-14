@@ -43,6 +43,10 @@ Recreate the work from `origin/main` on an issue-scoped branch.
 - Do not patch a downstream repository first when a shared QC command runs in the wrong directory.
   Fix the central scaffold or central language justfile in this repository, then reinstall or recopy downstream only if the downstream file itself is stale.
 
+- Treat public gate recipe changes as an atomic central-and-downstream migration.
+  Updating the central justfiles, scaffolds, doctor, or global hooks is incomplete until every governed downstream default branch exposes the same public recipes.
+  `install-qc-scaffold` intentionally refuses to overwrite repo-owned justfiles, so a scaffold edit updates new installations only; explicitly roll the thin delegation block out to existing downstream repositories before a global hook begins calling the new recipe names.
+
 - Prove caller-root fixes with a red test before editing the scaffold or justfile.
   Use a real temporary target repository whose target-specific preflight failure differs from the failure produced in `~/ai-review-ci/justfiles`.
 

@@ -204,6 +204,7 @@ just install-qc-scaffold sage /path/to/new/repo
 
 The recipe copies files from `scaffolds/<profile>/` and refuses to overwrite existing files.
 Edit the tracked scaffold here when the standard project surface changes; do not copy sample snippets into downstream repos by hand.
+Because installed justfiles are repo-owned, changing a public gate recipe is an atomic rollout rather than an installer upgrade: update the central justfiles, scaffolds, doctor, and hooks, then commit the matching thin delegation recipes to every governed downstream default branch before the hook starts calling the new names.
 
 The scaffold contents are intentionally small.
 They install the repo-local command surface; the actual QC behavior remains global.
