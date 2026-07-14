@@ -4,6 +4,15 @@ Load this guide before implementing a design that reaches one of its pattern fam
 
 The same card serves both purposes: upfront it teaches the preferred construction; after a finding it explains the bad shape, required rearchitecture, and proof burden. Reviewers classify policy; fixers select the matching card.
 
+## Language Profiles
+
+Select the language profile before applying a card. The card owns the invariant and proof obligation; the profile owns the concrete construction and migration shape.
+
+- [[style-guide/python/SKILL|Python]] — Pydantic/dataclasses, enums, typed outcomes, and real Python boundaries.
+- [[style-guide/typescript/SKILL|TypeScript and Bun]] — Zod, discriminated unions, typed outcomes, and real TypeScript/Bun boundaries.
+- [[style-guide/bash/SKILL|Bash]] — explicit inputs, command boundaries, `case` modes, and observable command proof.
+- [[style-guide/sage/SKILL|SageMath]] — routing stub pending observed Sage-specific repairs.
+
 ## Policy-to-Style Routing
 
 | Route code | Policy findings | Preferred construction |
