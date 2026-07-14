@@ -29,7 +29,7 @@ A domain skill may narrow these policies for its domain but may not weaken them.
 It may not relax them (e.g., no skill may permit mocks or pytest-mock).
 
 **When a lower-ranked skill contradicts a higher-ranked skill, the higher-ranked skill wins.** If [[test-driven-development/SKILL|test-driven-development]] says "mocks if unavoidable" and [[test-guidelines/SKILL|test-guidelines]] says "no mocks, no exceptions," [[test-guidelines/SKILL|test-guidelines]] wins.
-If [[clean-code/SKILL|clean-code]] says "start with try/catch" and [[python-patterns/SKILL|python-patterns]] says "fail fast, no speculative try/catch," [[python-patterns/SKILL|python-patterns]] (as a domain skill narrowing tool-provisioning's fail-loud doctrine) wins.
+If [[code-patterns/legacy/clean-code/SKILL|clean-code]] says "start with try/catch" and [[code-patterns/legacy/python-patterns/SKILL|python-patterns]] says "fail fast, no speculative try/catch," [[code-patterns/legacy/python-patterns/SKILL|python-patterns]] (as a domain skill narrowing tool-provisioning's fail-loud doctrine) wins.
 
 The hierarchy is designed so that no skill below rank 3 can re-introduce mock seams, local QC reimplementation, or global tool installation.
 

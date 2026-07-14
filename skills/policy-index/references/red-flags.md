@@ -579,4 +579,4 @@ For the canonical inventory of these banned patterns and their allowed replaceme
 ## Remediation Boundary
 
 This detector-facing catalog names suspicious constructs and maps them to policy.
-Fixer-side remediation instructions live in `remediations.md` and are loaded only after triage assigns a `POLICY.*` code.
+Fixer-side remediation instructions live in `../../style-guide/references/style-guide-index.md` and are loaded only after triage assigns a `POLICY.*` code.

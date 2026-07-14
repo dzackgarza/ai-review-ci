@@ -17,7 +17,7 @@ You fix slop by reconstructing the narrative that produced it, identifying the c
 
 Remediation must strictly respect the **Bridge-Burning Policies** (defined in [[policy-index/SKILL#policy-registry|policy-index/SKILL.md]]). Any fix that introduces fallbacks, defaults, mocks, optional critical dependencies, or boolean flags to "remediate" a finding is violating policy and is considered laundering.
 
-For `POLICY.NO_EXCEPTION_CONTROL_FLOW`, load `policy-index/references/remediations.md` → `REMEDIATE.EXPLICIT_STATE_MODEL`. Reordering catches, narrowing exception types while retaining failure-selected routine behavior, or hiding the same guess-catch-retry tree in a helper is laundering. The fix must expose expected states, legal transitions, typed outcomes, and retry safety explicitly.
+For `POLICY.NO_EXCEPTION_CONTROL_FLOW`, load [[style-guide/references/style-guide-index|style-guide index]] → `REMEDIATE.EXPLICIT_STATE_MODEL`. Reordering catches, narrowing exception types while retaining failure-selected routine behavior, or hiding the same guess-catch-retry tree in a helper is laundering. The fix must expose expected states, legal transitions, typed outcomes, and retry safety explicitly.
 
 ## Slop Is Never Localized: The Blast Radius Rule
 
@@ -181,7 +181,7 @@ See `llm-failure-modes/documentation-failures.md` and the `L10`/`C9`/`T8` codes 
 In-place editing reseeds the same slop in cleaner prose.
 Agents do reliable greenfield work and unreliable brownfield work, so the only safe repair is to **force the brownfield job to look like a greenfield job**:
 
-1. **Encode the standard.** The skill that owns the artifact type must already state what a correct and an incorrect such artifact looks like ([[writing-documentation/SKILL|writing-documentation]], the [[plan/SKILL|plan]] skill, etc.). This is the priming, not the contaminated artifact.
+1. **Encode the standard.** The skill that owns the artifact type must already state what a correct and an incorrect such artifact looks like ([[writing/documentation/SKILL|writing-documentation]], the [[plan/SKILL|plan]] skill, etc.). This is the priming, not the contaminated artifact.
 2. **Adversarial requirement extraction (fresh agent).** A fresh agent, primed on the owning skill and *not* carrying the correction history, audits the contaminated artifact and extracts only the real, externally-verifiable, user-facing requirements and surviving facts.
    It must verify each surviving claim against inspected reality (code, data, command output, external sources), not against other generated documents.
    Anything that cannot be grounded is dropped, not relabeled.

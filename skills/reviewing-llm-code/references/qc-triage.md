@@ -67,7 +67,7 @@ Use this route only when the raw output lacks explicit `POLICY.*` findings.
 Spawn a subagent to determine policy-aligned dispositions.
 The subagent must:
 
-- Load the disposition policies explicitly: `policy-index` plus its references `red-flags.md`, `runtime-control-flow.md`, `policies.md`, and `test-proof-rules.md`; `anti-slop`; `reviewing-llm-code`; `bespoke-software-policy`; and `test-guidelines`. Do not give B the remediation index; it belongs to C.
+- Load the disposition policies explicitly: `policy-index` plus its references `red-flags.md`, `runtime-control-flow.md`, `policies.md`, and `test-proof-rules.md`; `anti-slop`; `reviewing-llm-code`; `bespoke-software-policy`; and `test-guidelines`. Do not give B the style-guide index; it belongs to C.
 - Receive only the raw findings and file/line locations.
   Do not include the orchestrator's verdict, leaning, explanation, root-cause theory, or proposed fix.
 - Determine for itself whether the raw output is a tool-execution failure, a tool finding, or cleared.
@@ -88,7 +88,7 @@ The subagent must:
 - Be a different agent from any disposition/review agent and from the orchestrator.
 - Receive only the policy-coded findings: file/line, snippet when present in the raw QC output, and `POLICY.*` code.
   Do not include B's prose, root-cause narrative, suggested fix, or the orchestrator's opinion.
-- Load the remediation policy index: `policy-index/references/remediations.md` (canonical home: `ai-review-ci` `skills/policy-index/references/remediations.md`) and `fixing-slop`.
+- Load the style-guide index: `style-guide/references/style-guide-index.md` (canonical home: `ai-review-ci` `skills/style-guide/references/style-guide-index.md`) and `fixing-slop`.
 - For each `POLICY.*` code, look up the matching `REMEDIATE.*` entry and derive the fix from the policy, not from another agent's suggestion.
 - Implement the remediation in the target repository only.
 - Verify with the target repository's `just test-ci` gate unless the emitted directive names another policy-sensitive gate.
@@ -128,7 +128,7 @@ For Route C, the dispatch may contain only:
 
 - policy-coded findings from the raw QC output or B's disposition list;
 - file/line locations and snippets that came from the raw QC output;
-- the instruction to load `policy-index/references/remediations.md` and `fixing-slop`;
+- the instruction to load `style-guide/references/style-guide-index.md` and `fixing-slop`;
 - the instruction to remediate according to the matching `REMEDIATE.*` entries.
 
 Do not include:
@@ -143,12 +143,12 @@ Do not include:
 | Behavior | Why | Instead |
 | --- | --- | --- |
 | Orchestrator reads `~/ai-review-ci/` during downstream triage | Gives the failing-code producer gate internals it can game | Present raw output, route mechanically, then delegate |
-| Orchestrator reads the remediation policy during downstream triage | That is C's job and contaminates routing | Tell C to load `policy-index/references/remediations.md` |
+| Orchestrator reads the remediation policy during downstream triage | That is C's job and contaminates routing | Tell C to load `style-guide/references/style-guide-index.md` |
 | Spawning a slop-report subagent for already policy-coded QC output | Repeats the report and delays remediation | Treat the raw `POLICY.*` output as the disposition artifact and spawn C |
 | Orchestrator forming/stating a finding disposition | The producer's self-judgment is inadmissible | Route without judgment |
 | Seeding B or C with a verdict, leaning, or proposed fix | Collapses independent review/remediation into confirmation of the orchestrator | Dispatch raw findings or policy-coded dispositions only |
 | B proposing remediation | Biases C toward B's preferred fix | B returns dispositions only |
-| C receiving B's prose or suggested fix | Destroys C's independent derivation from the remediation index | C gets only `VIOLATION -> POLICY.*` entries |
+| C receiving B's prose or suggested fix | Destroys C's independent derivation from the style-guide index | C gets only `VIOLATION -> POLICY.*` entries |
 | Routing a `test-commit` or `test-push` failure through this protocol | Turns a directly repairable local error into multi-agent review ceremony | Fix the reported object directly and rerun the same local gate |
 | Running isolated checks to verify CI remediation | Cherry-picks around the full acceptance gate | Run the target repo's `just test-ci` after remediation |
 | Adding bypass comments or suppressions | Hides symptoms without satisfying policy | Fix the policy violation |
@@ -166,5 +166,5 @@ Before reporting triage complete, these must be true:
 - [ ] The orchestrator did not inspect `~/ai-review-ci/` or the remediation policy during downstream triage.
 - [ ] The routing decision was mechanical: explicit `POLICY.*` output went directly to C; un-coded output went to B first.
 - [ ] If B ran, B returned dispositions only and no remediation.
-- [ ] C received only policy-coded findings, loaded the remediation policy index and `fixing-slop`, remediated from the matching `REMEDIATE.*` entries, and verified with the target repo's canonical QC command.
+- [ ] C received only policy-coded findings, loaded the style-guide index and `fixing-slop`, remediated from the matching `REMEDIATE.*` entries, and verified with the target repo's canonical QC command.
 - [ ] B and C, when both are used, were different agents.

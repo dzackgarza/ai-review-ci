@@ -13,7 +13,7 @@ They point here for policy codes, red flags, runtime control-flow rules, banned 
 
 Remediation instructions are deliberately separated from detector instructions.
 The agent that sees or classifies an issue must not see the preferred remediation, because that couples detection to fixing and trains local appeasement.
-Remediation lives in `references/remediations.md` and is loaded only by the remediation agent after triage assigns a policy code.
+The [[style-guide/SKILL|style guide]] is loaded before implementation; after triage, the fixer uses the same card selected by the policy code.
 
 ## Use Protocol
 
@@ -27,8 +27,8 @@ Remediation lives in `references/remediations.md` and is loaded only by the reme
 - Do not remediate from the detector message alone.
 - State the weakened obligation before editing.
 - Use a separate reviewer/fixer context when QC triage requires it.
-- If acting as the issue-seeing reviewer, do not open `references/remediations.md`.
-- If acting as the remediation/fixer agent, open `references/remediations.md` only after receiving the policy code from triage.
+- If acting as the issue-seeing reviewer, classify the policy finding without proposing a card or patch.
+- If acting as the remediation/fixer agent, use the policy code to select the matching style card before changing code.
 - Treat local token replacement as invalid unless the remediation reference explicitly says the finding is mechanical.
 
 ## Database Files
@@ -40,7 +40,7 @@ Remediation lives in `references/remediations.md` and is loaded only by the reme
 | `references/runtime-control-flow.md` | Reviewers, detector authors, and fixers after code assignment | Runtime branch admission rules, banned branch shapes, ADDD assertion style, and examples. |
 | `references/error-handling-as-control-flow.md` | Reviewers, detector authors, test writers, and coding-style authors | Canonical rationale for banning exception-driven ordinary control flow and guess-check-retry state probing. |
 | `references/test-proof-rules.md` | Test writers, test reviewers, detector authors | Banned test/assertion shapes and proof-admission rules. |
-| `references/remediations.md` | Fixers only after triage | Remediation registry and detailed restoration procedures keyed by policy/remediation code. |
+| [[style-guide/references/style-guide-index|style-guide index]] | Before implementation and during repair | Canonical preferred constructions, bad patterns, rearchitecture, and proof obligations. |
 
 ## Policy Categories
 
@@ -124,16 +124,16 @@ A policy exception requires all of:
 | Why is exception-driven ordinary control flow banned, and what explicit models does it displace? | `references/error-handling-as-control-flow.md` and `POLICY.NO_EXCEPTION_CONTROL_FLOW`. |
 | What is the coding style for assertions and invariant failures? | `references/runtime-control-flow.md#addd-assert-dump-data-direct`. |
 | What test assertion patterns are banned? | `references/test-proof-rules.md`. |
-| What codenamed remediation applies? | `references/remediations.md`, loaded only by the remediation/fixer agent after triage. |
+| What codenamed remediation applies? | [[style-guide/references/style-guide-index|style-guide index]], loaded by the implementing agent before design and by the fixer after triage. |
 | What policy applies to creating files dynamically from code? | `POLICY.NO_DYNAMIC_ARTIFACTS` in `references/policies.md`. |
 | What policy applies to embedding large strings/prompts/messages inline in code? | `POLICY.NO_DYNAMIC_ARTIFACTS` in `references/policies.md`. |
 | What policy applies to embedding one language inside another? | `POLICY.NO_DYNAMIC_ARTIFACTS` in `references/policies.md`. |
 | What policy applies to mypy `import-untyped`, missing stubs, or missing `py.typed`? | `POLICY.NO_UNTYPED_IMPORT_LEAK`; remediation is `REMEDIATE.TYPED_DEPENDENCY_BOUNDARY`, not dependency churn. |
 | How do I review LLM-produced code? | [[reviewing-llm-code/SKILL|reviewing-llm-code/SKILL.md]]. |
-| How do I fix slop without laundering? | [[fixing-slop/SKILL|fixing-slop/SKILL.md]] plus fixer-only `references/remediations.md`. |
+| How do I fix slop without laundering? | [[fixing-slop/SKILL|fixing-slop/SKILL.md]] plus [[style-guide/references/style-guide-index|style-guide index]]. |
 | What makes a test valid proof? | [[test-guidelines/SKILL|test-guidelines/SKILL.md]] plus `references/test-proof-rules.md`. |
 | Who owns QC invocation/config/tooling? | `POLICY.GLOBAL_QC_AUTHORITY`; operational QC invocation remains in the global [[quality-control/SKILL|quality-control]] skill. |
-| How do I triage PR feedback? | [[pr-feedback-triage/SKILL|pr-feedback-triage]]. |
+| How do I triage PR feedback? | [[git-guidelines/feedback/SKILL|pr-feedback-triage]]. |
 | How do I debug without prior-shaped probing? | [[reality-grounded-debugging/SKILL|reality-grounded-debugging]] + [[systematic-debugging/SKILL|systematic-debugging]]. |
 | How do I handle external tool/library/compiler uncertainty? | [[known-solution-first/SKILL|known-solution-first]]. |
 | How do I provision tools? | [[tool-provisioning-and-environment-hygiene/SKILL|tool-provisioning-and-environment-hygiene]]. |

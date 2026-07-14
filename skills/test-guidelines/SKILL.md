@@ -170,7 +170,7 @@ This agent must follow these standards:
 
 - **agent-orchestration** — Standard for multi-agent coordination.
 
-- [[clean-code/SKILL|clean-code]] — Standard for test readability and maintenance.
+- [[code-patterns/legacy/clean-code/SKILL|clean-code]] — Standard for test readability and maintenance.
 
 * * *
 
@@ -706,7 +706,7 @@ Red flags:
 - test would pass even if the application stopped calling the helper;
 - the helper did not exist before the review.
 
-Correct response after triage: See `policy-index/references/remediations.md` → **Remediation: Boundary Test Bypass**.
+Correct response after triage: See `style-guide/references/style-guide-index.md` → **Remediation: Boundary Test Bypass**.
 
 * * *
 

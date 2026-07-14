@@ -850,7 +850,7 @@ The absence of an import is the defect, not the presence of the dependency.
 
 ### Correct Response
 
-See `policy-index/references/remediations.md` → **Remediation: Bespoke Dependency Reinvention**.
+See `style-guide/references/style-guide-index.md` → **Remediation: Bespoke Dependency Reinvention**.
 
 * * *
 

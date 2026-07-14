@@ -4,7 +4,7 @@ This file is the canonical database of named bridge-burning policies.
 Other skills may teach review, testing, debugging, or remediation workflows, but policy identity and policy text live here.
 
 Detector and reviewer agents may load this file.
-Fixer agents load `remediations.md` only after triage assigns a `POLICY.*` code.
+Fixer agents load `../../style-guide/references/style-guide-index.md` only after triage assigns a `POLICY.*` code.
 
 ## Record Schema
 
@@ -14,7 +14,7 @@ Each policy record contains:
 - `Rule`: the canonical obligation.
 - `Invalid local fixes`: local edits that preserve the violation.
 - `Detection handles`: red-flag or banned-shape labels that map to the policy.
-- `Related remediation`: the fixer-side remediation code, loaded only from `remediations.md` after triage.
+- `Related remediation`: the fixer-side remediation code, loaded only from `../../style-guide/references/style-guide-index.md` after triage.
 
 ## Category Index
 
