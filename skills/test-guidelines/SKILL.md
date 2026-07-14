@@ -3,7 +3,7 @@ name: test-guidelines
 description: 'Use any and every time you interact with a test file, period.'
 ---
 
-Note: if you are working with a PR, read the adjacent pr-guide.md file.
+For PR-scoped test or QC work, follow the [Git integration workflow](../git-integration-workflow/SKILL.md) for the PR lifecycle and returned review/check feedback. This skill remains the source of truth for test and proof quality.
 
 # HIGH-QUALITY TESTING STANDARDS (GUIDELINES)
 
