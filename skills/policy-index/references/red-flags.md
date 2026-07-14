@@ -23,6 +23,7 @@ When one appears, ask:
 | :--- | :--- |
 | **[RUNTIME-DEFAULTS] Runtime defaults** | Defaults preserve missing-data paths and force weak proof obligations. |
 | **[FALLBACK-CHAINS] Fallback chains** | The app makes unreviewed decisions for the user. |
+| **[EXCEPTION-CONTROL-FLOW] Failure-selected ordinary branches** | Catch order, failed probes, and retry order become a hidden state machine; expected states and legal transitions remain unmodeled. |
 | **[OPTIONAL-DEPS] Optional critical dependencies** | Lets the app pretend required tools are optional. |
 | **[PARTIAL-SUCCESS] Partial success objects** | Converts failed work into "mostly OK." |
 | **[BOOLEAN-FLAGS] Boolean mode flags** | Tests can force branches instead of constructing real state. |
@@ -48,6 +49,8 @@ When one appears, ask:
 | **[ADMIN-COMPLETION] Administrative completion** | Issues/comments/docs replace implementation or proof. |
 
 If a construct would let an agent preserve the appearance of correctness while weakening the obligation, treat it as a red flag even if the code currently works.
+
+For `[EXCEPTION-CONTROL-FLOW]`, use [Error Handling as Control Flow](error-handling-as-control-flow.md) to inspect the displaced domain model, readability loss, side-effect risk, retry safety, and language-semantic abuse.
 
 ### **[VERBOSITY-COMPLEXITY]** Code Verbosity and Complexity Red Flags
 

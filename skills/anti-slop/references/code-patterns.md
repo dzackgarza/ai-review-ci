@@ -1007,7 +1007,7 @@ The bad patterns are the OPPOSITE of what a normal code review would flag:
   The bug, when it surfaces weeks later as subtly wrong behavior, is undiscoverable.
 
   The fix declares the hard dependency and fails loudly if it is missing.
-  If the user actually needed both binaries (they don't — `xournalpp` replaced `xournal`), the correct shape is a tool-config record (`executables: ['xournalpp', 'xournal']` probed in order), not a ternary embedded in control flow.
+  If the user actually needed both binaries (they don't — `xournalpp` replaced `xournal`), the correct shape is a required configured executable or an explicit named backend variant validated before execution, not a list probed until one survives and not a ternary embedded in control flow.
   The agent patched the control flow because it refused to update the data model.
 
 - **Squishy input shapes**: the code accepts many different input formats, “normalizes” them, handles “various” data shapes.
@@ -1036,6 +1036,7 @@ The following are immediate red flags that surface slop without requiring you to
   If a dependency fails, the app should crash.
   The user owns the system, they can fix the dependency.
   A caught error hides the broken state.
+  When catches select expected behavior, attempts probe state or capability, or retries begin without a typed transient failure and idempotency proof, classify `POLICY.NO_EXCEPTION_CONTROL_FLOW` and load [Error Handling as Control Flow](../../policy-index/references/error-handling-as-control-flow.md).
 
 - **Any hard-coding of a path, command name, or identifier that should be in config.** Hard-coding mixes data and logic.
   A binary name belongs in a tool-config record, not in the body of an `if` statement.

@@ -19,7 +19,7 @@ Each policy record contains:
 ## Category Index
 
 - **Runtime, Config, and State**: `POLICY.RUNTIME_DEFAULT`, `POLICY.TOTAL_CORE_STATE`, `POLICY.NO_UNJUSTIFIED_OPTIONALITY`, `POLICY.NO_HIDDEN_CONFIG`, `POLICY.NO_AMBIENT_DISCOVERY`, `POLICY.NO_DEFENSIVE_HOTPATH`
-- **Fail-Loud Execution**: `POLICY.FAIL_OPEN`, `POLICY.CRITICAL_DEPENDENCY`, `POLICY.NO_PARTIAL_SUCCESS`, `POLICY.NO_ERROR_DISCARD`
+- **Fail-Loud Execution**: `POLICY.FAIL_OPEN`, `POLICY.CRITICAL_DEPENDENCY`, `POLICY.NO_PARTIAL_SUCCESS`, `POLICY.NO_ERROR_DISCARD`, `POLICY.NO_EXCEPTION_CONTROL_FLOW`
 - **Proof and Test Integrity**: `POLICY.NO_SMOKE_PROOF`, `POLICY.NO_MOCK_PROOF`, `POLICY.NO_SKIP_MASK`, `POLICY.NO_HELPER_PROOF`, `POLICY.NO_EXACT_STRING_PROOF`
 - **Type and Interface Integrity**: `POLICY.NO_BOOLEAN_MODE`, `POLICY.NO_TYPE_ESCAPE`, `POLICY.NO_UNTYPED_IMPORT_LEAK`
 - **QC Authority**: `POLICY.NO_QC_SILENCING`, `POLICY.GLOBAL_QC_AUTHORITY`
@@ -163,6 +163,22 @@ Invalid local fixes: `.ok()`, `let _ =`, `filter_map(Result::ok)`, `except: pass
 Detection handles: `SWALLOWED-ERRORS`, `OK-DISCARD`, `SUPPRESSION-FALLBACK`, `PIPE-TRUE`, `NO_ERROR_DISCARD`
 
 Related remediation: `REMEDIATE.FAIL_LOUD_BOUNDARY`
+
+#### `POLICY.NO_EXCEPTION_CONTROL_FLOW` — No exception-driven ordinary control flow
+
+Category: Fail-Loud Execution
+
+Rule: Expected domain states, legal transitions, and routine alternatives must be represented explicitly before effects execute.
+Do not deliberately provoke and catch failures to discover state, select ordinary behavior, probe an API or object shape, or drive fallback and retry trees.
+Exceptions mean that the current computation cannot fulfill its contract; retries are admissible only for a classified transient failure when the operation is safe to repeat, the attempt count is bounded, backoff is explicit, and every attempt remains observable.
+
+Canonical rationale: [Error Handling as Control Flow](error-handling-as-control-flow.md).
+
+Invalid local fixes: Reordering catches; narrowing a catch while retaining exception-selected routine behavior; moving the probing loop into a helper; renaming retries as resilience; catching an exception only to return a domain sentinel; adding preflight attempts that still mutate state; retrying without a typed transient-failure class and idempotency proof.
+
+Detection handles: `EXCEPTION-CONTROL-FLOW`, `TRY-EXCEPT-FALLBACK`, `SWALLOWED-ERRORS`, `ASSERTION-CATCH`
+
+Related remediation: `REMEDIATE.EXPLICIT_STATE_MODEL`
 
 ### Proof and Test Integrity
 

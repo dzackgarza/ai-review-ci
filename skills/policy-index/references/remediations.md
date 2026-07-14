@@ -10,7 +10,8 @@ The reviewer classifies the weakened obligation; the fixer reads the remediation
 | Code | Applies to | Required remediation |
 | --- | --- | --- |
 | `REMEDIATE.TOTAL_CONFIG_MODEL` | `POLICY.RUNTIME_DEFAULT`, `POLICY.NO_HIDDEN_CONFIG`, `POLICY.TOTAL_CORE_STATE`, `POLICY.NO_UNJUSTIFIED_OPTIONALITY` | Put required configuration in the declared config surface. Validate once at startup into a total model. Missing, malformed, partial, or unknown config fails loudly. |
-| `REMEDIATE.FAIL_LOUD_BOUNDARY` | `POLICY.FAIL_OPEN`, `POLICY.CRITICAL_DEPENDENCY`, `POLICY.NO_PARTIAL_SUCCESS`, `POLICY.NO_ERROR_DISCARD`, `POLICY.NO_AMBIENT_DISCOVERY`, `POLICY.NO_DEFENSIVE_HOTPATH` | Assert or check required resources at the owned boundary, then execute without fallback. Let unexpected errors propagate. Catch only observed, specific, recoverable domain errors and handle them in the same scope. |
+| `REMEDIATE.FAIL_LOUD_BOUNDARY` | `POLICY.FAIL_OPEN`, `POLICY.CRITICAL_DEPENDENCY`, `POLICY.NO_PARTIAL_SUCCESS`, `POLICY.NO_ERROR_DISCARD`, `POLICY.NO_AMBIENT_DISCOVERY`, `POLICY.NO_DEFENSIVE_HOTPATH` | Assert or check required resources at the owned boundary, then execute without fallback. Let unexpected errors propagate. At an external boundary, translate a specific observed exception once into a typed domain outcome; ordinary callers dispatch that outcome explicitly. |
+| `REMEDIATE.EXPLICIT_STATE_MODEL` | `POLICY.NO_EXCEPTION_CONTROL_FLOW` | Enumerate expected domain states and legal transitions, parse boundary input into typed outcomes, and dispatch exhaustively before effects execute. Unexpected failures propagate. Retry only a typed transient failure through a bounded, observable policy after proving the operation is safe to repeat. |
 | `REMEDIATE.REAL_PROOF_LOOP` | `POLICY.NO_SMOKE_PROOF`, `POLICY.NO_MOCK_PROOF`, `POLICY.NO_SKIP_MASK`, `POLICY.NO_HELPER_PROOF`, `POLICY.NO_EXACT_STRING_PROOF` | Replace fake or masked proof with tests that cross the real boundary, use real fixtures/data/services available to the project, and assert semantic output or side effects. Commit red proof before green fixes for reported bugs. |
 | `REMEDIATE.API_SPLIT_OR_VARIANT` | `POLICY.NO_BOOLEAN_MODE` | Split behavior into named functions when the modes are separate operations. Use an explicit enum/tagged variant only when the mode is domain data, and dispatch exhaustively. |
 | `REMEDIATE.STRUCTURED_TYPES` | `POLICY.NO_TYPE_ESCAPE` | Replace casts, `Any`, broad `Partial`, string errors, and dict-shaped owned data with explicit domain types, schemas, enums, and structured errors. Replace runtime duck-typing introspection (`hasattr`, dynamic `getattr`/`setattr`/`delattr`, `vars()`, `type(x)` comparisons, `__class__`/`__dict__` probing) by declaring the exact expected type in the signature and, where narrowing is genuinely domain data, dispatching exhaustively on `isinstance` against declared types. Tests assert semantic variants, not string rendering or shape. |
@@ -105,23 +106,64 @@ except Exception as e:
 
 Remediation: Let the error propagate.
 If the caller cannot handle the error, it should not catch it.
-If a specific error type is expected and recoverable, catch only that type and handle it in the same scope.
+At an external boundary, a specific observed exception may be caught once only to translate it into a typed domain outcome; ordinary callers dispatch that outcome explicitly.
 
 ```python
 # Remediation: propagate
 data = read_file(path)  # raises if file is missing or unreadable
 
-# When recovery IS the intent: narrow and handle immediately
-try:
-    config = read_config(path)
-except FileNotFoundError:
-    config = default_config()  # explicit recovery for a known condition
+# When absence is an expected domain state: represent and dispatch it explicitly
+match load_config(path):
+    case ConfigLoaded(config):
+        use_config(config)
+    case ConfigAbsent():
+        create_initial_config(path)
 ```
 
 Remediation applies when:
 - The try block wraps a single operation (not a sequence where partial failure is meaningful).
 - The catch clause is broad (`Exception`, bare `except`, or a type that does not match the recoverable error).
 - Recovery produces a sentinel value (`None`, `[]`, `""`, `False`) distinct from real results.
+
+### [EXPLICIT-STATE-MODEL] Remediation: Exception-Driven Ordinary Control Flow
+
+Slop pattern: Exceptions, failed attempts, or retry order select expected application behavior. The code learns the current state by provoking failure instead of representing the state, its legal transitions, and the operation's preconditions.
+
+```python
+# BAD: catch order is the hidden state machine
+try:
+    execute_transfer(account, transfer)
+except VerificationRequired:
+    request_verification(account)
+except SuspendedAccount:
+    reject_transfer(transfer)
+```
+
+Remediation: Name every expected state or outcome, validate the transition before effects execute, and dispatch exhaustively. The ordinary path must remain visible at the call site.
+
+```python
+# Remediation: expected states are explicit domain data
+match account.state:
+    case Unverified():
+        request_verification(account)
+    case Active():
+        execute_transfer(account, transfer)
+    case Suspended():
+        reject_transfer(transfer)
+```
+
+For operations that may be retried, return or translate once into a typed outcome. A retry policy may receive only a classified transient failure. It must require a bounded attempt count, explicit backoff, observability for every attempt, and proof that repeating the operation is safe through transaction semantics or an idempotency key. Permanent rejection, invalid input, invariant failure, and unknown exceptions never enter the retry path.
+
+Use [Error Handling as Control Flow](error-handling-as-control-flow.md) for the canonical rationale and the full list of displaced patterns.
+
+Remediation applies when:
+- catch clauses represent expected business states, validation results, protocol alternatives, or object capabilities;
+- code tries operations in sequence until one does not throw;
+- failure order changes ordinary behavior;
+- retry begins before the failure is classified as transient;
+- an effect can partially succeed before another speculative attempt begins.
+
+The remediation is incomplete until the state model names the valid variants, transition ownership is explicit, effect safety is proved, and tests construct domain states directly instead of forcing catch branches.
 
 ### [DATA-PEEK] Remediation: Data-Peeking Inside Loops
 

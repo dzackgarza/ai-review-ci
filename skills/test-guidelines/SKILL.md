@@ -372,6 +372,8 @@ Banned:
 Expected failures must be asserted by structured test-framework mechanisms or structured error values.
 Unexpected failures must propagate.
 
+Tests must construct expected domain states and typed outcomes directly; they must not provoke exceptions to force an ordinary branch or validate catch order. Classify that shape as `POLICY.NO_EXCEPTION_CONTROL_FLOW` and use [Error Handling as Control Flow](../policy-index/references/error-handling-as-control-flow.md) for the displaced state-machine, result-type, transition, transaction, idempotency, and retry obligations.
+
 The only possible exception is an explicitly approved boundary renderer whose sole job is to translate a structured internal error into a user-facing protocol.
 That boundary must not continue execution, must not default, and must not return partial success.
 
@@ -521,6 +523,8 @@ Guard against:
 - **Shallow validation gaming:** assertions check that output exists, parses, or has the right type while allowing wrong content.
 
 - **Exception-swallowing gaming:** a test treats any exception as acceptable or the implementation catches errors and returns placeholder success.
+
+- **Exception-branch gaming:** a test forces a catch branch or retry order instead of constructing the expected domain state, allowing the hidden state machine to remain encoded in failure order.
 
 - **Commentary gaming:** comments, names, or reports describe rigorous behavior that the assertions do not prove.
 
@@ -882,6 +886,8 @@ Any exception requires:
 For example, an exception allowing a fallback provider is only allowed if the product explicitly owns multi-provider behavior, and tests prove that: provider selection is explicit, failure is visible, no fake data is returned, the user can tell which provider ran, and config declares the provider order.
 
 ## Cross-References
+
+- **policy-index/references/error-handling-as-control-flow** → Load when tests or runtime code use exceptions, failed attempts, or retries to choose ordinary behavior. Tests must prove explicit domain states, legal transitions, typed outcomes, and retry safety rather than catch ordering.
 
 - **llm-failure-modes/testing-failures** → Load alongside during test audit or test writing tasks.
   Catalogs failure patterns agents produce in test code: content-free verification, tautological testing, mock-first evasion, tolerance substitution, instrumental deception, and the 7-tactic test-cheat escalation ladder.

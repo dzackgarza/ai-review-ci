@@ -364,6 +364,8 @@ For code, tests, QC, and documentation, **always** load:
 
 - `policy-index/references/red-flags.md` for validation-evasion red flags and `policy-index/references/runtime-control-flow.md` for runtime control-flow rules.
 
+- `policy-index/references/error-handling-as-control-flow.md` for exception-selected ordinary branches, state probing, guess-catch-retry trees, and the explicit models those patterns displace.
+
 - `llm-failure-modes` — the cognitive failure modes that produce slop (overconfidence, confabulation, premature solution generation, replacement instinct).
 
 - `test-guidelines` — the canonical test quality framework.
@@ -539,6 +541,8 @@ If you catch yourself doing any of these, you have slipped from analysis into ja
 
 - **Prior-shaped probes** (commands encoding the expected answer and suppressing contrary evidence — guessed flags with `2>/dev/null`, greps whose failure is treated as absence, `jq` paths run before response-shape inspection, endpoint guesses treated as API facts) See `reality-grounded-debugging` for the behavioral fix.
 
+- **Exception-driven ordinary control flow** (catch order selects expected behavior, operations are attempted until one survives, or retries begin before classifying a typed transient failure and proving idempotency). Classify as `POLICY.NO_EXCEPTION_CONTROL_FLOW`; use `policy-index/references/error-handling-as-control-flow.md` for the architectural and readability burden.
+
 - **Debug-surface debt** (failures addressed by mutating global code, adding one-off scripts, or repeatedly running opaque whole-system commands instead of creating isolated reproducers, structured logs, artifact dumps, schema inspections, or canonical diagnostic recipes) See `reality-grounded-debugging` for the surface-upgrade requirements.
 
 - **Bespoke reinvention** (custom `AcademicCard` when `card.tsx` exists)
@@ -645,6 +649,8 @@ Secondary references (use when the central catalog does not cover the specific d
 - `references/deepening-vocabulary.md` — Precise glossary for architectural deepening: module, interface, depth, seam, adapter, leverage, locality, deletion test.
   Use these terms exactly — consistent language prevents drift into vague synonyms.
 
+- **`../policy-index/references/error-handling-as-control-flow.md`** — Canonical policy rationale for why exception-driven ordinary branching and guess-check-retry replace explicit domain modeling with runtime collision.
+
 - **`../reality-grounded-debugging/SKILL.md`** — Load alongside when reviewing debugging attempts, probe logs, or diagnostic commands.
   Detects prior-shaped probes, debug-surface debt, and missing command-output discipline.
   Provides the behavioral fix (surface upgrade) for patterns in this catalog.
@@ -733,6 +739,7 @@ The canonical bridge-burning policy registry has moved to [policy-index/SKILL.md
 
 This skill no longer owns the enumerated policy text.
 Use `policy-index` for `POLICY.*` codes and the exception protocol.
+For failure-driven ordinary branching, classify `POLICY.NO_EXCEPTION_CONTROL_FLOW` and load [Error Handling as Control Flow](../policy-index/references/error-handling-as-control-flow.md).
 Anti-slop review uses those policies to classify slop, reconstruct the original obligation, and decide whether a finding is a real bridge-burning violation.
 Remediation instructions are intentionally separate and belong to the fixer-side reference under `policy-index/references/`.
 

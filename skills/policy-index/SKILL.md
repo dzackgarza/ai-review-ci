@@ -21,6 +21,7 @@ Remediation lives in `references/remediations.md` and is loaded only by the reme
 - Use `POLICY.*` codes from this skill and `references/policies.md` as authoritative.
 - Use `references/red-flags.md` to classify validation-evasion constructs.
 - Use `references/runtime-control-flow.md` to classify runtime branch shapes.
+- Use `references/error-handling-as-control-flow.md` to classify failure-driven ordinary branching, state probing, and guess-catch-retry behavior.
 - Use `references/runtime-control-flow.md#addd-assert-dump-data-direct` as the canonical ADDD coding style lookup for assertions: assert early, dump related data, then direct the maintainer to the owning fix surface.
 - Use `references/test-proof-rules.md` to classify proof and assertion shapes.
 - Do not remediate from the detector message alone.
@@ -37,6 +38,7 @@ Remediation lives in `references/remediations.md` and is loaded only by the reme
 | `references/policies.md` | Reviewers, triage agents, fixers after code assignment | Categorized policy database with named `POLICY.*` records. |
 | `references/red-flags.md` | Reviewers and detector authors | Validation-evasion red flags, language-specific signatures, and QC detector targets. |
 | `references/runtime-control-flow.md` | Reviewers, detector authors, and fixers after code assignment | Runtime branch admission rules, banned branch shapes, ADDD assertion style, and examples. |
+| `references/error-handling-as-control-flow.md` | Reviewers, detector authors, test writers, and coding-style authors | Canonical rationale for banning exception-driven ordinary control flow and guess-check-retry state probing. |
 | `references/test-proof-rules.md` | Test writers, test reviewers, detector authors | Banned test/assertion shapes and proof-admission rules. |
 | `references/remediations.md` | Fixers only after triage | Remediation registry and detailed restoration procedures keyed by policy/remediation code. |
 
@@ -70,6 +72,7 @@ Remediation lives in `references/remediations.md` and is loaded only by the reme
 | `POLICY.NO_TYPE_ESCAPE` | No type-system escape hatches | Owned code must not bypass static guarantees with `Any`, casts, double casts, `as any`, `unknown as`, broad `Partial`, stringly errors, or untyped blobs for structured state. | Adding a narrower cast without proving the boundary; asserting type shape in tests; hiding data in JSON/dicts. |
 | `POLICY.NO_UNTYPED_IMPORT_LEAK` | No untyped dependency leakage | Untyped third-party libraries may not leak `Any` into owned code. Direct imports of untyped libraries belong behind stubs or a typed firewall module that returns project-owned typed values. | Replacing the library solely to satisfy mypy; adding `ignore_missing_imports`, `# type: ignore[import-untyped]`, casts, local QC excludes, or untyped wrapper pass-throughs. |
 | `POLICY.NO_ERROR_DISCARD` | No swallowed errors | Errors and failed results must be propagated, handled immediately as a real domain alternative, or converted into structured failure. They must not be discarded. | `.ok()`, `let _ =`, `filter_map(Result::ok)`, `except: pass`, `catch(() => default)`, `\|\| true`, stderr suppression. |
+| `POLICY.NO_EXCEPTION_CONTROL_FLOW` | No exception-driven ordinary control flow | Expected domain states and legal transitions must be represented explicitly. Do not provoke failure to choose an ordinary branch, probe state or shape, or drive guess-catch-retry loops. Exceptions unwind genuinely failed contracts; retries require a classified transient failure, safe idempotency, bounded backoff, and observability. | Catch-order dispatch; EAFP state probing; try-A/catch-try-B; broad retry loops; moving the same probing into helper functions. |
 | `POLICY.NO_QC_SILENCING` | No validator bypass | Suppression comments, allow attributes, ignore globs, disabled rules, lowered thresholds, local QC overrides, and broad excludes convert validator failure into validator silence. | Narrowing the suppression while keeping the violation; adding post-hoc prose; weakening the rule or threshold. |
 | `POLICY.GLOBAL_QC_AUTHORITY` | No local QC authority | Generic lint, type, format, coverage, dead-code, duplication, slop, and tool-config behavior belong to global QC. Repos delegate; they do not reimplement or override. | Adding local `lint`/`typecheck` recipes; copying global configs downstream; running narrower local checks as proof. |
 | `POLICY.NO_HIDDEN_CONFIG` | No hidden behavioral config in code | Behavioral parameters, thresholds, paths, provider choices, retries, feature flags, and policy decisions belong in the declared config surface as required values. | Moving to `constants.*`; using `const`/`static`/top-level literals; calling it a true invariant without applying the invariant test. |
@@ -118,6 +121,7 @@ A policy exception requires all of:
 | What named policy applies? | `references/policies.md` and [Policy Registry](#policy-registry). |
 | What code/test red flags should I scan for? | `references/red-flags.md`. |
 | What runtime control-flow shapes are banned? | `references/runtime-control-flow.md`. |
+| Why is exception-driven ordinary control flow banned, and what explicit models does it displace? | `references/error-handling-as-control-flow.md` and `POLICY.NO_EXCEPTION_CONTROL_FLOW`. |
 | What is the coding style for assertions and invariant failures? | `references/runtime-control-flow.md#addd-assert-dump-data-direct`. |
 | What test assertion patterns are banned? | `references/test-proof-rules.md`. |
 | What codenamed remediation applies? | `references/remediations.md`, loaded only by the remediation/fixer agent after triage. |
