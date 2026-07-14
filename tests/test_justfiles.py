@@ -356,7 +356,9 @@ def test_sync_qc_excludes_preserves_non_owned_artifacts_and_updates_grain(
     grain = tomllib.loads((qc_root / "grain.toml").read_text())
     assert "fail_on" in grain["grain"]
     assert "central-owned/*" in grain["grain"]["exclude"]
-    slopconfig = yaml.safe_load((qc_root / "slopconfig.yaml").read_text())
+    slopconfig_text = (qc_root / "slopconfig.yaml").read_text()
+    assert slopconfig_text.startswith("# Maximally strict production config for ai-slop-detector\n")
+    slopconfig = yaml.safe_load(slopconfig_text)
     assert slopconfig["ignore"] == ["central-owned/**", "**/central-owned/**"]
     assert eslint_config.read_text() == "export default [{ ignores: ['sentinel'] }];\n"
     assert rust_justfile.read_text() == "# rust sentinel\n"
