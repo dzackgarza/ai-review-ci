@@ -11,7 +11,7 @@ _normalize:
 
 [private]
 _check-yaml:
-    python3 -c "import yaml, pathlib; [yaml.safe_load(p.read_text()) for p in pathlib.Path('.github/workflows').glob('*.yml')]; [yaml.safe_load(p.read_text()) for p in pathlib.Path('src/ai_review_ci/templates').glob('*.yml')]"
+    uv run --project {{repo}} python -c "import yaml, pathlib; [yaml.safe_load(p.read_text()) for p in pathlib.Path('.github/workflows').glob('*.yml')]; [yaml.safe_load(p.read_text()) for p in pathlib.Path('src/ai_review_ci/templates').glob('*.yml')]"
 
 # Parse-check every infrastructure source: workflow YAML, runner justfile, shell wrappers
 check: _normalize
