@@ -9,7 +9,7 @@
 - [ ] This PR started as a draft while implementation/proof was in progress.
 - [ ] The PR scope maps to the linked issue acceptance criteria; unrelated issue families are excluded.
 - [ ] Ready-for-review was requested only after the policy alignment gate and evidence below were complete.
-- [ ] Review feedback loop followed: accepted comments have committed remediation; rejected or modified feedback is recorded in a top-level PR comment titled `Review feedback disposition ledger`.
+- [ ] Returned review feedback followed [[skills/pr-feedback-triage/SKILL.md|pr-feedback-triage]]: every resolved substantive item carries its own evidenced disposition, and accepted or modified feedback cites committed remediation and proof.
 
 ## Policy alignment gate — required
 

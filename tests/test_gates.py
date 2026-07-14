@@ -202,28 +202,87 @@ def test_branch_protection_payload_requires_app_boot_for_bun_playwright() -> Non
     assert {"context": "app-boot / app-boot", "app_id": -1} in checks
 
 
-def test_thread_resolution_evidence_accepts_commit_or_ledger() -> None:
-    commit_node = {
-        "comments": {
-            "nodes": [
-                {"body": "<!-- ai-review-fingerprint: " + "a" * 64 + " -->"},
-                {"body": "Resolved by commit 123456789abc."},
-            ]
+def test_thread_resolution_evidence_requires_a_thread_local_disposition() -> None:
+    def node(reply: str) -> dict[str, object]:
+        return {
+            "comments": {
+                "nodes": [
+                    {"body": "<!-- ai-review-fingerprint: " + "a" * 64 + " -->"},
+                    {"body": reply},
+                ]
+            }
         }
-    }
-    ledger_node = {
-        "comments": {
-            "nodes": [
-                {"body": "<!-- ai-review-fingerprint: " + "b" * 64 + " -->"},
-                {"body": "Disposition-ledger: accepted in PR body."},
-            ]
-        }
-    }
-    empty_node = {"comments": {"nodes": [{"body": "<!-- ai-review-fingerprint: " + "c" * 64 + " -->"}]}}
 
-    assert gates._has_resolution_evidence(commit_node)
-    assert gates._has_resolution_evidence(ledger_node)
-    assert not gates._has_resolution_evidence(empty_node)
+    accepted = """\
+Disposition: Accepted as written
+Policy basis: POLICY.NO_ERROR_DISCARD
+Pre-filter: Gate 1 correctness defect -> current-PR remediation
+Claim: Read failures are discarded as partial success.
+Remediation: Propagate the failure with path context.
+Code/action taken or explicit non-change: Propagate the read error with path context.
+Proof: The boundary test proves a failed read cannot return partial success.
+Commit: 123456789abc
+Audit anchor: tests/test_reader.py::test_read_failure_is_visible
+"""
+    rejected = """\
+Disposition: Rejected
+Factual/contract basis: The requested fixture is present in the reviewed tree.
+Pre-filter: Gate 1 factual premise false -> no change
+Claim: The review says the fixture is absent.
+Code/action taken or explicit non-change: No code change.
+Audit anchor: tests/fixtures/extract_link.pdf
+"""
+    duplicate = """\
+Disposition: Duplicate
+Policy basis: POLICY.NO_MOCK_PROOF
+Pre-filter: Same semantic finding -> inherit canonical disposition
+Claim: This repeats the canonical proof concern.
+Canonical thread: https://github.com/owner/repo/pull/7#discussion_r123
+Code/action taken or explicit non-change: No additional code change.
+Audit anchor: https://github.com/owner/repo/pull/7#discussion_r123
+"""
+    outdated = """\
+Disposition: Outdated
+Policy basis: POLICY.NO_ERROR_DISCARD
+Pre-filter: Finding targets replaced code -> superseded
+Claim: The former branch discarded read errors.
+Superseding commit: abcdef123456
+Code/action taken or explicit non-change: No additional code change.
+Audit anchor: abcdef123456
+"""
+
+    assert gates._has_resolution_evidence(node(accepted))
+    assert gates._has_resolution_evidence(node(rejected))
+    assert gates._has_resolution_evidence(node(duplicate))
+    assert gates._has_resolution_evidence(node(outdated))
+    assert not gates._has_resolution_evidence(node("Resolved by commit 123456789abc."))
+    assert not gates._has_resolution_evidence(node("Disposition-ledger: accepted in PR body."))
+    assert not gates._has_resolution_evidence(
+        node(
+            """\
+Disposition: Accepted as written
+Policy basis: POLICY.NO_ERROR_DISCARD
+Pre-filter: Gate 1 correctness defect -> current-PR remediation
+Claim: Read failures are discarded.
+Remediation: Propagate the read error.
+Code/action taken or explicit non-change: Propagate the read error.
+Proof: Focused boundary test.
+Audit anchor: tests/test_reader.py
+"""
+        )
+    )
+    assert not gates._has_resolution_evidence(
+        {
+            "comments": {
+                "nodes": [
+                    {
+                        "body": accepted,
+                    }
+                ]
+            }
+        }
+    )
+
 
 
 def test_thread_resolution_gate_blocks_unresolved_non_ai_review_threads(
@@ -259,7 +318,7 @@ def test_thread_resolution_gate_requires_evidence_for_resolved_non_ai_review_thr
             {
                 "path": "src/app.py",
                 "isResolved": True,
-                "comments": {"nodes": [{"body": "Resolved in the UI without a commit or ledger citation."}]},
+                "comments": {"nodes": [{"body": "Resolved in the UI without a thread-local disposition."}]},
             }
         ],
     )
@@ -267,7 +326,7 @@ def test_thread_resolution_gate_requires_evidence_for_resolved_non_ai_review_thr
     with pytest.raises(SystemExit):
         gates.check_review_threads("owner/repo", 7)
 
-    assert "src/app.py: resolved review thread lacks commit or disposition-ledger evidence" in capsys.readouterr().err
+    assert "src/app.py: resolved review thread lacks a thread-local evidenced disposition" in capsys.readouterr().err
 
 
 def test_thread_resolution_auto_resolves_stale_ai_review_proof(

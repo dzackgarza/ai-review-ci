@@ -14,8 +14,8 @@ if [[ "$failure_mode" == "direct" ]]; then
 ================================================================================
 
   Add proof-bearing tests for the repository-owned behavior before pushing.
-  This local failure is not PR review feedback and does not require a
-  disposition ledger, policy reviewer, or remediation subagent.
+  This local failure is not PR review feedback and does not enter the
+  returned-PR-feedback triage workflow.
 
   Do not add placeholder tests, weaken assertions, skip the boundary, or edit
   the QC gate to make the missing proof disappear.

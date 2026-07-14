@@ -3,7 +3,7 @@
 Consolidated from the former `github-code-review` skill.
 
 > This skill is for *performing* code reviews and generating review feedback.
-> For consuming, triaging, or acting on existing review comments, use `pr-feedback-triage` instead, and [pr-review-disposition.md](./pr-review-disposition.md) in this skill for the enforced disposition doctrine.
+> For consuming, triaging, or acting on returned review comments, route to [[pr-feedback-triage/SKILL|pr-feedback-triage]]. This review guide generates findings; it does not own their disposition or remediation.
 
 ## 1. Reviewing Local Changes (Pre-Push)
 
@@ -152,7 +152,7 @@ All code evaluation rules, anti-slop guidelines, and validation-evasion auditing
 Always consult `policy-index` to find the canonical skill for any code review, testing, or remediation question.
 
 When you need "how to review a suspect PR" — the slop field guide, bridge-burning red flags, and validation-evasion auditing — do NOT rebuild it here.
-Load [reviewing-llm-code](../../reviewing-llm-code/SKILL.md) and [anti-slop](../../anti-slop/SKILL.md).
+Load [[reviewing-llm-code/SKILL|reviewing-llm-code]] and [[anti-slop/SKILL|anti-slop]].
 This file owns the review *mechanics*; those skills own the review *judgment*.
 
 * * *

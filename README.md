@@ -361,7 +361,7 @@ just -f ~/ai-review-ci/justfiles/python.just -d . test-commit
 
 The gates are split by failure ownership, runtime, and gaming surface:
 
-- `just test-commit` (pre-commit) runs preflight, deterministic normalization, syntax/compile checks, type checking, and bypass detection. Its failures are immediate local repair: fix the reported object and recommit. They are not PR feedback and do not require disposition ledgers or remediation subagents.
+- `just test-commit` (pre-commit) runs preflight, deterministic normalization, syntax/compile checks, type checking, and bypass detection. Its failures are immediate local repair: fix the reported object and recommit. They do not enter the returned-PR-feedback triage workflow.
 - `just test-push` (pre-push) includes the commit gate and runs the full project-owned test suite. Ordinary build and test failures remain direct implementation work.
 - `just test-ci` (required PR context) includes the push gate and adds coverage/diff-cover, dependency and import boundaries, dead-code, duplication, complexity, policy, slop, security, and hosted checks. Policy-sensitive findings retain independent triage because agents can game them by suppressing diagnostics, weakening thresholds, or golfing error counts.
 
@@ -391,7 +391,7 @@ trigger -> _review.yml (cross-repo reusable workflow)
               FIX-guided rejection -> repeat until exit 0
   -> `ai-review-ci to-sarif` -> upload to code scanning
   -> [diff scope] `ai-review-ci post-threads` posts resolvable review threads to the PR
-  -> [diff scope] thread-resolution gate verifies ai-review PR threads are resolved with commit or disposition-ledger evidence
+  -> [diff scope] thread-resolution gate verifies resolved review threads carry complete thread-local disposition evidence
 ```
 
 ### The agent contract

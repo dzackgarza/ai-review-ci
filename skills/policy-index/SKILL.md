@@ -133,7 +133,7 @@ A policy exception requires all of:
 | How do I fix slop without laundering? | [[fixing-slop/SKILL|fixing-slop/SKILL.md]] plus [[style-guide/references/style-guide-index|style-guide index]]. |
 | What makes a test valid proof? | [[test-guidelines/SKILL|test-guidelines/SKILL.md]] plus `references/test-proof-rules.md`. |
 | Who owns QC invocation/config/tooling? | `POLICY.GLOBAL_QC_AUTHORITY`; operational QC invocation remains in the global [[quality-control/SKILL|quality-control]] skill. |
-| How do I triage PR feedback? | [[git-guidelines/feedback/SKILL|pr-feedback-triage]]. |
+| How do I triage PR feedback? | [[pr-feedback-triage/SKILL|pr-feedback-triage]]. |
 | How do I debug without prior-shaped probing? | [[reality-grounded-debugging/SKILL|reality-grounded-debugging]] + [[systematic-debugging/SKILL|systematic-debugging]]. |
 | How do I handle external tool/library/compiler uncertainty? | [[known-solution-first/SKILL|known-solution-first]]. |
 | How do I provision tools? | [[tool-provisioning-and-environment-hygiene/SKILL|tool-provisioning-and-environment-hygiene]]. |

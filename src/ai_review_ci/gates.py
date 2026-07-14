@@ -174,8 +174,42 @@ query($owner: String!, $name: String!, $number: Int!, $cursor: String) {
 }
 """
 
-_COMMIT_EVIDENCE = re.compile(r"(?:commit|commits/|[/-])\s*[0-9a-f]{7,40}\b|\b[0-9a-f]{12,40}\b", re.IGNORECASE)
-_LEDGER_EVIDENCE = re.compile(r"disposition[- ]ledger|resolution[- ]ledger", re.IGNORECASE)
+_DISPOSITION_FIELD = re.compile(
+    r"^\s*Disposition:\s*"
+    r"(?P<disposition>Accepted as written|Accepted with modified remediation|Rejected|Duplicate|Outdated|"
+    r"Backlogged as minor technical debt)\s*\.?\s*$",
+    re.IGNORECASE | re.MULTILINE,
+)
+_POLICY_BASIS_FIELD = re.compile(
+    r"^\s*Policy basis:\s*.*\bPOLICY\.[A-Z][A-Z0-9_]*\b.*$",
+    re.IGNORECASE | re.MULTILINE,
+)
+_FACTUAL_CONTRACT_BASIS_FIELD = re.compile(
+    r"^\s*Factual/contract basis:\s*(?!<)\S.+$",
+    re.IGNORECASE | re.MULTILINE,
+)
+_ACTION_FIELD = re.compile(
+    r"^\s*Code/action taken or explicit non-change:\s*(?!<)\S.+$",
+    re.IGNORECASE | re.MULTILINE,
+)
+_PREFILTER_FIELD = re.compile(r"^\s*Pre-filter:\s*(?!<)\S.+$", re.IGNORECASE | re.MULTILINE)
+_CLAIM_FIELD = re.compile(r"^\s*Claim:\s*(?!<)\S.+$", re.IGNORECASE | re.MULTILINE)
+_REMEDIATION_FIELD = re.compile(r"^\s*Remediation:\s*(?!<)\S.+$", re.IGNORECASE | re.MULTILINE)
+_PROOF_FIELD = re.compile(r"^\s*Proof:\s*(?!<)\S.+$", re.IGNORECASE | re.MULTILINE)
+_COMMIT_FIELD = re.compile(r"^\s*Commit:\s*[0-9a-f]{7,40}\b", re.IGNORECASE | re.MULTILINE)
+_AUDIT_ANCHOR_FIELD = re.compile(r"^\s*Audit anchor:\s*(?!<)\S.+$", re.IGNORECASE | re.MULTILINE)
+_CANONICAL_THREAD_FIELD = re.compile(
+    r"^\s*Canonical thread:\s*(?:https?://\S+|[A-Za-z0-9_-]+)\s*$",
+    re.IGNORECASE | re.MULTILINE,
+)
+_SUPERSEDING_COMMIT_FIELD = re.compile(
+    r"^\s*Superseding commit:\s*[0-9a-f]{7,40}\b",
+    re.IGNORECASE | re.MULTILINE,
+)
+_DEBT_ISSUE_FIELD = re.compile(
+    r"^\s*Debt issue:\s*https://github\.com/\S+/issues/\d+\s*$",
+    re.IGNORECASE | re.MULTILINE,
+)
 _DIRECT_PLAYWRIGHT = re.compile(r"\b(?:bunx|npx|npm|pnpm|yarn)\s+(?:exec\s+)?playwright\b|\bplaywright\s+test\b")
 _PROOF_COMMAND = re.compile(r"\*\*Proof:\*\*\s*`([^`]+)`")
 _RESOLVE_THREAD_MUTATION = """
@@ -496,12 +530,39 @@ def _auto_resolve_stale_thread(node: JsonDict) -> bool:
     return True
 
 
+def _reply_has_resolution_evidence(body: str) -> bool:
+    disposition_match = _DISPOSITION_FIELD.search(body)
+    if disposition_match is None:
+        return False
+    if not (_POLICY_BASIS_FIELD.search(body) or _FACTUAL_CONTRACT_BASIS_FIELD.search(body)):
+        return False
+    if not (
+        _PREFILTER_FIELD.search(body)
+        and _CLAIM_FIELD.search(body)
+        and _ACTION_FIELD.search(body)
+        and _AUDIT_ANCHOR_FIELD.search(body)
+    ):
+        return False
+
+    disposition = disposition_match.group("disposition").lower()
+    if disposition.startswith("accepted"):
+        return bool(
+            _REMEDIATION_FIELD.search(body)
+            and _PROOF_FIELD.search(body)
+            and _COMMIT_FIELD.search(body)
+        )
+    if disposition == "duplicate":
+        return bool(_CANONICAL_THREAD_FIELD.search(body))
+    if disposition == "outdated":
+        return bool(_SUPERSEDING_COMMIT_FIELD.search(body))
+    if disposition == "backlogged as minor technical debt":
+        return bool(_DEBT_ISSUE_FIELD.search(body))
+    return disposition == "rejected"
+
+
 def _has_resolution_evidence(node: JsonDict) -> bool:
-    for comment in _comments(node):
-        body = str(comment["body"])
-        if _COMMIT_EVIDENCE.search(body) or _LEDGER_EVIDENCE.search(body):
-            return True
-    return False
+    replies = _comments(node)[1:]
+    return any(_reply_has_resolution_evidence(str(comment["body"])) for comment in replies)
 
 
 def check_review_threads(repo: str, pr_number: int) -> None:
@@ -514,7 +575,7 @@ def check_review_threads(repo: str, pr_number: int) -> None:
                 continue
             failures.append(f"{path}: unresolved review thread")
         elif not _has_resolution_evidence(node):
-            failures.append(f"{path}: resolved review thread lacks commit or disposition-ledger evidence")
+            failures.append(f"{path}: resolved review thread lacks a thread-local evidenced disposition")
     if failures:
         print("Review thread gate found unresolved or unevidenced threads:", file=sys.stderr)
         for failure in failures:

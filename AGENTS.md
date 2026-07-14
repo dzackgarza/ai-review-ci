@@ -14,7 +14,7 @@ Before writing code:
 - open the PR when implementation starts, synthesize its body from the issue acceptance criteria and the Policy Alignment Gate, and refresh that synthesis before review;
 - use the first coherent push to enter the automated PR review loop; `test-ci`, general review, and slop review run in parallel so architectural feedback arrives before local polishing drifts;
 - request review only after tests/evidence and adversarial policy review are complete;
-- handle review feedback as a loop: accepted feedback requires a committed remediation before any “fixed/addressed” reply, and rejected or modified feedback belongs in a top-level `Review feedback disposition ledger`.
+- route returned review feedback through [[pr-feedback-triage/SKILL|pr-feedback-triage]]: every substantive item receives a visible thread- or surface-local disposition, and accepted or modified feedback receives committed, proven remediation before any positive reply.
 
 If a branch is discovered to contain a broad, untriaged, or policy-poisoned diff, close or abandon the PR rather than trying to salvage it by summary wording.
 Recreate the work from `origin/main` on an issue-scoped branch.
@@ -101,7 +101,7 @@ The one-line test: *if the fact is about an external framework's dispatch, decla
 
 - The three gate boundaries are intentional: `pre-commit` runs `just test-commit`, `pre-push` runs `just test-push`, and required PR CI runs `just test-ci`.
 
-- Commit failures are direct local repair and push failures are ordinary project/test repair. Neither is PR feedback and neither requires a disposition ledger or remediation subagent.
+- Commit failures are direct local repair and push failures are ordinary project/test repair. Neither enters the PR-feedback triage workflow or requires an independent remediation role.
 
 - Slop/style/coverage findings during commit or push indicate a gate-tier or delegation problem. Policy-sensitive findings belong in `test-ci`, where independent anti-golfing triage and PR review run as separate acceptance channels.
   Do not reinstall hooks or weaken QC until the active hook path, hook contents, and delegated cwd have been verified.
@@ -131,7 +131,7 @@ The in-repo copy is the contract — this repo is the canonical home; other mach
 
 ## Tier 0 — every PR
 
-Before requesting review or merging, the PR body (or disposition ledger) must state:
+Before requesting review or merging, the PR body must state:
 
 - Which `POLICY.*` records the change touches or risks.
 - That no **Invalid local fix** from those records was introduced — no new fallback, runtime default, optional core-state, swallowed error, or partial-success path added to make required work look successful after it should have failed loudly.
@@ -231,7 +231,7 @@ Do not resolve an accepted review comment until the code/proof remediation is co
 Never reply “accepted,” “aligned,” “fixed,” “addressed,” or “will address” to a review thread unless the remediation is already committed.
 A thread cannot be resolved on intent or future work.
 
-Rejected and modified feedback must be collected in a top-level PR comment titled `Review feedback disposition ledger` so resolved threads do not hide the audit trail.
+Every substantive review item must receive its visible thread- or surface-local disposition and evidence before resolution. The canonical field contract and state machine live in [[pr-feedback-triage/SKILL|pr-feedback-triage]]. Top-level disposition ledgers and tracked review-log files are not substitutes.
 
 Review comments are not implementation specs.
 The worker must translate accepted feedback into first-principles remediation requirements before assigning implementation.

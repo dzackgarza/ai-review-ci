@@ -2786,7 +2786,7 @@ def test_direct_failure_mode_forbids_review_ceremony() -> None:
 
     assert result.returncode == 0
     assert "DIRECT REPAIR REQUIRED" in result.stdout
-    assert "does not require a disposition ledger" in result.stdout
+    assert "does not enter returned-PR-feedback triage" in result.stdout
     assert "TRIAGE REQUIRED" not in result.stdout
     assert "subagent" in result.stdout
 
