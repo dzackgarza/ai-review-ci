@@ -368,3 +368,25 @@ def test_thread_resolution_gate_accepts_resolved_non_ai_review_threads_with_evid
     )
 
     gates.check_review_threads("owner/repo", 7)
+
+
+def test_delegation_accepts_docs_and_configs_profile(tmp_path: pathlib.Path) -> None:
+    project = tmp_path / "project"
+    project.mkdir()
+    (project / "justfile").write_text(
+        "\n".join(
+            [
+                "test-commit:",
+                "    @just -f ~/ai-review-ci/justfiles/docs-and-configs.just -d . test-commit",
+                "",
+                "test-push:",
+                "    @just -f ~/ai-review-ci/justfiles/docs-and-configs.just -d . test-push",
+                "",
+                "test-ci:",
+                "    @just -f ~/ai-review-ci/justfiles/docs-and-configs.just -d . test-ci",
+                "",
+            ]
+        )
+    )
+
+    gates.check_delegation(project, "docs-and-configs")

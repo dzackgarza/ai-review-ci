@@ -157,9 +157,9 @@ install-qc-scaffold profile target=".":
     set -euo pipefail
 
     case "{{profile}}" in
-        python|bun|bun-playwright|rust|sage) ;;
+        python|bun|bun-playwright|bun-python|docs-and-configs|rust|sage) ;;
         *)
-            echo "Error: profile must be one of: python, bun, bun-playwright, rust, sage"
+            echo "Error: profile must be one of: python, bun, bun-playwright, bun-python, docs-and-configs, rust, sage"
             exit 1
             ;;
     esac

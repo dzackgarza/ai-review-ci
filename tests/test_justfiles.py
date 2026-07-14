@@ -2849,3 +2849,56 @@ def test_scaffold_does_not_export_working_directory_routing_hint(language: str) 
 # The collision itself (JUST_WORKING_DIRECTORY set -> bare `just` fails at
 # arg-parse) is covered with the real delegated chain by
 # test_python_scaffold_bare_just_test_breaks_when_just_working_directory_is_exported.
+
+
+def test_docs_and_configs_qc_routes_formatting_and_link_validation(tmp_path: pathlib.Path) -> None:
+    commit = subprocess.run(
+        [
+            "just",
+            "--dry-run",
+            "--justfile",
+            str(ROOT / "justfiles" / "docs-and-configs.just"),
+            "-d",
+            str(tmp_path),
+            "test-commit",
+        ],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    push = subprocess.run(
+        [
+            "just",
+            "--dry-run",
+            "--justfile",
+            str(ROOT / "justfiles" / "docs-and-configs.just"),
+            "-d",
+            str(tmp_path),
+            "test-push",
+        ],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    links = subprocess.run(
+        [
+            "just",
+            "--dry-run",
+            "--justfile",
+            str(ROOT / "justfiles" / "docs-and-configs.just"),
+            "-d",
+            str(tmp_path),
+            "_check-links",
+        ],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert commit.returncode == 0, commit.stderr
+    assert "_format-structured-text" in commit.stderr
+    assert push.returncode == 0, push.stderr
+    assert "_check-links" in push.stderr
+    assert links.returncode == 0, links.stderr
+    assert "lychee --no-progress" in links.stderr

@@ -59,6 +59,7 @@ PROJECT_PROFILES = {
         required_paths=("pyproject.toml", "package.json"),
         requires_bun_lock=True,
     ),
+    "docs-and-configs": ProjectProfile(name="docs-and-configs", justfile_names=("docs-and-configs.just",), required_paths=()),
     "rust": ProjectProfile(name="rust", justfile_names=("rust.just",), required_paths=(), requires_cargo_manifest=True),
     "sage": ProjectProfile(name="sage", justfile_names=("sage.just",), required_paths=("pyproject.toml",), requires_sage_file=True),
 }
