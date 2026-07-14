@@ -31,8 +31,8 @@ JUSTFILE_CONTRACT_VARIABLES = {
     "default_branch": "ai_review_ci_default_branch",
 }
 
-ProfileName = Literal["python", "bun", "bun-playwright", "bun-python", "rust", "sage"]
-ObservedProfile = Literal["python", "bun", "bun-playwright", "bun-python", "rust", "sage", "unknown"]
+ProfileName = Literal["python", "bun", "bun-playwright", "bun-python", "docs-and-configs", "rust", "sage"]
+ObservedProfile = Literal["python", "bun", "bun-playwright", "bun-python", "docs-and-configs", "rust", "sage", "unknown"]
 InstallationState = Literal["compliant", "outdated", "noncompliant", "uninstalled", "unknown"]
 GlobalStatus = Literal["current", "stale", "misconfigured", "unverifiable"]
 FindingSeverity = Literal["error", "warning"]

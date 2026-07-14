@@ -8,6 +8,7 @@ import pytest
 
 from ai_review_ci.doctor import (
     DoctorReport,
+    ProfileAdapter,
     QcJustfileContract,
     _classify,
     _evaluate_label_alignment,
@@ -626,3 +627,7 @@ def test_active_findings_are_noncompliant_with_no_exception_path(tmp_path: pathl
     assert payload["installation_state"] == "noncompliant"
     assert payload["findings"]
     assert "exceptions" not in payload
+
+
+def test_docs_and_configs_profile_is_doctor_compatible() -> None:
+    assert ProfileAdapter.validate_python("docs-and-configs") == "docs-and-configs"
