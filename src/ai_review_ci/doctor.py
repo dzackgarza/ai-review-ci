@@ -406,6 +406,8 @@ def _profile_missing_paths(target: Path, project_profile: ProjectProfile) -> tup
     missing = [path for path in project_profile.required_paths if not (target / path).exists()]
     if project_profile.requires_bun_lock and not ((target / "bun.lock").exists() or (target / "bun.lockb").exists()):
         missing.append("bun.lock or bun.lockb")
+    if project_profile.requires_cargo_manifest and not any(path.name == "Cargo.toml" and ".git" not in path.parts for path in target.rglob("Cargo.toml")):
+        missing.append("at least one Cargo.toml file")
     if project_profile.requires_sage_file and not any(path.suffix == ".sage" and ".git" not in path.parts for path in target.rglob("*.sage")):
         missing.append("at least one .sage file")
     return tuple(missing)

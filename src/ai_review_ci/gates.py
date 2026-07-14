@@ -38,6 +38,7 @@ class ProjectProfile(BaseModel):
     justfile_names: tuple[str, ...]
     required_paths: tuple[str, ...]
     requires_bun_lock: bool = False
+    requires_cargo_manifest: bool = False
     requires_sage_file: bool = False
     requires_app_boot: bool = False
 
@@ -58,7 +59,7 @@ PROJECT_PROFILES = {
         required_paths=("pyproject.toml", "package.json"),
         requires_bun_lock=True,
     ),
-    "rust": ProjectProfile(name="rust", justfile_names=("rust.just",), required_paths=("Cargo.toml",)),
+    "rust": ProjectProfile(name="rust", justfile_names=("rust.just",), required_paths=(), requires_cargo_manifest=True),
     "sage": ProjectProfile(name="sage", justfile_names=("sage.just",), required_paths=("pyproject.toml",), requires_sage_file=True),
 }
 
@@ -281,11 +282,7 @@ def delegates_to_global_qc(output: str, project_profile: ProjectProfile) -> bool
     expected = set(project_profile.justfile_names)
     command_lines = output.splitlines()
     return observed == expected and all(
-        any(
-            f"ai-review-ci/justfiles/{justfile_name}" in line
-            and re.search(r"(?:-d|--working-directory)\s+\.", line) is not None
-            for line in command_lines
-        )
+        any(f"ai-review-ci/justfiles/{justfile_name}" in line and re.search(r"(?:-d|--working-directory)\s+\.", line) is not None for line in command_lines)
         for justfile_name in project_profile.justfile_names
     )
 
