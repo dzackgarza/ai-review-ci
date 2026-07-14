@@ -7,7 +7,7 @@ For PR-scoped test or QC work, follow the [Git integration workflow](../git-inte
 
 # HIGH-QUALITY TESTING STANDARDS (GUIDELINES)
 
-Before writing, reviewing, or modifying tests or Quality Control configurations, consult the central policy index: [policy-index](../policy-index/SKILL.md)
+Before writing, reviewing, or modifying tests or Quality Control configurations, consult the central policy index: [[policy-index/SKILL|policy-index]]
 
 **MANDATORY FIRST STEP: You MUST read this entire file before taking ANY action.
 This is the source of truth for all test work.**
@@ -866,7 +866,7 @@ The right response is to make whole classes of evasive code unrepresentable.
 The recurring pattern is that an agent first tries to satisfy checking/validation surfaces (such as the compiler/typechecker, QC gates, PR review, or user queries) by manipulating the validation surface (e.g. by adding fallbacks, defaults, mocks, try/except blocks, or bypass comments) instead of reconstructing the original obligation and solving it.
 The policy answer is to remove the vocabulary that enables that manipulation.
 
-Adhering to the [Bridge-Burning Policies](../policy-index/SKILL.md#policy-registry) defined in `policy-index/SKILL.md` is a non-negotiable hard constraint for all development.
+Adhering to the [[policy-index/SKILL#policy-registry|Bridge-Burning Policies]] defined in `policy-index/SKILL.md` is a non-negotiable hard constraint for all development.
 These rules eliminate common agent validation-evasion pathways (such as runtime defaults, fallbacks, mocks, and diagnostic smoke tests in proof paths).
 Refer to them as hard boundaries.
 
@@ -893,12 +893,12 @@ For example, an exception allowing a fallback provider is only allowed if the pr
 
 ## Cross-References
 
-- **policy-index/references/error-handling-as-control-flow** → Load when tests or runtime code use exceptions, failed attempts, or retries to choose ordinary behavior. Tests must prove explicit domain states, legal transitions, typed outcomes, and retry safety rather than catch ordering.
+- **[[policy-index/SKILL|policy-index]]/references/error-handling-as-control-flow** → Load when tests or runtime code use exceptions, failed attempts, or retries to choose ordinary behavior. Tests must prove explicit domain states, legal transitions, typed outcomes, and retry safety rather than catch ordering.
 
-- **llm-failure-modes/testing-failures** → Load alongside during test audit or test writing tasks.
+- **[[llm-failure-modes/SKILL|llm-failure-modes]]/testing-failures** → Load alongside during test audit or test writing tasks.
   Catalogs failure patterns agents produce in test code: content-free verification, tautological testing, mock-first evasion, tolerance substitution, instrumental deception, and the 7-tactic test-cheat escalation ladder.
 
-- **llm-failure-modes/field-observations** → Load alongside during review of test suites, CI configuration, or error-handling code.
+- **[[llm-failure-modes/SKILL|llm-failure-modes]]/field-observations** → Load alongside during review of test suites, CI configuration, or error-handling code.
   Catalogs field-observed testing failures: checker removal, test expectation modification, and plausible fixture injection.
 
 - [[reviewing-llm-code/SKILL|reviewing-llm-code]] → Load alongside when reviewing tests or test-related documentation produced by an LLM. Provides the canonical pattern catalog for LLM-generated test artifacts: developer-controlled assertions, fallback laundering, no-op behavior, and recipe bypasses.

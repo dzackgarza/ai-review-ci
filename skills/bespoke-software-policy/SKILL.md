@@ -15,7 +15,7 @@ Apply these rules to EVERY finding before reporting.
 They will not introduce code that crashes on the happy path.
 The far more insidious residue is code that *silently fails* — it does not crash, it does not produce obviously wrong output, but it has disabled some safety guarantee, erased some diagnostic signal, or introduced a path where wrong behavior would be invisible.
 That is the defect category this policy exists to catch.
-The bridge-burning policies, anti-slop red flags, and fail-loudly rule all exist for this reason.
+The bridge-burning policies, [[anti-slop/SKILL|anti-slop]] red flags, and fail-loudly rule all exist for this reason.
 
 An agent may frame silent-failure constructs as "speculative" or "enterprise."
 They are not.

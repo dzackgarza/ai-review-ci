@@ -5,7 +5,7 @@ description: Use when implementing, understanding, or delegating to the global q
 
 # Quality Control System
 
-Before configuring, running, or modifying Quality Control checks, consult the central policy index: [policy-index](../policy-index/SKILL.md)
+Before configuring, running, or modifying Quality Control checks, consult the central policy index: [[policy-index/SKILL|policy-index]]
 
 The global quality control system at `~/ai-review-ci` provides centralized linting, typechecking, formatting, complexity analysis, and code quality enforcement for all projects.
 It is the single source of truth for QC workflows.
@@ -217,7 +217,7 @@ Global QC owns these tool configs — local overrides are forbidden:
 | `semgrep.yml` | Semgrep | Global QC owns semgrep security rules |
 | `.jscpd.json` | jscpd | Global QC owns copy-paste detection config |
 | `.slopconfig.yaml` | ai-slop-detector | Global QC owns slop detection config |
-| `sgconfig.yml` | ast-grep | Global QC owns AST pattern rules |
+| `sgconfig.yml` | [[ast-grep/SKILL|ast-grep]] | Global QC owns AST pattern rules |
 
 If any of these files exist in the project root, the check fails with:
 
@@ -263,7 +263,7 @@ Validates:
 1. **At least one `Cargo.toml` exists anywhere in the repository** — Rust QC supports nested Rust layouts such as Tauri projects where the manifest lives in `src-tauri/Cargo.toml`.
 2. **Tests must exist** — Either a `tests/` directory or `#[test]` functions in source files.
 
-#### Missing Tests: Test-Writing Triage
+#### Missing Tests: [[test-writing/SKILL|Test-Writing]] Triage
 
 Missing tests are not routed through ordinary QC triage.
 A project with source code and no tests needs a separate proof-design workflow, because immediately fixing application code or adding placeholder tests launders the absence of proof into a generic QC failure.
@@ -275,7 +275,7 @@ The required workflow is:
 - A separate subagent writes and locks in those tests, observes them fail for the expected reason, and commits the red tests.
 - The main agent changes application code until those tests pass.
 - If the main agent believes a test is wrong, it may not edit the test or instruct a fixer to edit it.
-  It must ask the same test-writing subagent, or a fresh neutral subagent primed on all policies and testing guidelines, for an unbiased verdict.
+  It must ask the same [[test-writing/SKILL|test-writing]] subagent, or a fresh neutral subagent primed on all policies and testing guidelines, for an unbiased verdict.
   The verdict determines whether the app changes or the validating subagent updates the test.
 
 #### Why preflight gates exist
@@ -415,10 +415,10 @@ This exception is documented at the recipe site in `_eslint-deps`. No other tool
 
 ### Bridge-Burning Policies
 
-Adhering to the [Bridge-Burning Policies](../anti-slop/SKILL.md#bridge-burning-policies) is a non-negotiable constraint for all development.
+Adhering to the [[anti-slop/SKILL#bridge-burning-policies|Bridge-Burning Policies]] is a non-negotiable constraint for all development.
 These rules eliminate common agent validation-evasion pathways (such as runtime defaults, fallbacks, mocks, and diagnostic smoke tests in proof paths).
 
-Any exception to these rules must strictly follow the **Policy Exception Protocol** defined in [anti-slop.md](../anti-slop/SKILL.md#policy-exception-protocol).
+Any exception to these rules must strictly follow the **Policy Exception Protocol** defined in [[anti-slop/SKILL#policy-exception-protocol|anti-slop.md]].
 
 > [!IMPORTANT]
 > **Bridge-Burning Red Flags:** If a construct would let an agent preserve the appearance of correctness while weakening the obligation, treat it as a red flag even if the code currently works.
@@ -453,7 +453,7 @@ Cross-language recipes called by language justfiles:
 - `_semgrep-autofix` — Applies Semgrep autofixes before later verification
 - `_no-bypass` — Blocks bypass comments (`# noqa`, `@ts-ignore`, `# type: ignore`, etc.)
 - `_semgrep` — Security and quality pattern verification
-- `_vibecheck` — Anti-slop pattern detection
+- `_vibecheck` — [[anti-slop/SKILL|Anti-slop]] pattern detection
 - `_slop` — ML-based code quality detection (preflight checks `models/slop_classifier.pkl`; fails hard if model file missing)
 
 This file is **not** intended for standalone invocation.
@@ -630,7 +630,7 @@ Before adding any project-local QC recipe, script, tool config, or dev dependenc
 2. **Could the same check apply to another repository?**
    - If yes: it belongs in `~/ai-review-ci`, not this repo.
 
-3. **Does it encode a known LLM failure mode or anti-slop detector?**
+3. **Does it encode a known LLM failure mode or [[anti-slop/SKILL|anti-slop]] detector?**
    - If yes: promote it to global QC.
 
 4. **Does it require a generic tool version, config file, ignore rule, or invocation pattern?**
@@ -790,11 +790,11 @@ The QC system uses these configs (all stored in `~/ai-review-ci/tool-configs/`):
 | `semgrep.yml` | Semgrep | Custom security and quality rules |
 | `grain.toml` | Grain | Unused code and low-quality pattern detection |
 | `.jscpd.json` | jscpd | Copy-paste detection |
-| `sgconfig.yml` | ast-grep | Custom AST-based rules |
+| `sgconfig.yml` | [[ast-grep/SKILL|ast-grep]] | Custom AST-based rules |
 | `lintstagedrc.mjs` | lint-staged | Pre-commit hook staged file processing |
 | `.slopconfig.yaml` | ai-slop-detector | AI-generated code detection |
 | `.coveragerc` | coverage.py | Coverage configuration |
-| `ast-grep/rules/` | ast-grep | Custom rule definitions |
+| `ast-grep/rules/` | [[ast-grep/SKILL|ast-grep]] | Custom rule definitions |
 
 ## Workflows
 
@@ -834,7 +834,7 @@ Project tests own behavior proof:
 - independent oracles used.
 
 Do not scatter policy-policing tests into projects.
-For assertion constraints, see the central [Test Guidelines](../test-guidelines/SKILL.md).
+For assertion constraints, see the central [[test-guidelines/SKILL|Test Guidelines]].
 
 ## Key Principle
 

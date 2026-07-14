@@ -5,7 +5,7 @@ description: Use when reviewing code, tests, QC, or documentation produced by an
 
 # Reviewing LLM Code
 
-Before reviewing, testing, or triaging code, consult the central policy index to locate the canonical source-of-truth skill: [policy-index](../policy-index/SKILL.md)
+Before reviewing, testing, or triaging code, consult the central policy index to locate the canonical source-of-truth skill: [[policy-index/SKILL|policy-index]]
 
 Review LLM-produced code as an agent-failure audit, not as a normal bug list.
 The point is to identify the mechanisms that made bad work look acceptable.
@@ -130,11 +130,11 @@ Also load as applicable:
 
 - [[thermo-nuclear-code-quality-review/SKILL|thermo-nuclear-code-quality-review]] when the review includes maintainability, architecture, abstractions, giant files, or code that feels obviously badly shaped.
 
-- **Jules Review Delegation** (if the user asks to use Jules for review): Load:
+- **Jules Review Delegation** (if the user asks to use [[jules/SKILL|Jules]] for review): Load:
   - [[jules/SKILL|jules]]
   - `jules/references/anti-slop-report-review.md`
-  - [reviewing-llm-code](SKILL.md)
-  - [anti-slop](../anti-slop/SKILL.md)
+  - [[reviewing-llm-code/SKILL|reviewing-llm-code]]
+  - [[anti-slop/SKILL|anti-slop]]
   - [[reviewing-subagent-work/SKILL|reviewing-subagent-work]]
   - [[test-guidelines/SKILL|test-guidelines]] if tests/QC/proof surfaces are in scope
   - [[pr-feedback-triage/SKILL|pr-feedback-triage]] if existing review comments are being evaluated
@@ -745,7 +745,7 @@ Do not invent alternatives that preserve the red flag while laundering the imple
 
 Before doing any refactor prescribed by a finding, check the EXISTING tests for LLM idiocy.
 Tests that assert on strings, formatting, whitespace, or byte-level output are a HUGE sign of slop — the skill flags this as "superficial state assertions."
-Fix the test slop FIRST: replace bad tests with proper tests that follow the test-guidelines skill.
+Fix the test slop FIRST: replace bad tests with proper tests that follow the [[test-guidelines/SKILL|test-guidelines]] skill.
 Verify they are green.
 
 Then add regression tests that capture the current behavior BEFORE the refactor.
@@ -797,7 +797,7 @@ The right response is to make whole classes of evasive code unrepresentable.
 The recurring pattern is that an agent first tries to satisfy checking/validation surfaces (such as the compiler/typechecker, QC gates, PR review, or user queries) by manipulating the validation surface (e.g. by adding fallbacks, defaults, mocks, try/except blocks, or bypass comments) instead of reconstructing the original obligation and solving it.
 The policy answer is to remove the vocabulary that enables that manipulation.
 
-Adhering to the [Bridge-Burning Policies](../policy-index/SKILL.md#policy-registry) defined in `policy-index/SKILL.md` is a non-negotiable hard constraint for all development.
+Adhering to the [[policy-index/SKILL#policy-registry|Bridge-Burning Policies]] defined in `policy-index/SKILL.md` is a non-negotiable hard constraint for all development.
 These rules eliminate common agent validation-evasion pathways (such as runtime defaults, fallbacks, mocks, and diagnostic smoke tests in proof paths).
 Refer to them as hard boundaries.
 

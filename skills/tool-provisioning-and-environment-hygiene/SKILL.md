@@ -27,7 +27,7 @@ Only reach for the OS package manager when the task requires it and the user has
 ## Prohibitions
 
 > [!IMPORTANT]
-> All code produced under this skill must adhere to the [Bridge-Burning Policies](../policy-index/SKILL.md#policy-registry) in `policy-index/SKILL.md`. These are non-negotiable hard constraints that eliminate runtime defaults, fallbacks, mocks, optional critical dependencies, and other agent validation-evasion pathways.
+> All code produced under this skill must adhere to the [[policy-index/SKILL#policy-registry|Bridge-Burning Policies]] in `policy-index/SKILL.md`. These are non-negotiable hard constraints that eliminate runtime defaults, fallbacks, mocks, optional critical dependencies, and other agent validation-evasion pathways.
 
 - Never use `pip install --break-system-packages`.
 - Never install into system Python.

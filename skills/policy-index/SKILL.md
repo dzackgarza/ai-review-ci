@@ -129,11 +129,11 @@ A policy exception requires all of:
 | What policy applies to embedding large strings/prompts/messages inline in code? | `POLICY.NO_DYNAMIC_ARTIFACTS` in `references/policies.md`. |
 | What policy applies to embedding one language inside another? | `POLICY.NO_DYNAMIC_ARTIFACTS` in `references/policies.md`. |
 | What policy applies to mypy `import-untyped`, missing stubs, or missing `py.typed`? | `POLICY.NO_UNTYPED_IMPORT_LEAK`; remediation is `REMEDIATE.TYPED_DEPENDENCY_BOUNDARY`, not dependency churn. |
-| How do I review LLM-produced code? | [reviewing-llm-code/SKILL.md](../reviewing-llm-code/SKILL.md). |
-| How do I fix slop without laundering? | [fixing-slop/SKILL.md](../fixing-slop/SKILL.md) plus fixer-only `references/remediations.md`. |
-| What makes a test valid proof? | [test-guidelines/SKILL.md](../test-guidelines/SKILL.md) plus `references/test-proof-rules.md`. |
+| How do I review LLM-produced code? | [[reviewing-llm-code/SKILL|reviewing-llm-code/SKILL.md]]. |
+| How do I fix slop without laundering? | [[fixing-slop/SKILL|fixing-slop/SKILL.md]] plus fixer-only `references/remediations.md`. |
+| What makes a test valid proof? | [[test-guidelines/SKILL|test-guidelines/SKILL.md]] plus `references/test-proof-rules.md`. |
 | Who owns QC invocation/config/tooling? | `POLICY.GLOBAL_QC_AUTHORITY`; operational QC invocation remains in the global [[quality-control/SKILL|quality-control]] skill. |
 | How do I triage PR feedback? | [[pr-feedback-triage/SKILL|pr-feedback-triage]]. |
 | How do I debug without prior-shaped probing? | [[reality-grounded-debugging/SKILL|reality-grounded-debugging]] + [[systematic-debugging/SKILL|systematic-debugging]]. |
 | How do I handle external tool/library/compiler uncertainty? | [[known-solution-first/SKILL|known-solution-first]]. |
-| How do I provision tools? | [tool-provisioning-and-environment-hygiene](../tool-provisioning-and-environment-hygiene/SKILL.md). |
+| How do I provision tools? | [[tool-provisioning-and-environment-hygiene/SKILL|tool-provisioning-and-environment-hygiene]]. |

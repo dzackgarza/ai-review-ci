@@ -735,7 +735,7 @@ This links to the existing goal-integrity rule: changing labels, comments, issue
 
 ## Bridge-Burning Policies
 
-The canonical bridge-burning policy registry has moved to [policy-index/SKILL.md#policy-registry](../policy-index/SKILL.md#policy-registry).
+The canonical bridge-burning policy registry has moved to [[policy-index/SKILL#policy-registry|policy-index/SKILL.md#policy-registry]].
 
 This skill no longer owns the enumerated policy text.
 Use [[policy-index/SKILL|policy-index]] for `POLICY.*` codes and the exception protocol.
@@ -745,7 +745,7 @@ Remediation instructions are intentionally separate and belong to the fixer-side
 
 ## Policy Exception Protocol
 
-The canonical policy exception protocol lives in [policy-index/SKILL.md#exception-protocol](../policy-index/SKILL.md#exception-protocol).
+The canonical policy exception protocol lives in [[policy-index/SKILL#exception-protocol|policy-index/SKILL.md#exception-protocol]].
 
 Anti-slop findings may identify that an exception would be required, but this skill does not grant exceptions or maintain a separate exception checklist.
 
@@ -791,4 +791,4 @@ Skills must not seed:
 
 ### Cross-References (Source-of-Truth Skills)
 
-Rather than repeating policy in every skill, consult the central policy index to locate the canonical source-of-truth skill: [policy-index](../policy-index/SKILL.md)
+Rather than repeating policy in every skill, consult the central policy index to locate the canonical source-of-truth skill: [[policy-index/SKILL|policy-index]]
