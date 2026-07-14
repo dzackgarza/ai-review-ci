@@ -2,7 +2,7 @@
 #
 # Imports cross-language QC recipes from `justfile` (shared) and adds
 # Rust-specific recipes. Rust projects delegate to this file:
-#   just -f ~/ai-review-ci/justfiles/rust.just -d . test
+#   just -f ~/ai-review-ci/justfiles/rust.just -d . test-commit
 #
 # Shared recipes (imported from justfile):
 #   _no-bypass, _semgrep, _ast-grep, _jscpd, _vibecheck, _slop
@@ -10,13 +10,12 @@
 # Rust-specific recipes:
 #   _clippy, _rustfmt, _cargo-test, _lizard, _codeql
 #
-# WORKFLOW (two-tier):
-#   just test     — COMMIT gate: correctness + normalization only (preflight,
-#                   cargo fmt, clippy, rustfmt --check, cargo test, bypass check).
-#   just test-ci  — PUSH/CI gate: test + the full style/slop stack
-#                   (jscpd, lizard, codeql, semgrep, ast-grep, vibecheck, ai-slop).
+# WORKFLOW (three-tier):
+#   just test-commit — preflight, formatting, clippy, bypass check.
+#   just test-push   — commit checks plus the full Cargo test suite.
+#   just test-ci     — push checks plus policy, complexity, and security gates.
 #
-# HOOKS: pre-commit blocks on `just test`; pre-push blocks on `just test-ci`.
+# HOOKS: pre-commit blocks on `just test-commit`; pre-push blocks on `just test-push`.
 #   Run `just install-global-hooks` from ~/ai-review-ci to activate them globally.
 
 infra := justfile_directory() / ".."
@@ -25,7 +24,7 @@ artifacts := infra / "tool-artifacts"
 justfiles := infra / "justfiles"
 
 default:
-	@just test
+	@just test-commit
 
 _rust-qc-files:
 	#!/usr/bin/env bash
@@ -285,16 +284,28 @@ _doctor-preflight:
 	set -euo pipefail
 	uv run --project {{infra}} ai-review-ci doctor-preflight --target .
 
-# public: COMMIT gate — correctness + normalization, plus bypass detection
-test: _doctor-preflight _check-rust-project _normalize-common _normalize _clippy _rustfmt _cargo-test
+# public: COMMIT gate — immediate, directly repairable feedback
+test-commit:
 	#!/usr/bin/env bash
 	set -euo pipefail
+	export AI_REVIEW_CI_FAILURE_MODE=direct
+	just --justfile {{justfile()}} -d . _doctor-preflight _check-rust-project _normalize-common _normalize _clippy _rustfmt
 	just -f {{justfiles}}/shared.just -d . _no-bypass
-	echo "Commit-tier quality checks completed"
+	echo "Commit quality checks completed"
 
-# public: PUSH/CI gate — test + the full style/slop stack
-test-ci: test _jscpd _lizard _codeql
+# public: PUSH gate — commit checks plus the full project-owned test suite
+test-push:
 	#!/usr/bin/env bash
 	set -euo pipefail
+	export AI_REVIEW_CI_FAILURE_MODE=direct
+	just --justfile {{justfile()}} -d . test-commit _cargo-test
+	echo "Push quality checks completed"
+
+# public: CI gate — push checks plus gameable and long-running acceptance gates
+test-ci:
+	#!/usr/bin/env bash
+	set -euo pipefail
+	export AI_REVIEW_CI_FAILURE_MODE=triage
+	just --justfile {{justfile()}} -d . test-push _jscpd _lizard _codeql
 	just -f {{justfiles}}/shared.just -d . _global-qc
-	echo "Push/CI quality checks completed"
+	echo "CI quality checks completed"

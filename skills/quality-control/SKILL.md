@@ -37,24 +37,25 @@ The hierarchy is designed so that no skill below rank 3 can re-introduce mock se
 
 ### Minimal Public API
 
-**Only two public recipes exist:** `test` and `test-ci`. Everything else is private (prefixed with `_`). This prevents cherry-picking — agents cannot run just `lint` or just `typecheck` in isolation to bypass the stack.
+**Exactly three blocking gate recipes exist:** `test-commit`, `test-push`, and `test-ci`. Scheduled `ambient`, setup/help, and profile-specific boundary entrypoints are separate surfaces; individual generic checks stay private. This prevents cherry-picking while separating feedback by ownership and gaming surface.
 
-The two recipes are tiered:
+The recipes are tiered:
 
-- **`test` (commit gate, run by `pre-commit`)** — correctness + normalization only: preflight, shared normalization + language auto-fixers, syntax, type-checking (mypy/tsc/clippy), the project's own tests with **no** coverage threshold, and bypass-comment detection.
-  Its job is to catch *plainly incorrect* code while keeping the tree normalized, without dragging full slop triage into every commit.
-- **`test-ci` (push gate, run by `pre-push`)** — depends on `test` and adds the full *style/slop/coverage* stack: 100% coverage + diff-cover, deptry, import-linter, dead-code (vulture/grain/knip), jscpd, lizard, ast-grep, semgrep, vibecheck, and ai-slop.
-  This is the complete pipeline; it must pass before pushing.
+- **`test-commit` (pre-commit)** — preflight, normalization, syntax/compile checks, type checking, and bypass detection. Failures are direct local repair; do not create a review disposition or delegate an obvious fix.
+- **`test-push` (pre-push)** — includes `test-commit` and runs the full project-owned test suite. Ordinary build and test failures remain direct implementation work.
+- **`test-ci` (required PR context)** — includes `test-push` and adds coverage, dependency/import boundaries, dead-code, duplication, complexity, policy/slop, security, and hosted checks. Policy-sensitive findings retain independent triage because their evaluator surface is gameable.
+
+General and slop review start on the first coherent push in parallel with `test-ci`. Do not postpone the review loop until the branch has spent hours optimizing around an unreviewed architecture.
 
 ### Auto-Fix Enforcement: Always Apply All Available Fixes
 
-**Rule:** Agents MUST always apply all available auto-fixes when running any default recipe (`just test`, `just test-ci`). This is not optional, not a "best effort," and not conditional on whether failures are expected.
+**Rule:** Agents MUST always apply all available auto-fixes when running any public gate. This is not optional, not a "best effort," and not conditional on whether failures are expected.
 Mutating normalization runs first.
 Verification checks run second against the post-fix tree.
 
-#### What happens when you run `just test`
+#### What happens when you run `just test-commit`
 
-The `test` recipe runs common normalization before language-specific normalization and before verification checks.
+The `test-commit` recipe runs common normalization before language-specific normalization and before verification checks.
 This applies every deterministic auto-fix the toolchain supports:
 
 **Common stack (`~/ai-review-ci/justfiles/shared.just`):**
@@ -83,15 +84,14 @@ This applies every deterministic auto-fix the toolchain supports:
 
 Late verification gates such as `semgrep`, `rustfmt --check`, `biome check`, `eslint --max-warnings 0`, and `just --list` parse checks must not be the first place deterministic style issues are discovered when a stable autoformatter exists.
 They verify that normalization succeeded.
-The auto-fixers in the tables above run in the commit-tier `test`; the heavier verification gates (`semgrep`, `biome check`, `eslint --max-warnings 0`, ai-slop, complexity, coverage) run in the push-tier `test-ci`.
+The auto-fixers in the tables above run in `test-commit`; the project suite runs in `test-push`; heavier verification gates (`semgrep`, `biome check`, `eslint --max-warnings 0`, ai-slop, complexity, coverage) run in `test-ci`.
 
 #### What agents MUST do
 
-- **Run `just test` for the commit gate and `just test-ci` for the full stack (not individual checks).** Auto-fix runs in both.
-  Before pushing, `just test-ci` must pass.
+- **Run the gate matching the workflow boundary, not individual checks.** `test-commit` runs at commit, `test-push` before publication, and `test-ci` in required PR CI.
   Do not run `ruff` or `biome` or `eslint` in isolation — the recipe handles all of them in the right order with the right flags.
 
-- **Never skip the auto-fix step.** If `just test` passes without changes, fine.
+- **Never skip the auto-fix step.** If `just test-commit` passes without changes, fine.
   If it applies fixes, those fixes are part of the intended output — they are not noise.
   Commit them.
 
@@ -111,13 +111,13 @@ Without an explicit auto-fix requirement, agents routinely:
 - Skip auto-fix entirely and report "lint pass" when the actual fix step was never run
 
 This is not a performance optimization.
-It is an epistemic integrity requirement: the state of the code after `just test` must be the state that was actually checked.
+It is an epistemic integrity requirement: the state after each gate must be the state that gate actually checked.
 
 ### Full Stack, No Exceptions
 
-`just test-ci` runs the complete QC pipeline; `just test` runs the commit-tier subset (correctness + normalization) that it builds on.
+`just test-ci` runs the complete acceptance pipeline; `just test-push` runs the project suite it builds on; `just test-commit` runs the immediate correctness subset.
 There is no separate `just lint` or `just typecheck` for agents to use.
-Running only typecheck is insufficient — the commit gate must pass to commit, and the full `test-ci` stack must pass before pushing.
+Running only typecheck is insufficient. Each workflow boundary owns its named gate, and required PR contexts own final acceptance.
 
 ### No-Bypass Policy
 
@@ -363,10 +363,10 @@ _slop-scan:            # does not belong here — hard-fails on pure Python proj
 
 ```
 # Python justfile
-test: _normalize-common _normalize _python-syntax _mypy ...   # common normalization, then Python tools
+test-commit: _normalize-common _normalize _python-syntax _mypy ...
 
 # TS justfile
-test: _normalize-common _normalize _knip _biome _slop-scan ...  # common normalization, then TS tools
+test-ci: test-push _knip _biome _slop-scan ...
 ```
 
 Running the wrong justfile for a project also fails — if Python QC runs on a project with no Python files, every recipe that checks for `.py` files will exit 1. This is correct: the developer is using the wrong justfile.
@@ -509,7 +509,8 @@ Recipes: `_normalize-common` wrapper, `_sage-syntax`, `_vulture` (Sage-aware pre
 
 Invocations:
 
-- `just -f ~/ai-review-ci/justfiles/sage.just -d . test`
+- `just -f ~/ai-review-ci/justfiles/sage.just -d . test-commit`
+- `just -f ~/ai-review-ci/justfiles/sage.just -d . test-push`
 - `just -f ~/ai-review-ci/justfiles/sage.just -d . test-ci`
 
 ### Shared Composition Rule
@@ -528,8 +529,11 @@ Language-specific recipes like `_jscpd-python`, `_lizard-python`, `_jscpd-bun`, 
 
 ```justfile
 # my-project/justfile
-test:
-  @just -f ~/ai-review-ci/justfiles/python.just -d . test
+test-commit:
+  @just -f ~/ai-review-ci/justfiles/python.just -d . test-commit
+
+test-push:
+  @just -f ~/ai-review-ci/justfiles/python.just -d . test-push
 
 test-ci:
   @just -f ~/ai-review-ci/justfiles/python.just -d . test-ci
@@ -539,8 +543,11 @@ test-ci:
 
 ```justfile
 # my-project/justfile
-test:
-  @just -f ~/ai-review-ci/justfiles/bun.just -d . test
+test-commit:
+  @just -f ~/ai-review-ci/justfiles/bun.just -d . test-commit
+
+test-push:
+  @just -f ~/ai-review-ci/justfiles/bun.just -d . test-push
 
 test-ci:
   @just -f ~/ai-review-ci/justfiles/bun.just -d . test-ci
@@ -550,8 +557,11 @@ test-ci:
 
 ```justfile
 # my-project/justfile
-test:
-  @just -f ~/ai-review-ci/justfiles/rust.just -d . test
+test-commit:
+  @just -f ~/ai-review-ci/justfiles/rust.just -d . test-commit
+
+test-push:
+  @just -f ~/ai-review-ci/justfiles/rust.just -d . test-push
 
 test-ci:
   @just -f ~/ai-review-ci/justfiles/rust.just -d . test-ci
@@ -561,8 +571,11 @@ test-ci:
 
 ```justfile
 # my-project/justfile
-test:
-  @just -f ~/ai-review-ci/justfiles/sage.just -d . test
+test-commit:
+  @just -f ~/ai-review-ci/justfiles/sage.just -d . test-commit
+
+test-push:
+  @just -f ~/ai-review-ci/justfiles/sage.just -d . test-push
 
 test-ci:
   @just -f ~/ai-review-ci/justfiles/sage.just -d . test-ci
@@ -725,15 +738,16 @@ Instead, projects add targeted recipes that use the actual tooling:
 ### How to Extend (Domain-Specific Only, After Gate Classification)
 
 Project justfiles must NOT modify the global QC recipes.
-Instead, wrap the global `test` and add project-specific (domain-owned) steps:
+Assign project-owned checks to the gate matching their runtime and proof burden:
 
 ```justfile
 # my-project/justfile
-test:
-  @just -f ~/ai-review-ci/justfiles/python.just -d . test
-  @just _mutation-test
+test-commit:
+  @just -f ~/ai-review-ci/justfiles/python.just -d . test-commit
+
+test-push:
+  @just -f ~/ai-review-ci/justfiles/python.just -d . test-push
   @just _property-test
-  @just _validate-models
 
 _mutation-test:
   uv run mutmut run --paths-to-mutate src/my_project/
@@ -744,15 +758,17 @@ _property-test:
 _validate-models:
   uv run python -m pydantic src/my_project/models/
 
-test-ci: test
+test-ci: test-push
   @just -f ~/ai-review-ci/justfiles/python.just -d . test-ci
+  @just _mutation-test
+  @just _validate-models
 ```
 
 This preserves "delegate, never reimplement" while letting projects layer on the adversarial depth their domain requires.
 
 ## Hooks
 
-Pre-commit and pre-push hooks block on `just test`. Install the centralized global hook collection from `~/ai-review-ci/global-hooks/`:
+Pre-commit blocks on `just test-commit`; pre-push blocks on `just test-push`. Required pull-request CI runs `just test-ci` in parallel with general and slop review. Install the centralized global hook collection from `~/ai-review-ci/global-hooks/`:
 
 ```bash
 just --justfile ~/ai-review-ci/justfile install-global-hooks
@@ -785,13 +801,14 @@ The QC system uses these configs (all stored in `~/ai-review-ci/tool-configs/`):
 ### Local Development
 
 ```bash
-just test       # Run all local QC checks
-just test-ci    # Run all checks including CI-specific ones
+just test-commit # Immediate local correctness and normalization
+just test-push   # Commit checks plus the full project-owned test suite
+just test-ci     # Push checks plus CI acceptance and anti-gaming gates
 ```
 
 ### CI Pipeline
 
-Projects should run `just test-ci` in CI to match local + CI checks.
+Projects run `just test-ci` as a required PR context. Review jobs start on the same push and do not wait for deterministic CI to finish.
 
 ## Assertion Policy vs QC Policy
 

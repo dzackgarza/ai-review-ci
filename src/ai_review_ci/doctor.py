@@ -464,6 +464,7 @@ def _required_workflow_gates(name: str, profile: ProfileName) -> tuple[str, ...]
     if name != "review-pr.yml":
         return ()
     gates = (
+        "qc-ci",
         "deterministic-diff",
         "delegation-conformance",
         "qc-doctor",
@@ -477,7 +478,7 @@ def _required_workflow_gates(name: str, profile: ProfileName) -> tuple[str, ...]
 
 def _justfile_delegation(target: Path, profile: ProfileName) -> dict[str, DelegationObservation]:
     project_profile = PROJECT_PROFILES[profile]
-    recipes = ["test", "test-ci"]
+    recipes = ["test-commit", "test-push", "test-ci"]
     if project_profile.requires_app_boot:
         recipes.append("app-boot")
     justfile = _justfile_path(target)

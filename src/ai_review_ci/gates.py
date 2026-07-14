@@ -64,6 +64,7 @@ PROJECT_PROFILES = {
 }
 
 BASE_REQUIRED_CHECK_CONTEXTS = (
+    "qc-ci / qc",
     "deterministic-diff / deterministic-diff",
     "delegation-conformance / delegation-conformance",
     "qc-doctor / qc-doctor",
@@ -288,13 +289,13 @@ def delegates_to_global_qc(output: str, project_profile: ProjectProfile) -> bool
 
 
 def check_delegation(target: Path, profile: str) -> None:
-    """Fail if target test/test-ci recipes do not delegate to global QC."""
+    """Fail unless every public QC tier delegates to global QC."""
     target = target.resolve()
     project_profile = _profile(profile)
     check_profile(target, profile)
     justfile = _justfile_for(target)
     failed: list[str] = []
-    for recipe in ("test", "test-ci"):
+    for recipe in ("test-commit", "test-push", "test-ci"):
         output = _dry_run_recipe(target, justfile, recipe)
         if not delegates_to_global_qc(output, project_profile):
             failed.append(recipe)
@@ -525,7 +526,8 @@ def required_check_contexts(profile: str) -> tuple[str, ...]:
     """Required branch-protection check contexts for a curated project profile."""
     project_profile = _profile(profile)
     if project_profile.requires_app_boot:
-        return BASE_REQUIRED_CHECK_CONTEXTS[:2] + (APP_BOOT_CHECK_CONTEXT,) + BASE_REQUIRED_CHECK_CONTEXTS[2:]
+        insertion = BASE_REQUIRED_CHECK_CONTEXTS.index("pr-description-checklist / pr-description-checklist")
+        return BASE_REQUIRED_CHECK_CONTEXTS[:insertion] + (APP_BOOT_CHECK_CONTEXT,) + BASE_REQUIRED_CHECK_CONTEXTS[insertion:]
     return BASE_REQUIRED_CHECK_CONTEXTS
 
 

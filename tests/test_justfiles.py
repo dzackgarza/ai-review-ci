@@ -17,6 +17,12 @@ TRIAGE_MARKER = "QC FAILURE"
 LINT_STAGED_CONFIG = TypeAdapter(dict[str, list[str]])
 
 
+@pytest.fixture(autouse=True)
+def private_recipe_failure_mode(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Private-recipe tests exercise CI-style directives unless overridden."""
+    monkeypatch.setenv("AI_REVIEW_CI_FAILURE_MODE", "triage")
+
+
 def run_just(
     justfile: pathlib.Path,
     workdir: pathlib.Path,
@@ -1397,7 +1403,7 @@ def test_envrc_check_accepts_root_envrc_and_rejects_dotenv_files(
     assert rejected.returncode != 0, rejected.stdout + rejected.stderr
 
 
-def test_python_scaffold_bare_just_test_reaches_downstream_preflight_without_working_directory_env(
+def test_python_scaffold_bare_push_gate_reaches_downstream_preflight_without_working_directory_env(
     tmp_path: pathlib.Path,
 ) -> None:
     project = tmp_path / "python-scaffold-project"
@@ -1418,7 +1424,7 @@ def test_python_scaffold_bare_just_test_reaches_downstream_preflight_without_wor
     env = os.environ | {"DIRENV_CONFIGURED_CORRECTLY": "1"}
 
     result = subprocess.run(
-        ["just", "test"],
+        ["just", "test-push"],
         cwd=project,
         env=env,
         text=True,
@@ -1432,7 +1438,7 @@ def test_python_scaffold_bare_just_test_reaches_downstream_preflight_without_wor
     assert "the following required arguments were not provided" not in output
 
 
-def test_python_scaffold_bare_just_test_breaks_when_just_working_directory_is_exported(
+def test_python_scaffold_bare_push_gate_breaks_when_just_working_directory_is_exported(
     tmp_path: pathlib.Path,
 ) -> None:
     project = tmp_path / "python-scaffold-project"
@@ -1456,7 +1462,7 @@ def test_python_scaffold_bare_just_test_breaks_when_just_working_directory_is_ex
     }
 
     result = subprocess.run(
-        ["just", "test"],
+        ["just", "test-push"],
         cwd=project,
         env=env,
         text=True,
@@ -1520,7 +1526,7 @@ def test_bun_scaffold_delegates_qc_in_project_directory(
             str(ROOT / "scaffolds" / "bun" / "justfile"),
             "-d",
             str(project),
-            "test",
+            "test-push",
         ],
         cwd=project,
         text=True,
@@ -1630,7 +1636,7 @@ def test_scaffolds_delegate_qc_in_project_directory(
             str(ROOT / "scaffolds" / language / "justfile"),
             "-d",
             str(project),
-            "test",
+            "test-commit",
         ],
         cwd=project,
         env=env,
@@ -1701,10 +1707,10 @@ def test_bun_playwright_gate_requires_standard_config(tmp_path: pathlib.Path) ->
 @pytest.mark.parametrize(
     ("justfile_name", "recipes"),
     [
-        ("bun.just", ("test", "test-ci")),
-        ("python.just", ("test", "test-ci")),
-        ("rust.just", ("test", "test-ci")),
-        ("sage.just", ("test", "test-ci")),
+        ("bun.just", ("test-commit", "test-push", "test-ci")),
+        ("python.just", ("test-commit", "test-push", "test-ci")),
+        ("rust.just", ("test-commit", "test-push", "test-ci")),
+        ("sage.just", ("test-commit", "test-push", "test-ci")),
     ],
 )
 def test_language_qc_delegates_nested_global_recipes_in_project_directory(
@@ -1738,6 +1744,48 @@ def test_language_qc_delegates_nested_global_recipes_in_project_directory(
         assert delegated_lines, output
         for line in delegated_lines:
             assert " -d . " in f" {line} ", line
+
+
+@pytest.mark.parametrize(
+    ("justfile_name", "full_suite_recipe"),
+    [
+        ("python.just", "_pytest"),
+        ("bun.just", "_bun-test"),
+        ("rust.just", "_cargo-test"),
+        ("sage.just", "_sage-pytest"),
+    ],
+)
+def test_public_gate_composition_separates_immediate_checks_from_full_suite(
+    justfile_name: str,
+    full_suite_recipe: str,
+) -> None:
+    text = (ROOT / "justfiles" / justfile_name).read_text()
+
+    commit = re.search(r"(?ms)^test-commit:\n(?P<body>.*?)(?=^# public:)", text)
+    push = re.search(r"(?ms)^test-push:\n(?P<body>.*?)(?=^# public:|\Z)", text)
+    ci = re.search(r"(?ms)^test-ci:\n(?P<body>.*)\Z", text)
+
+    assert commit is not None
+    assert push is not None
+    assert ci is not None
+    assert full_suite_recipe not in commit.group("body")
+    assert full_suite_recipe in push.group("body")
+    assert "test-push" in ci.group("body")
+
+
+@pytest.mark.parametrize(
+    "path",
+    [
+        ROOT / "justfile",
+        ROOT / "justfiles" / "python.just",
+        ROOT / "justfiles" / "bun.just",
+        ROOT / "justfiles" / "rust.just",
+        ROOT / "justfiles" / "sage.just",
+        ROOT / "justfiles" / "qc-tooling.just",
+    ],
+)
+def test_old_test_gate_alias_is_removed(path: pathlib.Path) -> None:
+    assert re.search(r"(?m)^test:", path.read_text()) is None
 
 
 def test_tsc_removes_temp_output_on_success(tmp_path: pathlib.Path) -> None:
@@ -2381,7 +2429,7 @@ def test_commit_gate_stops_at_doctor_preflight_before_typechecking(
 
     (project / "justfile").write_text((ROOT / "scaffolds" / "python" / "justfile").read_text())
 
-    result = run_just(ROOT / "justfiles" / "python.just", project, "test")
+    result = run_just(ROOT / "justfiles" / "python.just", project, "test-commit")
     output = result.stdout + result.stderr
 
     assert result.returncode != 0, output
@@ -2658,6 +2706,7 @@ def test_rust_preflight_accepts_nested_cargo_manifest_and_routes_missing_tests(
             "_check-rust-project",
         ],
         cwd=project,
+        env=os.environ | {"AI_REVIEW_CI_FAILURE_MODE": "triage"},
         text=True,
         capture_output=True,
         check=False,
@@ -2712,7 +2761,7 @@ def test_rust_normalization_formats_nested_manifest_project(
 # Regression for #17: just >= 1.46 binds JUST_WORKING_DIRECTORY to
 # -d/--working-directory, which then requires --justfile — so any consumer that
 # exported JUST_WORKING_DIRECTORY (the old delegated-gate routing hint) could no
-# longer run a bare `just test`. The scaffolds resolve this by routing with an
+# longer run a bare public gate. The scaffolds resolve this by routing with an
 # explicit `-d .` and never exporting JUST_WORKING_DIRECTORY, so the bare
 # entrypoint keeps working. These tests lock both halves of that contract.
 
@@ -2726,8 +2775,39 @@ SCAFFOLD_DELEGATES = {
 }
 
 
+def test_direct_failure_mode_forbids_review_ceremony() -> None:
+    result = subprocess.run(
+        [str(ROOT / "tool-artifacts" / "scripts" / "emit-triage-directive.sh")],
+        env=os.environ | {"AI_REVIEW_CI_FAILURE_MODE": "direct"},
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+
+    assert result.returncode == 0
+    assert "DIRECT REPAIR REQUIRED" in result.stdout
+    assert "does not require a disposition ledger" in result.stdout
+    assert "TRIAGE REQUIRED" not in result.stdout
+    assert "subagent" in result.stdout
+
+
+def test_ci_failure_mode_retains_anti_golfing_triage() -> None:
+    result = subprocess.run(
+        [str(ROOT / "tool-artifacts" / "scripts" / "emit-triage-directive.sh")],
+        env=os.environ | {"AI_REVIEW_CI_FAILURE_MODE": "triage"},
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+
+    assert result.returncode == 0
+    assert "QC FAILURE — TRIAGE REQUIRED" in result.stdout
+    assert "golf" in result.stdout
+    assert "subagent" in result.stdout
+
+
 @pytest.mark.parametrize("language", sorted(SCAFFOLD_DELEGATES))
-@pytest.mark.parametrize("recipe", ["test", "test-ci"])
+@pytest.mark.parametrize("recipe", ["test-commit", "test-push", "test-ci"])
 def test_scaffold_bare_just_entrypoint_survives_working_directory_binding(
     tmp_path: pathlib.Path,
     language: str,

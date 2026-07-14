@@ -8,8 +8,8 @@ edits directly afterward:
 
 - review-general.yml  — repo-wide general review (cron, push to main, dispatch)
 - review-slop.yml     — repo-wide slop review   (cron, push to main, dispatch)
-- review-pr.yml       — diff-scoped reviews on every pull request,
-                        rendered for the declared curated project profile
+- review-pr.yml       — required test-ci plus parallel diff-scoped reviews on
+                        every pull request, rendered for the declared profile
 
 Existing files are never overwritten: once installed they are repo-owned
 configuration. Installation also applies the GitHub-side required-check

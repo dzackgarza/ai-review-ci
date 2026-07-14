@@ -4,6 +4,32 @@
 
 set -euo pipefail
 
+failure_mode="${AI_REVIEW_CI_FAILURE_MODE:?AI_REVIEW_CI_FAILURE_MODE must be set by test-commit, test-push, test-ci, or ambient}"
+
+if [[ "$failure_mode" == "direct" ]]; then
+  cat << 'DIRECT_EOF'
+
+================================================================================
+  PROJECT TEST PROOF MISSING — DIRECT REPAIR REQUIRED
+================================================================================
+
+  Add proof-bearing tests for the repository-owned behavior before pushing.
+  This local failure is not PR review feedback and does not require a
+  disposition ledger, policy reviewer, or remediation subagent.
+
+  Do not add placeholder tests, weaken assertions, skip the boundary, or edit
+  the QC gate to make the missing proof disappear.
+
+================================================================================
+DIRECT_EOF
+  exit 0
+fi
+
+if [[ "$failure_mode" != "triage" ]]; then
+  printf 'invalid AI_REVIEW_CI_FAILURE_MODE: %s\n' "$failure_mode" >&2
+  exit 2
+fi
+
 cat << 'TRIAGE_EOF'
 
 ================================================================================

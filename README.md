@@ -104,8 +104,11 @@ ai_review_ci_workflow_template_version := "1"
 ai_review_ci_local_delegation := "global-justfile"
 ai_review_ci_default_branch := "main"
 
-test:
-    @just -f ~/ai-review-ci/justfiles/bun.just -d . test
+test-commit:
+    @just -f ~/ai-review-ci/justfiles/bun.just -d . test-commit
+
+test-push:
+    @just -f ~/ai-review-ci/justfiles/bun.just -d . test-push
 
 test-ci:
     @just -f ~/ai-review-ci/justfiles/bun.just -d . test-ci
@@ -140,7 +143,7 @@ Status mapping is fixed:
 Only `current` exits zero.
 All other statuses fail the command and the `qc-doctor` PR gate.
 
-Every public `just test` begins with `doctor-preflight`. It is the local, no-network subset of doctor: it requires a valid justfile contract and the declared profile's required project shape before normalization, type checking, or tests run. Composite project shapes are centrally defined profiles; `bun-python` requires both Python and Bun project evidence and delegates to both central gates. A preflight failure is project initialization work, not a code-quality finding and must not enter the QC triage routes.
+Every public `just test-commit` begins with `doctor-preflight`. It is the local, no-network subset of doctor: it requires a valid justfile contract and the declared profile's required project shape before normalization or type checking runs. Composite project shapes are centrally defined profiles; `bun-python` requires both Python and Bun project evidence and delegates to all three central gates. A preflight failure is project initialization work, not a policy-triage finding.
 
 ## Installing QC Surfaces
 
@@ -155,7 +158,7 @@ cd ~/ai-review-ci
 ### Global Git hooks
 
 Global hooks are user-level Git hooks.
-The QC stack is two-tier: `pre-commit` runs `just test` (the commit gate — correctness and normalization only) and `pre-push` runs `just test-ci` (the push gate — the full style/slop/coverage stack on top of the commit gate).
+The QC stack has three gates: `pre-commit` runs `just test-commit` for immediate local correctness, `pre-push` runs `just test-push` for the full project-owned suite, and pull-request CI runs `just test-ci` for long, hosted, and policy-sensitive acceptance checks. General and slop review start on the first coherent push in parallel with `test-ci`, so architectural drift is reviewed before the branch is polished around the wrong design.
 The install recipe requires `GIT_GLOBAL_HOOKS_DIR` to name the explicit hooks directory, symlinks `global-hooks/pre-commit` and `global-hooks/pre-push` into that directory, and sets the user's global `core.hooksPath` to the same value:
 
 ```bash
@@ -208,8 +211,11 @@ They install the repo-local command surface; the actual QC behavior remains glob
 Python:
 
 ```justfile
-test:
-    @just -f ~/ai-review-ci/justfiles/python.just -d . test
+test-commit:
+    @just -f ~/ai-review-ci/justfiles/python.just -d . test-commit
+
+test-push:
+    @just -f ~/ai-review-ci/justfiles/python.just -d . test-push
 
 test-ci:
     @just -f ~/ai-review-ci/justfiles/python.just -d . test-ci
@@ -218,8 +224,11 @@ test-ci:
 TypeScript/Bun:
 
 ```justfile
-test:
-    @just -f ~/ai-review-ci/justfiles/bun.just -d . test
+test-commit:
+    @just -f ~/ai-review-ci/justfiles/bun.just -d . test-commit
+
+test-push:
+    @just -f ~/ai-review-ci/justfiles/bun.just -d . test-push
 
 test-ci:
     @just -f ~/ai-review-ci/justfiles/bun.just -d . test-ci
@@ -228,8 +237,11 @@ test-ci:
 TypeScript/Bun project with mandatory Playwright GUI proof:
 
 ```justfile
-test:
-    @just -f ~/ai-review-ci/justfiles/bun.just -d . test
+test-commit:
+    @just -f ~/ai-review-ci/justfiles/bun.just -d . test-commit
+
+test-push:
+    @just -f ~/ai-review-ci/justfiles/bun.just -d . test-push
 
 test-ci:
     @just -f ~/ai-review-ci/justfiles/bun.just -d . test-ci
@@ -243,8 +255,11 @@ app-boot:
 Rust:
 
 ```justfile
-test:
-    @just -f ~/ai-review-ci/justfiles/rust.just -d . test
+test-commit:
+    @just -f ~/ai-review-ci/justfiles/rust.just -d . test-commit
+
+test-push:
+    @just -f ~/ai-review-ci/justfiles/rust.just -d . test-push
 
 test-ci:
     @just -f ~/ai-review-ci/justfiles/rust.just -d . test-ci
@@ -253,8 +268,11 @@ test-ci:
 SageMath:
 
 ```justfile
-test:
-    @just -f ~/ai-review-ci/justfiles/sage.just -d . test
+test-commit:
+    @just -f ~/ai-review-ci/justfiles/sage.just -d . test-commit
+
+test-push:
+    @just -f ~/ai-review-ci/justfiles/sage.just -d . test-push
 
 test-ci:
     @just -f ~/ai-review-ci/justfiles/sage.just -d . test-ci
@@ -337,17 +355,20 @@ The non-CI quality-control stack is split by operational concern:
 Use the migrated quality gate directly from a target repo:
 
 ```bash
-just -f ~/ai-review-ci/justfiles/python.just -d . test
+just -f ~/ai-review-ci/justfiles/python.just -d . test-commit
 ```
 
-The quality gate is split into two tiers so that committing during feature work is cheap while heavier triage is deferred to push:
+The gates are split by failure ownership, runtime, and gaming surface:
 
-- `just test` (commit tier, run by `pre-commit`) catches *plainly incorrect* code: project preflight, shared normalization (Markdown/JSON/YAML formatting + Semgrep autofix), language auto-fixers (ruff/biome/cargo fmt), syntax, type-checking (mypy/tsc/clippy), the project's own tests (no coverage threshold), and bypass-comment detection.
-- `just test-ci` (push tier, run by `pre-push`) depends on `test` and adds the *style/slop/coverage* stack: 100% coverage + diff-cover, deptry, import-linter, dead-code (vulture/grain/knip), jscpd, lizard, ast-grep, semgrep, vibecheck, and ai-slop.
+- `just test-commit` (pre-commit) runs preflight, deterministic normalization, syntax/compile checks, type checking, and bypass detection. Its failures are immediate local repair: fix the reported object and recommit. They are not PR feedback and do not require disposition ledgers or remediation subagents.
+- `just test-push` (pre-push) includes the commit gate and runs the full project-owned test suite. Ordinary build and test failures remain direct implementation work.
+- `just test-ci` (required PR context) includes the push gate and adds coverage/diff-cover, dependency and import boundaries, dead-code, duplication, complexity, policy, slop, security, and hosted checks. Policy-sensitive findings retain independent triage because agents can game them by suppressing diagnostics, weakening thresholds, or golfing error counts.
+
+The first coherent push starts deterministic CI and general/slop review in parallel. Review is a separate acceptance channel, not a final step postponed until every CI detail is already green.
 
 Every language-specific tier runs shared normalization first: Markdown/JSON/YAML formatting and Semgrep autofix happen before language-specific checks and before verification gates.
 
-The root `test` recipe for this repo routes through that same migrated hierarchy.
+The root recipes for this repo route through that same hierarchy.
 
 ### How a run works
 

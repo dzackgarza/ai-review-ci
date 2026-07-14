@@ -2,6 +2,14 @@ name: PR Review
 on:
   pull_request: {}
 jobs:
+  qc-ci:
+    uses: dzackgarza/ai-review-ci/.github/workflows/_qc.yml@{{ ref }}
+    permissions:
+      contents: read
+      issues: read
+    with:
+      tier: test-ci
+      infra_ref: '{{ ref }}'
   deterministic-diff:
     uses: dzackgarza/ai-review-ci/.github/workflows/_gates.yml@{{ ref }}
     permissions:

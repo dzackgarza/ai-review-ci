@@ -2,7 +2,7 @@
 #
 # Imports shared and Python QC recipes and adds Sage-specific checks.
 # Sage projects delegate to this file:
-#   just -f ~/ai-review-ci/justfiles/sage.just -d . test
+#   just -f ~/ai-review-ci/justfiles/sage.just -d . test-commit
 #
 # Shared + Python recipes (imported transitively via justfile-python):
 #   All cross-language (justfile) and Python (justfile-python) recipes.
@@ -10,12 +10,10 @@
 # Sage-specific recipes:
 #   _sage-qc-files, _sage-syntax, _vulture, _sage-ast-grep (Sage-aware preparse)
 #
-# WORKFLOW (two-tier):
-#   just test     — COMMIT gate: Sage syntax + Python correctness/normalize
-#                   (normalize, syntax, mypy, plain pytest, bypass check).
-#   just test-ci  — PUSH/CI gate: test + the full style/slop/coverage stack
-#                   (vulture, deptry, import-linter, jscpd, lizard, ast-grep,
-#                   grain, coverage + diff-cover, semgrep, vibecheck, ai-slop).
+# WORKFLOW (three-tier):
+#   just test-commit — Sage/Python syntax, normalization, mypy, bypass check.
+#   just test-push   — commit checks plus the full Sage test suite.
+#   just test-ci     — push checks plus coverage and policy-sensitive gates.
 
 infra := justfile_directory() / ".."
 configs := infra / "tool-configs"
@@ -23,15 +21,17 @@ artifacts := infra / "tool-artifacts"
 justfiles := infra / "justfiles"
 
 default:
-	@just test
+	@just test-commit
 
 # public: print the wiring contract for putting a Sage project on this QC
 setup:
 	@echo "Sage QC wiring contract (what _sage-preflight enforces):"
 	@echo ""
 	@echo "1. Delegate the project justfile to this file:"
-	@echo "     test:"
-	@echo "         @just -f ~/ai-review-ci/justfiles/sage.just -d . test"
+	@echo "     test-commit:"
+	@echo "         @just -f ~/ai-review-ci/justfiles/sage.just -d . test-commit"
+	@echo "     test-push:"
+	@echo "         @just -f ~/ai-review-ci/justfiles/sage.just -d . test-push"
 	@echo "     test-ci:"
 	@echo "         @just -f ~/ai-review-ci/justfiles/sage.just -d . test-ci"
 	@echo ""
@@ -55,9 +55,9 @@ setup:
 	@echo "   The package must be importable there (PYTHONPATH via .envrc, or"
 	@echo "   installed into Sage's python)."
 	@echo ""
-	@echo "6. Gates: pre-commit hook runs 'just test' (syntax, mypy, pytest);"
-	@echo "   pre-push runs 'just test-ci' (adds style/slop/coverage stack)."
-	@echo "   Run 'just test' locally first — every failure prints its own fix."
+	@echo "6. Gates: pre-commit runs 'just test-commit' (syntax and mypy);"
+	@echo "   pre-push runs 'just test-push' (adds Sage tests); CI runs 'just test-ci'."
+	@echo "   Commit/push failures are direct repair; CI policy findings are triaged."
 
 _sage-qc-files:
 	#!/usr/bin/env bash
@@ -519,16 +519,25 @@ _sage-diff-cover: _sage-pytest-coverage
 		exit $ec
 	fi
 
-# public: COMMIT gate — Sage syntax + Python correctness/normalization
-test: _doctor-preflight _sage-preflight _normalize-common _sage-syntax
+# public: COMMIT gate — immediate, directly repairable feedback
+test-commit:
 	#!/usr/bin/env bash
 	set -euo pipefail
+	export AI_REVIEW_CI_FAILURE_MODE=direct
+	just --justfile {{justfile()}} -d . _doctor-preflight _sage-preflight _normalize-common _sage-syntax
 	python_qc_repo="{{justfiles}}/python.just"
 	python_qc_recipes=(_normalize _python-syntax _mypy)
 	just -f "$python_qc_repo" -d . "${python_qc_recipes[@]}"
-	just --justfile {{justfile()}} -d . _sage-pytest
 	just -f {{justfiles}}/shared.just -d . _no-bypass
-	echo "Sage commit-tier quality checks completed"
+	echo "Sage commit quality checks completed"
+
+# public: PUSH gate — commit checks plus the full project-owned test suite
+test-push:
+	#!/usr/bin/env bash
+	set -euo pipefail
+	export AI_REVIEW_CI_FAILURE_MODE=direct
+	just --justfile {{justfile()}} -d . test-commit _sage-pytest
+	echo "Sage push quality checks completed"
 
 _sage-ast-grep:
 	#!/usr/bin/env bash
@@ -596,10 +605,12 @@ _sage-ast-grep:
 		exit 1
 	fi
 
-# public: PUSH/CI gate — test + the full style/slop/coverage stack
-test-ci: test _vulture _sage-ast-grep
+# public: CI gate — push checks plus gameable and long-running acceptance gates
+test-ci:
 	#!/usr/bin/env bash
 	set -euo pipefail
+	export AI_REVIEW_CI_FAILURE_MODE=triage
+	just --justfile {{justfile()}} -d . test-push _vulture _sage-ast-grep
 	python_qc_repo="{{justfiles}}/python.just"
 	python_qc_recipes=(_deptry _import-linter _ast-grep _jscpd-python _grain)
 	just -f "$python_qc_repo" -d . "${python_qc_recipes[@]}"
@@ -610,4 +621,4 @@ test-ci: test _vulture _sage-ast-grep
 	# import sage.* or see preparsed .sage tests).
 	just --justfile {{justfile()}} -d . _sage-diff-cover
 	just -f {{justfiles}}/shared.just -d . _global-qc
-	echo "Sage push/CI quality checks completed"
+	echo "Sage CI quality checks completed"

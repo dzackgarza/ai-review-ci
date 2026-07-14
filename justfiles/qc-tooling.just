@@ -6,7 +6,7 @@
 # "skip ai-review-ci QC on itself" carve-out.
 #
 # But "skip slop rules" must not mean "no CI". QC is a repo running its own
-# standardized `test` / `test-ci` recipes against itself. This profile is that
+# standardized three-tier recipes against itself. This profile is that
 # standard minus the product-only gates: it reuses python.just's correctness
 # subrecipes (project-shape, normalize, syntax, mypy, pytest, changed-line
 # coverage, deptry, import-linter) and omits semgrep / ast-grep / jscpd /
@@ -14,11 +14,12 @@
 # this profile from duplicating python.just.
 #
 # A repo selects it the same way as any other profile:
-#   just -f ~/ai-review-ci/justfiles/qc-tooling.just -d . test
+#   just -f ~/ai-review-ci/justfiles/qc-tooling.just -d . test-commit
 #
-# WORKFLOW (two-tier, matching every other profile):
-#   just test     — COMMIT gate: preflight, normalize, syntax, mypy, pytest.
-#   just test-ci  — PUSH/CI gate: + changed-line coverage, deptry, import-linter.
+# WORKFLOW (three-tier, matching every other profile):
+#   just test-commit — normalize, syntax, and mypy.
+#   just test-push   — commit checks plus pytest.
+#   just test-ci     — push checks plus coverage, deptry, and import-linter.
 
 infra := justfile_directory() / ".."
 justfiles := infra / "justfiles"
@@ -31,26 +32,38 @@ justfiles := infra / "justfiles"
 # test layout) that is inverted for the QC owner: ai-review-ci legitimately owns
 # the tool configs it ships. Correctness is still proven by mypy + pytest (which
 # fail if types are wrong or tests are absent/failing).
-_commit-recipes := "_normalize _python-syntax _mypy _pytest"
+_commit-recipes := "_normalize _python-syntax _mypy"
+_push-recipes := "_pytest"
 _ci-recipes := "_pytest_with_coverage _diff-cover _deptry _import-linter"
 
-# public: COMMIT gate — correctness + normalization only (no slop/style gates)
-test:
+# public: COMMIT gate — immediate, directly repairable feedback
+test-commit:
     #!/usr/bin/env bash
     set -euo pipefail
+    export AI_REVIEW_CI_FAILURE_MODE=direct
     just --justfile {{infra}}/justfile -d . check
     just -f {{justfiles}}/python.just -d . {{_commit-recipes}}
     just -f {{justfiles}}/shared.just -d . _no-bypass
-    echo "QC-tooling commit-tier checks completed"
+    echo "QC-tooling commit checks completed"
 
-# public: PUSH/CI gate — correctness + coverage/dependency/import gates, no slop
+# public: PUSH gate — commit checks plus the full project-owned test suite
+test-push:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    export AI_REVIEW_CI_FAILURE_MODE=direct
+    just --justfile {{justfile()}} -d . test-commit
+    just -f {{justfiles}}/python.just -d . {{_push-recipes}}
+    echo "QC-tooling push checks completed"
+
+# public: CI gate — push checks plus coverage/dependency/import gates, no slop
 test-ci:
     #!/usr/bin/env bash
     set -euo pipefail
+    export AI_REVIEW_CI_FAILURE_MODE=triage
     just --justfile {{infra}}/justfile -d . check
-    just -f {{justfiles}}/python.just -d . {{_commit-recipes}} {{_ci-recipes}}
-    just -f {{justfiles}}/shared.just -d . _no-bypass
-    echo "QC-tooling push/CI checks completed"
+    just --justfile {{justfile()}} -d . test-push
+    just -f {{justfiles}}/python.just -d . {{_ci-recipes}}
+    echo "QC-tooling CI checks completed"
 
 # Scheduled, NOT in the PR/push gate: pre-existing repo-wide debt stays visible
 # and reviewable without blocking unrelated PRs (#53), and is the non-blocking
@@ -61,5 +74,6 @@ test-ci:
 ambient:
     #!/usr/bin/env bash
     set -euo pipefail
+    export AI_REVIEW_CI_FAILURE_MODE=triage
     just -f {{justfiles}}/python.just -d . _ambient-python-debt
     echo "QC-tooling ambient debt audit completed"

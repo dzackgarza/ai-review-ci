@@ -89,7 +89,7 @@ _semgrep-autofix:
 	set -euo pipefail
 	echo "============================="
 	echo "=== Running: semgrep auto-fix ==="
-	echo "# Applies Semgrep autofixes; push-tier Semgrep verification owns remaining findings"
+	echo "# Applies Semgrep autofixes; CI-tier Semgrep verification owns remaining findings"
 	exclude_dirs_output="$(uv run {{artifacts}}/scripts/read_qc_excludes.py {{configs}}/qc-excludes.toml)"
 	exclude_dirs=()
 	if [ -n "$exclude_dirs_output" ]; then
@@ -724,7 +724,7 @@ _sync-qc-excludes:
 # ── Entry Points ──────────────────────────────────────────────────
 
 # Push/CI-tier cross-language stack. `_no-bypass` is NOT here — it is a
-# commit-tier check invoked directly by each language's `test` recipe.
+# commit-tier check invoked directly by each language's `test-commit` recipe.
 _global-qc: _ensure-qc-repo-current _check-envrc _check-no-local-qc-override _semgrep _ast-grep _vibecheck _slop _aislop
 	#!/usr/bin/env bash
 	set -euo pipefail

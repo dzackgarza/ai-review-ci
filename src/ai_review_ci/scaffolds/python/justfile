@@ -15,9 +15,13 @@ default:
     @just --list
 
 # Run commit-tier Python QC through the central implementation.
-test:
-    @just -f ~/ai-review-ci/justfiles/python.just -d . test
+test-commit:
+    @just -f ~/ai-review-ci/justfiles/python.just -d . test-commit
 
-# Run push-tier Python QC through the central implementation.
+# Run the full Python test suite before pushing.
+test-push:
+    @just -f ~/ai-review-ci/justfiles/python.just -d . test-push
+
+# Run CI acceptance QC through the central implementation.
 test-ci:
     @just -f ~/ai-review-ci/justfiles/python.just -d . test-ci

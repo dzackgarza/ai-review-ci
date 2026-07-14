@@ -110,7 +110,7 @@ def test_doctor_reports_current_for_installed_profile_targets(tmp_path: pathlib.
     assert payload["findings"] == []
     assert payload["branch_protection"]["observed_state"] == "not_applicable"
     assert "qc-doctor / qc-doctor" in payload["branch_protection"]["required_contexts"]
-    assert payload["justfile_delegation"]["test"]["observed"]["caller_root_preserved"] is True
+    assert payload["justfile_delegation"]["test-commit"]["observed"]["caller_root_preserved"] is True
     assert payload["workflow_refs"]["review-pr.yml"]["observed_ref"] == "main"
 
 
@@ -361,13 +361,13 @@ def test_doctor_classifies_missing_bun_playwright_app_boot_as_misconfigured(tmp_
 
 def test_doctor_classifies_wrong_caller_root_delegation_as_misconfigured(tmp_path: pathlib.Path) -> None:
     project = create_target(tmp_path, "python")
-    (project / "justfile").write_text((ROOT / "scaffolds" / "python" / "justfile").read_text().replace(" -d . test", " test").replace(" -d . test-ci", " test-ci"))
+    (project / "justfile").write_text((ROOT / "scaffolds" / "python" / "justfile").read_text().replace(" -d . test-commit", " test-commit"))
 
     status, payload = status_for(project)
 
     assert status == "misconfigured"
     assert payload["installation_state"] == "noncompliant"
-    assert payload["justfile_delegation"]["test"]["observed"]["caller_root_preserved"] is False
+    assert payload["justfile_delegation"]["test-commit"]["observed"]["caller_root_preserved"] is False
     assert payload["findings"][0]["remediation_commands"] == ["just install-qc-scaffold python <target-repo>"]
 
 
@@ -383,10 +383,14 @@ def test_doctor_reports_justfile_baseline_violations(tmp_path: pathlib.Path) -> 
                 'ai_review_ci_workflow_template_version := "1"',
                 'ai_review_ci_local_delegation := "global-justfile"',
                 'ai_review_ci_default_branch := "main"',
-                "test:",
-                "    @just -f ~/ai-review-ci/justfiles/python.just -d . test",
+                "test-commit:",
+                "    @just -f ~/ai-review-ci/justfiles/python.just -d . test-commit",
                 "",
                 "# Run push-tier Python QC through the central implementation.",
+                "test-push:",
+                "    @just -f ~/ai-review-ci/justfiles/python.just -d . test-push",
+                "",
+                "# Run CI-tier Python QC through the central implementation.",
                 "test-ci:",
                 "    @just -f ~/ai-review-ci/justfiles/python.just -d . test-ci",
                 "",
@@ -401,7 +405,7 @@ def test_doctor_reports_justfile_baseline_violations(tmp_path: pathlib.Path) -> 
     assert [finding["evidence"].split(" ", 1)[1] for finding in justfile_findings] == [
         "header-comment: justfile must begin with a comment block",
         "default-recipe: no default recipe; bare just must list recipes",
-        "public-recipe-doc: recipe `test` has no immediate # doc comment",
+        "public-recipe-doc: recipe `test-commit` has no immediate # doc comment",
     ]
 
 
@@ -420,10 +424,14 @@ def test_check_justfile_cli_reports_baseline_violations(tmp_path: pathlib.Path) 
                 "# Delegates Python QC.",
                 "",
                 "# Run commit-tier Python QC through the central implementation.",
-                "test:",
-                "    @just -f ~/ai-review-ci/justfiles/python.just -d . test",
+                "test-commit:",
+                "    @just -f ~/ai-review-ci/justfiles/python.just -d . test-commit",
                 "",
                 "# Run push-tier Python QC through the central implementation.",
+                "test-push:",
+                "    @just -f ~/ai-review-ci/justfiles/python.just -d . test-push",
+                "",
+                "# Run CI-tier Python QC through the central implementation.",
                 "test-ci:",
                 "    @just -f ~/ai-review-ci/justfiles/python.just -d . test-ci",
                 "",
@@ -465,10 +473,14 @@ def test_doctor_justfile_parser_accepts_parameter_defaults_and_recipe_attributes
                 "",
                 "# Run commit-tier Python QC through the central implementation.",
                 "[no-cd]",
-                'test mode="fast":',
-                "    @just -f ~/ai-review-ci/justfiles/python.just -d . test",
+                'test-commit mode="fast":',
+                "    @just -f ~/ai-review-ci/justfiles/python.just -d . test-commit",
                 "",
                 "# Run push-tier Python QC through the central implementation.",
+                "test-push:",
+                "    @just -f ~/ai-review-ci/justfiles/python.just -d . test-push",
+                "",
+                "# Run CI-tier Python QC through the central implementation.",
                 "test-ci:",
                 "    @just -f ~/ai-review-ci/justfiles/python.just -d . test-ci",
                 "",

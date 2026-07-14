@@ -15,9 +15,13 @@ default:
     @just --list
 
 # Run commit-tier Rust QC through the central implementation.
-test:
-    @just -d . -f ~/ai-review-ci/justfiles/rust.just test
+test-commit:
+    @just -d . -f ~/ai-review-ci/justfiles/rust.just test-commit
 
-# Run push-tier Rust QC through the central implementation.
+# Run the full Rust test suite before pushing.
+test-push:
+    @just -d . -f ~/ai-review-ci/justfiles/rust.just test-push
+
+# Run CI acceptance QC through the central implementation.
 test-ci:
     @just -d . -f ~/ai-review-ci/justfiles/rust.just test-ci

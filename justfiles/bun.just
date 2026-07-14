@@ -2,7 +2,7 @@
 #
 # Imports cross-language QC recipes from `justfile` (shared) and adds
 # TypeScript-specific recipes. TypeScript projects delegate to this file:
-#   just -f ~/ai-review-ci/justfiles/bun.just -d . test
+#   just -f ~/ai-review-ci/justfiles/bun.just -d . test-commit
 #
 # Shared recipes (imported from justfile):
 #   _no-bypass, _semgrep, _vibecheck, _slop
@@ -12,14 +12,12 @@
 #   _normalize (biome + eslint), _ast-grep, _jscpd, _lizard,
 #   _codeql, _slop-scan, _lint-staged
 #
-# WORKFLOW (two-tier):
-#   just test     — COMMIT gate: correctness + normalization only (preflight,
-#                   biome/eslint auto-fix, tsc, plain bun test, bypass check).
-#   just test-ci  — PUSH/CI gate: test + the full style/slop/coverage stack
-#                   (coverage + diff-cover, knip, biome/eslint verify, ast-grep,
-#                   jscpd, lizard, slop-scan, semgrep, vibecheck, ai-slop).
+# WORKFLOW (three-tier):
+#   just test-commit — preflight, normalization, tsc, bypass check.
+#   just test-push   — commit checks plus the full Bun test suite.
+#   just test-ci     — push checks plus coverage and policy-sensitive gates.
 #
-# HOOKS: pre-commit blocks on `just test`; pre-push blocks on `just test-ci`.
+# HOOKS: pre-commit blocks on `just test-commit`; pre-push blocks on `just test-push`.
 #   Run `just install-global-hooks` from ~/ai-review-ci to activate them globally.
 #
 # CONFIG: this justfile resolves configs and artifacts from the ai-review-ci repo.
@@ -57,8 +55,8 @@ _bun-test:
 	#!/usr/bin/env bash
 	set -euo pipefail
 	echo "============================="
-	echo "=== Running: bun test (commit tier — no coverage gate) ==="
-	echo "# Runs the project's own test suite; must pass. Coverage is enforced at push (test-ci)."
+	echo "=== Running: bun test (push tier — no coverage gate) ==="
+	echo "# Runs the project's own test suite; coverage is enforced in CI."
 	unset NODE_ENV
 	if jq -e '.scripts.test // empty' package.json >/dev/null 2>&1; then
 		bun run test
@@ -74,6 +72,7 @@ _bun-test:
 app-boot:
 	#!/usr/bin/env bash
 	set -euo pipefail
+	export AI_REVIEW_CI_FAILURE_MODE=triage
 	if [ ! -f playwright.config.ts ]; then
 		echo "ERROR: bun-playwright projects must define playwright.config.ts at the repository root."
 		"{{artifacts}}/scripts/emit-triage-directive.sh"
@@ -444,16 +443,28 @@ _doctor-preflight:
 	set -euo pipefail
 	uv run --project {{infra}} ai-review-ci doctor-preflight --target .
 
-# public: COMMIT gate — correctness + normalization, plus bypass detection
-test: _doctor-preflight _check-ts-project _normalize-common _normalize _tsc _bun-test
+# public: COMMIT gate — immediate, directly repairable feedback
+test-commit:
 	#!/usr/bin/env bash
 	set -euo pipefail
+	export AI_REVIEW_CI_FAILURE_MODE=direct
+	just --justfile {{justfile()}} -d . _doctor-preflight _check-ts-project _normalize-common _normalize _tsc
 	just -f {{justfiles}}/shared.just -d . _no-bypass
-	echo "Commit-tier quality checks completed"
+	echo "Commit quality checks completed"
 
-# public: PUSH/CI gate — test + the full style/slop/coverage stack
-test-ci: test _coverage _diff-cover _knip _biome _ast-grep _eslint _jscpd-bun _lizard-bun _slop-scan
+# public: PUSH gate — commit checks plus the full project-owned test suite
+test-push:
 	#!/usr/bin/env bash
 	set -euo pipefail
+	export AI_REVIEW_CI_FAILURE_MODE=direct
+	just --justfile {{justfile()}} -d . test-commit _bun-test
+	echo "Push quality checks completed"
+
+# public: CI gate — push checks plus gameable and long-running acceptance gates
+test-ci:
+	#!/usr/bin/env bash
+	set -euo pipefail
+	export AI_REVIEW_CI_FAILURE_MODE=triage
+	just --justfile {{justfile()}} -d . test-push _coverage _diff-cover _knip _biome _ast-grep _eslint _jscpd-bun _lizard-bun _slop-scan
 	just -f {{justfiles}}/shared.just -d . _global-qc
-	echo "Push/CI quality checks completed"
+	echo "CI quality checks completed"

@@ -29,7 +29,7 @@ Each arrow is a gate, not a suggestion.
    Keep the diff inside the issue boundary.
    Keep issue checklist items open while any in-scope work remains open.
 
-   **Red-proof route.** When the red/green workflow calls for landing the genuinely-failing red proof as its own commit *before* the green fix, the pre-commit gate (`just test`) will reject it.
+   **Red-proof route.** When the red/green workflow calls for landing the genuinely-failing red proof as its own commit *before* the green fix, the pre-commit gate (`just test-commit`) will reject it.
    Do NOT reach for `git commit --no-verify` — that is an unaudited bypass.
    Use the single sanctioned, auditable route:
    ```bash
@@ -40,6 +40,7 @@ Each arrow is a gate, not a suggestion.
 
 3. **PR review synthesis.** Open or update the PR from the current work-unit issue: summarize the issue scope, close/reference split, proof obligations addressed, evidence, and reviewer checklist.
    The PR body is a review submission derived from the issue, not a second planning tracker.
+   Open the PR on the first coherent push. Deterministic `test-ci`, general review, and slop review start in parallel; do not spend hours polishing an unreviewed architecture before entering this loop.
    Use closing keywords (`Closes`) only for the work-unit issue this PR fully completes on merge; use `Refs` or prose for organizational parents and deferred work.
    A visible open checkbox in the PR body is a reviewer-facing blocker copied from the issue; if it is still open, the PR is not ready.
 

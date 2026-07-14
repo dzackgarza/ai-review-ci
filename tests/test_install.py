@@ -173,6 +173,8 @@ def test_install_writes_trigger_workflows(tmp_path: pathlib.Path) -> None:
     assert "report_type: general" in general
     assert "scope: repo" in general
     pr = (wf / "review-pr.yml").read_text()
+    assert "uses: dzackgarza/ai-review-ci/.github/workflows/_qc.yml@main" in pr
+    assert "tier: test-ci" in pr
     assert "scope: diff" in pr
     assert "gate: deterministic-diff" in pr
     assert "gate: delegation-conformance" in pr
@@ -182,6 +184,14 @@ def test_install_writes_trigger_workflows(tmp_path: pathlib.Path) -> None:
     assert "profile: 'bun'" in pr
     assert "fail_below" not in pr
     assert "pull_request" in pr
+
+
+@pytest.mark.parametrize("profile", ["python", "bun", "bun-playwright", "bun-python", "rust", "sage"])
+def test_repo_and_packaged_scaffolds_are_identical(profile: str) -> None:
+    repo_scaffold = (ROOT / "scaffolds" / profile / "justfile").read_text()
+    packaged_scaffold = (ROOT / "src" / "ai_review_ci" / "scaffolds" / profile / "justfile").read_text()
+
+    assert repo_scaffold == packaged_scaffold
 
 
 def test_install_writes_bun_playwright_app_boot_gate(tmp_path: pathlib.Path) -> None:
@@ -327,10 +337,14 @@ def test_install_final_doctor_rejects_broken_local_delegation(
                 'ai_review_ci_default_branch := "main"',
                 "",
                 "# Broken commit gate.",
-                "test:",
+                "test-commit:",
                 "    @true",
                 "",
                 "# Broken push gate.",
+                "test-push:",
+                "    @true",
+                "",
+                "# Broken CI gate.",
                 "test-ci:",
                 "    @true",
                 "",
@@ -605,7 +619,7 @@ def test_cli_install_skip_scaffold_bypasses_scaffold_overwrite_guard(
     repo = _git_repo(tmp_path)
     (repo / "pyproject.toml").write_text('[project]\nname = "target"\nversion = "0.1.0"\n')
     existing = repo / "justfile"
-    existing.write_text("# pre-existing brownfield justfile\ntest:\n    @true\n")
+    existing.write_text("# pre-existing brownfield justfile\ntest-commit:\n    @true\n")
 
     result = _run_cli_install(repo, skip_scaffold=True)
 
@@ -613,7 +627,7 @@ def test_cli_install_skip_scaffold_bypasses_scaffold_overwrite_guard(
     assert "refusing to overwrite existing scaffold" not in combined, combined
     assert result.returncode == 1, combined
     assert "FATAL: gh api --method PUT failed:" in result.stderr, combined
-    assert existing.read_text() == "# pre-existing brownfield justfile\ntest:\n    @true\n"
+    assert existing.read_text() == "# pre-existing brownfield justfile\ntest-commit:\n    @true\n"
     assert not (repo / ".ai-review-ci.toml").exists()
     assert (repo / ".github" / "workflows" / "review-pr.yml").exists()
 
@@ -625,7 +639,7 @@ def test_cli_install_without_skip_scaffold_still_refuses_existing_justfile(
     # --skip-scaffold a pre-existing justfile still hard-exits and nothing is
     # written (#202 keeps the honest refusal for the accidental case).
     repo = _git_repo(tmp_path)
-    (repo / "justfile").write_text("test:\n    @true\n")
+    (repo / "justfile").write_text("test-commit:\n    @true\n")
 
     result = _run_cli_install(repo)
 
@@ -645,6 +659,25 @@ def test_qc_tier_step_does_not_export_gh_token_tier_wide() -> None:
     assert "GH_TOKEN" not in (tier.get("env") or {})
 
 
+def test_qc_workflow_accepts_only_remote_acceptance_tiers() -> None:
+    job = _workflow_jobs("_qc.yml")["qc"]
+    validation = next(step for step in job["steps"] if isinstance(step, dict) and step.get("name") == "Validate inputs")
+
+    assert "test-ci|ambient" in validation["run"]
+    assert "test|test-ci|ambient" not in validation["run"]
+
+
+@pytest.mark.parametrize("profile", ["python", "bun-playwright"])
+def test_pr_qc_and_reviews_start_in_parallel(profile: str) -> None:
+    workflow = yaml.safe_load(_template_text("review-pr.yml", profile, "main"))
+    jobs = workflow["jobs"]
+
+    assert jobs["qc-ci"]["with"]["tier"] == "test-ci"
+    assert "needs" not in jobs["qc-ci"]
+    assert "needs" not in jobs["general"]
+    assert "needs" not in jobs["slop"]
+
+
 def test_qc_scopes_gh_token_to_isolated_gh_boundary_step() -> None:
     # #218: only the label suite's real-boundary gh tests receive the token, in
     # their own step running an isolated recipe — not the tier-wide
@@ -656,3 +689,4 @@ def test_qc_scopes_gh_token_to_isolated_gh_boundary_step() -> None:
     run = step.get("run", "")
     assert "test-gh-boundary" in run
     assert '"$QC_TIER"' not in run
+    assert step["if"] == "github.repository == 'dzackgarza/ai-review-ci'"

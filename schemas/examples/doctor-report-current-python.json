@@ -42,6 +42,7 @@
       "required_ref": "main",
       "observed_ref": "main",
       "required_gates": [
+        "qc-ci",
         "deterministic-diff",
         "delegation-conformance",
         "qc-doctor",
@@ -49,6 +50,7 @@
         "thread-resolution"
       ],
       "observed_gates": [
+        "qc-ci",
         "delegation-conformance",
         "deterministic-diff",
         "qc-doctor",
@@ -58,13 +60,24 @@
     }
   },
   "justfile_delegation": {
-    "test": {
+    "test-commit": {
       "required_justfiles": [
         "python.just"
       ],
       "observed": {
         "present": true,
-        "command": "just -f ~/ai-review-ci/justfiles/python.just -d . test\n",
+        "command": "just -f ~/ai-review-ci/justfiles/python.just -d . test-commit\n",
+        "delegates_to_global_qc": true,
+        "caller_root_preserved": true
+      }
+    },
+    "test-push": {
+      "required_justfiles": [
+        "python.just"
+      ],
+      "observed": {
+        "present": true,
+        "command": "just -f ~/ai-review-ci/justfiles/python.just -d . test-push\n",
         "delegates_to_global_qc": true,
         "caller_root_preserved": true
       }
@@ -83,6 +96,7 @@
   },
   "branch_protection": {
     "required_contexts": [
+      "qc-ci / qc",
       "deterministic-diff / deterministic-diff",
       "delegation-conformance / delegation-conformance",
       "qc-doctor / qc-doctor",
@@ -91,7 +105,9 @@
       "slop / review",
       "thread-resolution / thread-resolution"
     ],
-    "observed_contexts": [],
+    "observed_contexts": [
+      "qc-ci / qc"
+    ],
     "observed_state": "not_applicable",
     "evidence": "target repository has no origin remote"
   },

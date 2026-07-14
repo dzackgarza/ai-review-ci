@@ -555,7 +555,7 @@ This prevents in-memory stand-ins from passing tests that claim durable storage.
 
 ### Landing a red proof as its own commit
 
-The commit gate (`just test`, run by the pre-commit hook) rejects any commit whose tests fail.
+The commit gate (`just test-commit`) rejects immediate correctness failures. The full test suite runs at `just test-push`; a deliberately failing red proof therefore still requires the sanctioned red-commit route when either local gate rejects the checkpoint.
 When the red/green workflow calls for landing a genuinely-failing red proof *before* its green fix, do NOT reach for `git commit --no-verify` — that is an unaudited bypass with no owning-issue trail.
 Use the single sanctioned, auditable route:
 
@@ -733,16 +733,22 @@ If that sentence cannot be written clearly, the test is likely not well-targeted
 
 * * *
 
-## Comprehensive Quality Gates (`just test`)
+## Comprehensive Quality Gates
 
-All code must be hard-gated by a comprehensive suite of checks.
+All code must be hard-gated by the complete three-tier suite.
 These gates are owned by the global QC system at `~/ai-review-ci` — see the `quality-control` skill.
 The project justfile delegates to global QC and may add only domain-specific private checks per the QC Extension Gate.
 
 **Do not** reconfigure these gates locally (no per-repo tool installs, no local config overrides for generic QC tools).
 The global QC system owns tool pins, configs, and invocation patterns.
 
-The following checks are **mandatory** gates (all owned by global QC):
+The tiers separate feedback latency without dropping any mandatory burden:
+
+- `test-commit`: preflight, normalization, syntax/compile, type checking, and bypass detection. Repair failures directly.
+- `test-push`: the commit gate plus the full project-owned test suite. Ordinary test failures remain direct implementation work.
+- `test-ci`: the push gate plus coverage, architecture, dead-code, duplication, complexity, policy/slop, security, and hosted checks. Policy-sensitive findings use independent anti-golfing triage.
+
+The following checks are **mandatory** across those gates (all owned by global QC):
 
 1. **Tests pass**
 

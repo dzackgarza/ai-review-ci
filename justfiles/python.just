@@ -2,7 +2,7 @@
 #
 # Imports cross-language QC recipes from `justfile` (shared) and adds
 # Python-specific recipes. Python projects delegate to this file:
-#   just -f ~/ai-review-ci/justfiles/python.just -d . test
+#   just -f ~/ai-review-ci/justfiles/python.just -d . test-commit
 #
 # Shared recipes (imported from justfile):
 #   _no-bypass, _semgrep, _vibecheck, _slop
@@ -12,14 +12,12 @@
 #   _pytest_with_coverage, _diff-cover, _vulture, _deptry,
 #   _import-linter, _grain, _ast-grep, _jscpd, _lizard, _codeql
 #
-# WORKFLOW (two-tier):
-#   just test     — COMMIT gate: correctness + normalization only (preflight,
-#                   normalize/auto-fix, syntax, mypy, plain pytest, bypass check).
-#   just test-ci  — PUSH/CI gate: test + changed-line coverage and deterministic
-#                   dependency/import/AST/duplication gates. Broad debt scans
-#                   stay available through _ambient-python-debt.
+# WORKFLOW (three-tier):
+#   just test-commit — preflight, normalization, syntax, mypy, bypass check.
+#   just test-push   — commit checks plus the full pytest suite.
+#   just test-ci     — push checks plus coverage and policy-sensitive gates.
 #
-# HOOKS: pre-commit blocks on `just test`; pre-push blocks on `just test-ci`.
+# HOOKS: pre-commit blocks on `just test-commit`; pre-push blocks on `just test-push`.
 #   Run `just install-global-hooks` from ~/ai-review-ci to activate them globally.
 #
 # CONFIG: this justfile resolves configs and artifacts from the ai-review-ci repo.
@@ -34,8 +32,10 @@ setup:
 	@echo "Python QC wiring contract (what _check-python-project enforces):"
 	@echo ""
 	@echo "1. Delegate the project justfile to this file:"
-	@echo "     test:"
-	@echo "         @just -f ~/ai-review-ci/justfiles/python.just -d . test"
+	@echo "     test-commit:"
+	@echo "         @just -f ~/ai-review-ci/justfiles/python.just -d . test-commit"
+	@echo "     test-push:"
+	@echo "         @just -f ~/ai-review-ci/justfiles/python.just -d . test-push"
 	@echo "     test-ci:"
 	@echo "         @just -f ~/ai-review-ci/justfiles/python.just -d . test-ci"
 	@echo ""
@@ -49,9 +49,9 @@ setup:
 	@echo ""
 	@echo "4. Tests must exist (test_*.py / *_test.py / tests/*.py)."
 	@echo ""
-	@echo "5. Gates: pre-commit hook runs 'just test' (syntax, mypy, pytest);"
-	@echo "   pre-push runs 'just test-ci' (adds style/slop/coverage stack)."
-	@echo "   Run 'just test' locally first — every failure prints its own fix."
+	@echo "5. Gates: pre-commit runs 'just test-commit' (syntax and mypy);"
+	@echo "   pre-push runs 'just test-push' (adds pytest); CI runs 'just test-ci'."
+	@echo "   Commit/push failures are direct repair; CI policy findings are triaged."
 	@echo ""
 	@echo "Sage projects: use sage.just instead ('just -f ~/ai-review-ci/justfiles/sage.just setup')."
 
@@ -307,8 +307,8 @@ _pytest: _install-tools
 	#!/usr/bin/env bash
 	set -euo pipefail
 	echo "============================="
-	echo "=== Running: pytest (commit tier — no coverage gate) ==="
-	echo "# Runs the project's own test suite; must pass. Coverage thresholds are enforced at push (test-ci)."
+	echo "=== Running: pytest (push tier — no coverage gate) ==="
+	echo "# Runs the project's own test suite; coverage thresholds are enforced in CI."
 	if ! rg --files tests -g 'test_*.py' -g '*_test.py' -g '!*.sage.py' >/dev/null 2>&1; then
 		echo "ERROR: pytest: no test files found in a Python project."
 		"{{artifacts}}/scripts/emit-test-writing-directive.sh"
@@ -534,7 +534,7 @@ _ast-grep: _install-tools
 	# rather than emitting an ignorable warning, so every rule is error-tier and
 	# blocks here — `error[` matches all of them.
 	if grep -q "error\[" "$findings_file"; then
-		echo "Blocking just test: error-severity findings must be resolved against repository audit guidelines."
+		echo "Blocking just test-ci: error-severity findings must be resolved against repository audit guidelines."
 		"{{artifacts}}/scripts/emit-triage-directive.sh"
 		exit 1
 	fi
@@ -722,19 +722,31 @@ _codeql:
 		print(f"- ... {len(findings) - 50} more findings omitted; see SARIF report above.")
 	PY
 
-# public: COMMIT gate — correctness + normalization, plus bypass detection
-test: _doctor-preflight _check-python-project _normalize-common _normalize _python-syntax _mypy _pytest
+# public: COMMIT gate — immediate, directly repairable feedback
+test-commit:
 	#!/usr/bin/env bash
 	set -euo pipefail
+	export AI_REVIEW_CI_FAILURE_MODE=direct
+	just --justfile {{justfile()}} -d . _doctor-preflight _check-python-project _normalize-common _normalize _python-syntax _mypy
 	just -f {{justfiles}}/shared.just -d . _no-bypass
-	echo "Commit-tier quality checks completed"
+	echo "Commit quality checks completed"
+
+# public: PUSH gate — commit checks plus the full project-owned test suite
+test-push:
+	#!/usr/bin/env bash
+	set -euo pipefail
+	export AI_REVIEW_CI_FAILURE_MODE=direct
+	just --justfile {{justfile()}} -d . test-commit _pytest
+	echo "Push quality checks completed"
 
 # private: ambient broad-debt audit — not push-blocking for unrelated diffs
 _ambient-python-debt: _lizard-python _vulture _grain
 
-# public: PUSH/CI gate — test + changed-line coverage and deterministic project gates
-test-ci: test _pytest_with_coverage _diff-cover _deptry _import-linter _ast-grep _jscpd-python
+# public: CI gate — push checks plus gameable and long-running acceptance gates
+test-ci:
 	#!/usr/bin/env bash
 	set -euo pipefail
+	export AI_REVIEW_CI_FAILURE_MODE=triage
+	just --justfile {{justfile()}} -d . test-push _pytest_with_coverage _diff-cover _deptry _import-linter _ast-grep _jscpd-python
 	just -f {{justfiles}}/shared.just -d . _global-qc
-	echo "Push/CI quality checks completed"
+	echo "CI quality checks completed"

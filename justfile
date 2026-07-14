@@ -32,14 +32,16 @@ check: _normalize
 check-skill-links:
     uv run tool-artifacts/scripts/check_skill_links.py
 
-# Commit gate: this repo is QC tooling, so it runs the qc-tooling profile
-# (correctness + normalization, without the product-only slop/style gates it
-# ships for downstream). Same standardized recipe shape as every other repo.
-test:
-    just -f {{repo}}/justfiles/qc-tooling.just -d . test
+# Commit gate: immediate, directly repairable feedback.
+test-commit:
+    just -f {{repo}}/justfiles/qc-tooling.just -d . test-commit
 
-# Push/CI gate: qc-tooling profile + changed-line coverage / dependency / import
-# boundary checks. Still no self-applied slop/style stack.
+# Push gate: commit checks plus the full project-owned test suite.
+test-push:
+    just -f {{repo}}/justfiles/qc-tooling.just -d . test-push
+
+# CI gate: push checks plus changed-line coverage / dependency / import
+# boundary checks. This repo does not self-apply the downstream slop stack.
 test-ci:
     just -f {{repo}}/justfiles/qc-tooling.just -d . test-ci
 
@@ -49,7 +51,7 @@ ambient:
     just -f {{repo}}/justfiles/qc-tooling.just -d . ambient
 
 # gh-boundary gate: the label suite's real-boundary tests that authenticate to
-# the live GitHub API. Isolated from `test`/`test-ci` so GH_TOKEN is scoped to
+# the live GitHub API. Isolated from the three standard gates so GH_TOKEN is scoped to
 # this recipe's CI step alone (_qc.yml), never exported to the QC tier's recipes
 # and npx/uvx tool runners (#218). `-m gh_boundary` overrides the default
 # `not gh_boundary` deselection in pyproject.

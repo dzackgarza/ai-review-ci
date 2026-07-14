@@ -58,7 +58,7 @@ def test_delegation_accepts_central_bun_python_composite_profile(tmp_path: pathl
 def test_delegation_rejects_local_qc_override(tmp_path: pathlib.Path) -> None:
     project = tmp_path / "project"
     project.mkdir()
-    (project / "justfile").write_text("test:\n    @true\n\ntest-ci:\n    @true\n")
+    (project / "justfile").write_text("test-commit:\n    @true\n\ntest-push:\n    @true\n\ntest-ci:\n    @true\n")
     (project / "package.json").write_text('{"scripts": {}}\n')
     (project / "bun.lock").write_text("")
 
@@ -185,6 +185,7 @@ def test_branch_protection_payload_uses_profile_check_contexts() -> None:
 
     assert payload["required_status_checks"]["contexts"] == []
     assert payload["required_status_checks"]["checks"] == [
+        {"context": "qc-ci / qc", "app_id": -1},
         {"context": "deterministic-diff / deterministic-diff", "app_id": -1},
         {"context": "delegation-conformance / delegation-conformance", "app_id": -1},
         {"context": "qc-doctor / qc-doctor", "app_id": -1},

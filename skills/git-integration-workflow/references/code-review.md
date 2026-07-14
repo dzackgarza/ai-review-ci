@@ -199,7 +199,7 @@ git diff main...HEAD -- path/to/file.py
 ### Step 5: Run automated checks
 
 ```bash
-just test
+just test-push
 ```
 
 ### Step 6: Apply review checklist (see Section 3 above)

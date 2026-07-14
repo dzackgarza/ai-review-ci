@@ -12,6 +12,7 @@ Before writing code:
 - update that issue with the plan, proof obligations, checklist, and expected review evidence before broad implementation continues;
 - keep the PR diff limited to that work-unit issue and its evidence; unrelated reopened issues require separate branches/PRs;
 - open the PR when implementation starts, synthesize its body from the issue acceptance criteria and the Policy Alignment Gate, and refresh that synthesis before review;
+- use the first coherent push to enter the automated PR review loop; `test-ci`, general review, and slop review run in parallel so architectural feedback arrives before local polishing drifts;
 - request review only after tests/evidence and adversarial policy review are complete;
 - handle review feedback as a loop: accepted feedback requires a committed remediation before any “fixed/addressed” reply, and rejected or modified feedback belongs in a top-level `Review feedback disposition ledger`.
 
@@ -21,13 +22,16 @@ Recreate the work from `origin/main` on an issue-scoped branch.
 ## QC Delegation
 
 - Treat `~/ai-review-ci` as the authoritative QC implementation.
-  Downstream repositories carry only thin `test` and `test-ci` recipes that delegate to this repo.
+  Downstream repositories carry only thin `test-commit`, `test-push`, and `test-ci` gate recipes that delegate to this repo.
 
 - Every command that loads a central justfile from another repository must preserve the caller repository with `-d .`:
 
   ```justfile
-  test:
-      @just -f ~/ai-review-ci/justfiles/python.just -d . test
+  test-commit:
+      @just -f ~/ai-review-ci/justfiles/python.just -d . test-commit
+
+  test-push:
+      @just -f ~/ai-review-ci/justfiles/python.just -d . test-push
 
   test-ci:
       @just -f ~/ai-review-ci/justfiles/python.just -d . test-ci
@@ -91,9 +95,11 @@ The one-line test: *if the fact is about an external framework's dispatch, decla
 
 ## Hook Tiers
 
-- The global hook split is intentional: `pre-commit` runs `just test`, and `pre-push` runs `just test-ci`.
+- The three gate boundaries are intentional: `pre-commit` runs `just test-commit`, `pre-push` runs `just test-push`, and required PR CI runs `just test-ci`.
 
-- Slop/style/coverage findings during an ordinary commit indicate a hook-tier or delegation problem.
+- Commit failures are direct local repair and push failures are ordinary project/test repair. Neither is PR feedback and neither requires a disposition ledger or remediation subagent.
+
+- Slop/style/coverage findings during commit or push indicate a gate-tier or delegation problem. Policy-sensitive findings belong in `test-ci`, where independent anti-golfing triage and PR review run as separate acceptance channels.
   Do not reinstall hooks or weaken QC until the active hook path, hook contents, and delegated cwd have been verified.
 
 > Optimized tool-use workflow for agents: see [SDL.md](./SDL.md).
