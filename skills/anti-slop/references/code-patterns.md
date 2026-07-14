@@ -848,9 +848,7 @@ For every custom function or component, ask: **“Is there a standard library or
 If yes, the custom code is slop.
 The absence of an import is the defect, not the presence of the dependency.
 
-### Correct Response
-
-See `style-guide/references/style-guide-index.md` → **Remediation: Bespoke Dependency Reinvention**.
+Policy: `POLICY.NO_BESPOKE_REINVENTION`.
 
 * * *
 
@@ -1571,6 +1569,8 @@ If it cannot, it is accretion slop.
 
 ## **[BLAST-RADIUS]** Brittleness as Blast-Radius Smell
 
+Policy: `POLICY.NO_MYOPIC_PATCHING`.
+
 **“Brittle” does NOT mean “doesn’t handle many edge cases.”** Edge-case handling is a natural consequence of bugs that surface during planned development.
 It is not a quality signal and its absence is not a defect.
 Do not critique code for lacking speculative edge-case handling.
@@ -1712,6 +1712,8 @@ The short-circuit proves the code was intentionally preserved.
 * * *
 
 ## **[MYOPIC-PATCHING]** Myopic Patching & Patch Accretion
+
+Policy: `POLICY.NO_MYOPIC_PATCHING`.
 
 LLMs patch locally without understanding the global structure.
 Over time, this produces **patch accretion**: evidence of continued monkey-patching with no refactor.

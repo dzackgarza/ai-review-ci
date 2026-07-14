@@ -6,4 +6,3 @@ message: POLICY.CRITICAL_DEPENDENCY
 severity: error
 metadata:
   policy_code: POLICY.CRITICAL_DEPENDENCY
-  remediation_code: REMEDIATE.FAIL_LOUD_BOUNDARY

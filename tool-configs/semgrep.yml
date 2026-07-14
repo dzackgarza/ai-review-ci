@@ -25,7 +25,6 @@ rules:
           regex: '^(?:"[^"]*"|\x27[^\x27]*\x27|\x60[^\x60]*\x60|-?[0-9]+(?:\.[0-9]+)?|true|false|null|\[[\s\S]*\]|\{[\s\S]*\})$'
     metadata:
       policy_code: POLICY.RUNTIME_DEFAULT
-      remediation_code: REMEDIATE.TOTAL_CONFIG_MODEL
   - id: no-const-assignment
     message: POLICY.NO_HIDDEN_CONFIG
     paths:
@@ -43,7 +42,6 @@ rules:
           - pattern-regex: (?m)^(?:export\s+)?const\s+[A-Z][A-Z0-9_]*\s*=\s*["'`](?:https?://|file://)[^"'`]*["'`]
     metadata:
       policy_code: POLICY.NO_HIDDEN_CONFIG
-      remediation_code: REMEDIATE.TOTAL_CONFIG_MODEL
   - id: rust-no-const
     pattern: 'const $X: $T = $VALUE;'
     message: POLICY.NO_HIDDEN_CONFIG
@@ -55,7 +53,6 @@ rules:
     severity: ERROR
     metadata:
       policy_code: POLICY.NO_HIDDEN_CONFIG
-      remediation_code: REMEDIATE.TOTAL_CONFIG_MODEL
   - id: rust-no-static
     pattern: 'static $X: $T = $VALUE;'
     message: POLICY.NO_HIDDEN_CONFIG
@@ -67,7 +64,6 @@ rules:
     severity: ERROR
     metadata:
       policy_code: POLICY.NO_HIDDEN_CONFIG
-      remediation_code: REMEDIATE.TOTAL_CONFIG_MODEL
   - id: no-double-cast
     # #46: arbitrary double casts stay blocked. Runtime/type-surface mismatches
     # must use the explicit runtimeBoundaryCast form below so the local code
@@ -79,7 +75,6 @@ rules:
     severity: ERROR
     metadata:
       policy_code: POLICY.NO_TYPE_ESCAPE
-      remediation_code: REMEDIATE.STRUCTURED_TYPES
   - id: no-unproven-boundary-cast
     # #46 sanctioned boundary form:
     # runtimeBoundaryCast<T>(value, predicate, "issue/url-backed reason").
@@ -101,7 +96,6 @@ rules:
                   regex: '^["''`](?![\s\S]*(?:#[0-9]+|https?://|issue[ -][0-9]+))[\s\S]*["''`]$'
     metadata:
       policy_code: POLICY.NO_TYPE_ESCAPE
-      remediation_code: REMEDIATE.STRUCTURED_TYPES
   - id: no-first-element-child-hydration
     pattern: $X.firstElementChild !== null
     message: POLICY.NO_HELPER_PROOF
@@ -110,7 +104,6 @@ rules:
     severity: ERROR
     metadata:
       policy_code: POLICY.NO_HELPER_PROOF
-      remediation_code: REMEDIATE.REAL_PROOF_LOOP
   - id: no-status-only-assertion
     message: POLICY.NO_EXACT_STRING_PROOF
     languages:
@@ -122,7 +115,6 @@ rules:
           - pattern-regex: expect\([^\n]*\.status\(\)\)\.toBe\(200\);\s*\n\s*\}\);
     metadata:
       policy_code: POLICY.NO_EXACT_STRING_PROOF
-      remediation_code: REMEDIATE.REAL_PROOF_LOOP
   - id: rust-silenced-result
     pattern: let _ = $EXPR;
     message: POLICY.NO_ERROR_DISCARD
@@ -131,7 +123,6 @@ rules:
     severity: ERROR
     metadata:
       policy_code: POLICY.NO_ERROR_DISCARD
-      remediation_code: REMEDIATE.FAIL_LOUD_BOUNDARY
   - id: py-no-getenv-default
     pattern: os.getenv($KEY, $DEFAULT)
     message: POLICY.RUNTIME_DEFAULT
@@ -140,7 +131,6 @@ rules:
     severity: ERROR
     metadata:
       policy_code: POLICY.RUNTIME_DEFAULT
-      remediation_code: REMEDIATE.TOTAL_CONFIG_MODEL
   - id: py-no-dict-get-default
     pattern: $DICT.get($KEY, $DEFAULT)
     message: POLICY.RUNTIME_DEFAULT
@@ -149,7 +139,6 @@ rules:
     severity: ERROR
     metadata:
       policy_code: POLICY.RUNTIME_DEFAULT
-      remediation_code: REMEDIATE.TOTAL_CONFIG_MODEL
   - id: py-no-getattr-default
     pattern: getattr($OBJ, $ATTR, $DEFAULT)
     message: POLICY.RUNTIME_DEFAULT
@@ -158,7 +147,6 @@ rules:
     severity: ERROR
     metadata:
       policy_code: POLICY.RUNTIME_DEFAULT
-      remediation_code: REMEDIATE.TOTAL_CONFIG_MODEL
   - id: py-no-setdefault-consumed
     pattern-either:
       - pattern: $TARGET = $DICT.setdefault($KEY, $DEFAULT)
@@ -173,7 +161,6 @@ rules:
     severity: ERROR
     metadata:
       policy_code: POLICY.RUNTIME_DEFAULT
-      remediation_code: REMEDIATE.TOTAL_CONFIG_MODEL
   - id: py-no-setdefault-runtime-mapping
     patterns:
       - pattern: $DICT.setdefault($KEY, $DEFAULT)
@@ -186,7 +173,6 @@ rules:
     severity: ERROR
     metadata:
       policy_code: POLICY.RUNTIME_DEFAULT
-      remediation_code: REMEDIATE.TOTAL_CONFIG_MODEL
   - id: py-no-defaultdict
     pattern: defaultdict($TYPE)
     message: POLICY.RUNTIME_DEFAULT
@@ -195,7 +181,6 @@ rules:
     severity: ERROR
     metadata:
       policy_code: POLICY.RUNTIME_DEFAULT
-      remediation_code: REMEDIATE.TOTAL_CONFIG_MODEL
   - id: py-no-optional-type
     pattern-either:
       - pattern: '$VAR: Optional[$TYPE]'
@@ -206,7 +191,6 @@ rules:
     severity: ERROR
     metadata:
       policy_code: POLICY.TOTAL_CORE_STATE
-      remediation_code: REMEDIATE.TOTAL_CONFIG_MODEL
   - id: py-no-try-import
     pattern: "try:\n    import $MOD\nexcept ImportError:\n    ..."
     message: POLICY.CRITICAL_DEPENDENCY
@@ -215,7 +199,6 @@ rules:
     severity: ERROR
     metadata:
       policy_code: POLICY.CRITICAL_DEPENDENCY
-      remediation_code: REMEDIATE.FAIL_LOUD_BOUNDARY
   - id: py-no-hardcoded-env-var
     pattern: os.environ[$KEY] = $VALUE
     message: POLICY.NO_HIDDEN_CONFIG
@@ -224,7 +207,6 @@ rules:
     severity: ERROR
     metadata:
       policy_code: POLICY.NO_HIDDEN_CONFIG
-      remediation_code: REMEDIATE.TOTAL_CONFIG_MODEL
   - id: ts-no-hardcoded-env-var
     pattern-either:
       - pattern: process.env.$KEY = $VALUE
@@ -236,7 +218,6 @@ rules:
     severity: ERROR
     metadata:
       policy_code: POLICY.NO_HIDDEN_CONFIG
-      remediation_code: REMEDIATE.TOTAL_CONFIG_MODEL
   - id: rust-no-hardcoded-env-var
     pattern-either:
       - pattern: env::set_var($KEY, $VALUE)
@@ -247,7 +228,6 @@ rules:
     severity: ERROR
     metadata:
       policy_code: POLICY.NO_HIDDEN_CONFIG
-      remediation_code: REMEDIATE.TOTAL_CONFIG_MODEL
   - id: py-no-bare-except
     # A bare "except:\n    pass" clause fragment never parses as a semgrep
     # python pattern, so the rule silently matched nothing (caught by the
@@ -268,7 +248,6 @@ rules:
     severity: ERROR
     metadata:
       policy_code: POLICY.NO_ERROR_DISCARD
-      remediation_code: REMEDIATE.FAIL_LOUD_BOUNDARY
   - id: py-no-suppress
     pattern: contextlib.suppress($EXC)
     message: POLICY.NO_ERROR_DISCARD
@@ -277,7 +256,6 @@ rules:
     severity: ERROR
     metadata:
       policy_code: POLICY.NO_ERROR_DISCARD
-      remediation_code: REMEDIATE.FAIL_LOUD_BOUNDARY
   - id: py-no-mock-import
     pattern-either:
       - pattern: from unittest.mock import $X
@@ -288,7 +266,6 @@ rules:
     severity: ERROR
     metadata:
       policy_code: POLICY.NO_MOCK_PROOF
-      remediation_code: REMEDIATE.REAL_PROOF_LOOP
   - id: py-no-magicmock
     pattern-either:
       - pattern: MagicMock(...)
@@ -299,7 +276,6 @@ rules:
     severity: ERROR
     metadata:
       policy_code: POLICY.NO_MOCK_PROOF
-      remediation_code: REMEDIATE.REAL_PROOF_LOOP
   - id: py-no-monkeypatch
     pattern: monkeypatch.setattr(...)
     message: POLICY.NO_MOCK_PROOF
@@ -308,7 +284,6 @@ rules:
     severity: ERROR
     metadata:
       policy_code: POLICY.NO_MOCK_PROOF
-      remediation_code: REMEDIATE.REAL_PROOF_LOOP
   - id: py-no-skip-test
     pattern-either:
       - pattern: '@pytest.mark.skip'
@@ -320,7 +295,6 @@ rules:
     severity: ERROR
     metadata:
       policy_code: POLICY.NO_SKIP_MASK
-      remediation_code: REMEDIATE.REAL_PROOF_LOOP
   - id: py-xfail-without-open-issue-gate
     # POLICY.NO_SKIP_MASK exception (user grant 2026-07-09): xfail is
     # sanctioned ONLY as an open-issue red proof gate — strict=True and a
@@ -339,7 +313,6 @@ rules:
     severity: ERROR
     metadata:
       policy_code: POLICY.NO_SKIP_MASK
-      remediation_code: REMEDIATE.REAL_PROOF_LOOP
   - id: ts-no-or-default
     # See no-nullish-coalescing: flag `||` only in default-value position
     # (right operand is a literal stub), not as a boolean connective (#120).
@@ -361,7 +334,6 @@ rules:
           regex: '^(?:"[^"]*"|\x27[^\x27]*\x27|\x60[^\x60]*\x60|-?[0-9]+(?:\.[0-9]+)?|true|false|null|\[[\s\S]*\]|\{[\s\S]*\})$'
     metadata:
       policy_code: POLICY.RUNTIME_DEFAULT
-      remediation_code: REMEDIATE.TOTAL_CONFIG_MODEL
   - id: ts-no-env-default
     pattern: process.env.$KEY || $DEFAULT
     message: POLICY.RUNTIME_DEFAULT
@@ -371,7 +343,6 @@ rules:
     severity: ERROR
     metadata:
       policy_code: POLICY.RUNTIME_DEFAULT
-      remediation_code: REMEDIATE.TOTAL_CONFIG_MODEL
   - id: ts-no-jest-mock
     pattern: jest.mock(...)
     message: POLICY.NO_MOCK_PROOF
@@ -381,7 +352,6 @@ rules:
     severity: ERROR
     metadata:
       policy_code: POLICY.NO_MOCK_PROOF
-      remediation_code: REMEDIATE.REAL_PROOF_LOOP
   - id: ts-no-vi-mock
     pattern: vi.mock(...)
     message: POLICY.NO_MOCK_PROOF
@@ -391,7 +361,6 @@ rules:
     severity: ERROR
     metadata:
       policy_code: POLICY.NO_MOCK_PROOF
-      remediation_code: REMEDIATE.REAL_PROOF_LOOP
   - id: ts-no-vi-stub-global
     pattern: vi.stubGlobal(...)
     message: POLICY.NO_MOCK_PROOF
@@ -407,7 +376,6 @@ rules:
         - '**/__tests__/**/*'
     metadata:
       policy_code: POLICY.NO_MOCK_PROOF
-      remediation_code: REMEDIATE.REAL_PROOF_LOOP
   - id: ts-no-vi-fn
     pattern: vi.fn(...)
     message: POLICY.NO_MOCK_PROOF
@@ -423,7 +391,6 @@ rules:
         - '**/__tests__/**/*'
     metadata:
       policy_code: POLICY.NO_MOCK_PROOF
-      remediation_code: REMEDIATE.REAL_PROOF_LOOP
   - id: ts-no-vi-spyon
     pattern: vi.spyOn(...)
     message: POLICY.NO_MOCK_PROOF
@@ -439,7 +406,6 @@ rules:
         - '**/__tests__/**/*'
     metadata:
       policy_code: POLICY.NO_MOCK_PROOF
-      remediation_code: REMEDIATE.REAL_PROOF_LOOP
   - id: ts-no-vi-stub-env
     pattern: vi.stubEnv(...)
     message: POLICY.NO_MOCK_PROOF
@@ -455,7 +421,6 @@ rules:
         - '**/__tests__/**/*'
     metadata:
       policy_code: POLICY.NO_MOCK_PROOF
-      remediation_code: REMEDIATE.REAL_PROOF_LOOP
   - id: ts-no-jest-fn
     pattern: jest.fn(...)
     message: POLICY.NO_MOCK_PROOF
@@ -471,7 +436,6 @@ rules:
         - '**/__tests__/**/*'
     metadata:
       policy_code: POLICY.NO_MOCK_PROOF
-      remediation_code: REMEDIATE.REAL_PROOF_LOOP
   - id: ts-no-jest-spyon
     pattern: jest.spyOn(...)
     message: POLICY.NO_MOCK_PROOF
@@ -487,7 +451,6 @@ rules:
         - '**/__tests__/**/*'
     metadata:
       policy_code: POLICY.NO_MOCK_PROOF
-      remediation_code: REMEDIATE.REAL_PROOF_LOOP
   - id: ts-no-skip-test
     pattern-either:
       - pattern: test.skip(...)
@@ -500,7 +463,6 @@ rules:
     severity: ERROR
     metadata:
       policy_code: POLICY.NO_SKIP_MASK
-      remediation_code: REMEDIATE.REAL_PROOF_LOOP
   - id: ts-no-catch-console
     pattern-either:
       - pattern: .catch(console.error)
@@ -512,7 +474,6 @@ rules:
     severity: ERROR
     metadata:
       policy_code: POLICY.NO_ERROR_DISCARD
-      remediation_code: REMEDIATE.FAIL_LOUD_BOUNDARY
   - id: rs-no-unwrap-or
     message: POLICY.RUNTIME_DEFAULT
     languages:
@@ -521,7 +482,6 @@ rules:
     pattern-regex: .unwrap_or($DEFAULT)
     metadata:
       policy_code: POLICY.RUNTIME_DEFAULT
-      remediation_code: REMEDIATE.TOTAL_CONFIG_MODEL
   - id: rs-no-unwrap-or-default
     message: POLICY.RUNTIME_DEFAULT
     languages:
@@ -530,7 +490,6 @@ rules:
     pattern-regex: .unwrap_or_default()
     metadata:
       policy_code: POLICY.RUNTIME_DEFAULT
-      remediation_code: REMEDIATE.TOTAL_CONFIG_MODEL
   - id: rs-no-result-ok
     message: POLICY.NO_ERROR_DISCARD
     languages:
@@ -539,7 +498,6 @@ rules:
     pattern-regex: .ok()
     metadata:
       policy_code: POLICY.NO_ERROR_DISCARD
-      remediation_code: REMEDIATE.FAIL_LOUD_BOUNDARY
   - id: rs-no-filter-map-ok
     pattern: filter_map(Result::ok)
     message: POLICY.NO_ERROR_DISCARD
@@ -548,7 +506,6 @@ rules:
     severity: ERROR
     metadata:
       policy_code: POLICY.NO_ERROR_DISCARD
-      remediation_code: REMEDIATE.FAIL_LOUD_BOUNDARY
   - id: rs-no-stringly-error
     message: POLICY.NO_TYPE_ESCAPE
     languages:
@@ -557,7 +514,6 @@ rules:
     pattern-regex: Result<[^<>]+,\s*String>
     metadata:
       policy_code: POLICY.NO_TYPE_ESCAPE
-      remediation_code: REMEDIATE.STRUCTURED_TYPES
   - id: rs-no-serde-default
     pattern: '#[serde(default)]'
     message: POLICY.RUNTIME_DEFAULT
@@ -566,7 +522,6 @@ rules:
     severity: ERROR
     metadata:
       policy_code: POLICY.RUNTIME_DEFAULT
-      remediation_code: REMEDIATE.TOTAL_CONFIG_MODEL
   - id: rs-no-allow-attr
     pattern-either:
       - pattern: '#[allow($ARGS)]'
@@ -577,7 +532,6 @@ rules:
     severity: ERROR
     metadata:
       policy_code: POLICY.NO_QC_SILENCING
-      remediation_code: REMEDIATE.REMOVE_SUPPRESSION_WITH_EXCEPTION_PROTOCOL
   - id: sh-no-command-v-runtime
     pattern: "if command -v $TOOL >/dev/null 2>&1; then\n  $CMD\nelse\n  $FALLBACK\nfi"
     message: POLICY.CRITICAL_DEPENDENCY
@@ -586,7 +540,6 @@ rules:
     severity: ERROR
     metadata:
       policy_code: POLICY.CRITICAL_DEPENDENCY
-      remediation_code: REMEDIATE.FAIL_LOUD_BOUNDARY
   - id: sh-no-or-true
     pattern: '|| true'
     message: POLICY.NO_ERROR_DISCARD
@@ -595,7 +548,6 @@ rules:
     severity: ERROR
     metadata:
       policy_code: POLICY.NO_ERROR_DISCARD
-      remediation_code: REMEDIATE.FAIL_LOUD_BOUNDARY
   - id: sh-no-pip-install
     pattern: pip install $PACKAGE
     message: POLICY.GLOBAL_QC_AUTHORITY
@@ -604,7 +556,6 @@ rules:
     severity: ERROR
     metadata:
       policy_code: POLICY.GLOBAL_QC_AUTHORITY
-      remediation_code: REMEDIATE.DELEGATE_GLOBAL_QC
   - id: ts-no-partial
     message: POLICY.TOTAL_CORE_STATE
     languages:
@@ -616,7 +567,6 @@ rules:
       - pattern: '$X: Partial<$Y>'
     metadata:
       policy_code: POLICY.TOTAL_CORE_STATE
-      remediation_code: REMEDIATE.TOTAL_CONFIG_MODEL
   - id: rs-no-cfg-test-fake
     pattern: "#[cfg(test)]\nmod tests {\n    use super::*;\n    ...\n}"
     message: POLICY.NO_MOCK_PROOF
@@ -625,7 +575,6 @@ rules:
     severity: ERROR
     metadata:
       policy_code: POLICY.NO_MOCK_PROOF
-      remediation_code: REMEDIATE.REAL_PROOF_LOOP
   - id: sh-no-stderr-suppress
     pattern-regex: 2\s*>\s*/dev/null
     message: POLICY.NO_ERROR_DISCARD
@@ -634,7 +583,6 @@ rules:
     severity: ERROR
     metadata:
       policy_code: POLICY.NO_ERROR_DISCARD
-      remediation_code: REMEDIATE.FAIL_LOUD_BOUNDARY
   - id: rs-no-match-bool
     pattern: "match $X {\n    true => $A,\n    false => $B,\n}"
     message: POLICY.NO_BOOLEAN_MODE
@@ -643,7 +591,6 @@ rules:
     severity: ERROR
     metadata:
       policy_code: POLICY.NO_BOOLEAN_MODE
-      remediation_code: REMEDIATE.API_SPLIT_OR_VARIANT
   - id: just-no-env-var-or-default
     pattern-regex: env_var_or_default\s*\(
     message: POLICY.RUNTIME_DEFAULT
@@ -657,7 +604,6 @@ rules:
         - '**/*.just'
     metadata:
       policy_code: POLICY.RUNTIME_DEFAULT
-      remediation_code: REMEDIATE.TOTAL_CONFIG_MODEL
   - id: just-no-option-or-default
     pattern-regex: option_or_default\s*\(
     message: POLICY.RUNTIME_DEFAULT
@@ -671,7 +617,6 @@ rules:
         - '**/*.just'
     metadata:
       policy_code: POLICY.RUNTIME_DEFAULT
-      remediation_code: REMEDIATE.TOTAL_CONFIG_MODEL
   - id: just-no-or-fallback
     pattern-regex: \|\|
     message: POLICY.RUNTIME_DEFAULT
@@ -685,7 +630,6 @@ rules:
         - '**/*.just'
     metadata:
       policy_code: POLICY.RUNTIME_DEFAULT
-      remediation_code: REMEDIATE.TOTAL_CONFIG_MODEL
   - id: just-no-command-v
     pattern-regex: command\s+-v\s+
     message: POLICY.CRITICAL_DEPENDENCY
@@ -699,7 +643,6 @@ rules:
         - '**/*.just'
     metadata:
       policy_code: POLICY.CRITICAL_DEPENDENCY
-      remediation_code: REMEDIATE.FAIL_LOUD_BOUNDARY
   - id: py-no-deprecated-typing
     message: POLICY.NO_LEGACY_SHIM
     languages:
@@ -708,4 +651,3 @@ rules:
     pattern-regex: ^\s*from\s+typing\s+import.*?\b(Dict|List|Tuple|Set|Type|Optional|Union|Callable|Iterable|Mapping|Sequence)\b
     metadata:
       policy_code: POLICY.NO_LEGACY_SHIM
-      remediation_code: REMEDIATE.REPLACE_LEGACY_PATH

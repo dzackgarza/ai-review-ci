@@ -706,7 +706,7 @@ Red flags:
 - test would pass even if the application stopped calling the helper;
 - the helper did not exist before the review.
 
-Correct response after triage: See `style-guide/references/style-guide-index.md` → **Remediation: Boundary Test Bypass**.
+Policy: `POLICY.NO_HELPER_PROOF`.
 
 * * *
 

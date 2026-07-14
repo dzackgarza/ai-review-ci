@@ -33,6 +33,7 @@ from pathlib import Path
 from typing import Any, NoReturn
 
 from ai_review_ci.models import finding_fingerprint
+from ai_review_ci.policy_index import canonical_route
 from ai_review_ci.reviewer_identity import reviewer_identity
 
 JsonDict = dict[str, Any]
@@ -60,7 +61,6 @@ _NARRATIVE_KEYS = (
     ("existential_justification", "Existential justification"),
     ("failure_mode", "Failure mode"),
     ("policy_code", "Policy"),
-    ("remediation_code", "Remediation"),
 )
 
 
@@ -158,6 +158,16 @@ def _issue_body(finding: JsonDict, report_type: str, parent_issue: int) -> str:
         value = finding.get(key)
         if isinstance(value, str) and value:
             lines.append(f"**{heading}:** {value}")
+    policy_code = finding.get("policy_code")
+    if isinstance(policy_code, str):
+        route = canonical_route(policy_code)
+        lines.extend(
+            [
+                "",
+                "### Canonical catalogue route",
+                f"`{route.policy_code}` → `{route.remediation_code}`",
+            ]
+        )
     proof = finding.get("proof_command")
     if isinstance(proof, str) and proof:
         lines.extend(["", "**Proof:**", "```", proof, "```"])

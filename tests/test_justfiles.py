@@ -183,7 +183,7 @@ def test_no_bypass_blocks_newly_staged_markers(tmp_path: pathlib.Path) -> None:
 
     output = result.stdout + result.stderr
     assert result.returncode != 0, output
-    assert "coverage bypass marker" in output
+    assert "POLICY.NO_QC_SILENCING" in output
     assert TRIAGE_MARKER in output
 
 
