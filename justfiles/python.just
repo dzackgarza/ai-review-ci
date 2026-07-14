@@ -68,11 +68,20 @@ _python-qc-files:
 	for dir in "${exclude_dirs[@]}"; do
 		exclude_args+=(-g "!**/$dir/**")
 	done
-	rg --files \
+	if rg --files \
 		-g '*.py' \
 		-g '!*.sage.py' \
 		-g '!tool-artifacts/vulture_whitelist.py' \
-		"${exclude_args[@]}"
+		"${exclude_args[@]}"; then
+		:
+	else
+		status=$?
+		# rg uses 1 for an empty selection. Callers decide whether a selected
+		# language is required; source-discovery errors still propagate.
+		if [ "$status" -ne 1 ]; then
+			exit "$status"
+		fi
+	fi
 
 _python-syntax:
 	#!/usr/bin/env bash
