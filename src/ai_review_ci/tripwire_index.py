@@ -43,6 +43,15 @@ _POLICY_INTERNAL_PATTERNS = (
     re.compile(r"\bsignal_keys?\b"),
     re.compile(r"Mechanical QC Targets", re.IGNORECASE),
 )
+_SEMANTIC_SEMGREP_KEYS = frozenset(
+    {
+        "metavariable-pattern",
+        "pattern",
+        "pattern-inside",
+        "pattern-not",
+        "pattern-not-inside",
+    }
+)
 
 
 class TripwireIndexError(ValueError):
@@ -165,7 +174,10 @@ def _display_path(path: Path, root: Path) -> str:
 def _load_yaml(path: Path) -> object:
     if not path.is_file():
         _fail(f"missing tripwire source: {path}", error_code="MISSING_TRIPWIRE_SOURCE")
-    return yaml.safe_load(path.read_text())
+    try:
+        return yaml.safe_load(path.read_text(encoding="utf-8"))
+    except yaml.YAMLError as exc:
+        _fail(f"{path}: invalid YAML: {exc}", error_code="INVALID_RULE_SOURCE")
 
 
 def _mapping(value: object, *, source: Path, label: str) -> dict[str, object]:
@@ -181,6 +193,11 @@ def _sequence(value: object, *, source: Path, label: str) -> tuple[object, ...]:
 
 
 def _reject_authored_remediation(rule: dict[str, object], *, rule_id: str, source: Path) -> None:
+    if "remediation_code" in rule:
+        _fail(
+            f"{source}: rule {rule_id} declares remediation_code; rules declare only policy_code",
+            error_code="RULE_OWNS_REMEDIATION",
+        )
     metadata = _mapping(rule["metadata"], source=source, label=f"{rule_id}.metadata")
     if "remediation_code" in metadata:
         _fail(
@@ -224,7 +241,7 @@ def _scope_from_rule(rule: dict[str, object], *, source: Path, languages: tuple[
 def _has_semantic_pattern(value: object) -> bool:
     if isinstance(value, dict):
         for key, item in value.items():
-            if key == "pattern":
+            if key in _SEMANTIC_SEMGREP_KEYS:
                 return True
             if _has_semantic_pattern(item):
                 return True
@@ -403,7 +420,7 @@ def audit_policy_isolation(root: Path) -> tuple[str, ...]:
     policy_paths = sorted(policy_dir.rglob("*.md"))
     remediation_path = root / "skills/style-guide/references/style-guide-index.md"
     for path in (*policy_paths, remediation_path):
-        text = path.read_text()
+        text = path.read_text(encoding="utf-8")
         for pattern in _POLICY_INTERNAL_PATTERNS:
             match = pattern.search(text)
             if match:
@@ -419,7 +436,7 @@ def audit_policy_isolation(root: Path) -> tuple[str, ...]:
     for path in sorted((root / "skills").rglob("*.md")):
         if path == canonical_policy_path:
             continue
-        text = path.read_text()
+        text = path.read_text(encoding="utf-8")
         if _POLICY_CODE_RE.search(text) and _REMEDIATION_CODE_RE.search(text):
             findings.append(f"{_display_path(path, root)}: scattered policy-to-remediation mapping")
     return tuple(sorted(set(findings)))

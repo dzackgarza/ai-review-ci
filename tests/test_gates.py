@@ -51,6 +51,21 @@ def test_bypass_diff_rules_block_only_added_bypass_markers() -> None:
     assert gates.bypass_diff_findings(diff) == ["src/app.py:2: no-coverage-pragma: POLICY.NO_QC_SILENCING"]
 
 
+def test_bypass_diff_rules_block_ts_expect_error_with_trailing_whitespace() -> None:
+    marker = "@ts-expect-err" + "or"
+    trailing_spaces = "   "
+    diff = f"""diff --git a/src/app.ts b/src/app.ts
+--- a/src/app.ts
++++ b/src/app.ts
+@@ -0,0 +1,1 @@
++// {marker}{trailing_spaces}
+"""
+
+    assert gates.bypass_diff_findings(diff) == [
+        "src/app.ts:1: no-unjustified-ts-expect-error: POLICY.NO_QC_SILENCING"
+    ]
+
+
 def test_diff_gate_blocks_uppercase_literals_but_not_local_const_calls() -> None:
     diff = """diff --git a/src/settings.ts b/src/settings.ts
 --- a/src/settings.ts

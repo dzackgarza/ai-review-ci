@@ -67,6 +67,93 @@ def test_rule_local_remediation_is_rejected_even_when_it_matches_policy(tmp_path
     assert str(config) in str(exc_info.value)
 
 
+def test_top_level_rule_remediation_is_rejected(tmp_path: Path) -> None:
+    config = tmp_path / "semgrep.yml"
+    config.write_text(
+        """rules:
+  - id: copied-remediation
+    message: POLICY.RUNTIME_DEFAULT
+    languages: [python]
+    severity: ERROR
+    pattern: os.getenv($KEY, $DEFAULT)
+    remediation_code: REMEDIATE.REQUIRE_EXPLICIT_INPUT
+    metadata:
+      policy_code: POLICY.RUNTIME_DEFAULT
+""",
+        encoding="utf-8",
+    )
+
+    with pytest.raises(TripwireIndexError) as exc_info:
+        collect_semgrep_rules(config, ROOT)
+
+    assert exc_info.value.error_code == "RULE_OWNS_REMEDIATION"
+
+
+def test_malformed_rule_yaml_fails_with_tripwire_error(tmp_path: Path) -> None:
+    config = tmp_path / "semgrep.yml"
+    config.write_text("rules: [\n", encoding="utf-8")
+
+    with pytest.raises(TripwireIndexError) as exc_info:
+        collect_semgrep_rules(config, ROOT)
+
+    assert exc_info.value.error_code == "INVALID_RULE_SOURCE"
+    assert str(config) in str(exc_info.value)
+
+
+@pytest.mark.parametrize(
+    "operator, clause",
+    [
+        ("pattern", "'os.getenv($KEY, $DEFAULT)'"),
+        ("pattern-inside", "'def $FUNC(...): ...'"),
+        ("pattern-not", "'os.getenv($KEY)'"),
+        ("pattern-not-inside", "'if $COND: ...'"),
+        ("metavariable-pattern", "{metavariable: '$VALUE', pattern: '$DEFAULT'}"),
+    ],
+)
+def test_semgrep_semantic_operators_are_classified_as_syntax_tree_queries(
+    tmp_path: Path,
+    operator: str,
+    clause: str,
+) -> None:
+    config = tmp_path / "semgrep.yml"
+    config.write_text(
+        f"""rules:
+  - id: semantic-rule
+    message: POLICY.RUNTIME_DEFAULT
+    languages: [python]
+    severity: ERROR
+    {operator}: {clause}
+    metadata:
+      policy_code: POLICY.RUNTIME_DEFAULT
+""",
+        encoding="utf-8",
+    )
+
+    (rule,) = collect_semgrep_rules(config, ROOT)
+
+    assert rule.analysis_capability == "syntax-tree-query"
+
+
+def test_semgrep_regex_only_rule_is_classified_as_line_regex(tmp_path: Path) -> None:
+    config = tmp_path / "semgrep.yml"
+    config.write_text(
+        """rules:
+  - id: regex-rule
+    message: POLICY.RUNTIME_DEFAULT
+    languages: [regex]
+    severity: ERROR
+    pattern-regex: getenv
+    metadata:
+      policy_code: POLICY.RUNTIME_DEFAULT
+""",
+        encoding="utf-8",
+    )
+
+    (rule,) = collect_semgrep_rules(config, ROOT)
+
+    assert rule.analysis_capability == "line-regex"
+
+
 def test_unknown_rule_policy_identifies_rule_and_source(tmp_path: Path) -> None:
     config = tmp_path / "semgrep.yml"
     config.write_text(

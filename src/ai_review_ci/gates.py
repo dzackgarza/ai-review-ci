@@ -231,7 +231,7 @@ BYPASS_DIFF_RULES = (
         rule_id="no-unjustified-ts-expect-error",
         policy_code="POLICY.NO_QC_SILENCING",
         signal_keys=("no-unjustified-ts-expect-error",),
-        pattern=re.compile(r"@ts-expect-err" + r"or$"),
+        pattern=re.compile(r"@ts-expect-err" + r"or[ \t]*$"),
         suffixes=(),
         excluded_suffixes=_NON_CODE_SUFFIXES,
     ),

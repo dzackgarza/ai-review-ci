@@ -104,7 +104,7 @@ def _fail(message: str, *, error_code: str = "UNKNOWN") -> NoReturn:
 def _read_required(path: Path) -> str:
     if not path.is_file():
         _fail(f"missing policy-index file: {path}", error_code="MISSING_INDEX_FILE")
-    return path.read_text()
+    return path.read_text(encoding="utf-8")
 
 
 def _parse_detection_handles(value: str) -> tuple[str, ...]:
@@ -173,12 +173,14 @@ def parse_remediations(text: str) -> dict[str, RemediationRecord]:
         if not match:
             continue
         code, required_remediation = match.groups()
+        if code in remediations:
+            _fail(f"duplicate remediation record: {code}", error_code="DUPLICATE_REMEDIATION")
         remediations[code] = RemediationRecord(
             code=code,
             required_remediation=required_remediation,
         )
     if not remediations:
-        _fail("remediations.md contained no REMEDIATE records", error_code="EMPTY_SOURCE")
+        _fail("remediation catalogue contained no REMEDIATE records", error_code="EMPTY_SOURCE")
     return remediations
 
 

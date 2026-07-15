@@ -89,6 +89,17 @@ def test_remediation_parser_rejects_empty_remediation_source() -> None:
     assert exc_info.value.error_code == "EMPTY_SOURCE"
 
 
+def test_remediation_parser_rejects_duplicate_codes() -> None:
+    text = """| `REMEDIATE.EXAMPLE` | First construction. |
+| `REMEDIATE.EXAMPLE` | Conflicting construction. |
+"""
+
+    with pytest.raises(PolicyIndexError) as exc_info:
+        parse_remediations(text)
+
+    assert exc_info.value.error_code == "DUPLICATE_REMEDIATION"
+
+
 def test_semgrep_rules_use_id_only_messages_and_valid_metadata() -> None:
     index = load_policy_index()
     data = yaml.safe_load(Path("tool-configs/semgrep.yml").read_text())
