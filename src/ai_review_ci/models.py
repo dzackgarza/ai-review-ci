@@ -229,16 +229,14 @@ def require_substantive_finding(findings: Sequence[ReportFinding], *, fix_tail: 
         )
 
 
-def validate_policy_reference(policy_code: str | None, remediation_code: str | None) -> None:
-    """Validate optional policy/remediation IDs against the vendored index."""
+def validate_policy_reference(policy_code: str | None) -> None:
+    """Validate an optional policy ID against the canonical index."""
     if policy_code is None:
-        if remediation_code is not None:
-            raise ValueError("REJECTED: remediation_code requires policy_code. FIX: cite the POLICY.* code that owns the remediation.")
         return
     try:
-        load_policy_index().remediation_for_policy(policy_code, remediation_code)
+        load_policy_index().policy(policy_code)
     except PolicyIndexError as exc:
-        raise ValueError(f"REJECTED: invalid policy/remediation reference. FIX: cite existing vendored POLICY.* and REMEDIATE.* IDs. {exc}") from exc
+        raise ValueError(f"REJECTED: invalid policy reference. FIX: cite an existing vendored POLICY.* ID. {exc}") from exc
 
 
 # ---------------------------------------------------------------------------
@@ -295,6 +293,7 @@ _GENERAL_INVARIANT_GOOD = "The CI runner silently swallows diff-retrieval failur
 
 class GeneralFinding(BaseModel):
     model_config = ConfigDict(
+        extra="forbid",
         json_schema_extra={
             "x-custom-validation": {
                 "_tier_category_consistency": {
@@ -333,9 +332,6 @@ class GeneralFinding(BaseModel):
     )
     policy_code: str | None = Field(
         description="Explicit POLICY.* code for policy-bearing findings; use null when the finding is not policy-bearing.",
-    )
-    remediation_code: str | None = Field(
-        description="Explicit REMEDIATE.* code, or null to use the policy's canonical related remediation.",
     )
     location: Location = Field(description="File and line range where the finding occurs.")
     violated_invariant: str = Field(
@@ -378,7 +374,7 @@ class GeneralFinding(BaseModel):
 
     @model_validator(mode="after")
     def _policy_reference(self) -> Self:
-        validate_policy_reference(self.policy_code, self.remediation_code)
+        validate_policy_reference(self.policy_code)
         return self
 
     @field_validator("violated_invariant")
@@ -452,6 +448,7 @@ _SLOP_INVARIANT_GOOD = "The agent suppresses stderr to construct synthetic fallb
 
 class SlopFinding(BaseModel):
     model_config = ConfigDict(
+        extra="forbid",
         json_schema_extra={
             "x-custom-validation": {
                 "_tier_category_consistency": {
@@ -487,9 +484,6 @@ class SlopFinding(BaseModel):
     )
     policy_code: str | None = Field(
         description="Explicit POLICY.* code for the bridge-burning obligation this finding weakens; use null when no policy applies.",
-    )
-    remediation_code: str | None = Field(
-        description="Explicit REMEDIATE.* code, or null to use the policy's canonical related remediation.",
     )
     location: Location = Field(description="File and line range where the slop pattern occurs.")
     violated_invariant: str = Field(
@@ -561,7 +555,7 @@ class SlopFinding(BaseModel):
 
     @model_validator(mode="after")
     def _policy_reference(self) -> Self:
-        validate_policy_reference(self.policy_code, self.remediation_code)
+        validate_policy_reference(self.policy_code)
         return self
 
     @field_validator("violated_invariant")

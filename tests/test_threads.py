@@ -1,4 +1,5 @@
 from ai_review_ci.models import finding_fingerprint
+from ai_review_ci.policy_index import canonical_route, load_policy_index
 from ai_review_ci.threads import parse_diff, partition_findings, pick_anchor, render_thread_body
 
 
@@ -114,9 +115,11 @@ def test_render_thread_body_appends_canonical_policy_guidance() -> None:
 
     body = render_thread_body(finding, "Slop Review", "a" * 64)
 
-    assert "#### Canonical policy guidance" in body
-    assert "Policy: `POLICY.NO_MOCK_PROOF`" in body
-    assert "Remediation: `REMEDIATE.REAL_PROOF_LOOP`" in body
+    route = canonical_route("POLICY.NO_MOCK_PROOF")
+    remediation_text = load_policy_index().remediation_for_policy("POLICY.NO_MOCK_PROOF").required_remediation
+    assert "#### Canonical catalogue route" in body
+    assert f"`{route.policy_code}` → `{route.remediation_code}`" in body
+    assert remediation_text not in body
 
 
 def test_render_thread_body_includes_structured_reviewer_identity() -> None:

@@ -1,9 +1,26 @@
 import pathlib
+import re
 import subprocess
 
 import pytest
+from pydantic import ValidationError
 
 from ai_review_ci import gates
+
+
+@pytest.mark.parametrize("forbidden_field", ["remediation_code", "message"])
+def test_diff_rule_rejects_authored_policy_route_prose(forbidden_field: str) -> None:
+    raw: dict[str, object] = {
+        "rule_id": "example-rule",
+        "policy_code": "POLICY.NO_QC_SILENCING",
+        "signal_keys": ("example-rule",),
+        "pattern": re.compile("example"),
+        "suffixes": (".py",),
+        forbidden_field: "authored duplicate",
+    }
+
+    with pytest.raises(ValidationError, match=forbidden_field):
+        gates.DiffRule.model_validate(raw)
 
 
 def test_diff_gate_blocks_added_mock_and_ignores_context_backlog() -> None:
@@ -17,7 +34,36 @@ def test_diff_gate_blocks_added_mock_and_ignores_context_backlog() -> None:
  context();
 """
 
-    assert gates.diff_findings(diff) == ["src/App.test.tsx:3: ts-no-vitest-mock-boundary: Vitest mock helpers replace real proof boundaries."]
+    assert gates.diff_findings(diff) == ["src/App.test.tsx:3: ts-no-vitest-mock-boundary: POLICY.NO_MOCK_PROOF"]
+
+
+def test_bypass_diff_rules_block_only_added_bypass_markers() -> None:
+    coverage_marker = "# pragma: no cov" + "er"
+    diff = f"""diff --git a/src/app.py b/src/app.py
+--- a/src/app.py
++++ b/src/app.py
+@@ -1,1 +1,3 @@
+ pass  {coverage_marker}
++pass  {coverage_marker}
++value = 1
+"""
+
+    assert gates.bypass_diff_findings(diff) == ["src/app.py:2: no-coverage-pragma: POLICY.NO_QC_SILENCING"]
+
+
+def test_bypass_diff_rules_block_ts_expect_error_with_trailing_whitespace() -> None:
+    marker = "@ts-expect-err" + "or"
+    trailing_spaces = "   "
+    diff = f"""diff --git a/src/app.ts b/src/app.ts
+--- a/src/app.ts
++++ b/src/app.ts
+@@ -0,0 +1,1 @@
++// {marker}{trailing_spaces}
+"""
+
+    assert gates.bypass_diff_findings(diff) == [
+        "src/app.ts:1: no-unjustified-ts-expect-error: POLICY.NO_QC_SILENCING"
+    ]
 
 
 def test_diff_gate_blocks_uppercase_literals_but_not_local_const_calls() -> None:
@@ -30,7 +76,7 @@ def test_diff_gate_blocks_uppercase_literals_but_not_local_const_calls() -> None
  export const existing = buildValue();
 """
 
-    assert gates.diff_findings(diff) == ["src/settings.ts:1: no-const-assignment: Hardcoded config-shaped constants belong in required config."]
+    assert gates.diff_findings(diff) == ["src/settings.ts:1: no-const-assignment: POLICY.NO_HIDDEN_CONFIG"]
 
 
 def test_delegation_accepts_canonical_scaffold(tmp_path: pathlib.Path) -> None:

@@ -15,6 +15,7 @@ from ai_review_ci.issues import (
     issue_fingerprint,
     publish_issues,
 )
+from ai_review_ci.policy_index import canonical_route, load_policy_index
 
 ROOT = Path(__file__).parent.parent
 
@@ -56,6 +57,18 @@ def test_issue_body_carries_marker_narrative_and_parent() -> None:
     assert "grep -n 'def dual' src/lattice.py" in body
     assert "Tracked under #46." in body
     assert "do-not-re-raise" in body
+
+
+def test_issue_body_routes_to_catalogue_without_inlining_remediation() -> None:
+    finding = _finding()
+    finding["policy_code"] = "POLICY.NO_HIDDEN_CONFIG"
+
+    body = _issue_body(finding, "general", parent_issue=46)
+
+    route = canonical_route("POLICY.NO_HIDDEN_CONFIG")
+    remediation_text = load_policy_index().remediation_for_policy("POLICY.NO_HIDDEN_CONFIG").required_remediation
+    assert f"`{route.policy_code}` → `{route.remediation_code}`" in body
+    assert remediation_text not in body
 
 
 def test_marked_fingerprint_ignores_unmarked_bodies() -> None:

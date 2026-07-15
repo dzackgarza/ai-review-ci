@@ -191,49 +191,10 @@ _no-bypass:
 	echo "============================="
 	echo "=== Running: bypass comment detection ==="
 	echo "# Blocks staged changes from hiding QC issues via bypass comments"
-	if ! files=$(git diff --cached --name-only --diff-filter=ACM 2>/dev/null); then
-		files=""
+	if ! uv run --project {{infra}} ai-review-ci check-staged-bypass; then
+		"{{artifacts}}/scripts/emit-triage-directive.sh"
+		exit 1
 	fi
-	[ -z "$files" ] && exit 0
-	for file in $files; do
-		if [ ! -f "$file" ]; then
-			continue
-		fi
-		# Documentation/prose files cannot bypass QC; their bypass-token strings are
-		# inert text (e.g. guidance that forbids @ts-ignore). Skip them.
-		case "$file" in
-			*.md|*.markdown|*.mdx) continue ;;
-		esac
-		if ! staged_diff=$(git diff --cached -U0 -- "$file" 2>/dev/null); then
-			continue
-		fi
-		check_added_bypass() {
-			local pattern="$1"
-			local message="$2"
-			if printf '%s\n' "$staged_diff" | grep -nE "^\+[^+].*${pattern}"; then
-				echo "$message"
-				"{{artifacts}}/scripts/emit-triage-directive.sh"
-				exit 1
-			fi
-		}
-		coverage_pragma='# pragma: no cov''er'
-		istanbul_ignore='// istanbul ign''ore'
-		noqa_marker='# no''qa'
-		type_ignore='# type: ign''ore'
-		double_cast='as[[:space:]]+(unknown|any|never)[[:space:]]+as[[:space:]]'
-		ts_ignore='@ts-ign''ore'
-		ts_expect_error='@ts-expect-err''or$'
-		eslint_disable='// eslint-dis''able'
-		check_added_bypass "$coverage_pragma" "ERROR: $file introduces a coverage bypass marker — fix coverage, don't hide it"
-		check_added_bypass "$istanbul_ignore" "ERROR: $file introduces an Istanbul coverage bypass — fix coverage, don't hide it"
-		check_added_bypass "$noqa_marker" "ERROR: $file introduces a lint bypass marker — fix lint errors, don't hide them"
-		check_added_bypass "$type_ignore" "ERROR: $file introduces a type-checking bypass marker — fix type errors, don't hide them"
-		check_added_bypass "$double_cast" "ERROR: $file introduces a double-cast bypass — use a proper type assertion or restructure the code"
-		check_added_bypass "$ts_ignore" "ERROR: $file introduces a TypeScript ignore bypass — fix type errors, don't hide them"
-		check_added_bypass "$ts_expect_error" "ERROR: $file introduces an unjustified TypeScript expect-error bypass — add a comment explaining why"
-		check_added_bypass "$eslint_disable" "ERROR: $file introduces an ESLint bypass marker — fix lint errors, don't hide them"
-	done
-	echo "No bypass comments detected in staged files"
 
 _check-no-local-qc-override:
 	#!/usr/bin/env bash

@@ -599,8 +599,7 @@ _sage-ast-grep:
 		--report-style short \
 		"${scan_files[@]}" | tee "$findings_file"
 	if [ -s "$findings_file" ]; then
-		echo "Blocking just test-ci: duck-typing introspection found. Declare the expected"
-		echo "mathematical object types explicitly (POLICY.NO_TYPE_ESCAPE -> REMEDIATE.STRUCTURED_TYPES)."
+		echo "Blocking just test-ci: POLICY.NO_TYPE_ESCAPE"
 		"{{artifacts}}/scripts/emit-triage-directive.sh"
 		exit 1
 	fi

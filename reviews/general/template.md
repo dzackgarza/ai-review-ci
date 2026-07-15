@@ -10,13 +10,17 @@ Follow these rules exactly:
 
 ### Do not waste effort
 
-Every command you run should serve a finding. Specifically:
+Every command you run should serve a finding.
+Specifically:
 
 - The review copy has **no `.git` directory**. Git commands (`git status`, `git log`, `git diff`, …) are denied and answer nothing; work from the files on disk.
-- The complete set of valid `POLICY.*` and `REMEDIATE.*` codes is already inlined in the policy-index documents above. Do not probe Python modules, importable packages, or the review infrastructure to discover policy registries — cite codes from the inlined index or use `null`.
+- The complete set of valid `POLICY.*` codes is already inlined in the policy-index documents above.
+  Do not probe Python modules, importable packages, or the review infrastructure to discover policy registries — cite a policy code from the inlined index or use `null`. The canonical policy record owns remediation routing.
 - Do not inspect `/opt/ai-review`, `/home/reviewer/.review`, or validator implementations; these paths are denied and findings about them are rejected.
 - Do not re-run `submit-candidate --help` more than once; the schema does not change between calls.
-- **Never read, `cat`, `ls`, `file`, or stat anything outside the repository** — including `/home/reviewer/bin/submit-candidate` itself. Reads outside the repo are auto-rejected and each rejection wastes a turn. `submit-candidate` is only ever *executed*: `--help` for the schema, then with no arguments to submit.
+- **Never read, `cat`, `ls`, `file`, or stat anything outside the repository** — including `/home/reviewer/bin/submit-candidate` itself.
+  Reads outside the repo are auto-rejected and each rejection wastes a turn.
+  `submit-candidate` is only ever *executed*: `--help` for the schema, then with no arguments to submit.
 
 ## Task
 
@@ -66,7 +70,7 @@ Key rules every finding must satisfy:
 - `symptom`, `source`, `consequence`: diagnosis only — what is observably wrong, what produces it, what breaks because of it.
 - `policy_code`: include the matching vendored `POLICY.*` ID when the finding is policy-bearing.
   Do not invent IDs.
-  Leave `remediation_code` absent unless a canonical `REMEDIATE.*` ID is explicitly required by the schema; deterministic rendering resolves the canonical remediation after validation.
+  Do not emit a remediation code; deterministic rendering derives it from the canonical policy record after validation.
 - `evidence`: At least one entry with `kind`, `path`, and `lines` showing the exploration.
 
 **Tier rules:**

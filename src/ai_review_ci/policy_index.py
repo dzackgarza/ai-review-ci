@@ -1,9 +1,9 @@
 """Load the canonical bridge-burning policy index.
 
-The Markdown files under ``skills/policy-index`` are the canonical
-database. This module parses only the stable ID-bearing contract in those
-files; detector configs and report renderers must resolve policy text here
-instead of copying local remediation prose.
+The policy records under ``skills/policy-index`` own the policy-to-remediation
+edge. The style guide owns remediation constructions but carries no inverse
+policy mapping. Detector configs and report renderers resolve the edge here
+instead of selecting or copying a remediation.
 """
 
 from __future__ import annotations
@@ -14,13 +14,12 @@ from typing import NoReturn
 
 from pydantic import BaseModel, ConfigDict
 
-POLICY_INDEX_RELATIVE = Path("skills/policy-index")
-POLICIES_FILE = "references/policies.md"
-REMEDIATIONS_FILE = "references/remediations.md"
+POLICIES_RELATIVE = Path("skills/policy-index/references/policies.md")
+REMEDIATIONS_RELATIVE = Path("skills/style-guide/references/style-guide-index.md")
 
 POLICY_RE = re.compile(r"^#### `(POLICY\.[A-Z0-9_]+)` — (.+)$")
 FIELD_RE = re.compile(r"^([A-Z][A-Za-z ]+): (.+)$")
-REMEDIATION_ROW_RE = re.compile(r"^\| `(REMEDIATE\.[A-Z0-9_]+)` \| (.+?) \| (.+) \|$")
+REMEDIATION_ROW_RE = re.compile(r"^\| `(REMEDIATE\.[A-Z0-9_]+)` \| (.+) \|$")
 CODE_RE = re.compile(r"`(POLICY\.[A-Z0-9_]+|REMEDIATE\.[A-Z0-9_]+)`")
 
 
@@ -53,8 +52,14 @@ class RemediationRecord(BaseModel):
     model_config = ConfigDict(frozen=True)
 
     code: str
-    applies_to: tuple[str, ...]
     required_remediation: str
+
+
+class PolicyRoute(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+    policy_code: str
+    remediation_code: str
 
 
 class PolicyIndex(BaseModel):
@@ -75,21 +80,21 @@ class PolicyIndex(BaseModel):
         except KeyError as exc:
             raise PolicyIndexError(f"unknown remediation code: {code}", error_code="UNKNOWN_REMEDIATION") from exc
 
-    def remediation_for_policy(self, policy_code: str, remediation_code: str | None = None) -> RemediationRecord:
+    def remediation_for_policy(self, policy_code: str) -> RemediationRecord:
         policy = self.policy(policy_code)
-        code = remediation_code or policy.remediation_code
-        remediation = self.remediation(code)
-        if policy_code not in remediation.applies_to and "Any slop finding" not in remediation.applies_to:
-            raise PolicyIndexError(f"remediation {code} does not apply to {policy_code}", error_code="REMEDIATION_MISMATCH")
-        return remediation
+        return self.remediation(policy.remediation_code)
+
+    def route(self, policy_code: str) -> PolicyRoute:
+        policy = self.policy(policy_code)
+        self.remediation(policy.remediation_code)
+        return PolicyRoute(
+            policy_code=policy.code,
+            remediation_code=policy.remediation_code,
+        )
 
 
 def repo_root() -> Path:
     return Path(__file__).resolve().parents[2]
-
-
-def default_policy_index_root() -> Path:
-    return repo_root() / POLICY_INDEX_RELATIVE
 
 
 def _fail(message: str, *, error_code: str = "UNKNOWN") -> NoReturn:
@@ -99,7 +104,7 @@ def _fail(message: str, *, error_code: str = "UNKNOWN") -> NoReturn:
 def _read_required(path: Path) -> str:
     if not path.is_file():
         _fail(f"missing policy-index file: {path}", error_code="MISSING_INDEX_FILE")
-    return path.read_text()
+    return path.read_text(encoding="utf-8")
 
 
 def _parse_detection_handles(value: str) -> tuple[str, ...]:
@@ -167,44 +172,40 @@ def parse_remediations(text: str) -> dict[str, RemediationRecord]:
         match = REMEDIATION_ROW_RE.match(line)
         if not match:
             continue
-        code, applies_to_text, required_remediation = match.groups()
-        applies_to = tuple(CODE_RE.findall(applies_to_text))
-        if not applies_to and "Any slop finding" in applies_to_text:
-            applies_to = ("Any slop finding",)
-        if not applies_to:
-            _fail(f"{code} does not name any applicable policy")
+        code, required_remediation = match.groups()
+        if code in remediations:
+            _fail(f"duplicate remediation record: {code}", error_code="DUPLICATE_REMEDIATION")
         remediations[code] = RemediationRecord(
             code=code,
-            applies_to=applies_to,
             required_remediation=required_remediation,
         )
     if not remediations:
-        _fail("remediations.md contained no REMEDIATE records", error_code="EMPTY_SOURCE")
+        _fail("remediation catalogue contained no REMEDIATE records", error_code="EMPTY_SOURCE")
     return remediations
 
 
-def load_policy_index(root: Path | None = None) -> PolicyIndex:
-    index_root = root or default_policy_index_root()
-    policies = parse_policies(_read_required(index_root / POLICIES_FILE))
-    remediations = parse_remediations(_read_required(index_root / REMEDIATIONS_FILE))
+def load_policy_index_from_paths(policies_path: Path, remediations_path: Path) -> PolicyIndex:
+    """Load an index from explicit canonical-source-shaped paths.
+
+    This seam exists for parser tests. Runtime callers use
+    :func:`load_policy_index`, whose two source locations are fixed.
+    """
+    policies = parse_policies(_read_required(policies_path))
+    remediations = parse_remediations(_read_required(remediations_path))
     for policy in policies.values():
         if policy.remediation_code not in remediations:
             _fail(f"{policy.code} references missing remediation {policy.remediation_code}", error_code="MISSING_REMEDIATION")
-        remediation = remediations[policy.remediation_code]
-        if policy.code not in remediation.applies_to and "Any slop finding" not in remediation.applies_to:
-            _fail(f"{policy.remediation_code} does not apply to {policy.code}", error_code="REMEDIATION_MISMATCH")
     return PolicyIndex(policies=policies, remediations=remediations)
 
 
-def canonical_guidance(policy_code: str, remediation_code: str | None = None, *, index: PolicyIndex | None = None) -> str:
-    policy_index = index or load_policy_index()
-    policy = policy_index.policy(policy_code)
-    remediation = policy_index.remediation_for_policy(policy_code, remediation_code)
-    return "\n".join(
-        [
-            f"Policy: `{policy.code}` — {policy.name}",
-            f"Rule: {policy.rule}",
-            f"Invalid local fixes: {policy.invalid_local_fixes}",
-            f"Remediation: `{remediation.code}` — {remediation.required_remediation}",
-        ]
+def load_policy_index() -> PolicyIndex:
+    root = repo_root()
+    return load_policy_index_from_paths(
+        root / POLICIES_RELATIVE,
+        root / REMEDIATIONS_RELATIVE,
     )
+
+
+def canonical_route(policy_code: str, *, index: PolicyIndex | None = None) -> PolicyRoute:
+    policy_index = index or load_policy_index()
+    return policy_index.route(policy_code)

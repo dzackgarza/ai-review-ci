@@ -9,4 +9,3 @@ message: POLICY.RUNTIME_DEFAULT
 severity: error
 metadata:
   policy_code: POLICY.RUNTIME_DEFAULT
-  remediation_code: REMEDIATE.TOTAL_CONFIG_MODEL

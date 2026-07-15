@@ -17,15 +17,20 @@ _PY_SUFFIXES = (".py",)
 _RUST_SUFFIXES = (".rs",)
 _SHELL_SUFFIXES = (".sh",)
 _JUST_SUFFIXES = (".just",)
+_DIFF_SECTION_START = re.compile(r"(?m)(?=^diff --git )")
+_NON_TEXT_DIFF_CONTENT = re.compile(r"[\udc80-\udcff\x0b\x0c\x1c-\x1e\x85\u2028\u2029]|\r(?!\n)")
 
 
 class DiffRule(BaseModel):
-    model_config = ConfigDict(frozen=True, arbitrary_types_allowed=True)
+    model_config = ConfigDict(extra="forbid", frozen=True, arbitrary_types_allowed=True)
 
     rule_id: str
+    policy_code: str
+    signal_keys: tuple[str, ...]
     pattern: re.Pattern[str]
     suffixes: tuple[str, ...]
-    message: str
+    excluded_suffixes: tuple[str, ...] = ()
+    exclude_config_paths: bool = False
 
 
 class ProjectProfile(BaseModel):
@@ -82,42 +87,60 @@ REQUIRED_CHECK_CONTEXTS = BASE_REQUIRED_CHECK_CONTEXTS
 DIFF_RULES = (
     DiffRule(
         rule_id="no-nullish-coalescing",
+        policy_code="POLICY.RUNTIME_DEFAULT",
+        signal_keys=("no-nullish-coalescing",),
         pattern=re.compile(r"\?\?"),
         suffixes=_TS_JS_SUFFIXES,
-        message="Nullish coalescing introduces a runtime fallback.",
     ),
     DiffRule(
         rule_id="ts-no-or-default",
+        policy_code="POLICY.RUNTIME_DEFAULT",
+        signal_keys=("ts-no-or-default",),
         pattern=re.compile(r"\|\|"),
         suffixes=_TS_JS_SUFFIXES + _SHELL_SUFFIXES + _JUST_SUFFIXES,
-        message="Logical OR introduces a fallback/default path.",
     ),
     DiffRule(
         rule_id="no-double-cast",
+        policy_code="POLICY.NO_TYPE_ESCAPE",
+        signal_keys=("no-double-cast",),
         pattern=re.compile(r"\bas\s+(?:unknown|any|never)\s+as\b"),
         suffixes=_TS_JS_SUFFIXES,
-        message="Double-casting bypasses TypeScript's type system.",
     ),
     DiffRule(
         rule_id="ts-no-any-cast",
+        policy_code="POLICY.NO_TYPE_ESCAPE",
+        signal_keys=("ts-no-any-cast",),
         pattern=re.compile(r"\bas\s+any\b"),
         suffixes=_TS_JS_SUFFIXES,
-        message="as any disables TypeScript evidence at the boundary.",
     ),
     DiffRule(
         rule_id="ts-no-vitest-mock-boundary",
+        policy_code="POLICY.NO_MOCK_PROOF",
+        signal_keys=(
+            "ts-no-vi-mock",
+            "ts-no-vi-stub-global",
+            "ts-no-vi-fn",
+            "ts-no-vi-spyon",
+            "ts-no-vi-stub-env",
+        ),
         pattern=re.compile(r"\bvi\.(?:mock|stubGlobal|fn|spyOn|stubEnv)\s*\("),
         suffixes=_TS_JS_SUFFIXES,
-        message="Vitest mock helpers replace real proof boundaries.",
     ),
     DiffRule(
         rule_id="ts-no-jest-mock-boundary",
+        policy_code="POLICY.NO_MOCK_PROOF",
+        signal_keys=(
+            "ts-no-jest-mock",
+            "ts-no-jest-fn",
+            "ts-no-jest-spyon",
+        ),
         pattern=re.compile(r"\bjest\.(?:mock|fn|spyOn)\s*\("),
         suffixes=_TS_JS_SUFFIXES,
-        message="Jest mock helpers replace real proof boundaries.",
     ),
     DiffRule(
         rule_id="no-const-assignment",
+        policy_code="POLICY.NO_HIDDEN_CONFIG",
+        signal_keys=("no-const-assignment",),
         pattern=re.compile(
             r"^\s*(?:export\s+)?const\s+(?:"
             r"[A-Z][A-Z0-9_]*(?:URL|URI|ENDPOINT|HOST|PORT|SERVER|DATABASE|COMMAND|CWD|PATH|DIR|DIRECTORY|TIMEOUT|RETRY|THRESHOLD|SECRET|TOKEN)[A-Z0-9_]*"
@@ -126,25 +149,98 @@ DIFF_RULES = (
             r")",
         ),
         suffixes=_TS_JS_SUFFIXES,
-        message="Hardcoded config-shaped constants belong in required config.",
+        exclude_config_paths=True,
     ),
     DiffRule(
         rule_id="py-no-getenv-default",
+        policy_code="POLICY.RUNTIME_DEFAULT",
+        signal_keys=("py-no-getenv-default",),
         pattern=re.compile(r"\bos\.getenv\s*\([^,\n]+,"),
         suffixes=_PY_SUFFIXES,
-        message="os.getenv with a default creates a runtime fallback.",
     ),
     DiffRule(
         rule_id="py-no-dict-get-default",
+        policy_code="POLICY.RUNTIME_DEFAULT",
+        signal_keys=("py-no-dict-get-default",),
         pattern=re.compile(r"\.get\s*\([^,\n]+,"),
         suffixes=_PY_SUFFIXES,
-        message="dict.get with a default hides missing required data.",
     ),
     DiffRule(
         rule_id="rs-no-unwrap-or",
+        policy_code="POLICY.RUNTIME_DEFAULT",
+        signal_keys=("rs-no-unwrap-or", "rs-no-unwrap-or-default"),
         pattern=re.compile(r"\.unwrap_or(?:_default)?\s*\("),
         suffixes=_RUST_SUFFIXES,
-        message="unwrap_or fallback paths hide failed Rust results.",
+    ),
+)
+
+
+_NON_CODE_SUFFIXES = (".md", ".markdown", ".mdx")
+
+BYPASS_DIFF_RULES = (
+    DiffRule(
+        rule_id="no-coverage-pragma",
+        policy_code="POLICY.NO_QC_SILENCING",
+        signal_keys=("no-coverage-pragma",),
+        pattern=re.compile(r"# pragma: no cov" + "er"),
+        suffixes=(),
+        excluded_suffixes=_NON_CODE_SUFFIXES,
+    ),
+    DiffRule(
+        rule_id="no-istanbul-ignore",
+        policy_code="POLICY.NO_QC_SILENCING",
+        signal_keys=("no-istanbul-ignore",),
+        pattern=re.compile(r"// istanbul ign" + "ore"),
+        suffixes=(),
+        excluded_suffixes=_NON_CODE_SUFFIXES,
+    ),
+    DiffRule(
+        rule_id="no-noqa",
+        policy_code="POLICY.NO_QC_SILENCING",
+        signal_keys=("no-noqa",),
+        pattern=re.compile(r"# no" + "qa"),
+        suffixes=(),
+        excluded_suffixes=_NON_CODE_SUFFIXES,
+    ),
+    DiffRule(
+        rule_id="no-type-ignore",
+        policy_code="POLICY.NO_QC_SILENCING",
+        signal_keys=("no-type-ignore",),
+        pattern=re.compile(r"# type: ign" + "ore"),
+        suffixes=(),
+        excluded_suffixes=_NON_CODE_SUFFIXES,
+    ),
+    DiffRule(
+        rule_id="no-double-cast",
+        policy_code="POLICY.NO_TYPE_ESCAPE",
+        signal_keys=("no-double-cast",),
+        pattern=re.compile(r"\bas\s+(?:unknown|any|never)\s+as\s+"),
+        suffixes=(),
+        excluded_suffixes=_NON_CODE_SUFFIXES,
+    ),
+    DiffRule(
+        rule_id="no-ts-ignore",
+        policy_code="POLICY.NO_QC_SILENCING",
+        signal_keys=("no-ts-ignore",),
+        pattern=re.compile(r"@ts-ign" + "ore"),
+        suffixes=(),
+        excluded_suffixes=_NON_CODE_SUFFIXES,
+    ),
+    DiffRule(
+        rule_id="no-unjustified-ts-expect-error",
+        policy_code="POLICY.NO_QC_SILENCING",
+        signal_keys=("no-unjustified-ts-expect-error",),
+        pattern=re.compile(r"@ts-expect-err" + r"or[ \t]*$"),
+        suffixes=(),
+        excluded_suffixes=_NON_CODE_SUFFIXES,
+    ),
+    DiffRule(
+        rule_id="no-eslint-disable",
+        policy_code="POLICY.NO_QC_SILENCING",
+        signal_keys=("no-eslint-disable",),
+        pattern=re.compile(r"// eslint-dis" + "able"),
+        suffixes=(),
+        excluded_suffixes=_NON_CODE_SUFFIXES,
     ),
 )
 
@@ -264,12 +360,16 @@ def _is_config_path(path: str) -> bool:
 
 
 def _rule_applies(path: str, rule: DiffRule) -> bool:
-    if rule.rule_id == "no-const-assignment" and _is_config_path(path):
+    if rule.exclude_config_paths and _is_config_path(path):
         return False
-    return Path(path).name == "justfile" or path.endswith(rule.suffixes)
+    if path.lower().endswith(rule.excluded_suffixes):
+        return False
+    if not rule.suffixes:
+        return True
+    return Path(path).name.lower() == "justfile" or path.endswith(rule.suffixes)
 
 
-def diff_findings(diff_text: str) -> list[str]:
+def diff_findings(diff_text: str, rules: tuple[DiffRule, ...] = DIFF_RULES) -> list[str]:
     """Return deterministic findings introduced by added lines in a unified diff."""
     findings: list[str] = []
     for patched_file in PatchSet(diff_text.splitlines(keepends=True)):
@@ -283,10 +383,21 @@ def diff_findings(diff_text: str) -> list[str]:
                 if line.target_line_no is None:
                     _fail(f"missing target line number in diff for {file_path}")
                 text = line.value.rstrip("\n")
-                for rule in DIFF_RULES:
+                for rule in rules:
                     if _rule_applies(file_path, rule) and rule.pattern.search(text):
-                        findings.append(f"{file_path}:{line.target_line_no}: {rule.rule_id}: {rule.message}")
+                        findings.append(f"{file_path}:{line.target_line_no}: {rule.rule_id}: {rule.policy_code}")
     return findings
+
+
+def bypass_diff_findings(diff_text: str) -> list[str]:
+    """Return staged-line findings for validator and type-system bypasses."""
+    return diff_findings(diff_text, BYPASS_DIFF_RULES)
+
+
+def _text_diff_sections(diff_text: str) -> str:
+    """Keep file sections whose content is safe for unified-text parsing."""
+    sections = _DIFF_SECTION_START.split(diff_text)
+    return "".join(section for section in sections if _NON_TEXT_DIFF_CONTENT.search(section) is None)
 
 
 def check_diff(diff: Path) -> None:
@@ -298,6 +409,26 @@ def check_diff(diff: Path) -> None:
             print(f"- {finding}", file=sys.stderr)
         sys.exit(1)
     print("Deterministic diff gate found no introduced violations.")
+
+
+def check_staged_bypass() -> None:
+    """Fail if staged added lines introduce validator or type-system bypasses."""
+    result = subprocess.run(
+        ["git", "diff", "--cached", "--unified=0", "--diff-filter=ACM"],
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="surrogateescape",
+    )
+    if result.returncode != 0:
+        _fail(f"git diff --cached failed: {result.stderr.strip()}")
+    findings = bypass_diff_findings(_text_diff_sections(result.stdout))
+    if findings:
+        print("Staged bypass gate found introduced violations:", file=sys.stderr)
+        for finding in findings:
+            print(f"- {finding}", file=sys.stderr)
+        sys.exit(1)
+    print("No bypass comments detected in staged files.")
 
 
 def _justfile_for(target: Path) -> Path:

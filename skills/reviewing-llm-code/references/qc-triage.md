@@ -87,7 +87,8 @@ The subagent must:
 - Receive only the policy-coded findings: file/line, snippet when present in the raw QC output, and `POLICY.*` code.
   Do not include B's prose, root-cause narrative, suggested fix, or the orchestrator's opinion.
 - Load the style-guide index: `style-guide/references/style-guide-index.md` (canonical home: `ai-review-ci` `skills/style-guide/references/style-guide-index.md`) and `fixing-slop`.
-- For each `POLICY.*` code, look up the matching `REMEDIATE.*` entry and derive the fix from the policy, not from another agent's suggestion.
+- For each `POLICY.*` code, follow the exact `REMEDIATE.*` route named by the canonical policy record.
+  Do not restate or improvise the catalogue entry.
 - Implement the remediation in the target repository only.
 - Verify with the target repository's `just test-ci` gate unless the emitted directive names another policy-sensitive gate.
 - Report the fix outcome and any blocker back to the orchestrator.

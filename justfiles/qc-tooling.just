@@ -42,6 +42,7 @@ test-commit:
     set -euo pipefail
     export AI_REVIEW_CI_FAILURE_MODE=direct
     just --justfile {{infra}}/justfile -d . check
+    uv run --project {{infra}} ai-review-ci check-tripwire-index
     just -f {{justfiles}}/python.just -d . {{_commit-recipes}}
     just -f {{justfiles}}/shared.just -d . _no-bypass
     echo "QC-tooling commit checks completed"
