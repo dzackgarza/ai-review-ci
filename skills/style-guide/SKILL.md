@@ -6,10 +6,10 @@ description: Load before implementing or refactoring code that reaches a governe
 
 Start by selecting the implementation language, then load only the relevant foundation card from the [[style-guide/references/style-guide-index|style-guide index]].
 
-- [[style-guide/python/SKILL|Python]]
-- [[style-guide/typescript/SKILL|TypeScript and Bun]]
-- [[style-guide/bash/SKILL|Bash]]
-- [[style-guide/sage/SKILL|SageMath stub]]
+- [[style-guide/style-guide-python/SKILL|Python]]
+- [[style-guide/style-guide-typescript/SKILL|TypeScript and Bun]]
+- [[style-guide/style-guide-bash/SKILL|Bash]]
+- [[style-guide/style-guide-sage/SKILL|SageMath stub]]
 
 Each card is canonical for both paths:
 

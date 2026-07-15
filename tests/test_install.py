@@ -108,7 +108,7 @@ def test_install_writes_pr_template_with_gate_marker(tmp_path: pathlib.Path) -> 
     assert "Linked triaged issue(s)" in text
     assert "started as a draft" in text
     assert "Ready-for-review was requested only after" in text
-    assert "top-level PR comment titled `Review feedback disposition ledger`" in text
+    assert "every resolved substantive item carries its own evidenced disposition" in text
 
 
 def test_install_writes_canonical_aislop_config(tmp_path: pathlib.Path) -> None:

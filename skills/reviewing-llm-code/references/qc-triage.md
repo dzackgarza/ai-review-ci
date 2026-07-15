@@ -2,8 +2,8 @@
 
 This document defines the mandatory triage procedure when `test-ci` or `ambient` emits `QC FAILURE — TRIAGE REQUIRED`. It is a reference for the `reviewing-llm-code` skill and for the directive emitted by central QC.
 
-It does not apply to `test-commit` or `test-push`. Those gates emit `DIRECT REPAIR REQUIRED`: the current agent fixes the reported compiler, formatter, type, build, or test error without a disposition ledger, policy reviewer, or remediation subagent.
-Local type/test failures are not PR review feedback.
+It does not apply to `test-commit` or `test-push`. Those gates emit `DIRECT REPAIR REQUIRED`: the current agent fixes the reported compiler, formatter, type, build, or test error directly.
+Local type/test failures do not enter the returned-PR-feedback triage workflow.
 
 ## Role Boundary
 

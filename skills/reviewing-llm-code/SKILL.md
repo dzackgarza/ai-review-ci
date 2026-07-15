@@ -137,7 +137,7 @@ Also load as applicable:
   - [[anti-slop/SKILL|anti-slop]]
   - [[reviewing-subagent-work/SKILL|reviewing-subagent-work]]
   - [[test-guidelines/SKILL|test-guidelines]] if tests/QC/proof surfaces are in scope
-  - [[git-guidelines/feedback/SKILL|pr-feedback-triage]] if existing review comments are being evaluated
+  - [[pr-feedback-triage/SKILL|pr-feedback-triage]] if existing review comments are being evaluated
 
 Do not summarize these skills in the review.
 Use them to shape the judgment.

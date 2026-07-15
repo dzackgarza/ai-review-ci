@@ -80,20 +80,23 @@ The canonical templates live in [`src/ai_review_ci/templates/`](src/ai_review_ci
 
 The reusable workflow also accepts three optional repo-owned configuration inputs:
 
-- `advisory` (boolean, default `false`): advisory runs upload the full SARIF ledger snapshot but never let findings determine the workflow conclusion — the tier-1 enforcement step is skipped while every infrastructure step still fails loudly. Use this for a continuous, non-blocking stream of review reports on `main`; findings are then triaged as code scanning alerts (dismissed with reason, or fixed), and dispositions feed later reviewer context as do-not-re-raise instructions.
-- `policy_paths` (string, default empty): newline-delimited repo-relative document paths inlined into the reviewer prompt in every scope (`#` comments and blank lines are skipped; a missing path fails the run). Use it to hand the reviewer a repo-local policy catalogue — style guides, terminology dictionaries, mathematical specifications — beyond the README/AGENTS docs that repo sweeps auto-collect.
+- `advisory` (boolean, default `false`): advisory runs upload the full SARIF ledger snapshot but never let findings determine the workflow conclusion — the tier-1 enforcement step is skipped while every infrastructure step still fails loudly.
+  Use this for a continuous, non-blocking stream of review reports on `main`; findings are then triaged as code scanning alerts (dismissed with reason, or fixed), and dispositions feed later reviewer context as do-not-re-raise instructions.
+- `policy_paths` (string, default empty): newline-delimited repo-relative document paths inlined into the reviewer prompt in every scope (`#` comments and blank lines are skipped; a missing path fails the run).
+  Use it to hand the reviewer a repo-local policy catalogue — style guides, terminology dictionaries, mathematical specifications — beyond the README/AGENTS docs that repo sweeps auto-collect.
 - `focus_prompt` (string, default empty): short repo-specific instructions inlined into the reviewer prompt, for narrowing the review to particular concerns (for example, mathematical correctness against a named specification).
-- `context_archive` (string, default empty): repo-relative path to a tar archive — the repo-assembled **review packet**. The runner explodes it into `.review-context/` inside the reviewer repo; a top-level `PROMPT.md` leads the inlined section, every other `*.md` document is inlined in sorted path order, and non-Markdown files are listed by path for the reviewer to read from disk. This is the extensible context surface: the consumer repo owns a recipe that assembles the packet (from tracked files, untracked vault documents, other repos — anything), and the archive itself is the only thing tracked.
+- `context_archive` (string, default empty): repo-relative path to a tar archive — the repo-assembled **review packet**. The runner explodes it into `.review-context/` inside the reviewer repo; a top-level `PROMPT.md` leads the inlined section, every other `*.md` document is inlined in sorted path order, and non-Markdown files are listed by path for the reviewer to read from disk.
+  This is the extensible context surface: the consumer repo owns a recipe that assembles the packet (from tracked files, untracked vault documents, other repos — anything), and the archive itself is the only thing tracked.
 
-Report schemas accept an honest empty report: `findings: []` is valid, and the substantive-finding requirement only rejects padding in non-empty reports. A reviewer that finds nothing must submit an empty report rather than invent debt.
+Report schemas accept an honest empty report: `findings: []` is valid, and the substantive-finding requirement only rejects padding in non-empty reports.
+A reviewer that finds nothing must submit an empty report rather than invent debt.
 
 Requirements in the target repo: GitHub code scanning enabled (free for public repos), GitHub CLI auth with permission to edit branch protection, the target branch named in `--branch`, and a repo shape that satisfies the declared `--profile`. LLM review jobs are signal-only process checks: they upload SARIF and post review threads, but they do not compute or fail on a health score.
 The merge gate is deterministic QC plus evidence-backed resolution of reviewer-authored PR threads.
 
 ### QC justfile contract and doctor
 
-Each installed target repo carries an executable QC contract in its repository-root `justfile`.
-The `ai_review_ci_*` variables are the declaration surface that `doctor` evaluates, and the public recipes are the execution surface that `doctor` cross-checks:
+Each installed target repo carries an executable QC contract in its repository-root `justfile`. The `ai_review_ci_*` variables are the declaration surface that `doctor` evaluates, and the public recipes are the execution surface that `doctor` cross-checks:
 
 ```justfile
 ai_review_ci_schema_version := "1"
@@ -143,7 +146,9 @@ Status mapping is fixed:
 Only `current` exits zero.
 All other statuses fail the command and the `qc-doctor` PR gate.
 
-Every public `just test-commit` begins with `doctor-preflight`. It is the local, no-network subset of doctor: it requires a valid justfile contract and the declared profile's required project shape before normalization or type checking runs. Composite project shapes are centrally defined profiles; `bun-python` requires both Python and Bun project evidence and delegates to all three central gates. A preflight failure is project initialization work, not a policy-triage finding.
+Every public `just test-commit` begins with `doctor-preflight`. It is the local, no-network subset of doctor: it requires a valid justfile contract and the declared profile's required project shape before normalization or type checking runs.
+Composite project shapes are centrally defined profiles; `bun-python` requires both Python and Bun project evidence and delegates to all three central gates.
+A preflight failure is project initialization work, not a policy-triage finding.
 
 ## Installing QC Surfaces
 
@@ -158,7 +163,8 @@ cd ~/ai-review-ci
 ### Global Git hooks
 
 Global hooks are user-level Git hooks.
-The QC stack has three gates: `pre-commit` runs `just test-commit` for immediate local correctness, `pre-push` runs `just test-push` for the full project-owned suite, and pull-request CI runs `just test-ci` for long, hosted, and policy-sensitive acceptance checks. General and slop review start on the first coherent push in parallel with `test-ci`, so architectural drift is reviewed before the branch is polished around the wrong design.
+The QC stack has three gates: `pre-commit` runs `just test-commit` for immediate local correctness, `pre-push` runs `just test-push` for the full project-owned suite, and pull-request CI runs `just test-ci` for long, hosted, and policy-sensitive acceptance checks.
+General and slop review start on the first coherent push in parallel with `test-ci`, so architectural drift is reviewed before the branch is polished around the wrong design.
 The install recipe requires `GIT_GLOBAL_HOOKS_DIR` to name the explicit hooks directory, symlinks `global-hooks/pre-commit` and `global-hooks/pre-push` into that directory, and sets the user's global `core.hooksPath` to the same value:
 
 ```bash
@@ -361,11 +367,16 @@ just -f ~/ai-review-ci/justfiles/python.just -d . test-commit
 
 The gates are split by failure ownership, runtime, and gaming surface:
 
-- `just test-commit` (pre-commit) runs preflight, deterministic normalization, syntax/compile checks, type checking, and bypass detection. Its failures are immediate local repair: fix the reported object and recommit. They are not PR feedback and do not require disposition ledgers or remediation subagents.
-- `just test-push` (pre-push) includes the commit gate and runs the full project-owned test suite. Ordinary build and test failures remain direct implementation work.
-- `just test-ci` (required PR context) includes the push gate and adds coverage/diff-cover, dependency and import boundaries, dead-code, duplication, complexity, policy, slop, security, and hosted checks. Policy-sensitive findings retain independent triage because agents can game them by suppressing diagnostics, weakening thresholds, or golfing error counts.
+- `just test-commit` (pre-commit) runs preflight, deterministic normalization, syntax/compile checks, type checking, and bypass detection.
+  Its failures are immediate local repair: fix the reported object and recommit.
+  They do not enter the returned-PR-feedback triage workflow.
+- `just test-push` (pre-push) includes the commit gate and runs the full project-owned test suite.
+  Ordinary build and test failures remain direct implementation work.
+- `just test-ci` (required PR context) includes the push gate and adds coverage/diff-cover, dependency and import boundaries, dead-code, duplication, complexity, policy, slop, security, and hosted checks.
+  Policy-sensitive findings retain independent triage because agents can game them by suppressing diagnostics, weakening thresholds, or golfing error counts.
 
-The first coherent push starts deterministic CI and general/slop review in parallel. Review is a separate acceptance channel, not a final step postponed until every CI detail is already green.
+The first coherent push starts deterministic CI and general/slop review in parallel.
+Review is a separate acceptance channel, not a final step postponed until every CI detail is already green.
 
 Every language-specific tier runs shared normalization first: Markdown/JSON/YAML formatting and Semgrep autofix happen before language-specific checks and before verification gates.
 
@@ -391,7 +402,7 @@ trigger -> _review.yml (cross-repo reusable workflow)
               FIX-guided rejection -> repeat until exit 0
   -> `ai-review-ci to-sarif` -> upload to code scanning
   -> [diff scope] `ai-review-ci post-threads` posts resolvable review threads to the PR
-  -> [diff scope] thread-resolution gate verifies ai-review PR threads are resolved with commit or disposition-ledger evidence
+  -> [diff scope] thread-resolution gate verifies resolved review threads carry complete thread-local disposition evidence
 ```
 
 ### The agent contract

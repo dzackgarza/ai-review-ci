@@ -4,7 +4,7 @@ description: Load with the style guide before implementing or repairing SageMath
 ---
 # SageMath Mathematical Domain Modeling
 
-Read [[style-guide/sage/references/mathematical-domain-modeling|the Sage mathematical domain-modeling guide]] before designing Sage-facing public code.
+Read [[style-guide/style-guide-sage/references/mathematical-domain-modeling|the Sage mathematical domain-modeling guide]] before designing Sage-facing public code.
 
 Its governing rule is: **model the mathematics first; algorithms and representations realize that model.**
 

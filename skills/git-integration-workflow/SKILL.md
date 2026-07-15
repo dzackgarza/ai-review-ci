@@ -9,8 +9,8 @@ The enforced git *integration* workflow: what agents must do when they take fini
 This owns the integration-time gates.
 During-writing hygiene (the Read → Checkpoint → Edit → Verify → Commit edit workflow, commit-message format, staging discipline, safe deletion, destructive-git bans, hard constraints) stays advisory in the `git-guidelines` skill in `~/ai` and is not restated here.
 
-For "how to review a suspect PR" — the slop field guide, bridge-burning red flags, and validation-evasion auditing — this skill references [reviewing-llm-code](../reviewing-llm-code/SKILL.md) rather than duplicating it.
-For banned patterns, policy codes, and disposition doctrine, reference [anti-slop](../anti-slop/SKILL.md) and [policy-index](../policy-index/SKILL.md).
+For "how to review a suspect PR" — the slop field guide, bridge-burning red flags, and validation-evasion auditing — this skill references [[reviewing-llm-code/SKILL|reviewing-llm-code]] rather than duplicating it.
+For banned patterns, policy codes, and disposition doctrine, reference [[anti-slop/SKILL|anti-slop]] and [[policy-index/SKILL|policy-index]].
 
 ## Enforced lifecycle
 
@@ -23,7 +23,7 @@ Each arrow is a gate, not a suggestion.
    The issue is the draft.
    Do not create child issues for ordinary implementation tasks, and do not use a draft PR as the planning surface.
    If the work cannot be placed under an existing roadmap node, issue subtree, or new top-level roadmap issue without inventing scope, behavior, acceptance criteria, proof burdens, milestone cuts, or dependency order, the issue is not ready — stop and repair the issue.
-   See the admission gate in [references/pr-lifecycle.md](./references/pr-lifecycle.md).
+   See the admission gate in [[git-integration-workflow/references/pr-lifecycle|PR lifecycle]].
 
 2. **Implement with TDD.** Lock the target with failing verification before implementation exists: write a failing test/check, confirm it fails for the intended reason, implement the narrowest change, re-run, record the result on the issue or in evidence linked from the issue.
    Keep the diff inside the issue boundary.
@@ -40,7 +40,8 @@ Each arrow is a gate, not a suggestion.
 
 3. **PR review synthesis.** Open or update the PR from the current work-unit issue: summarize the issue scope, close/reference split, proof obligations addressed, evidence, and reviewer checklist.
    The PR body is a review submission derived from the issue, not a second planning tracker.
-   Open the PR on the first coherent push. Deterministic `test-ci`, general review, and slop review start in parallel; do not spend hours polishing an unreviewed architecture before entering this loop.
+   Open the PR on the first coherent push.
+   Deterministic `test-ci`, general review, and slop review start in parallel; do not spend hours polishing an unreviewed architecture before entering this loop.
    Use closing keywords (`Closes`) only for the work-unit issue this PR fully completes on merge; use `Refs` or prose for organizational parents and deferred work.
    A visible open checkbox in the PR body is a reviewer-facing blocker copied from the issue; if it is still open, the PR is not ready.
 
@@ -49,10 +50,8 @@ Each arrow is a gate, not a suggestion.
 5. **Trigger review.** Explicitly start the automated review loop: `gh pr comment <PR_NUMBER> --body '@codex review'` (or the repo's documented equivalent).
    Before tagging reviewers, ensure the target repo's local `AGENTS.md` carries the canonical `# Review Guidelines` section.
 
-6. **Disposition feedback.** Scan all feedback surfaces at once with `extract_unresolved_issues`, then route every item through `pr-feedback-triage`. Review feedback is a judgment task: each item gets an explicit four-way disposition, a visible human-readable thread reply, and — for rejected/modified items — a top-level disposition ledger entry.
-   Positive disposition requires already-committed remediation.
-   If feedback reopens required work, update the work-unit issue first and mark the PR not ready if it had already been submitted for review.
-   See [references/pr-review-disposition.md](./references/pr-review-disposition.md).
+6. **Disposition feedback.** Route every returned item through [[pr-feedback-triage/SKILL|pr-feedback-triage]]. That skill exclusively owns collection, policy/factual disposition, first-principles remediation, thread-local replies, resolution, and convergence.
+   This lifecycle owns only the PR and issue-state handoff: if triage reopens required work, update the work-unit issue first and mark the PR not ready if it had already been submitted for review.
 
 7. **Merge.** Merge (typically `gh pr merge --squash --delete-branch`) only when checks are green and every review surface has been substantively dispositioned.
 
@@ -77,7 +76,7 @@ Confirm that ownership from repository guidance and `itree doctor OWNER/REPO`; a
 Initialize the tree or obtain an explicit decision that the repository is not `itree`-governed.
 
 In a governed repository, create work units with `itree new` and create delivery milestones with `itree milestone`. Raw `gh issue create`, direct issue POSTs, and manual GitHub Milestone construction are reserved for repositories explicitly outside `itree` governance.
-See [references/issue-workflow.md](./references/issue-workflow.md) for the creation and recovery contract.
+See [[git-integration-workflow/references/issue-workflow|issue workflow]] for the creation and recovery contract.
 
 ### Doctrine (matches `itree help model`)
 
@@ -136,10 +135,11 @@ See [references/issue-workflow.md](./references/issue-workflow.md) for the creat
 
 ## Structure
 
-- [references/pr-lifecycle.md](./references/pr-lifecycle.md) — the full PR worker guide and branch → commit → push → CI → merge mechanics: work-unit issue admission gate, reviewer-facing PR synthesis, TDD-before-implementation, exhaustive review reading, review-log discipline, CI monitoring and auto-fix, mark-ready, merge, and integration/handoff push cadence.
+- [[git-integration-workflow/references/pr-lifecycle|PR lifecycle]] — the PR worker guide and branch → commit → push → CI → merge mechanics: work-unit issue admission, reviewer-facing PR synthesis, TDD-before-implementation, CI monitoring, readiness, merge, and integration/handoff cadence.
+  Returned feedback routes onward to [[pr-feedback-triage/SKILL|pr-feedback-triage]].
 
-- [references/pr-review-disposition.md](./references/pr-review-disposition.md) — consuming and disposing of returned review feedback: `extract_unresolved_issues` command forms, the four-way disposition model, thread-reply required fields, the deletion-disposition format, top-level ledger requirement, banned PR-review behaviors, the overloaded "resolve" table, and Jules review delegation.
+- [[git-integration-workflow/references/pr-review-disposition|PR feedback compatibility route]] — a compatibility pointer only; all operative doctrine lives in [[pr-feedback-triage/SKILL|pr-feedback-triage]].
 
-- [references/issue-workflow.md](./references/issue-workflow.md) — issue filing, labels, templates, the owned-repo improvement loop, and the view/create/manage/triage CLI mechanics (gh and curl).
+- [[git-integration-workflow/references/issue-workflow|issue workflow]] — issue filing, labels, templates, the owned-repo improvement loop, and the view/create/manage/triage CLI mechanics (gh and curl).
 
-- [references/code-review.md](./references/code-review.md) — *performing* code reviews on local changes and PRs: pre-push review, PR review on GitHub, review delegation to the policy skills, and the end-to-end review workflow.
+- [[git-integration-workflow/references/code-review|code review]] — *performing* code reviews on local changes and PRs: pre-push review, PR review on GitHub, review delegation to the policy skills, and the end-to-end review workflow.
