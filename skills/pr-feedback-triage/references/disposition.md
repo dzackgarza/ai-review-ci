@@ -16,11 +16,13 @@ Then select one:
 - **Accepted as written** — the claim is true and the proposed fix preserves policy and product semantics.
 - **Accepted with modified remediation** — the claim is true but the proposed fix violates policy or product semantics, or is underspecified.
 - **Rejected** — the claim is false, unsupported, irrelevant, design-hostile, or defeated by stronger policy or contract evidence.
+- **Duplicate** — the same semantic claim already has a canonical disposition; point to that thread.
+- **Outdated** — a superseding PR commit has invalidated the concern; cite that commit and the invalidating evidence.
 - **Investigate before action** — evidence is insufficient.
   Keep the thread open.
 - **Backlogged as minor technical debt** — the claim is true but satisfies every spend gate below and is linked to an owning debt issue.
 
-Duplicate, outdated, and superseded threads still receive per-thread dispositions: `Duplicate` points to the canonical thread; `Outdated` points to the superseding commit.
+Duplicate, outdated, and superseded threads still receive their selected per-thread disposition.
 Never silently skip them.
 
 ## Mandatory pre-filter

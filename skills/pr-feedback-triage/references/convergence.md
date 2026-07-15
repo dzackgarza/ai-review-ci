@@ -41,7 +41,8 @@ When the disposition changes scope or reveals a contract defect, update the owni
 
 Push accepted remediation before waiting for the next review round.
 After verification closes every obligation claimed by the work-unit issue's ready-for-review gate, update the issue/PR claim map and run `gh pr ready <number>`; otherwise the PR remains not ready and convergence is false.
-Do not call repeated review a snowball: a growing window is evidence that remediation is introducing defects or that collection/disposition is incomplete.
+Do not call repeated review a snowball or infer its cause from growth alone.
+Recollect the live surfaces and determine whether each added item is newly exposed, independently discovered, reintroduced, caused by remediation, or previously missed before routing it.
 
 ## Termination
 

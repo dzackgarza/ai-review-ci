@@ -8,9 +8,9 @@ description: Use when collecting, judging, remediating, replying to, resolving, 
 This is the single entrypoint for returned PR feedback.
 A review comment is a claim to evaluate, not an instruction to implement and not an administrative obstacle to clear.
 
-The review thread or comment surface is the audit trail.
+The feedback item's native surface is the audit trail.
 Do not create a top-level disposition ledger or a tracked review-ledger file.
-Those detach the judgment from the finding and are not substitutes for a reply on the finding's own surface.
+Those detach the judgment from the finding and are not substitutes for surface-local completion, including a reply wherever the native surface supports one.
 
 ## Role firewall
 
@@ -21,16 +21,14 @@ Keep these roles separate:
 - **C — remediation:** receives a first-principles specification, the exact governing `POLICY.*` codes, and the relevant [[style-guide/SKILL|style-guide cards]]. C does not receive the reviewer's wording or B's fix ideas.
 
 A may batch findings within B or C when context and ownership permit.
-Batched processing never permits grouped judgments: every finding gets its own disposition and its own reply.
+Batched processing never permits grouped judgments: every finding gets its own disposition and its surface-specific completion; every reply-capable finding gets its own reply.
 
 ## Routed workflow
 
 Load only the stage currently being executed:
 
-1. [[pr-feedback-triage/references/collect|Collect and identify every live feedback item]].
-   Route `OPEN-PENDING` items through [[pr-feedback-triage/references/resume-pending|the pending-item resume card]].
-2. [[pr-feedback-triage/references/disposition|Disposition each new or re-raised claim and proposed fix]].
-   Route `Investigate before action` through [[pr-feedback-triage/references/investigation|the evidence-gathering loop]] and back to a fresh B disposition.
+1. [[pr-feedback-triage/references/collect|Collect and identify every live feedback item]]. Route `OPEN-PENDING` items through [[pr-feedback-triage/references/resume-pending|the pending-item resume card]].
+2. [[pr-feedback-triage/references/disposition|Disposition each new or re-raised claim and proposed fix]]. Route `Investigate before action` through [[pr-feedback-triage/references/investigation|the evidence-gathering loop]] and back to a fresh B disposition.
 3. [[pr-feedback-triage/references/remediation|Translate accepted findings into policy-routed remediation]].
 4. [[pr-feedback-triage/references/thread-resolution|Verify, commit, reply on the original surface, and resolve when eligible]].
 5. [[pr-feedback-triage/references/convergence|Re-scan and repeat until the review window converges]].
