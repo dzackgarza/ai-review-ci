@@ -20,6 +20,8 @@ _PY_SUFFIXES = (".py",)
 _RUST_SUFFIXES = (".rs",)
 _SHELL_SUFFIXES = (".sh",)
 _JUST_SUFFIXES = (".just",)
+_DIFF_SECTION_START = re.compile(r"(?m)(?=^diff --git )")
+_NON_TEXT_DIFF_CONTENT = re.compile(r"[\udc80-\udcff\x0b\x0c\x1c-\x1e\x85\u2028\u2029]|\r(?!\n)")
 
 
 class DiffRule(BaseModel):
@@ -351,6 +353,12 @@ def bypass_diff_findings(diff_text: str) -> list[str]:
     return diff_findings(diff_text, BYPASS_DIFF_RULES)
 
 
+def _text_diff_sections(diff_text: str) -> str:
+    """Keep file sections whose content is safe for unified-text parsing."""
+    sections = _DIFF_SECTION_START.split(diff_text)
+    return "".join(section for section in sections if _NON_TEXT_DIFF_CONTENT.search(section) is None)
+
+
 def check_diff(diff: Path) -> None:
     """Fail if the PR unified diff introduces deterministic QC violations."""
     findings = diff_findings(diff.read_text())
@@ -373,7 +381,7 @@ def check_staged_bypass() -> None:
     )
     if result.returncode != 0:
         _fail(f"git diff --cached failed: {result.stderr.strip()}")
-    findings = bypass_diff_findings(result.stdout)
+    findings = bypass_diff_findings(_text_diff_sections(result.stdout))
     if findings:
         print("Staged bypass gate found introduced violations:", file=sys.stderr)
         for finding in findings:
