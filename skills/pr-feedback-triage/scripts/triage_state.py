@@ -59,6 +59,18 @@ COMMENTS_QUERY = (
     "  pageInfo{hasNextPage endCursor}"
     "  nodes{ id databaseId url author{login} body createdAt }}}}}"
 )
+PR_COMMITS_QUERY = """
+query($owner: String!, $name: String!, $pr: Int!, $cursor: String) {
+  repository(owner: $owner, name: $name) {
+    pullRequest(number: $pr) {
+      commits(first: 100, after: $cursor) {
+        pageInfo { hasNextPage endCursor }
+        nodes { commit { oid } }
+      }
+    }
+  }
+}
+"""
 
 
 def run(args: list[str]) -> subprocess.CompletedProcess[str]:
@@ -249,6 +261,49 @@ def fetch_threads(repo: str, pr: int) -> tuple[str, list[dict]]:
             sys.exit("GitHub reported another review-thread page without an end cursor.")
 
 
+def fetch_pr_commit_shas(repo: str, pr: int) -> set[str]:
+    owner, name = repo.split("/", 1)
+    shas: set[str] = set()
+    cursor: str | None = None
+    while True:
+        variables: dict[str, object] = {
+            "owner": owner,
+            "name": name,
+            "pr": pr,
+        }
+        if cursor:
+            variables["cursor"] = cursor
+        payload = gh_graphql(PR_COMMITS_QUERY, **variables)
+        data = _object(payload.get("data"), "GraphQL data")
+        repository = data.get("repository")
+        if repository is None:
+            sys.exit(f"Repository {repo} not found or inaccessible.")
+        pull_request = _object(repository, "repository").get("pullRequest")
+        if pull_request is None:
+            sys.exit(f"Pull request #{pr} not found in {repo}.")
+        connection = _object(
+            _object(pull_request, "pull request").get("commits"),
+            "pull-request commits connection",
+        )
+        for raw_node in _array(connection.get("nodes"), "pull-request commit nodes"):
+            commit = _object(
+                _object(raw_node, "pull-request commit node").get("commit"),
+                "pull-request commit",
+            )
+            oid = commit.get("oid")
+            if not isinstance(oid, str) or not re.fullmatch(
+                r"[0-9a-f]{40}", oid, re.IGNORECASE
+            ):
+                sys.exit("GitHub returned an invalid pull-request commit SHA.")
+            shas.add(oid.lower())
+        page_info = _object(connection.get("pageInfo"), "commit page info")
+        if not page_info.get("hasNextPage"):
+            return shas
+        cursor = page_info.get("endCursor")
+        if not isinstance(cursor, str) or not cursor:
+            sys.exit("GitHub reported another commit page without an end cursor.")
+
+
 def _visible_finding(body: str) -> str:
     visible = re.sub(r"<!--.*?-->", "", body, flags=re.DOTALL)
     visible = re.sub(r"!\[[^\]]*\]\([^)]*\)", "", visible)
@@ -415,16 +470,86 @@ def classify(
     return "NEW"
 
 
+def _commit_match_count(cited: str, commits: set[str]) -> int:
+    return sum(sha.startswith(cited.lower()) for sha in commits)
+
+
+def _audit_anchor_error(
+    body: str,
+    commits: set[str],
+    repo_root: Path,
+) -> str | None:
+    anchor = _field_value(body, "Audit anchor")
+    assert anchor is not None
+    if re.fullmatch(r"https?://\S+", anchor):
+        return None
+    if re.fullmatch(r"[0-9a-f]{7,40}", anchor, re.IGNORECASE):
+        if _commit_match_count(anchor, commits) == 1:
+            return None
+        return f"proof anchor {anchor} is not a unique commit on this PR"
+    path_text = anchor.split("::", 1)[0]
+    path_text = re.sub(r"#L\d+(?:-L\d+)?$", "", path_text)
+    path_text = re.sub(r":\d+(?::\d+)?$", "", path_text)
+    root = repo_root.resolve()
+    candidate = (root / path_text).resolve()
+    try:
+        candidate.relative_to(root)
+    except ValueError:
+        return f"proof anchor {anchor} is outside the checkout"
+    if path_text and candidate.is_file():
+        return None
+    return f"proof anchor {anchor} does not exist"
+
+
+def _disposition_validation_errors(
+    disposition: dict,
+    commits: set[str],
+    repo_root: Path,
+) -> list[str]:
+    if not disposition.get("complete"):
+        return []
+    verdict = str(disposition.get("verdict", "")).lower()
+    body = str(disposition.get("body", ""))
+    errors: list[str] = []
+    if verdict.startswith("accepted"):
+        cited = str(disposition.get("commit", ""))
+        if _commit_match_count(cited, commits) != 1:
+            errors.append(f"cited commit {cited} is not on this PR")
+        anchor_error = _audit_anchor_error(body, commits, repo_root)
+        if anchor_error:
+            errors.append(anchor_error)
+    elif verdict == "outdated":
+        match = SUPERSEDING_COMMIT_RE.search(body)
+        assert match is not None
+        cited = match.group(1)
+        if _commit_match_count(cited, commits) != 1:
+            errors.append(f"superseding commit {cited} is not on this PR")
+    return errors
+
+
 def build_records(
     threads: list[dict],
     previous: dict[str, dict],
     head_sha: str,
+    *,
+    pr_commits: set[str] | None = None,
+    repo_root: Path = Path("."),
 ) -> list[dict]:
     records: list[dict] = []
     seen_complete = dict(previous)
     for thread in threads:
         key = stable_key(thread)
         disposition = disposition_of(thread)
+        if disposition and pr_commits is not None:
+            errors = _disposition_validation_errors(
+                disposition,
+                pr_commits,
+                repo_root,
+            )
+            if errors:
+                disposition = dict(disposition)
+                disposition["complete"] = False
+                disposition["validation_errors"] = errors
         state = classify(thread, disposition, seen_complete.get(key))
         comments_connection = _object(thread.get("comments"), "review-thread comments")
         comments = _array(comments_connection.get("nodes"), "review-thread comment nodes")
@@ -469,7 +594,14 @@ def main() -> None:
     path = state_path(repo, pr)
     previous = load_previous(path)
     head_sha, threads = fetch_threads(repo, pr)
-    records = build_records(threads, previous, head_sha)
+    pr_commits = fetch_pr_commit_shas(repo, pr)
+    records = build_records(
+        threads,
+        previous,
+        head_sha,
+        pr_commits=pr_commits,
+        repo_root=Path.cwd(),
+    )
 
     counts: dict[str, int] = {}
     for record in records:

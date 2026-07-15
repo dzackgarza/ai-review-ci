@@ -26,6 +26,7 @@ def test_graphql_queries_have_balanced_selection_braces() -> None:
 
     assert triage.THREADS_QUERY.count("{") == triage.THREADS_QUERY.count("}")
     assert triage.COMMENTS_QUERY.count("{") == triage.COMMENTS_QUERY.count("}")
+    assert triage.PR_COMMITS_QUERY.count("{") == triage.PR_COMMITS_QUERY.count("}")
 
 
 def thread(
@@ -194,11 +195,14 @@ Commit: abcdef123456
 Audit anchor: tests/test_boundary.py::test_failure
 Deleted artifact: tests/test_legacy.py
 """
-    complete = missing_burden + """\
+    complete = (
+        missing_burden
+        + """\
 Original burden: Prove read failures remain visible.
 Burden disposition: solved by tests/test_boundary.py::test_failure
 Verification: Focused boundary test passes.
 """
+    )
 
     assert triage.disposition_of(thread("Finding", missing_burden))["complete"] is False
     assert triage.disposition_of(thread("Finding", complete))["complete"] is True
