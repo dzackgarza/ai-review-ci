@@ -187,6 +187,25 @@ def test_no_bypass_blocks_newly_staged_markers(tmp_path: pathlib.Path) -> None:
     assert TRIAGE_MARKER in output
 
 
+def test_no_bypass_accepts_staged_non_utf8_generated_assets(tmp_path: pathlib.Path) -> None:
+    project = tmp_path / "git-project"
+    project.mkdir()
+    source = project / "app.py"
+    source.write_text("def clean() -> None:\n    pass\n")
+    init_git_repo(project)
+    assert run_git(project, "add", "app.py").returncode == 0
+    commit_without_hooks(project, "baseline")
+
+    (project / "viewer.mjs").write_bytes(b"export const asset = '\xe0';\n")
+    assert run_git(project, "add", "viewer.mjs").returncode == 0
+
+    result = run_just(ROOT / "justfiles" / "shared.just", project, "_no-bypass")
+
+    output = result.stdout + result.stderr
+    assert result.returncode == 0, output
+    assert "No bypass comments detected" in output
+
+
 @pytest.mark.parametrize("recipe", ["_sage-syntax", "_vulture"])
 @pytest.mark.parametrize("configured_path", ["missing", "not-executable"])
 def test_sage_recipes_require_configured_executable_sage_path(

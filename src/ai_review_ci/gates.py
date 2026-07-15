@@ -368,6 +368,8 @@ def check_staged_bypass() -> None:
         ["git", "diff", "--cached", "--unified=0", "--diff-filter=ACM"],
         capture_output=True,
         text=True,
+        encoding="utf-8",
+        errors="surrogateescape",
     )
     if result.returncode != 0:
         _fail(f"git diff --cached failed: {result.stderr.strip()}")
