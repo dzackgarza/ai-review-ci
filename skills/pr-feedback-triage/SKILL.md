@@ -27,11 +27,13 @@ Batched processing never permits grouped judgments: every finding gets its own d
 
 Load only the stage currently being executed:
 
-1. [[pr-feedback-triage/references/collect|Collect and identify every live feedback item]]
-2. [[pr-feedback-triage/references/disposition|Disposition each claim and proposed fix]]
-3. [[pr-feedback-triage/references/remediation|Translate accepted findings into policy-routed remediation]]
-4. [[pr-feedback-triage/references/thread-resolution|Verify, commit, reply on the thread, and resolve]]
-5. [[pr-feedback-triage/references/convergence|Re-scan and repeat until the review window converges]]
+1. [[pr-feedback-triage/references/collect|Collect and identify every live feedback item]].
+   Route `OPEN-PENDING` items through [[pr-feedback-triage/references/resume-pending|the pending-item resume card]].
+2. [[pr-feedback-triage/references/disposition|Disposition each new or re-raised claim and proposed fix]].
+   Route `Investigate before action` through [[pr-feedback-triage/references/investigation|the evidence-gathering loop]] and back to a fresh B disposition.
+3. [[pr-feedback-triage/references/remediation|Translate accepted findings into policy-routed remediation]].
+4. [[pr-feedback-triage/references/thread-resolution|Verify, commit, reply on the original surface, and resolve when eligible]].
+5. [[pr-feedback-triage/references/convergence|Re-scan and repeat until the review window converges]].
 
 Each reference owns its stage.
 Integration guides, AGENTS fragments, PR templates, and reviewer guidance should route here rather than restating the state machine or reply formats.

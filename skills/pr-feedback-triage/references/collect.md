@@ -42,7 +42,7 @@ gh api --paginate repos/<owner>/<repo>/commits/<head-sha>/check-runs
 gh api --paginate repos/<owner>/<repo>/check-runs/<check-run-id>/annotations
 ```
 
-Use [[git-integration-workflow/SKILL|git-integration-workflow]] only for GitHub authentication and PR mechanics.
+Authentication and raw PR mechanics remain outside this stage.
 This stage owns which feedback surfaces must be collected and how their results join the round worklist.
 
 ## Worklist fields
@@ -55,12 +55,22 @@ For every item preserve:
 - file and line when applicable;
 - resolved, outdated, or check state;
 - canonical duplicate identity when already known;
+- existing canonical disposition reply, its URL, parsed verdict, completeness, and commit when state is `OPEN-PENDING`;
 - linked issue or PR-contract obligation implicated by the claim.
 
 Use `NEW`, `RE-RAISED`, `OPEN-PENDING`, and `CLOSED` only as collection state.
 They are not dispositions.
 
-## Dispatch to B
+## Route the collected state
+
+- `NEW` and `RE-RAISED` go to [[pr-feedback-triage/references/disposition|B disposition]].
+- `OPEN-PENDING` goes to [[pr-feedback-triage/references/resume-pending|pending-item resume]].
+- `CLOSED` requires no action in the current round.
+
+Do not redisposition a complete canonical reply merely because its inline thread still needs resolution.
+Do not ignore an incomplete canonical reply merely because a disposition line already exists.
+
+## Dispatch new and re-raised findings to B
 
 Transmit raw review text, relevant source locations, the current PR contract, named policy surfaces, and verbatim owner statements.
 Do not transmit A's verdict, leaning, hypotheses, preferred fix, paraphrased owner premise, or resolution preference.

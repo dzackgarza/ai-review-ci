@@ -103,7 +103,24 @@ Code/action taken or explicit non-change: No current-PR code change.
 Audit anchor: <source plus debt issue>
 ```
 
-`Investigate before action` remains open and therefore has no resolvable reply format.
+Investigation required:
+
+```text
+Disposition: Investigate before action
+Policy basis: POLICY.<CODE>
+Pre-filter: <gate and unresolved evidence result>
+Claim: <the claim whose truth is not yet established>
+Evidence gap: <specific missing fact>
+Next evidence required: <observation that would decide or falsify the claim>
+Code/action taken or explicit non-change: No code change while the evidence gap remains open.
+Audit anchor: <current source or runtime evidence>
+```
+
+Use `Factual/contract basis:` instead when no policy governs.
+Post or update this reply on the finding's own surface, then keep the item open and route it through [[pr-feedback-triage/references/investigation|the evidence-gathering loop]].
+
+When replacing an incomplete or investigative canonical reply, edit that same reply into the final contract.
+Do not append a second canonical disposition: the first canonical reply is the stable resume anchor.
 
 ## Deletion appendix
 

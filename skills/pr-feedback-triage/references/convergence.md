@@ -7,7 +7,9 @@ GitHub is the current state; a cached worklist is only a resume aid.
 
 ```text
 collect every surface
-  -> B disposition for each NEW or RE-RAISED finding
+  -> resume each OPEN-PENDING item from its first incomplete stage
+  -> B disposition for each NEW, RE-RAISED, or incomplete pending finding
+  -> investigate evidence gaps and return the evidence packet to a fresh B
   -> reply and close rejected, duplicate, outdated, and eligible backlog items
   -> first-principles specs for accepted current-PR findings
   -> C remediation
