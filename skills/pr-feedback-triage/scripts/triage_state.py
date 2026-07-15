@@ -111,8 +111,9 @@ def fetch_threads(repo: str, pr: int) -> list[dict]:
 
 def normalized_title(body: str) -> str:
     """Return the first meaningful line without badges or review markup."""
-    for raw in body.splitlines():
-        line = re.sub(r"<!--.*?-->", "", raw)
+    visible_body = re.sub(r"<!--.*?-->", "", body, flags=re.DOTALL)
+    for raw in visible_body.splitlines():
+        line = raw
         line = re.sub(r"!\[[^\]]*\]\([^)]*\)", "", line)
         line = re.sub(r"[#>*`\[\]]", "", line)
         line = re.sub(r"\[(General|Slop) Review\]\[tier\d\]", "", line, flags=re.I)
@@ -120,7 +121,7 @@ def normalized_title(body: str) -> str:
         line = line.strip()
         if len(line) >= 8:
             return line.lower()[:160]
-    return body.strip().lower()[:160]
+    return visible_body.strip().lower()[:160]
 
 
 def stable_key(thread: dict) -> str:
