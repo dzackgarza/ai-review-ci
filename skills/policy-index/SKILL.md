@@ -39,10 +39,10 @@ Implementation details invite source disposition based on tooling limits instead
 | File | Audience | Contents |
 | --- | --- | --- |
 | `references/policies.md` | Reviewers, triage agents, fixers after code assignment | Categorized policy database with named `POLICY.*` records. |
-| `references/red-flags.md` | Reviewers, disposition agents, and detector authors | Validation-evasion red flags, language-specific signatures, and QC detector targets. |
-| `references/runtime-control-flow.md` | Reviewers, disposition agents, detector authors, and fixers after code assignment | Runtime branch admission rules, banned branch shapes, ADDD assertion style, and examples. |
-| `references/error-handling-as-control-flow.md` | Reviewers, disposition agents, detector authors, test writers, and coding-style authors | Canonical rationale for banning exception-driven ordinary control flow and guess-check-retry state probing. |
-| `references/test-proof-rules.md` | Test writers, test reviewers, disposition agents, and detector authors | Banned test/assertion shapes and proof-admission rules. |
+| `references/red-flags.md` | Reviewers and disposition agents | Validation-evasion red flags and language-specific signatures. |
+| `references/runtime-control-flow.md` | Reviewers, disposition agents, and fixers after code assignment | Runtime branch admission rules, banned branch shapes, ADDD assertion style, and examples. |
+| `references/error-handling-as-control-flow.md` | Reviewers, disposition agents, test writers, and coding-style authors | Canonical rationale for banning exception-driven ordinary control flow and guess-check-retry state probing. |
+| `references/test-proof-rules.md` | Test writers, test reviewers, and disposition agents | Banned test/assertion shapes and proof-admission rules. |
 | [[style-guide/references/style-guide-index\|style-guide index]] | Before implementation and during repair | Canonical preferred constructions, bad patterns, rearchitecture, and proof obligations. |
 
 ## Policy Categories
@@ -87,7 +87,7 @@ A policy exception requires all of:
 | What policy applies to creating files dynamically from code? | `POLICY.NO_DYNAMIC_ARTIFACTS` in `references/policies.md`. |
 | What policy applies to embedding large strings/prompts/messages inline in code? | `POLICY.NO_DYNAMIC_ARTIFACTS` in `references/policies.md`. |
 | What policy applies to embedding one language inside another? | `POLICY.NO_DYNAMIC_ARTIFACTS` in `references/policies.md`. |
-| What policy applies to mypy `import-untyped`, missing stubs, or missing `py.typed`? | `POLICY.NO_UNTYPED_IMPORT_LEAK`; follow its `REMEDIATE.TYPED_DEPENDENCY_BOUNDARY` route rather than changing dependencies. |
+| What policy applies to mypy `import-untyped`, missing stubs, or missing `py.typed`? | `POLICY.NO_UNTYPED_IMPORT_LEAK`; follow that record's canonical remediation route rather than changing dependencies. |
 | What policy applies to token-local fixes that preserve the architectural failure process? | `POLICY.NO_MYOPIC_PATCHING` in `references/policies.md`. |
 | How do I review LLM-produced code? | [[reviewing-llm-code/SKILL\|reviewing-llm-code]]. |
 | How do I fix slop without laundering? | [[fixing-slop/SKILL\|fixing-slop]] plus [[style-guide/references/style-guide-index\|style-guide index]]. |
