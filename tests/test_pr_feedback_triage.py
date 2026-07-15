@@ -1,8 +1,12 @@
 from __future__ import annotations
 
 import importlib.util
+import json
+import subprocess
 from pathlib import Path
 from types import ModuleType
+
+import pytest
 
 ROOT = Path(__file__).resolve().parents[1]
 SCRIPT = ROOT / "skills" / "pr-feedback-triage" / "scripts" / "triage_state.py"
@@ -79,6 +83,7 @@ Code/action taken or explicit non-change: Propagate the read error.
 Proof: Boundary test rejects partial success.
 Commit: 123456789abc
 Audit anchor: tests/test_reader.py::test_failure
+Deleted artifact: None
 """
     root_only = thread(accepted, resolved=True)
     incomplete_reply = thread(
@@ -119,7 +124,208 @@ def test_re_emitted_finding_uses_prior_complete_disposition_as_resume_state() ->
         }
     }
 
-    records = triage.build_records([current], previous)
+    records = triage.build_records([current], previous, "f" * 40)
 
     assert records[0]["state"] == "RE-RAISED"
     assert records[0]["key"] == key
+
+
+def test_stable_key_uses_the_complete_visible_finding_not_only_its_title() -> None:
+    triage = load_triage_state()
+    first = thread("## Shared title\nThe parser discards the first failure.")
+    second = thread("## Shared title\nThe parser fabricates a fallback value.")
+
+    assert triage.stable_key(first) != triage.stable_key(second)
+
+
+def test_disposition_parser_selects_the_latest_complete_reply() -> None:
+    triage = load_triage_state()
+    incomplete = """\
+Disposition: Accepted as written
+Policy basis: POLICY.NO_ERROR_DISCARD
+Pre-filter: <gate>
+Claim: Read failures are discarded.
+Remediation: Propagate the read error.
+Code/action taken or explicit non-change: Propagate the read error.
+Proof: Boundary test rejects partial success.
+Commit: 123456789abc
+Audit anchor: <anchor>
+Deleted artifact: None
+"""
+    corrected = """\
+Disposition: Accepted as written.
+Policy basis: POLICY.NO_ERROR_DISCARD
+Pre-filter: Gate 1 correctness defect -> current-PR remediation
+Claim: Read failures are discarded.
+Remediation: Propagate the read error.
+Code/action taken or explicit non-change: Propagate the read error.
+Proof: Boundary test rejects partial success.
+Commit: abcdef123456
+Audit anchor: tests/test_reader.py::test_failure
+Deleted artifact: None
+"""
+    item = thread("Read failures are discarded.", incomplete, corrected, resolved=True)
+
+    disposition = triage.disposition_of(item)
+
+    assert disposition["complete"] is True
+    assert disposition["commit"] == "abcdef123456"
+    assert disposition["body"] == corrected
+
+
+def test_deletion_disposition_requires_burden_fields() -> None:
+    triage = load_triage_state()
+    missing_burden = """\
+Disposition: Accepted with modified remediation
+Policy basis: POLICY.NO_DELETION_LAUNDERING
+Pre-filter: Gate 2 deletion -> burden disposition required
+Claim: A tracked proof artifact is deleted.
+Remediation: Transfer its proof burden to the owned boundary test.
+Code/action taken or explicit non-change: Deleted tests/test_legacy.py.
+Proof: The replacement boundary test fails on the former broken behavior.
+Commit: abcdef123456
+Audit anchor: tests/test_boundary.py::test_failure
+Deleted artifact: tests/test_legacy.py
+"""
+    complete = missing_burden + """\
+Original burden: Prove read failures remain visible.
+Burden disposition: solved by tests/test_boundary.py::test_failure
+Verification: Focused boundary test passes.
+"""
+
+    assert triage.disposition_of(thread("Finding", missing_burden))["complete"] is False
+    assert triage.disposition_of(thread("Finding", complete))["complete"] is True
+
+
+def test_build_records_preserves_raw_finding_and_current_head() -> None:
+    triage = load_triage_state()
+    current = thread("Exact reviewer text.")
+
+    record = triage.build_records([current], {}, "a" * 40)[0]
+
+    assert record["head_sha"] == "a" * 40
+    assert record["author"] == "reviewer"
+    assert record["finding"]["body"] == "Exact reviewer text."
+    assert record["comments"][0]["body"] == "Exact reviewer text."
+
+
+def test_state_path_is_namespaced_by_repository(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    triage = load_triage_state()
+    calls: list[list[str]] = []
+
+    def fake_run(args: list[str]) -> subprocess.CompletedProcess[str]:
+        calls.append(args)
+        return subprocess.CompletedProcess(args, 0, ".git/ai-review-ci/state.json\n", "")
+
+    monkeypatch.setattr(triage, "run", fake_run)
+
+    triage.state_path("owner/first", 7)
+    first = calls[-1][-1]
+    triage.state_path("owner/second", 7)
+    second = calls[-1][-1]
+
+    assert first != second
+    assert "owner-first" in first
+    assert "owner-second" in second
+
+
+def test_load_previous_rejects_non_object_state(tmp_path: Path) -> None:
+    triage = load_triage_state()
+    path = tmp_path / "state.json"
+    path.write_text(json.dumps([]), encoding="utf-8")
+
+    with pytest.raises(SystemExit, match="expected a JSON object"):
+        triage.load_previous(path)
+
+
+def test_fetch_threads_fails_loudly_for_missing_repository(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    triage = load_triage_state()
+    monkeypatch.setattr(
+        triage,
+        "gh_graphql",
+        lambda query, **variables: {"data": {"repository": None}},
+    )
+
+    with pytest.raises(SystemExit, match="not found or inaccessible"):
+        triage.fetch_threads("owner/missing", 7)
+
+
+def test_fetch_threads_paginates_comments_and_returns_head_sha(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    triage = load_triage_state()
+    first_comments = [
+        {
+            "id": f"comment-{index}",
+            "databaseId": index,
+            "url": f"https://example.test/{index}",
+            "author": {"login": "reviewer"},
+            "body": f"body {index}",
+            "createdAt": "2026-07-15T00:00:00Z",
+        }
+        for index in range(100)
+    ]
+    calls = iter(
+        [
+            {
+                "data": {
+                    "repository": {
+                        "pullRequest": {
+                            "headRefOid": "a" * 40,
+                            "reviewThreads": {
+                                "nodes": [
+                                    {
+                                        "id": "thread-1",
+                                        "isResolved": False,
+                                        "isOutdated": False,
+                                        "path": "src/app.py",
+                                        "line": 10,
+                                        "comments": {
+                                            "nodes": first_comments,
+                                            "pageInfo": {
+                                                "hasNextPage": True,
+                                                "endCursor": "comments-100",
+                                            },
+                                        },
+                                    }
+                                ],
+                                "pageInfo": {
+                                    "hasNextPage": False,
+                                    "endCursor": None,
+                                },
+                            },
+                        }
+                    }
+                }
+            },
+            {
+                "data": {
+                    "node": {
+                        "comments": {
+                            "nodes": [
+                                {
+                                    "id": "comment-100",
+                                    "databaseId": 100,
+                                    "url": "https://example.test/100",
+                                    "author": {"login": "worker"},
+                                    "body": "canonical disposition",
+                                    "createdAt": "2026-07-15T00:01:00Z",
+                                }
+                            ],
+                            "pageInfo": {"hasNextPage": False, "endCursor": None},
+                        }
+                    }
+                }
+            },
+        ]
+    )
+    monkeypatch.setattr(triage, "gh_graphql", lambda query, **variables: next(calls))
+
+    head_sha, threads = triage.fetch_threads("owner/repo", 7)
+
+    assert head_sha == "a" * 40
+    assert len(threads[0]["comments"]["nodes"]) == 101
