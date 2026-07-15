@@ -33,6 +33,7 @@ from pathlib import Path
 from typing import Any, NoReturn
 
 from ai_review_ci.models import finding_fingerprint
+from ai_review_ci.policy_index import canonical_route
 from ai_review_ci.reviewer_identity import reviewer_identity
 
 JsonDict = dict[str, Any]
@@ -60,7 +61,6 @@ _NARRATIVE_KEYS = (
     ("existential_justification", "Existential justification"),
     ("failure_mode", "Failure mode"),
     ("policy_code", "Policy"),
-    ("remediation_code", "Remediation"),
 )
 
 
@@ -158,6 +158,16 @@ def _issue_body(finding: JsonDict, report_type: str, parent_issue: int) -> str:
         value = finding.get(key)
         if isinstance(value, str) and value:
             lines.append(f"**{heading}:** {value}")
+    policy_code = finding.get("policy_code")
+    if isinstance(policy_code, str):
+        route = canonical_route(policy_code)
+        lines.extend(
+            [
+                "",
+                "### Canonical catalogue route",
+                f"`{route.policy_code}` → `{route.remediation_code}`",
+            ]
+        )
     proof = finding.get("proof_command")
     if isinstance(proof, str) and proof:
         lines.extend(["", "**Proof:**", "```", proof, "```"])
@@ -237,7 +247,7 @@ def publish_issues(artifact: Path, repo: str, parent_issue: int = 0) -> None:
         body = _issue_body(finding, report_type, parent_issue)
         existing = by_fingerprint.get(fingerprint)
         if existing is None:
-            issue = _gh_api(
+            created_issue = _gh_api(
                 [f"repos/{repo}/issues", "--input", "-"],
                 input_body={
                     "title": _issue_title(finding, report_type),
@@ -245,10 +255,10 @@ def publish_issues(artifact: Path, repo: str, parent_issue: int = 0) -> None:
                     "labels": [*ISSUE_LABELS, type_label],
                 },
             )
-            if not isinstance(issue, dict):
+            if not isinstance(created_issue, dict):
                 _fail("gh api issue creation returned non-object JSON")
             if parent_issue:
-                _attach_to_parent(repo, parent_issue, int(issue["number"]))
+                _attach_to_parent(repo, parent_issue, int(created_issue["number"]))
             created += 1
         elif existing["state"] == "open":
             _gh_api(

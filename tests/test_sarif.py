@@ -9,6 +9,7 @@ import pytest
 from sarif_pydantic import Message, ReportingDescriptor, Result
 
 from ai_review_ci.models import finding_fingerprint
+from ai_review_ci.policy_index import canonical_route
 from ai_review_ci.sarif import (
     CARRY_FORWARD_SCHEMA_VERSION,
     _append_result,
@@ -129,13 +130,13 @@ def test_build_sarif_resolves_policy_guidance_from_vendored_index(checkout: Path
 
     result = sarif["runs"][0]["results"][0]
     rule = sarif["runs"][0]["tool"]["driver"]["rules"][0]
-    assert result["properties"]["policy_code"] == "POLICY.NO_HIDDEN_CONFIG"
-    assert result["properties"]["remediation_code"] == "REMEDIATE.TOTAL_CONFIG_MODEL"
-    assert "Policy: `POLICY.NO_HIDDEN_CONFIG`" in result["message"]["text"]
-    assert "Remediation: `REMEDIATE.TOTAL_CONFIG_MODEL`" in result["message"]["text"]
+    route = canonical_route("POLICY.NO_HIDDEN_CONFIG")
+    assert result["properties"]["policy_code"] == route.policy_code
+    assert result["properties"]["remediation_code"] == route.remediation_code
+    assert result["message"]["text"] == artifact["findings"][0]["violated_invariant"]
     assert rule["properties"] == {
-        "policy_code": "POLICY.NO_HIDDEN_CONFIG",
-        "remediation_code": "REMEDIATE.TOTAL_CONFIG_MODEL",
+        "policy_code": route.policy_code,
+        "remediation_code": route.remediation_code,
     }
 
 

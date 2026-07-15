@@ -39,7 +39,7 @@ from sarif_pydantic import (
 )
 
 from ai_review_ci.models import finding_fingerprint
-from ai_review_ci.policy_index import canonical_guidance, load_policy_index
+from ai_review_ci.policy_index import load_policy_index
 from ai_review_ci.reviewer_identity import reviewer_identity
 
 JsonDict = dict[str, Any]
@@ -50,7 +50,6 @@ SARIF_SCHEMA = "https://raw.githubusercontent.com/oasis-tcs/sarif-spec/master/Sc
 CATEGORY_PREFIX = "ai-review"
 _OPTIONAL_PROPERTY_KEYS = (
     ("policy_code", "policy_code"),
-    ("remediation_code", "remediation_code"),
     ("symptom", "symptom"),
     ("consequence", "consequence"),
     ("proof_command", "proof_command"),
@@ -164,8 +163,7 @@ def _result_properties(finding: JsonDict, report_type: str) -> JsonDict:
     if isinstance(policy_code, str):
         policy = load_policy_index().policy(policy_code)
         properties["policy_code"] = policy.code
-        remediation_code = finding.get("remediation_code")
-        properties["remediation_code"] = remediation_code if isinstance(remediation_code, str) else policy.remediation_code
+        properties["remediation_code"] = policy.remediation_code
     for key, prop_name in _OPTIONAL_PROPERTY_KEYS:
         if prop_name in properties:
             continue
@@ -177,10 +175,6 @@ def _result_properties(finding: JsonDict, report_type: str) -> JsonDict:
 def _sarif_result(finding: JsonDict, rule_index: int, report_type: str) -> Result:
     loc = finding["location"]
     message_text = finding["violated_invariant"]
-    policy_code = finding.get("policy_code")
-    if isinstance(policy_code, str):
-        remediation_code = finding.get("remediation_code")
-        message_text = f"{message_text}\n\n{canonical_guidance(policy_code, remediation_code if isinstance(remediation_code, str) else None)}"
     return Result(
         ruleId=finding["category"],
         ruleIndex=rule_index,

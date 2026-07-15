@@ -17,7 +17,7 @@ You fix slop by reconstructing the narrative that produced it, identifying the c
 
 Remediation must strictly respect the **Bridge-Burning Policies** (defined in [[policy-index/SKILL#policy-registry|policy-index/SKILL.md]]). Any fix that introduces fallbacks, defaults, mocks, optional critical dependencies, or boolean flags to "remediate" a finding is violating policy and is considered laundering.
 
-For `POLICY.NO_EXCEPTION_CONTROL_FLOW`, load [[style-guide/references/style-guide-index|style-guide index]] → `REMEDIATE.EXPLICIT_STATE_MODEL`. Reordering catches, narrowing exception types while retaining failure-selected routine behavior, or hiding the same guess-catch-retry tree in a helper is laundering. The fix must expose expected states, legal transitions, typed outcomes, and retry safety explicitly.
+For `POLICY.NO_EXCEPTION_CONTROL_FLOW`, follow the remediation route named by its canonical policy record into the [[style-guide/references/style-guide-index|style-guide index]]. Do not restate or improvise that route here.
 
 ## Slop Is Never Localized: The Blast Radius Rule
 
@@ -199,7 +199,7 @@ The delegation mechanics (two fresh subagents, no shared contaminated context) l
 - **`anti-slop/references/code-patterns.md`** → **Honest-Label Laundering** — The specific detection heuristics for renaming/relabeling.
 - **`anti-slop/SKILL.md`** — The analysis skill; use this FIRST to identify slop, then use fixing-slop to remediate.
 - **[[policy-index/SKILL|policy-index]] -> Bridge-Burning Policies** — The [[policy-index/SKILL#policy-registry|Bridge-Burning Policies]] are the core criteria for what constitutes a correct, non-evasive implementation.
-- **[Error Handling as Control Flow](../policy-index/references/error-handling-as-control-flow.md)** — Use with `POLICY.NO_EXCEPTION_CONTROL_FLOW` to reconstruct the missing domain model before applying `REMEDIATE.EXPLICIT_STATE_MODEL`.
+- **[Error Handling as Control Flow](../policy-index/references/error-handling-as-control-flow.md)** — Use with `POLICY.NO_EXCEPTION_CONTROL_FLOW` to reconstruct the missing domain model before following that policy record's remediation route.
   Any fix must follow them as hard constraints.
   For a detailed list of prohibited code constructs and testing red flags, see the [Bridge-Burning Red Flags Catalog](../policy-index/references/red-flags.md) and the [Runtime Control-Flow Red Flags Catalog](../policy-index/references/runtime-control-flow.md).
 - **`handling-corrections/SKILL.md`** — The anti-thrashing protocol; use when a fix attempt is rejected as laundering.

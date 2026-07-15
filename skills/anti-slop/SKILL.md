@@ -537,11 +537,13 @@ If you catch yourself doing any of these, you have slipped from analysis into ja
 
 - **Needless complexity that could be idiomatic** (imperative loops that should be functional, nested branching that should be data-aware dispatch, manual iteration that should be library calls, string manipulation that should be typed operations — the complexity is slop when the idiom exists and the agent did not know it)
 
-- **Myopic patching** (stacked conditionals around prior mistakes, parallel helpers)
+- **Myopic patching** (stacked conditionals around prior mistakes, parallel helpers).
+  Classify as `POLICY.NO_MYOPIC_PATCHING`.
 
 - **Prior-shaped probes** (commands encoding the expected answer and suppressing contrary evidence — guessed flags with `2>/dev/null`, greps whose failure is treated as absence, `jq` paths run before response-shape inspection, endpoint guesses treated as API facts) See [[reality-grounded-debugging/SKILL|reality-grounded-debugging]] for the behavioral fix.
 
-- **Exception-driven ordinary control flow** (catch order selects expected behavior, operations are attempted until one survives, or retries begin before classifying a typed transient failure and proving idempotency). Classify as `POLICY.NO_EXCEPTION_CONTROL_FLOW`; use `policy-index/references/error-handling-as-control-flow.md` for the architectural and readability burden.
+- **Exception-driven ordinary control flow** (catch order selects expected behavior, operations are attempted until one survives, or retries begin before classifying a typed transient failure and proving idempotency).
+  Classify as `POLICY.NO_EXCEPTION_CONTROL_FLOW`; use `policy-index/references/error-handling-as-control-flow.md` for the architectural and readability burden.
 
 - **Debug-surface debt** (failures addressed by mutating global code, adding one-off scripts, or repeatedly running opaque whole-system commands instead of creating isolated reproducers, structured logs, artifact dumps, schema inspections, or canonical diagnostic recipes) See [[reality-grounded-debugging/SKILL|reality-grounded-debugging]] for the surface-upgrade requirements.
 
@@ -658,15 +660,16 @@ Secondary references (use when the central catalog does not cover the specific d
 - **`../llm-failure-modes/documentation-failures.md`** and **`../llm-failure-modes/references/agent-distortion-index.md`** — Load when reviewing agent-generated documents or project structure.
   The first is the concrete documentation-failure catalog; the second is the R/T/L/O/C/V distortion shorthand (including the reviewer-infection codes to watch for in your own analysis).
 
-## Remediation
+## Review Boundary
 
-This skill is ANALYSIS only.
-It detects slop but does not prescribe fixes.
+This skill is analysis only.
+It detects and classifies slop; it does not select or restate remediation.
+Findings cite the owning `POLICY.*` record for a separate fixer context.
 
-When slop has been identified, do NOT rename or delete it — both are laundering.
-Instead, load **`../fixing-slop/SKILL.md`** for the remediation protocol: reconstruct the narrative, identify the correct intention, fulfill the intention with the right implementation.
+Do not rename or delete a criticized artifact during review.
+After disposition, the separate fixer loads [[fixing-slop/SKILL|fixing-slop]] and follows the route owned by the cited policy record.
 
-### Deletion Laundering / Problem-Erasure Deletion
+## Deletion Laundering / Problem-Erasure Deletion
 
 Deletion laundering occurs when an agent removes a criticized slop artifact without solving, invalidating, or explicitly preserving the original problem it was trying to solve.
 
@@ -730,6 +733,8 @@ This links to the existing goal-integrity rule: changing labels, comments, issue
 **Short reviewer form:**
 - Do not ask only “is the slop gone?”
 - Ask “where did the original problem go?”
+
+A finding under this doctrine cites `POLICY.NO_DELETION_LAUNDERING`.
 
 * * *
 

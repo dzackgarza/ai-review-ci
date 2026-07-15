@@ -1,9 +1,9 @@
 # QC Triage Protocol
 
-This document defines the mandatory triage procedure when `test-ci` or `ambient` emits `QC FAILURE — TRIAGE REQUIRED`.
-It is a reference for the `reviewing-llm-code` skill and for the directive emitted by central QC.
+This document defines the mandatory triage procedure when `test-ci` or `ambient` emits `QC FAILURE — TRIAGE REQUIRED`. It is a reference for the `reviewing-llm-code` skill and for the directive emitted by central QC.
 
-It does not apply to `test-commit` or `test-push`. Those gates emit `DIRECT REPAIR REQUIRED`: the current agent fixes the reported compiler, formatter, type, build, or test error without a disposition ledger, policy reviewer, or remediation subagent. Local type/test failures are not PR review feedback.
+It does not apply to `test-commit` or `test-push`. Those gates emit `DIRECT REPAIR REQUIRED`: the current agent fixes the reported compiler, formatter, type, build, or test error without a disposition ledger, policy reviewer, or remediation subagent.
+Local type/test failures are not PR review feedback.
 
 ## Role Boundary
 
@@ -40,10 +40,8 @@ When the triage directive is emitted, the orchestrator MUST:
 5. **Present the raw output.** Show the complete raw QC output to the user.
    Do not filter, summarize, group, reinterpret, or convert it into your own report.
 
-6. **Route under existing authority.** A gate failure during active user-authorized
-   work does not require renewed approval. Ask the user only for a policy exception,
-   out-of-scope remediation, irreversible or externally visible action, or another
-   genuine authority boundary.
+6. **Route under existing authority.** A gate failure during active user-authorized work does not require renewed approval.
+   Ask the user only for a policy exception, out-of-scope remediation, irreversible or externally visible action, or another genuine authority boundary.
 
 ## Routing Gate Within Existing Authority
 
@@ -89,7 +87,8 @@ The subagent must:
 - Receive only the policy-coded findings: file/line, snippet when present in the raw QC output, and `POLICY.*` code.
   Do not include B's prose, root-cause narrative, suggested fix, or the orchestrator's opinion.
 - Load the style-guide index: `style-guide/references/style-guide-index.md` (canonical home: `ai-review-ci` `skills/style-guide/references/style-guide-index.md`) and `fixing-slop`.
-- For each `POLICY.*` code, look up the matching `REMEDIATE.*` entry and derive the fix from the policy, not from another agent's suggestion.
+- For each `POLICY.*` code, follow the exact `REMEDIATE.*` route named by the canonical policy record.
+  Do not restate or improvise the catalogue entry.
 - Implement the remediation in the target repository only.
 - Verify with the target repository's `just test-ci` gate unless the emitted directive names another policy-sensitive gate.
 - Report the fix outcome and any blocker back to the orchestrator.

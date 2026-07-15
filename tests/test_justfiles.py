@@ -183,8 +183,27 @@ def test_no_bypass_blocks_newly_staged_markers(tmp_path: pathlib.Path) -> None:
 
     output = result.stdout + result.stderr
     assert result.returncode != 0, output
-    assert "coverage bypass marker" in output
+    assert "POLICY.NO_QC_SILENCING" in output
     assert TRIAGE_MARKER in output
+
+
+def test_no_bypass_accepts_staged_non_utf8_generated_assets(tmp_path: pathlib.Path) -> None:
+    project = tmp_path / "git-project"
+    project.mkdir()
+    source = project / "app.py"
+    source.write_text("def clean() -> None:\n    pass\n")
+    init_git_repo(project)
+    assert run_git(project, "add", "app.py").returncode == 0
+    commit_without_hooks(project, "baseline")
+
+    (project / "viewer.mjs").write_bytes(b"export const asset = '\xe0';\n")
+    assert run_git(project, "add", "viewer.mjs").returncode == 0
+
+    result = run_just(ROOT / "justfiles" / "shared.just", project, "_no-bypass")
+
+    output = result.stdout + result.stderr
+    assert result.returncode == 0, output
+    assert "No bypass comments detected" in output
 
 
 @pytest.mark.parametrize("recipe", ["_sage-syntax", "_vulture"])
@@ -1073,8 +1092,8 @@ def test_vibecheck_installs_central_exclusions_without_persisting_them(
     uvx.write_text(
         "#!/usr/bin/env bash\n"
         "for expected in scripts notebooks; do\n"
-        "  if ! grep -Fxq \"$expected\" .ignore; then\n"
-        "    echo \"missing temporary exclusion: $expected\" >&2\n"
+        '  if ! grep -Fxq "$expected" .ignore; then\n'
+        '    echo "missing temporary exclusion: $expected" >&2\n'
         "    exit 86\n"
         "  fi\n"
         "done\n"
@@ -1200,9 +1219,9 @@ def test_aislop_receives_central_script_and_notebook_exclusions(
     npx.write_text(
         "#!/usr/bin/env bash\n"
         "for expected in '**/scripts/**' '**/notebooks/**'; do\n"
-        "  case \"$*\" in\n"
-        "    *\"$expected\"*) ;;\n"
-        "    *) echo \"missing aislop exclusion: $expected\" >&2; exit 86 ;;\n"
+        '  case "$*" in\n'
+        '    *"$expected"*) ;;\n'
+        '    *) echo "missing aislop exclusion: $expected" >&2; exit 86 ;;\n'
         "  esac\n"
         "done\n"
         f"cat <<'JSON'\n{json.dumps(aislop_payload())}\nJSON\n",

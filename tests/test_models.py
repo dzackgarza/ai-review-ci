@@ -15,6 +15,7 @@ from ai_review_ci.models import (
     SlopReport,
     finding_fingerprint,
 )
+from ai_review_ci.policy_index import canonical_route
 from tests.conftest import (
     APP_FILE,
     APP_LINES,
@@ -263,10 +264,18 @@ def test_general_report_rejects_unknown_policy_code(checkout: Path) -> None:
         GeneralReport.model_validate(raw)
 
 
-def test_slop_report_rejects_remediation_without_policy(checkout: Path) -> None:
-    raw = slop_candidate(findings=[slop_finding(remediation_code="REMEDIATE.REAL_PROOF_LOOP")])
+def test_slop_report_rejects_finding_authored_remediation(checkout: Path) -> None:
+    remediation_code = canonical_route("POLICY.NO_MOCK_PROOF").remediation_code
+    raw = slop_candidate(
+        findings=[
+            slop_finding(
+                policy_code="POLICY.NO_MOCK_PROOF",
+                remediation_code=remediation_code,
+            )
+        ]
+    )
 
-    with pytest.raises(ValidationError, match="remediation_code requires policy_code"):
+    with pytest.raises(ValidationError, match="remediation_code"):
         SlopReport.model_validate(raw)
 
 
