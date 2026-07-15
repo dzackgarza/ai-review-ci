@@ -216,6 +216,36 @@ def test_build_records_preserves_raw_finding_and_current_head() -> None:
     assert record["comments"][0]["body"] == "Exact reviewer text."
 
 
+def test_build_records_rejects_fabricated_pr_evidence(tmp_path: Path) -> None:
+    triage = load_triage_state()
+    accepted = """\
+Disposition: Accepted as written
+Policy basis: POLICY.NO_ADMIN_COMPLETION
+Pre-filter: Gate 1 proof defect -> current-PR remediation
+Claim: The collector trusts evidence-shaped text.
+Remediation: Validate the cited commit and audit anchor.
+Code/action taken or explicit non-change: Added semantic evidence validation.
+Proof: The collector leaves fabricated evidence pending.
+Commit: 123456789abc
+Audit anchor: tests/test_missing.py::test_evidence
+Deleted artifact: None
+"""
+    current = thread("Fabricated evidence.", accepted, resolved=True)
+
+    record = triage.build_records(
+        [current],
+        {},
+        "a" * 40,
+        pr_commits={"f" * 40},
+        repo_root=tmp_path,
+    )[0]
+
+    assert record["state"] == "OPEN-PENDING"
+    assert record["disp"]["complete"] is False
+    assert "cited commit 123456789abc is not on this PR" in record["disp"]["validation_errors"]
+    assert "proof anchor tests/test_missing.py::test_evidence does not exist" in record["disp"]["validation_errors"]
+
+
 def test_state_path_is_namespaced_by_repository(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
