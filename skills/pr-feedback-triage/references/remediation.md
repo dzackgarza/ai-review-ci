@@ -44,8 +44,9 @@ For example, “replace `.flatten()` with `map_err`” is patch text; “directo
 
 ## Route policy into the style guide
 
-For every `POLICY.*` code, load its mapping from [[policy-index/SKILL|policy-index]], then load the mapped card through [[style-guide/SKILL|style-guide]]. The card is the canonical remediation source: preferred construction, bad pattern, rearchitecture, and proof obligation.
-Do not invent a separate remediation interpretation.
+For every `POLICY.*` code, read its `Related remediation:` mapping in [[policy-index/references/policies|the canonical policy records]], resolve that `REMEDIATE.*` code through [[style-guide/references/style-guide-index|the style-guide index]], and load the named card from that index.
+The card is the canonical remediation source: preferred construction, bad pattern, rearchitecture, and proof obligation.
+Do not stop at either skill entrypoint and do not invent a separate remediation interpretation.
 
 If the accepted concern is factual or contract-only, identify the owned boundary and derive the spec from that contract.
 Do not manufacture a policy code.

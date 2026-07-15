@@ -384,8 +384,8 @@ Do not copy its commands, fields, state machine, or reply contract into this lif
 
 ## Phase 5: Reflect reopened obligations in public PR state
 
-This lifecycle resumes only at the ownership handoff declared by the triage workflow.
-If an accepted finding changes the PR contract or reopens a claimed proof burden:
+This lifecycle resumes when B returns an accepted current-PR finding whose first-principles concern changes the PR contract or reopens a claimed proof burden, before C begins remediation.
+That concrete triage result—not a generic “ownership handoff”—authorizes the following public-state mutations:
 
 1. update the work-unit issue with the corrected obligation;
 2. update the PR body from the issue;
@@ -506,6 +506,7 @@ gh issue comment <WORK_UNIT_ISSUE_NUMBER> --body-file issue-review-update.md
 $EDITOR .pr/PR_BODY.md
 git add .pr/PR_BODY.md <changed code/tests>
 git commit -m "Remediate accepted review feedback"
+git push -u origin HEAD
 
 # 7. republish the PR body only when triage reopened the issue synthesis
 gh pr edit <PR_NUMBER> --body-file .pr/PR_BODY.md --milestone "<milestone>"

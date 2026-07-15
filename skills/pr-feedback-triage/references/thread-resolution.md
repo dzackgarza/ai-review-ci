@@ -23,6 +23,7 @@ Do not patch C's output locally to clear the thread.
 
 Commit accepted remediation before replying.
 The commit and its proof must exist before the words “accepted,” “fixed,” or “addressed” appear on the thread.
+The deterministic gate verifies that the cited SHA belongs to the current PR and that the audit anchor names an existing checkout file, a unique PR commit, or a checkable source/run URL. A syntactically valid SHA or free-form proof sentence is not evidence.
 A plan, issue, uncommitted diff, launched agent, or future promise cannot close accepted feedback.
 
 ## Canonical thread-local reply contract
@@ -40,8 +41,9 @@ Claim: <first-principles concern>
 Remediation: <policy-aligned preferred pattern>
 Code/action taken or explicit non-change: <landed change>
 Proof: <owned-boundary witness>
-Commit: <7-40 hex SHA>
-Audit anchor: <commit, file, test, run, or source URL>
+Commit: <7-40 hex SHA from the current PR>
+Audit anchor: <existing file/test, unique PR commit, or source/run URL>
+Deleted artifact: None
 ```
 
 Use `Disposition: Accepted with modified remediation` when the reviewer's proposed fix was rejected.
@@ -119,8 +121,9 @@ Audit anchor: <current source or runtime evidence>
 Use `Factual/contract basis:` instead when no policy governs.
 Post or update this reply on the finding's own surface, then keep the item open and route it through [[pr-feedback-triage/references/investigation|the evidence-gathering loop]].
 
-When replacing an incomplete or investigative canonical reply, edit that same reply into the final contract.
-Do not append a second canonical disposition: the first canonical reply is the stable resume anchor.
+When replacing an incomplete or investigative canonical reply, edit that same reply into the final contract when the active identity can do so.
+If a corrective reply already exists, the collector selects the latest complete canonical reply; otherwise it resumes from the latest incomplete reply.
+Do not append duplicates merely to avoid editing, but do not let an earlier malformed reply hide a later valid correction.
 
 ## Deletion appendix
 
@@ -129,15 +132,12 @@ When remediation deletes an artifact, append:
 ```text
 Deleted artifact: <file or object>
 Original burden: <what it attempted to solve or prove>
-Burden disposition:
-  - solved by: <owned implementation/proof>
-  - invalidated by: <contract evidence>
-  - transferred to: <owned surface>
-  - remains open in: <issue or blocker>
+Burden disposition: <solved by | invalidated by | transferred to | remains open in> <owned evidence or blocker>
 Verification: <witness>
 ```
 
-Include the applicable line or lines; do not claim “removed” as resolution.
+Replace `Deleted artifact: None` with the deletion appendix whenever accepted remediation removes an artifact.
+The gate requires exactly one of the burden-disposition verbs above and a verification witness; do not claim “removed” as resolution.
 
 ## Surface-specific completion
 

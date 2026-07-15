@@ -13,8 +13,8 @@ For every item classify:
 
 Then select one:
 
-- **Accepted as written** — the claim is true and the proposed fix preserves policy.
-- **Accepted with modified remediation** — the claim is true but the proposed fix violates policy or product semantics.
+- **Accepted as written** — the claim is true and the proposed fix preserves policy and product semantics.
+- **Accepted with modified remediation** — the claim is true but the proposed fix violates policy or product semantics, or is underspecified.
 - **Rejected** — the claim is false, unsupported, irrelevant, design-hostile, or defeated by stronger policy or contract evidence.
 - **Investigate before action** — evidence is insufficient.
   Keep the thread open.
@@ -47,7 +47,7 @@ First match wins:
 | Finding shape | Forced disposition |
 | --- | --- |
 | Micro-optimization without a logged or reproduced user-visible problem | Reject. If the same finding exposes a fail-loud/proof gap, retain only that concern as accepted with modified remediation. |
-| Suggests fallback, default, mock, skip, graceful degradation, or silent coercion | Reject under the exact governing `POLICY.*` code. |
+| Suggests fallback, default, mock, skip, graceful degradation, or silent coercion | If the claim is supported, accept the concern with modified remediation and reject only the proposed fix under the exact governing `POLICY.*` code. Reject the finding only when no independent supported concern remains. |
 | Describes actual slop but frames it as a generic bug | Accept the concern, renamed as the policy violation. Remediation removes the slop. |
 | Suggests broader `try/catch` or error handling around a throw | Accept with modified remediation: fail earlier or assert the invariant; never swallow. |
 | Suggests an in-code constant where configuration owns the value | Accept with modified remediation to remain config-driven, or reject if no real divergence harm exists. |

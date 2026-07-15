@@ -2,7 +2,6 @@
 
 import json
 import re
-import shlex
 import subprocess
 import sys
 from pathlib import Path
@@ -10,8 +9,6 @@ from typing import Any, NoReturn
 
 from pydantic import BaseModel, ConfigDict
 from unidiff import PatchSet
-
-from ai_review_ci.threads import FINGERPRINT_MARKER
 
 JsonDict = dict[str, Any]
 
@@ -161,7 +158,8 @@ query($owner: String!, $name: String!, $number: Int!, $cursor: String) {
           id
           path
           isResolved
-          comments(first: 50) {
+          comments(first: 100) {
+            pageInfo { hasNextPage endCursor }
             nodes {
               body
               url
@@ -174,51 +172,60 @@ query($owner: String!, $name: String!, $number: Int!, $cursor: String) {
 }
 """
 
+_THREAD_COMMENTS_QUERY = """
+query($threadId: ID!, $cursor: String!) {
+  node(id: $threadId) {
+    ... on PullRequestReviewThread {
+      comments(first: 100, after: $cursor) {
+        pageInfo { hasNextPage endCursor }
+        nodes { body url }
+      }
+    }
+  }
+}
+"""
+
+_PR_COMMITS_QUERY = """
+query($owner: String!, $name: String!, $number: Int!, $cursor: String) {
+  repository(owner: $owner, name: $name) {
+    pullRequest(number: $number) {
+      commits(first: 100, after: $cursor) {
+        pageInfo { hasNextPage endCursor }
+        nodes { commit { oid } }
+      }
+    }
+  }
+}
+"""
+
 _DISPOSITION_FIELD = re.compile(
     r"^\s*Disposition:\s*"
     r"(?P<disposition>Accepted as written|Accepted with modified remediation|Rejected|Duplicate|Outdated|"
     r"Backlogged as minor technical debt)\s*\.?\s*$",
     re.IGNORECASE | re.MULTILINE,
 )
-_POLICY_BASIS_FIELD = re.compile(
-    r"^\s*Policy basis:\s*.*\bPOLICY\.[A-Z][A-Z0-9_]*\b.*$",
-    re.IGNORECASE | re.MULTILINE,
-)
-_FACTUAL_CONTRACT_BASIS_FIELD = re.compile(
-    r"^\s*Factual/contract basis:\s*(?!<)\S.+$",
-    re.IGNORECASE | re.MULTILINE,
-)
-_ACTION_FIELD = re.compile(
-    r"^\s*Code/action taken or explicit non-change:\s*(?!<)\S.+$",
-    re.IGNORECASE | re.MULTILINE,
-)
-_PREFILTER_FIELD = re.compile(r"^\s*Pre-filter:\s*(?!<)\S.+$", re.IGNORECASE | re.MULTILINE)
-_CLAIM_FIELD = re.compile(r"^\s*Claim:\s*(?!<)\S.+$", re.IGNORECASE | re.MULTILINE)
-_REMEDIATION_FIELD = re.compile(r"^\s*Remediation:\s*(?!<)\S.+$", re.IGNORECASE | re.MULTILINE)
-_PROOF_FIELD = re.compile(r"^\s*Proof:\s*(?!<)\S.+$", re.IGNORECASE | re.MULTILINE)
-_COMMIT_FIELD = re.compile(r"^\s*Commit:\s*[0-9a-f]{7,40}\b", re.IGNORECASE | re.MULTILINE)
-_AUDIT_ANCHOR_FIELD = re.compile(r"^\s*Audit anchor:\s*(?!<)\S.+$", re.IGNORECASE | re.MULTILINE)
-_CANONICAL_THREAD_FIELD = re.compile(
-    r"^\s*Canonical thread:\s*(?:https?://\S+|[A-Za-z0-9_-]+)\s*$",
+_POLICY_CODE = re.compile(r"\bPOLICY\.[A-Z][A-Z0-9_]*\b", re.IGNORECASE)
+_COMMIT_FIELD = re.compile(
+    r"^\s*Commit:\s*(?P<commit>[0-9a-f]{7,40})\s*$",
     re.IGNORECASE | re.MULTILINE,
 )
 _SUPERSEDING_COMMIT_FIELD = re.compile(
-    r"^\s*Superseding commit:\s*[0-9a-f]{7,40}\b",
+    r"^\s*Superseding commit:\s*(?P<commit>[0-9a-f]{7,40})\s*$",
+    re.IGNORECASE | re.MULTILINE,
+)
+_CANONICAL_THREAD_FIELD = re.compile(
+    r"^\s*Canonical thread:\s*(?:https?://\S+|[A-Za-z0-9_-]+)\s*$",
     re.IGNORECASE | re.MULTILINE,
 )
 _DEBT_ISSUE_FIELD = re.compile(
     r"^\s*Debt issue:\s*https://github\.com/\S+/issues/\d+\s*$",
     re.IGNORECASE | re.MULTILINE,
 )
+_BURDEN_DISPOSITION = re.compile(
+    r"^(?:solved by|invalidated by|transferred to|remains open in)\b",
+    re.IGNORECASE,
+)
 _DIRECT_PLAYWRIGHT = re.compile(r"\b(?:bunx|npx|npm|pnpm|yarn)\s+(?:exec\s+)?playwright\b|\bplaywright\s+test\b")
-_PROOF_COMMAND = re.compile(r"\*\*Proof:\*\*\s*`([^`]+)`")
-_RESOLVE_THREAD_MUTATION = """
-mutation($threadId: ID!) {
-  resolveReviewThread(input: {threadId: $threadId}) {
-    thread { id isResolved }
-  }
-}
-"""
 
 
 def _fail(message: str) -> NoReturn:
@@ -432,8 +439,59 @@ def check_pr_description(repo: str, pr_number: int, repo_root: Path = Path("."))
     print("PR description checklist gate found no unchecked items.")
 
 
+def _graphql_object(value: object, context: str) -> JsonDict:
+    if not isinstance(value, dict):
+        _fail(f"GitHub returned invalid {context}: expected an object")
+    return value
+
+
+def _graphql_nodes(value: object, context: str) -> list[JsonDict]:
+    if not isinstance(value, list) or not all(isinstance(item, dict) for item in value):
+        _fail(f"GitHub returned invalid {context}: expected an object array")
+    return value
+
+
+def _append_remaining_thread_comments(node: JsonDict) -> None:
+    connection = _graphql_object(node.get("comments"), "review-thread comments connection")
+    comments = _graphql_nodes(connection.get("nodes"), "review-thread comments")
+    page_info = _graphql_object(connection.get("pageInfo"), "review-thread comment page info")
+    cursor = page_info.get("endCursor")
+    while page_info.get("hasNextPage"):
+        if not isinstance(cursor, str) or not cursor:
+            _fail("GitHub reported another review-thread comment page without an end cursor")
+        payload = _gh_json(
+            [
+                "api",
+                "graphql",
+                "-f",
+                f"query={_THREAD_COMMENTS_QUERY}",
+                "-F",
+                f"threadId={node['id']}",
+                "-F",
+                f"cursor={cursor}",
+            ]
+        )
+        data = _graphql_object(payload.get("data"), "GraphQL data")
+        thread = data.get("node")
+        if thread is None:
+            _fail(f"review thread {node['id']} not found or inaccessible")
+        connection = _graphql_object(
+            _graphql_object(thread, "review thread").get("comments"),
+            "review-thread comments connection",
+        )
+        comments.extend(
+            _graphql_nodes(connection.get("nodes"), "review-thread comments")
+        )
+        page_info = _graphql_object(
+            connection.get("pageInfo"),
+            "review-thread comment page info",
+        )
+        cursor = page_info.get("endCursor")
+    _graphql_object(node.get("comments"), "review-thread comments connection")["nodes"] = comments
+
+
 def _thread_nodes(repo: str, pr_number: int) -> list[JsonDict]:
-    owner, name = repo.split("/")
+    owner, name = repo.split("/", 1)
     nodes: list[JsonDict] = []
     cursor: str | None = None
     while True:
@@ -451,97 +509,94 @@ def _thread_nodes(repo: str, pr_number: int) -> list[JsonDict]:
         ]
         if cursor:
             args.extend(["-F", f"cursor={cursor}"])
-        page = _gh_json(args)["data"]["repository"]["pullRequest"]["reviewThreads"]
-        nodes.extend(page["nodes"])
-        if not page["pageInfo"]["hasNextPage"]:
+        payload = _gh_json(args)
+        data = _graphql_object(payload.get("data"), "GraphQL data")
+        repository = data.get("repository")
+        if repository is None:
+            _fail(f"repository {repo} not found or inaccessible")
+        pull_request = _graphql_object(repository, "repository").get("pullRequest")
+        if pull_request is None:
+            _fail(f"pull request #{pr_number} not found in {repo}")
+        page = _graphql_object(
+            _graphql_object(pull_request, "pull request").get("reviewThreads"),
+            "review-threads connection",
+        )
+        page_nodes = _graphql_nodes(page.get("nodes"), "review-thread nodes")
+        for node in page_nodes:
+            _append_remaining_thread_comments(node)
+            nodes.append(node)
+        page_info = _graphql_object(page.get("pageInfo"), "review-thread page info")
+        if not page_info.get("hasNextPage"):
             return nodes
-        cursor = page["pageInfo"]["endCursor"]
+        cursor = page_info.get("endCursor")
+        if not isinstance(cursor, str) or not cursor:
+            _fail("GitHub reported another review-thread page without an end cursor")
 
 
 def _comments(node: JsonDict) -> list[JsonDict]:
-    comments = node["comments"]["nodes"]
-    if not isinstance(comments, list):
-        _fail("review thread comments were not an array")
-    return comments
+    connection = _graphql_object(node.get("comments"), "review-thread comments connection")
+    return _graphql_nodes(connection.get("nodes"), "review-thread comments")
 
 
-def _first_ai_review_proof(node: JsonDict) -> str | None:
-    """Proof command from an ai-review thread body, if the body uses our marker."""
-    for comment in _comments(node):
-        body = str(comment["body"])
-        if FINGERPRINT_MARKER not in body:
-            continue
-        match = _PROOF_COMMAND.search(body)
-        if match is not None:
-            return match.group(1)
-    return None
-
-
-def _safe_proof_args(proof_command: str) -> list[str] | None:
-    """Return argv for safe grep/rg proof commands; reject shell features."""
-    try:
-        args = shlex.split(proof_command)
-    except ValueError:
-        return None
-    if not args or args[0] not in {"grep", "rg"}:
-        return None
-    if any(token in {";", "&&", "||", "|", ">", "<"} for token in args):
-        return None
-    if args[0] == "grep":
-        # grep proofs must name at least a pattern and a target path. Recursive
-        # project scans are too broad to auto-resolve safely.
-        operands = [arg for arg in args[1:] if not arg.startswith("-")]
-        if len(operands) < 2:
-            return None
-    return args
-
-
-def _proof_is_stale(proof_command: str) -> bool:
-    args = _safe_proof_args(proof_command)
-    if args is None:
-        return False
-    result = subprocess.run(args, capture_output=True, text=True, check=False)
-    # grep/rg exit 1 means no matches. Any other non-zero status is an
-    # execution error and must not auto-resolve the thread.
-    return result.returncode == 1
-
-
-def _resolve_review_thread(thread_id: str) -> None:
-    _gh_json(
-        [
-            "api",
-            "graphql",
-            "-f",
-            f"query={_RESOLVE_THREAD_MUTATION}",
-            "-F",
-            f"threadId={thread_id}",
-        ]
+def _field_value(body: str, label: str) -> str | None:
+    match = re.search(
+        rf"^\s*{re.escape(label)}:\s*(?P<value>\S(?:.*\S)?)\s*$",
+        body,
+        re.IGNORECASE | re.MULTILINE,
     )
+    if match is None:
+        return None
+    value = match.group("value").strip()
+    if re.fullmatch(r"<[^>]+>", value):
+        return None
+    return value
 
 
-def _auto_resolve_stale_thread(node: JsonDict) -> bool:
-    proof = _first_ai_review_proof(node)
-    if proof is None or not _proof_is_stale(proof):
+def _basis_is_valid(body: str) -> bool:
+    policy = _field_value(body, "Policy basis")
+    if policy is not None and _POLICY_CODE.search(policy):
+        return True
+    return _field_value(body, "Factual/contract basis") is not None
+
+
+def _deletion_fields_are_valid(body: str) -> bool:
+    artifact = _field_value(body, "Deleted artifact")
+    if artifact is None:
         return False
-    thread_id = str(node.get("id", ""))
-    if not thread_id:
-        _fail("cannot auto-resolve stale proof thread without a thread id")
-    _resolve_review_thread(thread_id)
-    return True
+    if artifact.casefold() == "none":
+        return True
+    disposition = _field_value(body, "Burden disposition")
+    return bool(
+        _field_value(body, "Original burden")
+        and disposition
+        and _BURDEN_DISPOSITION.search(disposition)
+        and _field_value(body, "Verification")
+    )
 
 
 def _reply_has_resolution_evidence(body: str) -> bool:
     disposition_match = _DISPOSITION_FIELD.search(body)
-    if disposition_match is None:
+    if disposition_match is None or not _basis_is_valid(body):
         return False
-    if not (_POLICY_BASIS_FIELD.search(body) or _FACTUAL_CONTRACT_BASIS_FIELD.search(body)):
-        return False
-    if not (_PREFILTER_FIELD.search(body) and _CLAIM_FIELD.search(body) and _ACTION_FIELD.search(body) and _AUDIT_ANCHOR_FIELD.search(body)):
+    if not all(
+        _field_value(body, label)
+        for label in (
+            "Pre-filter",
+            "Claim",
+            "Code/action taken or explicit non-change",
+            "Audit anchor",
+        )
+    ):
         return False
 
     disposition = disposition_match.group("disposition").lower()
     if disposition.startswith("accepted"):
-        return bool(_REMEDIATION_FIELD.search(body) and _PROOF_FIELD.search(body) and _COMMIT_FIELD.search(body))
+        return bool(
+            _field_value(body, "Remediation")
+            and _field_value(body, "Proof")
+            and _COMMIT_FIELD.search(body)
+            and _deletion_fields_are_valid(body)
+        )
     if disposition == "duplicate":
         return bool(_CANONICAL_THREAD_FIELD.search(body))
     if disposition == "outdated":
@@ -551,22 +606,144 @@ def _reply_has_resolution_evidence(body: str) -> bool:
     return disposition == "rejected"
 
 
+def _resolution_reply(node: JsonDict) -> str | None:
+    for comment in reversed(_comments(node)[1:]):
+        body = str(comment.get("body", ""))
+        if _reply_has_resolution_evidence(body):
+            return body
+    return None
+
+
 def _has_resolution_evidence(node: JsonDict) -> bool:
-    replies = _comments(node)[1:]
-    return any(_reply_has_resolution_evidence(str(comment["body"])) for comment in replies)
+    return _resolution_reply(node) is not None
 
 
-def check_review_threads(repo: str, pr_number: int) -> None:
+def _pr_commit_shas(repo: str, pr_number: int) -> set[str]:
+    owner, name = repo.split("/", 1)
+    commits: set[str] = set()
+    cursor: str | None = None
+    while True:
+        args = [
+            "api",
+            "graphql",
+            "-f",
+            f"query={_PR_COMMITS_QUERY}",
+            "-F",
+            f"owner={owner}",
+            "-F",
+            f"name={name}",
+            "-F",
+            f"number={pr_number}",
+        ]
+        if cursor:
+            args.extend(["-F", f"cursor={cursor}"])
+        payload = _gh_json(args)
+        data = _graphql_object(payload.get("data"), "GraphQL data")
+        repository = data.get("repository")
+        if repository is None:
+            _fail(f"repository {repo} not found or inaccessible")
+        pull_request = _graphql_object(repository, "repository").get("pullRequest")
+        if pull_request is None:
+            _fail(f"pull request #{pr_number} not found in {repo}")
+        connection = _graphql_object(
+            _graphql_object(pull_request, "pull request").get("commits"),
+            "pull-request commits connection",
+        )
+        for node in _graphql_nodes(connection.get("nodes"), "pull-request commit nodes"):
+            commit = _graphql_object(node.get("commit"), "pull-request commit")
+            oid = commit.get("oid")
+            if not isinstance(oid, str) or not re.fullmatch(
+                r"[0-9a-f]{40}", oid, re.IGNORECASE
+            ):
+                _fail("GitHub returned an invalid pull-request commit SHA")
+            commits.add(oid.lower())
+        page_info = _graphql_object(connection.get("pageInfo"), "commit page info")
+        if not page_info.get("hasNextPage"):
+            return commits
+        cursor = page_info.get("endCursor")
+        if not isinstance(cursor, str) or not cursor:
+            _fail("GitHub reported another commit page without an end cursor")
+
+
+def _commit_match_count(cited: str, commits: set[str]) -> int:
+    return sum(sha.startswith(cited.lower()) for sha in commits)
+
+
+def _audit_anchor_error(
+    body: str,
+    commits: set[str],
+    repo_root: Path,
+) -> str | None:
+    anchor = _field_value(body, "Audit anchor")
+    assert anchor is not None
+    if re.fullmatch(r"https?://\S+", anchor):
+        return None
+    if re.fullmatch(r"[0-9a-f]{7,40}", anchor, re.IGNORECASE):
+        if _commit_match_count(anchor, commits) == 1:
+            return None
+        return f"proof anchor {anchor} is not a unique commit on this PR"
+    path_text = anchor.split("::", 1)[0]
+    path_text = re.sub(r"#L\d+(?:-L\d+)?$", "", path_text)
+    path_text = re.sub(r":\d+(?::\d+)?$", "", path_text)
+    if path_text and (repo_root / path_text).is_file():
+        return None
+    return f"proof anchor {anchor} does not exist"
+
+
+def _reply_semantic_errors(
+    body: str,
+    commits: set[str],
+    repo_root: Path,
+) -> list[str]:
+    disposition_match = _DISPOSITION_FIELD.search(body)
+    assert disposition_match is not None
+    disposition = disposition_match.group("disposition").lower()
+    errors: list[str] = []
+    if disposition.startswith("accepted"):
+        commit_match = _COMMIT_FIELD.search(body)
+        assert commit_match is not None
+        cited = commit_match.group("commit")
+        if _commit_match_count(cited, commits) != 1:
+            errors.append(f"cited commit {cited} is not on this PR")
+        anchor_error = _audit_anchor_error(body, commits, repo_root)
+        if anchor_error:
+            errors.append(anchor_error)
+    elif disposition == "outdated":
+        commit_match = _SUPERSEDING_COMMIT_FIELD.search(body)
+        assert commit_match is not None
+        cited = commit_match.group("commit")
+        if _commit_match_count(cited, commits) != 1:
+            errors.append(f"superseding commit {cited} is not on this PR")
+    return errors
+
+
+def check_review_threads(
+    repo: str,
+    pr_number: int,
+    repo_root: Path = Path("."),
+) -> None:
     """Fail unless every PR review thread is resolved with visible evidence."""
     failures: list[str] = []
+    commits: set[str] | None = None
     for node in _thread_nodes(repo, pr_number):
         path = str(node["path"])
         if not node["isResolved"]:
-            if _auto_resolve_stale_thread(node):
-                continue
             failures.append(f"{path}: unresolved review thread")
-        elif not _has_resolution_evidence(node):
-            failures.append(f"{path}: resolved review thread lacks a thread-local evidenced disposition")
+            continue
+        reply = _resolution_reply(node)
+        if reply is None:
+            failures.append(
+                f"{path}: resolved review thread lacks a thread-local evidenced disposition"
+            )
+            continue
+        disposition_match = _DISPOSITION_FIELD.search(reply)
+        assert disposition_match is not None
+        disposition = disposition_match.group("disposition").lower()
+        if disposition.startswith("accepted") or disposition == "outdated":
+            if commits is None:
+                commits = _pr_commit_shas(repo, pr_number)
+            for error in _reply_semantic_errors(reply, commits, repo_root):
+                failures.append(f"{path}: {error}")
     if failures:
         print("Review thread gate found unresolved or unevidenced threads:", file=sys.stderr)
         for failure in failures:

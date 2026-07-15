@@ -78,7 +78,8 @@ Never reply “accepted,” “aligned,” “fixed,” “addressed,” or “w
 A thread cannot be resolved on intent or future work.
 
 Every substantive review item must receive its visible thread- or surface-local disposition and evidence before resolution.
-The canonical field contract and state machine live in [[pr-feedback-triage/SKILL|pr-feedback-triage]]. Top-level disposition ledgers and tracked review-log files are not substitutes.
+The canonical field contract and state machine live in [[pr-feedback-triage/SKILL|pr-feedback-triage]]. Do not create top-level disposition ledgers or tracked review-log files.
+Migrate legacy ledger-only resolutions by posting the canonical disposition and evidence on each affected thread before treating it as closed.
 
 Review comments are not implementation specs.
 The worker must translate accepted feedback into first-principles remediation requirements before assigning implementation.

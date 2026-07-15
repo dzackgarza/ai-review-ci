@@ -25,7 +25,7 @@ python3 "$AI_SKILLS_DIR/pr-feedback-triage/scripts/triage_state.py" \
   --repo <owner/repo> --pr <number> --json
 ```
 
-It paginates beyond GitHub's first 100 threads, keys AI-review findings by `ai-review-fingerprint`, and otherwise uses a content identity that survives line shifts.
+It paginates beyond GitHub's first 100 threads and every thread's first 100 comments, keys AI-review findings by `ai-review-fingerprint`, and otherwise hashes the complete visible finding so identity survives line shifts without collapsing distinct findings that share a title.
 It stores resumable machine state under the repository's Git metadata, never in a tracked review ledger.
 Use `--no-write` for a read-only one-shot result.
 
@@ -37,6 +37,9 @@ gh pr view <number> --repo <owner/repo> \
   --json headRefOid,body,closingIssuesReferences,reviewDecision,latestReviews,reviews,comments,statusCheckRollup
 gh api --paginate repos/<owner>/<repo>/pulls/<number>/reviews
 gh api --paginate repos/<owner>/<repo>/issues/<number>/comments
+# For every closingIssuesReferences item, read the actual work-unit contract:
+gh issue view <issue-number> --repo <owner/repo> \\
+  --json number,title,body,comments,state,url,milestone,labels
 gh pr checks <number> --repo <owner/repo>
 gh api --paginate repos/<owner>/<repo>/commits/<head-sha>/check-runs
 gh api --paginate repos/<owner>/<repo>/check-runs/<check-run-id>/annotations
@@ -75,5 +78,14 @@ Do not ignore an incomplete canonical reply merely because a disposition line al
 Transmit raw review text, relevant source locations, the current PR contract, named policy surfaces, and verbatim owner statements.
 Do not transmit A's verdict, leaning, hypotheses, preferred fix, paraphrased owner premise, or resolution preference.
 
-A collection round is ready for disposition only after every surface above has been read.
+A collection round is ready for disposition only after every surface above has been read and every linked work-unit issue body and comment carrying acceptance or proof obligations has been joined to the relevant finding.
 Missing API access or an unsettled review run is an explicit open collection state, not permission to call the window clean.
+
+## Migrate legacy feedback state
+
+For an existing PR whose resolved threads cite only a retired top-level ledger, collect those threads as open migration work.
+Post the canonical disposition and evidence on each affected thread before treating it as closed; the old ledger is context, not thread-local completion.
+
+Existing repositories own their checked-in `.github/pull_request_template.md`, so installation intentionally does not overwrite it.
+To migrate an installed template, compare it with the canonical [upstream template](https://github.com/dzackgarza/ai-review-ci/blob/main/src/ai_review_ci/templates/pull_request_template.md), replace the deprecated ledger checklist line in the repo-owned copy, and commit that explicit config change.
+Do not delete the local template and rerun installation merely to bypass its overwrite guard.

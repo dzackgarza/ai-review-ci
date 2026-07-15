@@ -14,7 +14,8 @@ collect every surface
   -> first-principles specs for accepted current-PR findings
   -> C remediation
   -> A verification
-  -> commit, push, thread-local replies, and resolution
+  -> commit and push
+  -> complete each item on its own surface; resolve inline threads only after their replies
   -> wait for the review/check window to settle
   -> collect again
 ```
@@ -25,11 +26,13 @@ A disposition recorded internally while its required thread reply or remediation
 ## Re-raised findings
 
 - Same finding already dispositioned elsewhere: reply `Duplicate` with the canonical thread.
-- Finding attached to code replaced by a later commit: reply `Outdated` with the superseding commit.
-- Same fingerprint re-emitted after a push: inherit only from the verified canonical disposition; do not re-litigate and do not silently skip.
+- Finding attached to code replaced by a later commit: verify that the concern no longer applies, then reply `Outdated` with the superseding commit and proof.
+  If it still applies to replacement code, reattach or redisposition it.
+- Same fingerprint re-emitted after a push: verify that the same semantic concern and evidence still hold before using the canonical disposition.
+  If affected semantic code changed, produce a fresh disposition.
 
-Similarity alone is insufficient.
-Confirm the same concern on the same semantic code before calling it a duplicate.
+Similarity or fingerprint equality alone is insufficient.
+Confirm the same concern on the same semantic code before calling it a duplicate or inheriting prior judgment.
 
 ## Readiness and issue state
 
@@ -37,6 +40,7 @@ When accepted feedback reopens a claimed obligation, update the work-unit issue 
 When the disposition changes scope or reveals a contract defect, update the owning issue before code.
 
 Push accepted remediation before waiting for the next review round.
+After verification closes every obligation claimed by the work-unit issue's ready-for-review gate, update the issue/PR claim map and run `gh pr ready <number>`; otherwise the PR remains not ready and convergence is false.
 Do not call repeated review a snowball: a growing window is evidence that remediation is introducing defects or that collection/disposition is incomplete.
 
 ## Termination

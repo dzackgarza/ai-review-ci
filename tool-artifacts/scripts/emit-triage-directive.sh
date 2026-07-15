@@ -22,7 +22,7 @@ if [[ "$failure_mode" == "direct" ]]; then
 
   Fix the reported compiler, formatter, type, or test failure in the object
   being changed, then rerun the same gate. This is not PR review feedback and
-  does not enter returned-PR-feedback triage or require independent policy/remediation roles.
+  does not enter returned-PR-feedback triage or require independent policy/remediation subagents.
 
   Do not weaken the checker, suppress the diagnostic, golf the error count, or
   edit ai-review-ci to make the signal disappear.
