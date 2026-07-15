@@ -51,7 +51,7 @@ THREADS_QUERY = (
     "  reviewThreads(first:100, after:$cursor){ pageInfo{hasNextPage endCursor}"
     "   nodes{ id isResolved isOutdated path line"
     "    comments(first:100){ pageInfo{hasNextPage endCursor}"
-    "     nodes{ id databaseId url author{login} body createdAt }}}}}}}}"
+    "     nodes{ id databaseId url author{login} body createdAt }}}}}}}"
 )
 COMMENTS_QUERY = (
     "query($thread:ID!,$cursor:String){ node(id:$thread){"

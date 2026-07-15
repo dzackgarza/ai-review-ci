@@ -21,6 +21,13 @@ def load_triage_state() -> ModuleType:
     return module
 
 
+def test_graphql_queries_have_balanced_selection_braces() -> None:
+    triage = load_triage_state()
+
+    assert triage.THREADS_QUERY.count("{") == triage.THREADS_QUERY.count("}")
+    assert triage.COMMENTS_QUERY.count("{") == triage.COMMENTS_QUERY.count("}")
+
+
 def thread(
     finding: str,
     *replies: str,
