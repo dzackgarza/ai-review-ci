@@ -55,6 +55,18 @@ def test_stable_key_prefers_fingerprint_and_ignores_line_shifts() -> None:
     assert triage.stable_key(shifted) == triage.stable_key(first)
 
 
+def test_normalized_title_ignores_multiline_html_comment() -> None:
+    triage = load_triage_state()
+    body = """\
+<!--
+generated review metadata that is not visible
+-->
+## Reject unsafe fallback
+"""
+
+    assert triage.normalized_title(body) == "reject unsafe fallback"
+
+
 def test_disposition_parser_requires_complete_thread_reply_not_root_text() -> None:
     triage = load_triage_state()
     accepted = """\
