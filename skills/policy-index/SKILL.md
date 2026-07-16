@@ -94,6 +94,7 @@ A policy exception requires all of:
 | What makes a test valid proof? | [[test-guidelines/SKILL\|test-guidelines]] plus `references/test-proof-rules.md`. |
 | Who owns QC invocation/config/tooling? | `POLICY.GLOBAL_QC_AUTHORITY`; operational QC invocation remains in the global [[quality-control/SKILL\|quality-control]] skill. |
 | How do I triage PR feedback? | [[pr-feedback-triage/SKILL\|pr-feedback-triage]]. |
+| A reviewer asserts an external library's convention/namespace/API ("the standard is X")? | `POLICY.NO_UNVERIFIED_CONVENTION_CLAIMS` in `references/policies.md` — verify once against the pinned checkout; stale ⇒ reject wholesale with file:line evidence. |
 | How do I debug without prior-shaped probing? | [[reality-grounded-debugging/SKILL\|reality-grounded-debugging]] plus [[systematic-debugging/SKILL\|systematic-debugging]]. |
 | How do I handle external tool/library/compiler uncertainty? | [[known-solution-first/SKILL\|known-solution-first]]. |
 | How do I provision tools? | [[tool-provisioning-and-environment-hygiene/SKILL\|tool-provisioning-and-environment-hygiene]]. |

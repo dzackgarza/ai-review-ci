@@ -438,3 +438,18 @@ Invalid local fixes: Replacing an `assert` with `if/raise`/`ValueError`/`Runtime
 Detection handles: `RAISE-FOR-INVARIANT`, `ASSERT-TO-RAISE-O-STRIP`, `ASSERT-WEAKENING`, `ASSERTION-CATCH`, `ASSERTION-AS-RUNTIME-ERROR`
 
 Related remediation: `REMEDIATE.PREFER_ASSERTION`
+
+#### `POLICY.NO_UNVERIFIED_CONVENTION_CLAIMS` — Reviewer convention-claims are untrusted priors
+
+Category: Anti-Speculation
+
+Rule: Any claim that an external dependency's name, namespace, API shape, or convention is X — whether emitted by an agent or an automated reviewer — is an untrusted prior until verified against the pinned checkout or live source.
+A building usage against the pinned dependency outranks every prior.
+A review suggestion justified by convention-alignment ("the standard namespace is …", "for easier upstreaming …", "X is a LinearEquiv") that fails that one verification is slop: rejected wholesale, with the verifying file:line evidence recorded in the thread reply and the disposition ledger.
+One falsified convention-claim in a review batch drops the confidence prior on the reviewer's remaining unsourced convention-claims — each still receives its single verification; none receives accommodation.
+
+Invalid local fixes: Partially adopting the suggested rename; adding an alias or `open` so both spellings resolve; renaming "toward" the claimed convention; resolving the thread as accepted-with-modification without checkout evidence; deferring the claim to a follow-up instead of verifying it once.
+
+Detection handles: `STALE-CONVENTION-SUGGESTION`, `REVIEWER-PRIOR-RENAME`, `UNSOURCED-CONVENTION-CLAIM`, `DEPRECATED-NAMESPACE-SUGGESTION`, `CONVENTION-ALIGNMENT-JUSTIFICATION`
+
+Related remediation: none — triage-side rejection policy; the disposition is wholesale rejection with pinned-checkout evidence (file:line), per the review-feedback disposition ledger discipline.
