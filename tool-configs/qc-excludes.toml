@@ -61,4 +61,8 @@ directories = [
     # them; research-specific tooling owns their validation.
     "scripts",
     "notebooks",
+    # Authored research notes and extraction dumps: prose whose rendered
+    # content must never be altered by formatters (dzackgarza/research#187 —
+    # flowmark is not render-neutral on them).
+    "notes",
 ]
