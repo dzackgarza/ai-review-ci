@@ -58,6 +58,13 @@ _bun-test:
 	echo "=== Running: bun test (push tier — no coverage gate) ==="
 	echo "# Runs the project's own test suite; coverage is enforced in CI."
 	unset NODE_ENV
+	# A repo may declare a dedicated push-tier suite (e.g. units plus a browser
+	# smoke subset) as scripts["test:push"]; the full suite then runs in CI via
+	# scripts["test:ci"] (see _coverage).
+	if jq -e '.scripts["test:push"] // empty' package.json >/dev/null 2>&1; then
+		bun run test:push
+		exit 0
+	fi
 	if jq -e '.scripts.test // empty' package.json >/dev/null 2>&1; then
 		bun run test
 		exit 0
@@ -88,6 +95,12 @@ _coverage:
 	# test-ci, not a unit lcov. Unit-lcov diff-cover does not apply to them.
 	if [ -f playwright.config.ts ]; then
 		echo "Playwright project: coverage is proven by the app-boot e2e run; unit lcov is not applicable."
+		exit 0
+	fi
+	# A repo that split its suite into push/CI tiers runs the full suite here.
+	# The script owns its coverage flags and must leave lcov.info at the repo root.
+	if jq -e '.scripts["test:ci"] // empty' package.json >/dev/null 2>&1; then
+		bun run test:ci
 		exit 0
 	fi
 	if jq -e '(.devDependencies.vitest // .dependencies.vitest // empty)' package.json >/dev/null 2>&1; then
