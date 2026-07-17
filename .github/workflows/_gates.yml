@@ -46,10 +46,8 @@ jobs:
           github-token: ${{ github.token }}
       - name: Install gate tools
         run: just -f "$INFRA/ci/runner.just" install-gate-tools
-      - name: Stage PR diff
-        run: just -f "$INFRA/ci/runner.just" stage-pr-diff "$REVIEW_BASE_REF"
-      - name: Check deterministic diff
-        run: just -f "$INFRA/ci/runner.just" check-deterministic-diff
+      - name: Check semantic diff
+        run: just -f "$INFRA/ci/runner.just" check-semantic-diff "$REVIEW_BASE_REF"
   delegation-conformance:
     if: inputs.gate == 'delegation-conformance'
     runs-on: ubuntu-latest

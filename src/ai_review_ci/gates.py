@@ -13,10 +13,7 @@ from unidiff import PatchSet
 JsonDict = dict[str, Any]
 
 _TS_JS_SUFFIXES = (".ts", ".tsx", ".js", ".jsx", ".mjs", ".cjs")
-_PY_SUFFIXES = (".py",)
-_RUST_SUFFIXES = (".rs",)
-_SHELL_SUFFIXES = (".sh",)
-_JUST_SUFFIXES = (".just",)
+_NON_CODE_SUFFIXES = (".md", ".markdown", ".mdx")
 _DIFF_SECTION_START = re.compile(r"(?m)(?=^diff --git )")
 _NON_TEXT_DIFF_CONTENT = re.compile(r"[\udc80-\udcff\x0b\x0c\x1c-\x1e\x85\u2028\u2029]|\r(?!\n)")
 
@@ -84,100 +81,12 @@ SUPPORTED_PROFILES = tuple(PROJECT_PROFILES)
 REQUIRED_CHECK_CONTEXTS = BASE_REQUIRED_CHECK_CONTEXTS
 
 
-DIFF_RULES = (
-    DiffRule(
-        rule_id="no-nullish-coalescing",
-        policy_code="POLICY.RUNTIME_DEFAULT",
-        signal_keys=("no-nullish-coalescing",),
-        pattern=re.compile(r"\?\?"),
-        suffixes=_TS_JS_SUFFIXES,
-    ),
-    DiffRule(
-        rule_id="ts-no-or-default",
-        policy_code="POLICY.RUNTIME_DEFAULT",
-        signal_keys=("ts-no-or-default",),
-        pattern=re.compile(r"\|\|"),
-        suffixes=_TS_JS_SUFFIXES + _SHELL_SUFFIXES + _JUST_SUFFIXES,
-    ),
-    DiffRule(
-        rule_id="no-double-cast",
-        policy_code="POLICY.NO_TYPE_ESCAPE",
-        signal_keys=("no-double-cast",),
-        pattern=re.compile(r"\bas\s+(?:unknown|any|never)\s+as\b"),
-        suffixes=_TS_JS_SUFFIXES,
-    ),
-    DiffRule(
-        rule_id="ts-no-any-cast",
-        policy_code="POLICY.NO_TYPE_ESCAPE",
-        signal_keys=("ts-no-any-cast",),
-        pattern=re.compile(r"\bas\s+any\b"),
-        suffixes=_TS_JS_SUFFIXES,
-    ),
-    DiffRule(
-        rule_id="ts-no-vitest-mock-boundary",
-        policy_code="POLICY.NO_MOCK_PROOF",
-        signal_keys=(
-            "ts-no-vi-mock",
-            "ts-no-vi-stub-global",
-            "ts-no-vi-fn",
-            "ts-no-vi-spyon",
-            "ts-no-vi-stub-env",
-        ),
-        pattern=re.compile(r"\bvi\.(?:mock|stubGlobal|fn|spyOn|stubEnv)\s*\("),
-        suffixes=_TS_JS_SUFFIXES,
-    ),
-    DiffRule(
-        rule_id="ts-no-jest-mock-boundary",
-        policy_code="POLICY.NO_MOCK_PROOF",
-        signal_keys=(
-            "ts-no-jest-mock",
-            "ts-no-jest-fn",
-            "ts-no-jest-spyon",
-        ),
-        pattern=re.compile(r"\bjest\.(?:mock|fn|spyOn)\s*\("),
-        suffixes=_TS_JS_SUFFIXES,
-    ),
-    DiffRule(
-        rule_id="no-const-assignment",
-        policy_code="POLICY.NO_HIDDEN_CONFIG",
-        signal_keys=("no-const-assignment",),
-        pattern=re.compile(
-            r"^\s*(?:export\s+)?const\s+(?:"
-            r"[A-Z][A-Z0-9_]*(?:URL|URI|ENDPOINT|HOST|PORT|SERVER|DATABASE|COMMAND|CWD|PATH|DIR|DIRECTORY|TIMEOUT|RETRY|THRESHOLD|SECRET|TOKEN)[A-Z0-9_]*"
-            r"\s*=\s*(?:[\"'`][^\"'`]*[\"'`]|[0-9]+(?:\.[0-9]+)?|\[[^\n]*\]|\{[^\n]*\})"
-            r"|[A-Z][A-Z0-9_]*\s*=\s*[\"'`](?:https?://|file://)[^\"'`]*[\"'`]"
-            r")",
-        ),
-        suffixes=_TS_JS_SUFFIXES,
-        exclude_config_paths=True,
-    ),
-    DiffRule(
-        rule_id="py-no-getenv-default",
-        policy_code="POLICY.RUNTIME_DEFAULT",
-        signal_keys=("py-no-getenv-default",),
-        pattern=re.compile(r"\bos\.getenv\s*\([^,\n]+,"),
-        suffixes=_PY_SUFFIXES,
-    ),
-    DiffRule(
-        rule_id="py-no-dict-get-default",
-        policy_code="POLICY.RUNTIME_DEFAULT",
-        signal_keys=("py-no-dict-get-default",),
-        pattern=re.compile(r"\.get\s*\([^,\n]+,"),
-        suffixes=_PY_SUFFIXES,
-    ),
-    DiffRule(
-        rule_id="rs-no-unwrap-or",
-        policy_code="POLICY.RUNTIME_DEFAULT",
-        signal_keys=("rs-no-unwrap-or", "rs-no-unwrap-or-default"),
-        pattern=re.compile(r"\.unwrap_or(?:_default)?\s*\("),
-        suffixes=_RUST_SUFFIXES,
-    ),
-)
+# Added-line regex scanning is reserved for lexical suppression markers whose
+# policy significance is carried by source text itself. Semantic code shapes
+# belong to Semgrep or ast-grep, which parse the language syntax tree.
 
 
-_NON_CODE_SUFFIXES = (".md", ".markdown", ".mdx")
-
-BYPASS_DIFF_RULES = (
+LEXICAL_DIFF_RULES = (
     DiffRule(
         rule_id="no-coverage-pragma",
         policy_code="POLICY.NO_QC_SILENCING",
@@ -369,8 +278,12 @@ def _rule_applies(path: str, rule: DiffRule) -> bool:
     return Path(path).name.lower() == "justfile" or path.endswith(rule.suffixes)
 
 
-def diff_findings(diff_text: str, rules: tuple[DiffRule, ...] = DIFF_RULES) -> list[str]:
-    """Return deterministic findings introduced by added lines in a unified diff."""
+def lexical_diff_findings(diff_text: str) -> list[str]:
+    """Return added-line findings for lexical suppression markers.
+
+    Regex is intentionally limited to source-text markers that syntax-tree tools
+    discard. Semantic code shapes are owned by Semgrep or ast-grep.
+    """
     findings: list[str] = []
     for patched_file in PatchSet(diff_text.splitlines(keepends=True)):
         if patched_file.is_removed_file:
@@ -383,32 +296,16 @@ def diff_findings(diff_text: str, rules: tuple[DiffRule, ...] = DIFF_RULES) -> l
                 if line.target_line_no is None:
                     _fail(f"missing target line number in diff for {file_path}")
                 text = line.value.rstrip("\n")
-                for rule in rules:
+                for rule in LEXICAL_DIFF_RULES:
                     if _rule_applies(file_path, rule) and rule.pattern.search(text):
                         findings.append(f"{file_path}:{line.target_line_no}: {rule.rule_id}: {rule.policy_code}")
     return findings
-
-
-def bypass_diff_findings(diff_text: str) -> list[str]:
-    """Return staged-line findings for validator and type-system bypasses."""
-    return diff_findings(diff_text, BYPASS_DIFF_RULES)
 
 
 def _text_diff_sections(diff_text: str) -> str:
     """Keep file sections whose content is safe for unified-text parsing."""
     sections = _DIFF_SECTION_START.split(diff_text)
     return "".join(section for section in sections if _NON_TEXT_DIFF_CONTENT.search(section) is None)
-
-
-def check_diff(diff: Path) -> None:
-    """Fail if the PR unified diff introduces deterministic QC violations."""
-    findings = diff_findings(diff.read_text())
-    if findings:
-        print("Deterministic diff gate found introduced violations:", file=sys.stderr)
-        for finding in findings:
-            print(f"- {finding}", file=sys.stderr)
-        sys.exit(1)
-    print("Deterministic diff gate found no introduced violations.")
 
 
 def check_staged_bypass() -> None:
@@ -422,7 +319,7 @@ def check_staged_bypass() -> None:
     )
     if result.returncode != 0:
         _fail(f"git diff --cached failed: {result.stderr.strip()}")
-    findings = bypass_diff_findings(_text_diff_sections(result.stdout))
+    findings = lexical_diff_findings(_text_diff_sections(result.stdout))
     if findings:
         print("Staged bypass gate found introduced violations:", file=sys.stderr)
         for finding in findings:

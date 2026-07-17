@@ -16,6 +16,16 @@ install-tools:
 install-gate-tools:
     curl -LsSf https://astral.sh/uv/install.sh | env UV_INSTALL_DIR=/usr/local/bin sh
 
+check-semantic-diff base_ref:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    cd {{control_repo}}
+    uvx --from semgrep semgrep scan \
+      --config={{infra}}/tool-configs/semgrep.yml \
+      --baseline-commit="origin/{{base_ref}}" \
+      --scan-unknown-extensions \
+      --error
+
 setup-profile profile:
     #!/usr/bin/env bash
     set -euo pipefail
@@ -146,10 +156,6 @@ stage-pr-diff base_ref:
       sudo cp "${RUNNER_TEMP}/reviewer-diff.patch" {{reviewer_repo}}/.reviewer-diff.patch; \
       sudo chown reviewer:reviewer {{reviewer_repo}}/.reviewer-diff.patch; \
     fi
-
-check-deterministic-diff:
-    uv run --project {{infra}} ai-review-ci check-diff \
-      --diff "${RUNNER_TEMP}/reviewer-diff.patch"
 
 check-delegation profile:
     uv run --project {{infra}} ai-review-ci check-delegation \

@@ -23,18 +23,18 @@ def test_diff_rule_rejects_authored_policy_route_prose(forbidden_field: str) -> 
         gates.DiffRule.model_validate(raw)
 
 
-def test_diff_gate_blocks_added_mock_and_ignores_context_backlog() -> None:
-    diff = """diff --git a/src/App.test.tsx b/src/App.test.tsx
---- a/src/App.test.tsx
-+++ b/src/App.test.tsx
-@@ -1,3 +1,4 @@
- const OLD_API_URL = "https://example.test";
- const existing = value ?? fallback;
-+const fetchMock = vi.stubGlobal("fetch", vi.fn());
- context();
+def test_lexical_diff_gate_blocks_added_suppression_and_ignores_context() -> None:
+    coverage_marker = "# pragma: no cov" + "er"
+    diff = f"""diff --git a/src/app.py b/src/app.py
+--- a/src/app.py
++++ b/src/app.py
+@@ -1,1 +1,3 @@
+ pass  {coverage_marker}
++pass  {coverage_marker}
++value = config.get("model", "fallback")
 """
 
-    assert gates.diff_findings(diff) == ["src/App.test.tsx:3: ts-no-vitest-mock-boundary: POLICY.NO_MOCK_PROOF"]
+    assert gates.lexical_diff_findings(diff) == ["src/app.py:2: no-coverage-pragma: POLICY.NO_QC_SILENCING"]
 
 
 def test_bypass_diff_rules_block_only_added_bypass_markers() -> None:
@@ -48,7 +48,7 @@ def test_bypass_diff_rules_block_only_added_bypass_markers() -> None:
 +value = 1
 """
 
-    assert gates.bypass_diff_findings(diff) == ["src/app.py:2: no-coverage-pragma: POLICY.NO_QC_SILENCING"]
+    assert gates.lexical_diff_findings(diff) == ["src/app.py:2: no-coverage-pragma: POLICY.NO_QC_SILENCING"]
 
 
 def test_bypass_diff_rules_block_ts_expect_error_with_trailing_whitespace() -> None:
@@ -61,22 +61,9 @@ def test_bypass_diff_rules_block_ts_expect_error_with_trailing_whitespace() -> N
 +// {marker}{trailing_spaces}
 """
 
-    assert gates.bypass_diff_findings(diff) == [
+    assert gates.lexical_diff_findings(diff) == [
         "src/app.ts:1: no-unjustified-ts-expect-error: POLICY.NO_QC_SILENCING"
     ]
-
-
-def test_diff_gate_blocks_uppercase_literals_but_not_local_const_calls() -> None:
-    diff = """diff --git a/src/settings.ts b/src/settings.ts
---- a/src/settings.ts
-+++ b/src/settings.ts
-@@ -1,1 +1,3 @@
-+const API_URL = "https://example.test";
-+const localValue = buildValue();
- export const existing = buildValue();
-"""
-
-    assert gates.diff_findings(diff) == ["src/settings.ts:1: no-const-assignment: POLICY.NO_HIDDEN_CONFIG"]
 
 
 def test_delegation_accepts_canonical_scaffold(tmp_path: pathlib.Path) -> None:

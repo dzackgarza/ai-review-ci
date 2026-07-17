@@ -75,6 +75,14 @@ rules:
     severity: ERROR
     metadata:
       policy_code: POLICY.NO_TYPE_ESCAPE
+  - id: ts-no-any-cast
+    pattern: $X as any
+    message: POLICY.NO_TYPE_ESCAPE
+    languages:
+      - typescript
+    severity: ERROR
+    metadata:
+      policy_code: POLICY.NO_TYPE_ESCAPE
   - id: no-unproven-boundary-cast
     # #46 sanctioned boundary form:
     # runtimeBoundaryCast<T>(value, predicate, "issue/url-backed reason").

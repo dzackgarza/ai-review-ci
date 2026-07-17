@@ -9,7 +9,6 @@ Subcommands:
 - red-commit        — sanctioned, auditable route to commit an intentionally hook-failing red proof
 - install-labels    — create/update the canonical label taxonomy on a target repo
 - check-profile    — fail if a target repo does not match its curated profile
-- check-diff       — fail if a PR unified diff introduces deterministic findings
 - check-staged-bypass — fail if staged added lines introduce validator bypasses
 - check-delegation — fail if a target justfile stops delegating to global QC
 - check-justfile   — fail if a target justfile violates the baseline contract
@@ -41,7 +40,6 @@ from ai_review_ci.doctor import check_justfile, doctor, doctor_ci, doctor_prefli
 from ai_review_ci.gates import (
     check_app_boot,
     check_delegation,
-    check_diff,
     check_pr_description,
     check_profile,
     check_review_threads,
@@ -78,7 +76,6 @@ app.command(doctor_ci, name="doctor-ci")
 app.command(doctor_preflight, name="doctor-preflight")
 app.command(doctor_schema)
 app.command(check_profile)
-app.command(check_diff)
 app.command(check_staged_bypass)
 app.command(check_delegation)
 app.command(check_justfile)

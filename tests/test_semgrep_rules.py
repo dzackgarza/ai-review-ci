@@ -98,8 +98,5 @@ def test_runtime_default_rules_flag_only_value_default_positions() -> None:
     _assert_rules_match_annotations(RUNTIME_DEFAULT_RULES, "runtime_default.ts*")
 
 
-def test_no_double_cast_requires_explicit_boundary_assertion_form() -> None:
-    """#46: arbitrary double casts are blocked, while the sanctioned boundary
-    assertion form is allowed only with runtime evidence and source-backed
-    justification."""
-    _assert_rules_match_annotations(("no-double-cast", "no-unproven-boundary-cast"), "no_double_cast.ts")
+def test_type_escape_rules_own_single_and_double_casts() -> None:
+    _assert_rules_match_annotations(("ts-no-any-cast", "no-double-cast", "no-unproven-boundary-cast"), "no_double_cast.ts")

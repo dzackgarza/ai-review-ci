@@ -13,26 +13,15 @@ from ai_review_ci.tripwire_index import (
 ROOT = Path(__file__).parent.parent
 
 
-def test_inventory_derives_remediation_and_reports_cross_capability_overlap() -> None:
+def test_inventory_uses_semantic_engine_as_single_runtime_default_owner() -> None:
     inventory = build_tripwire_index(ROOT)
 
     or_tripwires = [tripwire for tripwire in inventory.tripwires if tripwire.rule_id == "ts-no-or-default"]
     expected_remediation = canonical_route("POLICY.RUNTIME_DEFAULT").remediation_code
     assert {tripwire.remediation_code for tripwire in or_tripwires} == {expected_remediation}
-    assert {tripwire.engine_class for tripwire in or_tripwires} == {
-        "python-re",
-        "semgrep",
-    }
-
-    overlap = next(candidate for candidate in inventory.overlap_candidates if candidate.signal_key == "ts-no-or-default")
-    assert {tripwire.engine_class for tripwire in overlap.tripwires} == {
-        "python-re",
-        "semgrep",
-    }
-
-    weaker = next(candidate for candidate in inventory.inferior_tool_candidates if candidate.signal_key == "ts-no-or-default")
-    assert {tripwire.analysis_capability for tripwire in weaker.inferior_tripwires} == {"line-regex"}
-    assert {tripwire.analysis_capability for tripwire in weaker.stronger_tripwires} == {"syntax-tree-query"}
+    assert {tripwire.engine_class for tripwire in or_tripwires} == {"semgrep"}
+    assert all(candidate.signal_key != "ts-no-or-default" for candidate in inventory.overlap_candidates)
+    assert all(candidate.signal_key != "ts-no-or-default" for candidate in inventory.inferior_tool_candidates)
 
 
 def test_inventory_includes_staged_bypass_rules_from_their_executable_registry() -> None:

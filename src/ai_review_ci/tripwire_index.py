@@ -14,7 +14,7 @@ from typing import Literal, NoReturn
 import yaml
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
-from ai_review_ci.gates import BYPASS_DIFF_RULES, DIFF_RULES, DiffRule
+from ai_review_ci.gates import LEXICAL_DIFF_RULES, DiffRule
 from ai_review_ci.policy_index import PolicyIndex, load_policy_index
 
 EngineClass = Literal["python-re", "semgrep", "ast-grep"]
@@ -461,8 +461,7 @@ def build_tripwire_index(root: Path) -> TripwireIndex:
     tripwires = (
         *_collect_semgrep_rules(root / "tool-configs/semgrep.yml", root, policy_index),
         *_collect_ast_grep_rules(root, policy_index),
-        *_collect_diff_rules(DIFF_RULES, execution_scope="pr-added-lines", root=root, policy_index=policy_index),
-        *_collect_diff_rules(BYPASS_DIFF_RULES, execution_scope="staged-added-lines", root=root, policy_index=policy_index),
+        *_collect_diff_rules(LEXICAL_DIFF_RULES, execution_scope="staged-added-lines", root=root, policy_index=policy_index),
     )
     ordered_tripwires = tuple(
         sorted(

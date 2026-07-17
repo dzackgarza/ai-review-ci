@@ -1,9 +1,8 @@
 // Fixtures for POLICY.NO_TYPE_ESCAPE / no-double-cast (#46).
 //
-// Arbitrary double casts stay blocked. A real runtime/type-surface mismatch
-// must use the explicit runtimeBoundaryCast form, which requires both a runtime
-// predicate and source-backed local justification. Single casts are a different
-// concern and this rule does not fire on them.
+// Arbitrary double casts and `as any` erasure stay blocked. A real
+// runtime/type-surface mismatch must use the explicit runtimeBoundaryCast form,
+// which requires both a runtime predicate and source-backed local justification.
 
 declare function runtimeBoundaryCast<T>(
   value: unknown,
@@ -48,7 +47,9 @@ export function boundaryAssertions(blob: unknown) {
 export function singleCasts(x: unknown) {
   // ok: no-double-cast
   const e = x as string;
+  // ruleid: ts-no-any-cast
+  const f = x as any;
   // ok: no-double-cast
   const g = JSON.parse("{}") as Record<string, unknown>;
-  return { e, g };
+  return { e, f, g };
 }
