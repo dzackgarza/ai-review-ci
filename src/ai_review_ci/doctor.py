@@ -249,7 +249,7 @@ def doctor_preflight(target: Path) -> None:
     missing = _profile_missing_paths(target_root, PROJECT_PROFILES[contract.profile])
     if missing:
         print(
-            f"FATAL: QC doctor preflight failed: {target_root} does not satisfy its declared {contract.profile!r} profile; missing: {', '.join(missing)}",
+            f"FATAL: QC doctor preflight failed: {target_root} declares {contract.profile!r} but does not satisfy that profile; missing: {', '.join(missing)}",
             file=sys.stderr,
         )
         sys.exit(1)
@@ -385,21 +385,46 @@ def _load_justfile_contract(target: Path) -> JustfileContractDeclaration:
         return MissingJustfileContract(present=False, reason=f"{justfile} has an invalid ai-review-ci justfile contract: {exc}")
 
 
+def _profile_specificity(profile: ProjectProfile) -> int:
+    return len(profile.required_paths) + sum(
+        (
+            profile.requires_bun_lock,
+            profile.requires_cargo_manifest,
+            profile.requires_sage_file,
+            profile.requires_app_boot,
+        )
+    )
+
+
 def _effective_profile(target: Path, declared_profile: ObservedProfile) -> ObservedProfile:
-    matches = [profile for profile in SUPPORTED_PROFILES if not _profile_missing_paths(target, PROJECT_PROFILES[profile])]
-    if declared_profile in matches:
+    if declared_profile == "docs-and-configs":
+        return declared_profile
+    matches = [
+        profile
+        for profile in SUPPORTED_PROFILES
+        if profile != "docs-and-configs" and not _profile_missing_paths(target, PROJECT_PROFILES[profile])
+    ]
+    if not matches:
+        return UNKNOWN_PROFILE
+    specificity = {profile: _profile_specificity(PROJECT_PROFILES[profile]) for profile in matches}
+    strongest = [profile for profile in matches if specificity[profile] == max(specificity.values())]
+    if len(strongest) == 1:
+        return ProfileAdapter.validate_python(strongest[0])
+    if declared_profile in strongest:
         return ProfileAdapter.validate_python(declared_profile)
-    if len(matches) == 1:
-        return ProfileAdapter.validate_python(matches[0])
     return UNKNOWN_PROFILE
 
 
 def _report_profile(contract: JustfileContractDeclaration, effective_profile: ObservedProfile) -> ProfileName:
-    if isinstance(contract, QcJustfileContract):
-        return contract.profile
     if effective_profile != UNKNOWN_PROFILE:
         return ProfileAdapter.validate_python(effective_profile)
+    if isinstance(contract, QcJustfileContract):
+        return contract.profile
     return "python"
+
+
+def _profiles_compatible(declared: ProfileName, effective: ObservedProfile) -> bool:
+    return declared == effective or (declared == "bun" and effective == "bun-playwright")
 
 
 def _profile_missing_paths(target: Path, project_profile: ProjectProfile) -> tuple[str, ...]:
@@ -434,10 +459,14 @@ def _workflow_refs(target: Path, contract: JustfileContractDeclaration, profile:
         if path.is_file():
             data = _yaml_mapping(path)
             jobs = TypeAdapter(dict[str, dict[str, Any]]).validate_python(data["jobs"] if "jobs" in data else {})
-            for job in jobs.values():
+            for job_name, job in jobs.items():
                 uses = str(job["uses"]) if "uses" in job else ""
                 if "dzackgarza/ai-review-ci/.github/workflows/" in uses and "@" in uses:
                     refs.add(uses.rsplit("@", 1)[1])
+                if job_name == "qc-ci" and "dzackgarza/ai-review-ci/.github/workflows/_qc.yml" in uses:
+                    with_block = TypeAdapter(dict[str, Any]).validate_python(job["with"]) if "with" in job else {}
+                    if with_block.get("tier") == "test-ci":
+                        gates.add(job_name)
                 if "dzackgarza/ai-review-ci/.github/workflows/_gates.yml" in uses:
                     with_block = TypeAdapter(dict[str, Any]).validate_python(job["with"]) if "with" in job else {}
                     gate = with_block["gate"] if "gate" in with_block else ""
@@ -687,7 +716,7 @@ def _findings(
                 ),
             )
         )
-    if isinstance(contract, QcJustfileContract) and effective_profile != contract.profile:
+    if isinstance(contract, QcJustfileContract) and not _profiles_compatible(contract.profile, effective_profile):
         findings.append(
             DoctorFinding(
                 severity="error",

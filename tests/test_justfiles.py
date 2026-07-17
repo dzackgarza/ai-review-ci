@@ -1579,18 +1579,12 @@ def test_bun_scaffold_delegates_qc_in_project_directory(
 ) -> None:
     project = tmp_path / "bun-project"
     project.mkdir()
+    shutil.copy(ROOT / "scaffolds" / "bun" / "justfile", project / "justfile")
     (project / "package.json").write_text(json.dumps({"scripts": {}}) + "\n")
     (project / "bun.lock").write_text("")
 
     result = subprocess.run(
-        [
-            "just",
-            "--justfile",
-            str(ROOT / "scaffolds" / "bun" / "justfile"),
-            "-d",
-            str(project),
-            "test-push",
-        ],
+        ["just", "test-push"],
         cwd=project,
         text=True,
         capture_output=True,
@@ -1624,6 +1618,7 @@ def test_bun_scaffold_delegates_qc_in_project_directory(
             {
                 "package.json": json.dumps({"scripts": {}}) + "\n",
                 "bun.lock": "",
+                "playwright.config.ts": "export default {};\n",
             },
             "TypeScript project must have tests",
             (
@@ -1665,7 +1660,10 @@ def test_bun_scaffold_delegates_qc_in_project_directory(
         ),
         (
             "sage",
-            {"example.sage": "x = 1\n"},
+            {
+                "example.sage": "x = 1\n",
+                "pyproject.toml": "[project]\nname = \"scaffold-sage-target\"\nversion = \"0.1.0\"\n",
+            },
             # Semantic key, not the copied diagnostic sentence
             # (POLICY.NO_EXACT_STRING_PROOF): the preflight must fail *about*
             # SAGE_BIN, whatever its wording.
@@ -1683,6 +1681,7 @@ def test_scaffolds_delegate_qc_in_project_directory(
 ) -> None:
     project = tmp_path / f"{language}-project"
     project.mkdir()
+    shutil.copy(ROOT / "scaffolds" / language / "justfile", project / "justfile")
     for relative_path, contents in project_files.items():
         target = project / relative_path
         target.parent.mkdir(parents=True, exist_ok=True)
@@ -1693,14 +1692,7 @@ def test_scaffolds_delegate_qc_in_project_directory(
         env.pop("SAGE_BIN", None)
 
     result = subprocess.run(
-        [
-            "just",
-            "--justfile",
-            str(ROOT / "scaffolds" / language / "justfile"),
-            "-d",
-            str(project),
-            "test-commit",
-        ],
+        ["just", "test-commit"],
         cwd=project,
         env=env,
         text=True,
@@ -1803,10 +1795,8 @@ def test_language_qc_delegates_nested_global_recipes_in_project_directory(
 
         output = result.stdout + result.stderr
         assert result.returncode == 0, output
-        delegated_lines = [line.strip() for line in output.splitlines() if "just -f " in line]
+        delegated_lines = [line.strip() for line in output.splitlines() if re.search(r"\bjust\b.*(?:-d|--working-directory)\s+\.", line)]
         assert delegated_lines, output
-        for line in delegated_lines:
-            assert " -d . " in f" {line} ", line
 
 
 @pytest.mark.parametrize(

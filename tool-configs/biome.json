@@ -34,7 +34,8 @@
       "!**/archives/**",
       "!**/src.bak/**",
       "!**/scripts/**",
-      "!**/notebooks/**"
+      "!**/notebooks/**",
+      "!**/notes/**"
     ]
   },
   "assist": {

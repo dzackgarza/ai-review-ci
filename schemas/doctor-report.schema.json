@@ -4,16 +4,12 @@
       "additionalProperties": false,
       "properties": {
         "required_contexts": {
-          "items": {
-            "type": "string"
-          },
+          "items": { "type": "string" },
           "title": "Required Contexts",
           "type": "array"
         },
         "observed_contexts": {
-          "items": {
-            "type": "string"
-          },
+          "items": { "type": "string" },
           "title": "Observed Contexts",
           "type": "array"
         },
@@ -28,10 +24,7 @@
           "title": "Observed State",
           "type": "string"
         },
-        "evidence": {
-          "title": "Evidence",
-          "type": "string"
-        }
+        "evidence": { "title": "Evidence", "type": "string" }
       },
       "required": [
         "required_contexts",
@@ -45,45 +38,25 @@
     "DeclarationObservation": {
       "additionalProperties": false,
       "properties": {
-        "path": {
-          "title": "Path",
-          "type": "string"
-        },
-        "sha256": {
-          "title": "Sha256",
-          "type": "string"
-        },
+        "path": { "title": "Path", "type": "string" },
+        "sha256": { "title": "Sha256", "type": "string" },
         "justfile_contract": {
           "anyOf": [
-            {
-              "$ref": "#/$defs/QcJustfileContract"
-            },
-            {
-              "$ref": "#/$defs/MissingJustfileContract"
-            }
+            { "$ref": "#/$defs/QcJustfileContract" },
+            { "$ref": "#/$defs/MissingJustfileContract" }
           ],
           "title": "Justfile Contract"
         }
       },
-      "required": [
-        "path",
-        "sha256",
-        "justfile_contract"
-      ],
+      "required": ["path", "sha256", "justfile_contract"],
       "title": "DeclarationObservation",
       "type": "object"
     },
     "DelegationCommandObservation": {
       "additionalProperties": false,
       "properties": {
-        "present": {
-          "title": "Present",
-          "type": "boolean"
-        },
-        "command": {
-          "title": "Command",
-          "type": "string"
-        },
+        "present": { "title": "Present", "type": "boolean" },
+        "command": { "title": "Command", "type": "string" },
         "delegates_to_global_qc": {
           "title": "Delegates To Global Qc",
           "type": "boolean"
@@ -106,20 +79,13 @@
       "additionalProperties": false,
       "properties": {
         "required_justfiles": {
-          "items": {
-            "type": "string"
-          },
+          "items": { "type": "string" },
           "title": "Required Justfiles",
           "type": "array"
         },
-        "observed": {
-          "$ref": "#/$defs/DelegationCommandObservation"
-        }
+        "observed": { "$ref": "#/$defs/DelegationCommandObservation" }
       },
-      "required": [
-        "required_justfiles",
-        "observed"
-      ],
+      "required": ["required_justfiles", "observed"],
       "title": "DelegationObservation",
       "type": "object"
     },
@@ -127,10 +93,7 @@
       "additionalProperties": false,
       "properties": {
         "severity": {
-          "enum": [
-            "error",
-            "warning"
-          ],
+          "enum": ["error", "warning"],
           "title": "Severity",
           "type": "string"
         },
@@ -149,66 +112,42 @@
           "title": "Surface",
           "type": "string"
         },
-        "evidence": {
-          "title": "Evidence",
-          "type": "string"
-        },
+        "evidence": { "title": "Evidence", "type": "string" },
         "remediation_commands": {
-          "items": {
-            "type": "string"
-          },
+          "items": { "type": "string" },
           "title": "Remediation Commands",
           "type": "array"
         }
       },
-      "required": [
-        "severity",
-        "surface",
-        "evidence",
-        "remediation_commands"
-      ],
+      "required": ["severity", "surface", "evidence", "remediation_commands"],
       "title": "DoctorFinding",
       "type": "object"
     },
     "LabelAlignmentObservation": {
       "additionalProperties": false,
-      "description": "How the repo's live GitHub labels compare to the canonical taxonomy.\n\n``missing`` / ``drifted`` / ``variants`` are the canonical labels absent, present but\ndrifted (color or description), or present only as a case/spelling variant. Extra\nrepo-specific labels are not recorded \u2014 extras are allowed.",
+      "description": "How the repo's live GitHub labels compare to the canonical taxonomy.\n\n``missing`` / ``drifted`` / ``variants`` are the canonical labels absent, present but\ndrifted (color or description), or present only as a case/spelling variant. Extra\nrepo-specific labels are not recorded — extras are allowed.",
       "properties": {
         "observed_state": {
-          "enum": [
-            "not_applicable",
-            "compliant",
-            "misaligned",
-            "unverifiable"
-          ],
+          "enum": ["not_applicable", "compliant", "misaligned", "unverifiable"],
           "title": "Observed State",
           "type": "string"
         },
         "missing": {
-          "items": {
-            "type": "string"
-          },
+          "items": { "type": "string" },
           "title": "Missing",
           "type": "array"
         },
         "drifted": {
-          "items": {
-            "type": "string"
-          },
+          "items": { "type": "string" },
           "title": "Drifted",
           "type": "array"
         },
         "variants": {
-          "items": {
-            "$ref": "#/$defs/LabelVariant"
-          },
+          "items": { "$ref": "#/$defs/LabelVariant" },
           "title": "Variants",
           "type": "array"
         },
-        "evidence": {
-          "title": "Evidence",
-          "type": "string"
-        }
+        "evidence": { "title": "Evidence", "type": "string" }
       },
       "required": [
         "observed_state",
@@ -223,42 +162,24 @@
     "LabelVariant": {
       "additionalProperties": false,
       "properties": {
-        "canonical": {
-          "title": "Canonical",
-          "type": "string"
-        },
+        "canonical": { "title": "Canonical", "type": "string" },
         "remote_variants": {
-          "items": {
-            "type": "string"
-          },
+          "items": { "type": "string" },
           "title": "Remote Variants",
           "type": "array"
         }
       },
-      "required": [
-        "canonical",
-        "remote_variants"
-      ],
+      "required": ["canonical", "remote_variants"],
       "title": "LabelVariant",
       "type": "object"
     },
     "MissingJustfileContract": {
       "additionalProperties": false,
       "properties": {
-        "present": {
-          "const": false,
-          "title": "Present",
-          "type": "boolean"
-        },
-        "reason": {
-          "title": "Reason",
-          "type": "string"
-        }
+        "present": { "const": false, "title": "Present", "type": "boolean" },
+        "reason": { "title": "Reason", "type": "string" }
       },
-      "required": [
-        "present",
-        "reason"
-      ],
+      "required": ["present", "reason"],
       "title": "MissingJustfileContract",
       "type": "object"
     },
@@ -271,6 +192,7 @@
             "bun",
             "bun-playwright",
             "bun-python",
+            "docs-and-configs",
             "rust",
             "sage"
           ],
@@ -278,25 +200,17 @@
           "type": "string"
         },
         "required_paths": {
-          "items": {
-            "type": "string"
-          },
+          "items": { "type": "string" },
           "title": "Required Paths",
           "type": "array"
         },
         "missing_paths": {
-          "items": {
-            "type": "string"
-          },
+          "items": { "type": "string" },
           "title": "Missing Paths",
           "type": "array"
         }
       },
-      "required": [
-        "profile",
-        "required_paths",
-        "missing_paths"
-      ],
+      "required": ["profile", "required_paths", "missing_paths"],
       "title": "ProfileProofObservation",
       "type": "object"
     },
@@ -314,6 +228,7 @@
             "bun",
             "bun-playwright",
             "bun-python",
+            "docs-and-configs",
             "rust",
             "sage"
           ],
@@ -361,53 +276,27 @@
     "TargetObservation": {
       "additionalProperties": false,
       "properties": {
-        "root": {
-          "title": "Root",
-          "type": "string"
-        },
-        "remote": {
-          "title": "Remote",
-          "type": "string"
-        },
-        "head": {
-          "title": "Head",
-          "type": "string"
-        }
+        "root": { "title": "Root", "type": "string" },
+        "remote": { "title": "Remote", "type": "string" },
+        "head": { "title": "Head", "type": "string" }
       },
-      "required": [
-        "root",
-        "remote",
-        "head"
-      ],
+      "required": ["root", "remote", "head"],
       "title": "TargetObservation",
       "type": "object"
     },
     "WorkflowRefObservation": {
       "additionalProperties": false,
       "properties": {
-        "path": {
-          "title": "Path",
-          "type": "string"
-        },
-        "required_ref": {
-          "title": "Required Ref",
-          "type": "string"
-        },
-        "observed_ref": {
-          "title": "Observed Ref",
-          "type": "string"
-        },
+        "path": { "title": "Path", "type": "string" },
+        "required_ref": { "title": "Required Ref", "type": "string" },
+        "observed_ref": { "title": "Observed Ref", "type": "string" },
         "required_gates": {
-          "items": {
-            "type": "string"
-          },
+          "items": { "type": "string" },
           "title": "Required Gates",
           "type": "array"
         },
         "observed_gates": {
-          "items": {
-            "type": "string"
-          },
+          "items": { "type": "string" },
           "title": "Observed Gates",
           "type": "array"
         }
@@ -430,26 +319,17 @@
       "title": "Schema Version",
       "type": "integer"
     },
-    "tool_version": {
-      "title": "Tool Version",
-      "type": "string"
-    },
-    "target": {
-      "$ref": "#/$defs/TargetObservation"
-    },
-    "declaration": {
-      "$ref": "#/$defs/DeclarationObservation"
-    },
-    "declaration_hash": {
-      "title": "Declaration Hash",
-      "type": "string"
-    },
+    "tool_version": { "title": "Tool Version", "type": "string" },
+    "target": { "$ref": "#/$defs/TargetObservation" },
+    "declaration": { "$ref": "#/$defs/DeclarationObservation" },
+    "declaration_hash": { "title": "Declaration Hash", "type": "string" },
     "declared_profile": {
       "enum": [
         "python",
         "bun",
         "bun-playwright",
         "bun-python",
+        "docs-and-configs",
         "rust",
         "sage",
         "unknown"
@@ -463,6 +343,7 @@
         "bun",
         "bun-playwright",
         "bun-python",
+        "docs-and-configs",
         "rust",
         "sage",
         "unknown"
@@ -471,43 +352,29 @@
       "type": "string"
     },
     "workflow_refs": {
-      "additionalProperties": {
-        "$ref": "#/$defs/WorkflowRefObservation"
-      },
+      "additionalProperties": { "$ref": "#/$defs/WorkflowRefObservation" },
       "title": "Workflow Refs",
       "type": "object"
     },
     "justfile_delegation": {
-      "additionalProperties": {
-        "$ref": "#/$defs/DelegationObservation"
-      },
+      "additionalProperties": { "$ref": "#/$defs/DelegationObservation" },
       "title": "Justfile Delegation",
       "type": "object"
     },
-    "branch_protection": {
-      "$ref": "#/$defs/BranchProtectionObservation"
-    },
-    "label_alignment": {
-      "$ref": "#/$defs/LabelAlignmentObservation"
-    },
+    "branch_protection": { "$ref": "#/$defs/BranchProtectionObservation" },
+    "label_alignment": { "$ref": "#/$defs/LabelAlignmentObservation" },
     "profile_proof_requirements": {
-      "additionalProperties": {
-        "$ref": "#/$defs/ProfileProofObservation"
-      },
+      "additionalProperties": { "$ref": "#/$defs/ProfileProofObservation" },
       "title": "Profile Proof Requirements",
       "type": "object"
     },
     "findings": {
-      "items": {
-        "$ref": "#/$defs/DoctorFinding"
-      },
+      "items": { "$ref": "#/$defs/DoctorFinding" },
       "title": "Findings",
       "type": "array"
     },
     "invalidation_inputs": {
-      "items": {
-        "type": "string"
-      },
+      "items": { "type": "string" },
       "title": "Invalidation Inputs",
       "type": "array"
     },
@@ -523,12 +390,7 @@
       "type": "string"
     },
     "global_status": {
-      "enum": [
-        "current",
-        "stale",
-        "misconfigured",
-        "unverifiable"
-      ],
+      "enum": ["current", "stale", "misconfigured", "unverifiable"],
       "title": "Global Status",
       "type": "string"
     }

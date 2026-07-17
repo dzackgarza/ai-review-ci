@@ -38,7 +38,8 @@
     "**/archives/**",
     "**/src.bak/**",
     "**/scripts/**",
-    "**/notebooks/**"
+    "**/notebooks/**",
+    "**/notes/**"
   ],
   "absolute": true,
   "gitignore": true

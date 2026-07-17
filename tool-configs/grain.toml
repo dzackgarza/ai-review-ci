@@ -75,6 +75,8 @@ exclude = [
     "**/scripts/**",
     "notebooks/*",
     "**/notebooks/**",
+    "notes/*",
+    "**/notes/**",
 ]
 
 [grain.python]

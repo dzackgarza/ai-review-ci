@@ -114,7 +114,13 @@ ignore:
 - '**/third_party/**'
 - venv/**
 - '**/venv/**'
+- archives/**
+- '**/archives/**'
+- src.bak/**
+- '**/src.bak/**'
 - scripts/**
 - '**/scripts/**'
 - notebooks/**
 - '**/notebooks/**'
+- notes/**
+- '**/notes/**'
