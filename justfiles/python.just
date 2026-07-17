@@ -336,6 +336,40 @@ _pytest: _install-tools
 		exit $ec
 	fi
 
+# public: isolated real-GitHub boundary tests; caller scopes GH_TOKEN to this recipe
+# and the downstream project owns gh_boundary marker registration and default deselection.
+test-gh-boundary: _install-tools
+	#!/usr/bin/env bash
+	set -euo pipefail
+	echo "============================="
+	echo "=== Running: pytest gh_boundary tests ==="
+	if ! rg --files tests -g 'test_*.py' -g '*_test.py' -g '!*.sage.py' >/dev/null 2>&1; then
+		echo "ERROR: pytest gh_boundary: no test files found in a Python project."
+		"{{artifacts}}/scripts/emit-test-writing-directive.sh"
+		exit 1
+	fi
+	if [ ! -f pyproject.toml ]; then
+		echo "ERROR: pytest gh_boundary: no pyproject.toml found — cannot install project."
+		"{{artifacts}}/scripts/emit-triage-directive.sh"
+		exit 1
+	fi
+	with_args=(--with-editable .)
+	dependency_requirements_output="$(uv run --no-project python "{{artifacts}}/scripts/python_qc_metadata.py" dependency-group-requirements .)"
+	if [ -n "$dependency_requirements_output" ]; then
+		mapfile -t dependency_requirements <<<"$dependency_requirements_output"
+		for requirement in "${dependency_requirements[@]}"; do
+			with_args+=(--with "$requirement")
+		done
+	fi
+	if uvx --python 3.14 --from pytest "${with_args[@]}" pytest -m gh_boundary; then
+		:
+	else
+		ec=$?
+		echo "ERROR: pytest gh_boundary tests failed."
+		"{{artifacts}}/scripts/emit-triage-directive.sh"
+		exit $ec
+	fi
+
 _pytest_with_coverage: _install-tools
 	#!/usr/bin/env bash
 	set -euo pipefail

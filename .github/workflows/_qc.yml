@@ -18,6 +18,11 @@ on:
         required: false
         type: string
         default: main
+      run_gh_boundary:
+        description: "Run this repository's real GitHub API tests marked pytest.mark.gh_boundary in an isolated token-scoped step"
+        required: false
+        type: boolean
+        default: false
 
 jobs:
   qc:
@@ -92,12 +97,11 @@ jobs:
         # token-scoped step below.
         run: just "$QC_TIER"
 
-      - name: Run gh-boundary label tests
-        # Least privilege (#218): only the label suite's real-boundary gh tests
-        # need the token, so it is scoped to this step alone. `test-gh-boundary`
-        # runs exactly the gh_boundary-marked tests that `just "$QC_TIER"`
-        # deselects — Actions does not wire the token into gh automatically.
+      - name: Run gh-boundary tests
+        # Least privilege (#218): an explicit downstream opt-in scopes the
+        # token to this step alone. The canonical Python profile recipe runs
+        # exactly the gh_boundary-marked tests the standard tier deselects.
         env:
           GH_TOKEN: ${{ github.token }}
-        run: just test-gh-boundary
-        if: github.repository == 'dzackgarza/ai-review-ci'
+        run: just -f "$HOME/ai-review-ci/justfiles/python.just" -d . test-gh-boundary
+        if: inputs.run_gh_boundary

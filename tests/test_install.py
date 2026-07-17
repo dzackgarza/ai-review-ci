@@ -648,6 +648,19 @@ def test_cli_install_without_skip_scaffold_still_refuses_existing_justfile(
     assert not (repo / ".ai-review-ci.toml").exists()
 
 
+def test_qc_workflow_declares_gh_boundary_opt_in_disabled_by_default() -> None:
+    data = yaml.safe_load((_WORKFLOWS_DIR / "_qc.yml").read_text())
+    on_block = data.get("on", data.get(True)) or {}
+    boundary_input = on_block["workflow_call"]["inputs"]["run_gh_boundary"]
+
+    assert boundary_input == {
+        "description": "Run this repository's real GitHub API tests marked pytest.mark.gh_boundary in an isolated token-scoped step",
+        "required": False,
+        "type": "boolean",
+        "default": False,
+    }
+
+
 def test_qc_tier_step_does_not_export_gh_token_tier_wide() -> None:
     # #218: GH_TOKEN must not sit on the whole "Run QC tier" step (nor the job
     # env it inherits), where every QC recipe and every npx/uvx tool runner
@@ -689,15 +702,16 @@ def test_pr_qc_and_reviews_start_in_parallel(profile: str) -> None:
     assert "needs" not in jobs["slop"]
 
 
-def test_qc_scopes_gh_token_to_isolated_gh_boundary_step() -> None:
-    # #218: only the label suite's real-boundary gh tests receive the token, in
-    # their own step running an isolated recipe — not the tier-wide
-    # `just "$QC_TIER"` run that drives the third-party tool runners.
+def test_qc_scopes_gh_token_to_explicitly_opted_in_gh_boundary_step() -> None:
+    # #218: only an explicit caller opt-in permits real-boundary GitHub tests to
+    # receive the token, in their own step running the canonical Python profile
+    # recipe — never the tier-wide `just "$QC_TIER"` run that drives third-party
+    # tool runners.
     job = _workflow_jobs("_qc.yml")["qc"]
     token_steps = [step for step in job["steps"] if isinstance(step, dict) and (step.get("env") or {}).get("GH_TOKEN") == "${{ github.token }}"]
     assert len(token_steps) == 1, token_steps
     step = token_steps[0]
     run = step.get("run", "")
-    assert "test-gh-boundary" in run
+    assert 'just -f "$HOME/ai-review-ci/justfiles/python.just" -d . test-gh-boundary' == run
     assert '"$QC_TIER"' not in run
-    assert step["if"] == "github.repository == 'dzackgarza/ai-review-ci'"
+    assert step["if"] == "inputs.run_gh_boundary"

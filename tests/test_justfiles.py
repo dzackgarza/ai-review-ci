@@ -1958,6 +1958,79 @@ def test_pytest_installs_dependency_group_requirements(
     assert result.returncode == 0, output
 
 
+def test_pytest_profile_isolates_downstream_gh_boundary_tests(
+    tmp_path: pathlib.Path,
+) -> None:
+    project = tmp_path / "downstream-python-project"
+    package_dir = project / "src" / "downstream_project"
+    tests_dir = project / "tests"
+    package_dir.mkdir(parents=True)
+    tests_dir.mkdir()
+    (project / "pyproject.toml").write_text(
+        "\n".join(
+            [
+                "[project]",
+                'name = "downstream-project"',
+                'version = "0.1.0"',
+                'requires-python = ">=3.14"',
+                "",
+                "[build-system]",
+                'requires = ["setuptools"]',
+                'build-backend = "setuptools.build_meta"',
+                "",
+                "[tool.setuptools.packages.find]",
+                'where = ["src"]',
+                "",
+                "[tool.pytest.ini_options]",
+                "markers = [",
+                '    "gh_boundary: real GitHub API boundary tests; need GH_TOKEN, deselected by default",',
+                "]",
+                'addopts = ["-m", "not gh_boundary"]',
+                "",
+            ]
+        )
+    )
+    (package_dir / "__init__.py").write_text("")
+    (tests_dir / "test_boundary_scope.py").write_text(
+        "\n".join(
+            [
+                "import os",
+                "",
+                "import pytest",
+                "",
+                "",
+                "def test_standard_suite_receives_no_github_token() -> None:",
+                '    assert "GH_TOKEN" not in os.environ',
+                "",
+                "",
+                "@pytest.mark.gh_boundary",
+                "def test_boundary_suite_receives_its_token() -> None:",
+                '    assert os.environ["GH_TOKEN"] == "boundary-token"',
+                "",
+            ]
+        )
+    )
+
+    tokenless_env = {key: value for key, value in os.environ.items() if key != "GH_TOKEN"}
+    standard = run_just(
+        ROOT / "justfiles" / "python.just",
+        project,
+        "_pytest",
+        env=tokenless_env,
+    )
+    boundary = run_just(
+        ROOT / "justfiles" / "python.just",
+        project,
+        "test-gh-boundary",
+        env=os.environ | {"GH_TOKEN": "boundary-token"},
+    )
+
+    assert standard.returncode == 0, standard.stdout + standard.stderr
+    assert "1 passed, 1 deselected" in standard.stdout + standard.stderr
+    assert boundary.returncode == 0, boundary.stdout + boundary.stderr
+    assert "1 passed, 1 deselected" in boundary.stdout + boundary.stderr
+
+
 def test_pytest_with_coverage_generates_xml_without_total_threshold(
     tmp_path: pathlib.Path,
 ) -> None:
