@@ -935,20 +935,21 @@ def test_lint_staged_runs_biome_before_ast_grep() -> None:
     ]
 
 
-def test_semgrep_autofix_defers_unfixed_findings_to_push_tier(
+def test_python_commit_gate_exits_nonzero_on_unfixed_semgrep_findings(
     tmp_path: pathlib.Path,
 ) -> None:
     project = tmp_path / "semgrep-project"
     project.mkdir()
+    (project / "pyproject.toml").write_text('[project]\nname = "semgrep-project"\nversion = "0.1.0"\n')
+    (project / "justfile").write_text((ROOT / "scaffolds" / "python" / "justfile").read_text())
     source = project / "app.ts"
     source.write_text('const API_URL = "https://example.test";\nconsole.log(API_URL);\n')
 
-    commit_tier = run_just(ROOT / "justfiles" / "shared.just", project, "_semgrep-autofix")
-    push_tier = run_just(ROOT / "justfiles" / "shared.just", project, "_semgrep")
+    commit_tier = run_just(ROOT / "justfiles" / "python.just", project, "test-commit")
 
-    assert commit_tier.returncode == 0, commit_tier.stdout + commit_tier.stderr
+    assert commit_tier.returncode != 0, commit_tier.stdout + commit_tier.stderr
+    assert "POLICY.NO_HIDDEN_CONFIG" in commit_tier.stdout + commit_tier.stderr
     assert source.read_text() == 'const API_URL = "https://example.test";\nconsole.log(API_URL);\n'
-    assert push_tier.returncode != 0, push_tier.stdout + push_tier.stderr
 
 
 def test_archived_directories_are_excluded_from_qc_file_discovery_and_semgrep(
