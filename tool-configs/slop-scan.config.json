@@ -27,6 +27,10 @@
     "**/.claude/worktrees/**",
     "**/vendor/**",
     "**/third_party/**",
-    "**/venv/**"
+    "**/venv/**",
+    "**/archives/**",
+    "**/src.bak/**",
+    "**/scripts/**",
+    "**/notebooks/**"
   ]
 }

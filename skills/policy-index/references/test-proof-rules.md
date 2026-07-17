@@ -10,7 +10,7 @@ If the line would pass on a broken, fake, partial, mocked, unwired, or review-ap
 Project tests prove product behavior.
 Global QC polices code shape.
 Issues record unresolved proof burdens.
-Policy identity lives in `policies.md`; fixer-side restoration details live in `remediations.md`.
+Policy identity lives in `policies.md`; fixer-side restoration details live in `../../style-guide/references/style-guide-index.md`.
 
 * * *
 
@@ -73,27 +73,27 @@ A test passes review only if its proof-bearing assertions are sufficient without
 ## **[LANG-AGNOSTIC-BANNED]** Language-Agnostic Banned Shapes
 
 These are banned regardless of language:
-- **[LA-EXISTENCE]** existence-only assertion
-- **[LA-VISIBILITY]** visibility-only assertion
-- **[LA-TRUTHY]** truthy/non-empty assertion
-- **[LA-STRING]** string assertion
-- **[LA-TYPE]** type-only assertion
-- **[LA-SHAPE]** shape-only assertion
-- **[LA-NO-THROW]** no-throw assertion
-- **[LA-SOURCE-TEXT]** source-text assertion
-- **[LA-HELPER-BRANCH]** helper-branch assertion
-- **[LA-BOOLEAN-FORCING]** boolean branch-forcing assertion
-- **[LA-MOCK-COUNT]** mock/spy/call-count assertion
-- **[LA-SNAPSHOT]** snapshot assertion where exact output is not the product
-- **[LA-IMPORT]** import/module-load/constructor assertion
-- **[LA-STATUS-LABEL]** status-label assertion
-- **[LA-LOG-WARNING]** log/warning assertion
-- **[LA-HTTP-STATUS]** HTTP status-only assertion
-- **[LA-DB-COUNT]** database count/existence assertion
-- **[LA-ROUND-TRIP]** round-trip assertion with shared implementation
-- **[LA-TIMING-PERF]** timing/performance assertion in ordinary tests
-- **[LA-NO-CONSOLE-ERRORS]** "no console errors" as sole proof
-- **[LA-COVERED-ELSEWHERE]** "covered elsewhere" with no exact proof anchor
+- **[LA-EXISTENCE]** existence-only assertion — `POLICY.NO_SMOKE_PROOF`
+- **[LA-VISIBILITY]** visibility-only assertion — `POLICY.NO_SMOKE_PROOF`
+- **[LA-TRUTHY]** truthy/non-empty assertion — `POLICY.NO_SMOKE_PROOF`
+- **[LA-STRING]** string assertion — `POLICY.NO_EXACT_STRING_PROOF`
+- **[LA-TYPE]** type-only assertion — `POLICY.NO_SMOKE_PROOF`
+- **[LA-SHAPE]** shape-only assertion — `POLICY.NO_SMOKE_PROOF`
+- **[LA-NO-THROW]** no-throw assertion — `POLICY.NO_SMOKE_PROOF`
+- **[LA-SOURCE-TEXT]** source-text assertion — `POLICY.GLOBAL_QC_AUTHORITY`
+- **[LA-HELPER-BRANCH]** helper-branch assertion — `POLICY.NO_HELPER_PROOF`
+- **[LA-BOOLEAN-FORCING]** boolean branch-forcing assertion — `POLICY.NO_HELPER_PROOF`
+- **[LA-MOCK-COUNT]** mock/spy/call-count assertion — `POLICY.NO_MOCK_PROOF`
+- **[LA-SNAPSHOT]** snapshot assertion where exact output is not the product — `POLICY.NO_SMOKE_PROOF`
+- **[LA-IMPORT]** import/module-load/constructor assertion — `POLICY.NO_SMOKE_PROOF`
+- **[LA-STATUS-LABEL]** status-label assertion — `POLICY.NO_SMOKE_PROOF`
+- **[LA-LOG-WARNING]** log/warning assertion — `POLICY.NO_SMOKE_PROOF`
+- **[LA-HTTP-STATUS]** HTTP status-only assertion — `POLICY.NO_SMOKE_PROOF`
+- **[LA-DB-COUNT]** database count/existence assertion — `POLICY.NO_SMOKE_PROOF`
+- **[LA-ROUND-TRIP]** round-trip assertion with shared implementation — `POLICY.NO_SMOKE_PROOF`
+- **[LA-TIMING-PERF]** timing/performance assertion in ordinary tests — `POLICY.NO_SMOKE_PROOF`
+- **[LA-NO-CONSOLE-ERRORS]** "no console errors" as sole proof — `POLICY.NO_SMOKE_PROOF`
+- **[LA-COVERED-ELSEWHERE]** "covered elsewhere" with no exact proof anchor — `POLICY.NO_SMOKE_PROOF`
 
 For every assertion line, force this question:
 > **"What broken app would still pass this line?"**
@@ -121,7 +121,7 @@ def test_object_has_field():
     assert hasattr(payload, "items")
 ```
 *Why banned:* A broken implementation can return `{}`, create an empty file, or attach a junk field.
-*Remediation:* See [Remediation: Existence / Truthy / Shape as Proof](remediations.md#remediation-existence--truthy--shape-as-proof).
+*Policy:* `POLICY.NO_SMOKE_PROOF`.
 
 ### **[PY-TRUTHY]** Truthy / non-empty
 
@@ -139,7 +139,7 @@ def test_response_ok():
     response = call_boundary(request_payload)
     assert response.ok
 ```
-*Remediation:* See [Remediation: Existence / Truthy / Shape as Proof](remediations.md#remediation-existence--truthy--shape-as-proof).
+*Policy:* `POLICY.NO_SMOKE_PROOF`.
 
 ### **[PY-STRINGS]** String assertions
 
@@ -154,8 +154,7 @@ def test_error_banner(page):
     page.click("button")
     assert "failed" in page.text_content("#status")
 ```
-*Remediation:* Use structured error types and assert on error kind, not message.
-See [Remediation: String-Based Error Types](remediations.md#remediation-string-based-error-types).
+*Policy:* `POLICY.NO_EXACT_STRING_PROOF`.
 
 ### **[PY-SHAPE]** Shape-only assertions
 
@@ -170,8 +169,7 @@ def test_items_are_models():
     items = collect_items(source)
     assert all(isinstance(item, DomainItem) for item in items)
 ```
-*Remediation:* Assert on concrete values against fixtures.
-See [Remediation: Existence / Truthy / Shape as Proof](remediations.md#remediation-existence--truthy--shape-as-proof).
+*Policy:* `POLICY.NO_SMOKE_PROOF`.
 
 ### **[PY-NO-THROW]** No-throw tests
 
@@ -183,8 +181,7 @@ def test_operation_does_not_crash():
 def test_config_loads(tmp_path):
     load_config(tmp_path / "app.toml")
 ```
-*Remediation:* Assert on exact output values, not just that the operation did not crash.
-See [Remediation: No-Throw / No-Crash as Proof](remediations.md#remediation-no-throw--no-crash-as-proof).
+*Policy:* `POLICY.NO_SMOKE_PROOF`.
 
 ### **[PY-SOURCE-POLICING]** Source policing
 
@@ -200,8 +197,7 @@ def test_no_type_ignore_comments():
     assert "# type: ignore" not in source
 ```
 *Why banned:* This belongs to global QC/static analysis, not project behavior tests.
-*Remediation:* Move source-text assertions to global QC. Test runtime behavior instead.
-See [Remediation: Source Policing in Tests](remediations.md#remediation-source-policing-in-tests).
+*Policy:* `POLICY.GLOBAL_QC_AUTHORITY`.
 
 ### **[PY-HELPER-BRANCH]** Helper branch laundering
 
@@ -227,8 +223,7 @@ def test_absent_config_uses_defaults():
 ```
 *Why banned:* The test passes the boolean that chooses the branch.
 It does not construct an existing or absent config.
-*Remediation:* Test the source-of-truth boundary, not an extracted helper.
-See [Remediation: Boundary Test Bypass](remediations.md#remediation-boundary-test-bypass).
+*Policy:* `POLICY.NO_HELPER_PROOF`.
 
 ### **[PY-TRY-EXCEPT]** Try/except in tests
 
@@ -240,8 +235,7 @@ def test_expected_failure():
     except Exception as error:
         assert "missing" in str(error)
 ```
-*Remediation:* Use the test framework's structured assertion and assert on error kind.
-See [Remediation: String-Based Error Types](remediations.md#remediation-string-based-error-types).
+*Policy:* `POLICY.NO_EXCEPTION_CONTROL_FLOW`.
 
 ### **[PY-MOCK-SPY]** Mock/spy/call-count
 
@@ -256,8 +250,7 @@ def test_network_path(monkeypatch):
     monkeypatch.setattr(client, "get", lambda url: {"ok": True})
     assert load_remote_data(url)
 ```
-*Remediation:* Assert the real effect at the owned boundary.
-See [Remediation: Mock/Spy/Call-Count as Proof](remediations.md#remediation-mockspycall-count-as-proof).
+*Policy:* `POLICY.NO_MOCK_PROOF`.
 
 * * *
 
@@ -282,8 +275,7 @@ test("module exports function", async () => {
   expect(module.render).toBeTruthy();
 });
 ```
-*Remediation:* Assert on concrete values against fixtures.
-See [Remediation: Existence / Truthy / Shape as Proof](remediations.md#remediation-existence--truthy--shape-as-proof).
+*Policy:* `POLICY.NO_SMOKE_PROOF`.
 
 ### **[TS-VISIBILITY]** Visibility-only
 
@@ -301,8 +293,7 @@ test("status is ready", async ({ page }) => {
 });
 ```
 *Why banned:* A totally broken app can render a shell and display "ready."
-*Remediation:* Assert on concrete output content, not visibility.
-See [Remediation: Existence / Truthy / Shape as Proof](remediations.md#remediation-existence--truthy--shape-as-proof).
+*Policy:* `POLICY.NO_SMOKE_PROOF`.
 
 ### **[TS-STATUS-LABEL]** Status / label / banner assertions
 
@@ -313,8 +304,7 @@ test("save shows success", async ({ page }) => {
   await expect(page.locator("#status")).toContainText("saved");
 });
 ```
-*Remediation:* Assert on the real side effect (file content, database state), not UI labels.
-See [Remediation: Existence / Truthy / Shape as Proof](remediations.md#remediation-existence--truthy--shape-as-proof).
+*Policy:* `POLICY.NO_SMOKE_PROOF`.
 
 ### **[TS-STRINGS]** String assertions
 
@@ -329,8 +319,7 @@ test("throws missing config", () => {
   expect(() => loadConfig(path)).toThrow("missing runtime.command");
 });
 ```
-*Remediation:* Assert on structured error types, not string messages.
-See [Remediation: String-Based Error Types](remediations.md#remediation-string-based-error-types).
+*Policy:* `POLICY.NO_EXACT_STRING_PROOF`.
 
 ### **[TS-TYPE-SHAPE]** Type-only / shape-only
 
@@ -346,8 +335,7 @@ test("has html property", () => {
   expect(result).toHaveProperty("html");
 });
 ```
-*Remediation:* Assert on concrete output values, not type/shape.
-See [Remediation: Existence / Truthy / Shape as Proof](remediations.md#remediation-existence--truthy--shape-as-proof).
+*Policy:* `POLICY.NO_SMOKE_PROOF`.
 
 ### **[TS-NO-THROW]** No-throw
 
@@ -361,8 +349,7 @@ test("promise resolves", async () => {
   await expect(runOperation(input)).resolves.toBeDefined();
 });
 ```
-*Remediation:* Assert on exact output values, not just absence of throw.
-See [Remediation: No-Throw / No-Crash as Proof](remediations.md#remediation-no-throw--no-crash-as-proof).
+*Policy:* `POLICY.NO_SMOKE_PROOF`.
 
 ### **[TS-SOURCE-POLICING]** Source policing
 
@@ -379,6 +366,7 @@ test("no fallbacks", () => {
   expect(source).not.toContain("||");
 });
 ```
+*Policy:* `POLICY.GLOBAL_QC_AUTHORITY`.
 
 ### **[TS-MOCKED-BOUNDARY]** Mocked boundary / browser smoke laundering
 
@@ -394,6 +382,7 @@ test("browser shell renders", async ({ page }) => {
   await expect(page.getByTestId("editor")).toBeVisible();
 });
 ```
+*Policy:* `POLICY.NO_MOCK_PROOF`.
 
 ### **[TS-SPY-COUNT]** Spy/call count
 
@@ -411,6 +400,7 @@ test("render invoked", async ({ page }) => {
   expect(invoke).toHaveBeenCalledTimes(1);
 });
 ```
+*Policy:* `POLICY.NO_MOCK_PROOF`.
 
 ### **[TS-TRY-CATCH]** Try/catch
 
@@ -424,8 +414,7 @@ test("handles bad config", () => {
   }
 });
 ```
-*Remediation:* Test framework structured assertions with error types.
-See [Remediation: String-Based Error Types](remediations.md#remediation-string-based-error-types).
+*Policy:* `POLICY.NO_EXCEPTION_CONTROL_FLOW`.
 
 * * *
 
@@ -453,8 +442,7 @@ fn items_present() {
     assert!(!items.is_empty());
 }
 ```
-*Remediation:* Assert on concrete output content against fixtures.
-See [Remediation: Existence / Truthy / Shape as Proof](remediations.md#remediation-existence--truthy--shape-as-proof).
+*Policy:* `POLICY.NO_SMOKE_PROOF`.
 
 ### **[RS-STRING-ERRORS]** Exact string errors
 
@@ -472,8 +460,7 @@ fn config_panics() {
     load_config(incomplete_config_path()).unwrap();
 }
 ```
-*Remediation:* Assert on structured error variants, not string rendering.
-See [Remediation: String-Based Error Types](remediations.md#remediation-string-based-error-types).
+*Policy:* `POLICY.NO_EXACT_STRING_PROOF`.
 
 ### **[RS-HELPER-BRANCH]** Helper branch proof
 
@@ -491,8 +478,7 @@ fn existing_config_requires_explicit_values() {
     assert_eq!(error, "missing runtime.command");
 }
 ```
-*Remediation:* Test the source-of-truth boundary, not an extracted helper.
-See [Remediation: Boundary Test Bypass](remediations.md#remediation-boundary-test-bypass).
+*Policy:* `POLICY.NO_HELPER_PROOF`.
 
 ### **[RS-BOOLEAN-FORCING]** Boolean branch-forcing
 
@@ -510,8 +496,7 @@ fn branch_for_absent_config() {
     assert_eq!(result.unwrap(), RuntimeConfig::default());
 }
 ```
-*Remediation:* Construct actual config state via real files, not boolean flags.
-See [Remediation: Boundary Test Bypass](remediations.md#remediation-boundary-test-bypass).
+*Policy:* `POLICY.NO_HELPER_PROOF`.
 
 ### **[RS-SOURCE-POLICING]** Source policing
 
@@ -524,6 +509,7 @@ fn no_defaults_in_config_source() {
     assert!(!source.contains("Default::default"));
 }
 ```
+*Policy:* `POLICY.GLOBAL_QC_AUTHORITY`.
 
 ### **[RS-SWALLOWED-ERROR]** Swallowed-error tests
 
@@ -534,8 +520,7 @@ fn cleanup_does_not_crash_when_file_missing() {
     cleanup_backup(missing_path()).unwrap();
 }
 ```
-*Remediation:* Assert on specific error variants or output values, not just absence of panic.
-See [Remediation: No-Throw / No-Crash as Proof](remediations.md#remediation-no-throw--no-crash-as-proof).
+*Policy:* `POLICY.NO_ERROR_DISCARD`.
 
 ### **[RS-PROCESS-LIFECYCLE]** Process lifecycle source-shape test
 
@@ -547,8 +532,7 @@ fn renderer_uses_kill_on_drop() {
     assert!(source.contains("kill_on_drop(true)"));
 }
 ```
-*Remediation:* Test runtime process behavior, not source text patterns.
-See [Remediation: Source Policing in Tests](remediations.md#remediation-source-policing-in-tests).
+*Policy:* `POLICY.GLOBAL_QC_AUTHORITY`.
 
 * * *
 
@@ -562,7 +546,7 @@ test -f "$output_file"
 [ -s "$output_file" ]
 [ -n "$result" ]
 ```
-*Remediation:* Assert on concrete output content (diff, structured JSON). See [Remediation: Existence / Truthy / Shape as Proof](remediations.md#remediation-existence--truthy--shape-as-proof).
+*Policy:* `POLICY.NO_SMOKE_PROOF`.
 
 ### **[SH-GREP-STRINGS]** Grep string assertions
 
@@ -572,8 +556,7 @@ grep -q "ready" "$log_file"
 grep -q "success" "$output_file"
 grep -q "missing runtime.command" "$stderr_file"
 ```
-*Remediation:* Assert on structured output with jq, not grep strings.
-See [Remediation: String-Based Error Types](remediations.md#remediation-string-based-error-types).
+*Policy:* `POLICY.NO_EXACT_STRING_PROOF`.
 
 ### **[SH-STATUS]** Status-only
 
@@ -585,8 +568,7 @@ test "$?" -eq 0
 status="$(curl -s -o /dev/null -w '%{http_code}' "$url")"
 test "$status" = 200
 ```
-*Remediation:* Assert on concrete response content with structured checks.
-See [Remediation: Existence / Truthy / Shape as Proof](remediations.md#remediation-existence--truthy--shape-as-proof).
+*Policy:* `POLICY.NO_SMOKE_PROOF`.
 
 ### **[SH-SUPPRESSION]** Suppression / fallback
 
@@ -596,6 +578,7 @@ command_under_test 2>/dev/null || echo "ok"
 grep -q pattern file || true
 run_check >/dev/null 2>&1
 ```
+*Policy:* `POLICY.NO_ERROR_DISCARD`.
 
 ### **[SH-SOURCE-POLICING]** Source policing
 
@@ -605,6 +588,7 @@ run_check >/dev/null 2>&1
 ! grep -R "as any" src
 ! grep -R "fallback" src
 ```
+*Policy:* `POLICY.GLOBAL_QC_AUTHORITY`.
 
 * * *
 

@@ -1,9 +1,26 @@
 import pathlib
+import re
 import subprocess
 
 import pytest
+from pydantic import ValidationError
 
 from ai_review_ci import gates
+
+
+@pytest.mark.parametrize("forbidden_field", ["remediation_code", "message"])
+def test_diff_rule_rejects_authored_policy_route_prose(forbidden_field: str) -> None:
+    raw: dict[str, object] = {
+        "rule_id": "example-rule",
+        "policy_code": "POLICY.NO_QC_SILENCING",
+        "signal_keys": ("example-rule",),
+        "pattern": re.compile("example"),
+        "suffixes": (".py",),
+        forbidden_field: "authored duplicate",
+    }
+
+    with pytest.raises(ValidationError, match=forbidden_field):
+        gates.DiffRule.model_validate(raw)
 
 
 def test_diff_gate_blocks_added_mock_and_ignores_context_backlog() -> None:
@@ -17,7 +34,36 @@ def test_diff_gate_blocks_added_mock_and_ignores_context_backlog() -> None:
  context();
 """
 
-    assert gates.diff_findings(diff) == ["src/App.test.tsx:3: ts-no-vitest-mock-boundary: Vitest mock helpers replace real proof boundaries."]
+    assert gates.diff_findings(diff) == ["src/App.test.tsx:3: ts-no-vitest-mock-boundary: POLICY.NO_MOCK_PROOF"]
+
+
+def test_bypass_diff_rules_block_only_added_bypass_markers() -> None:
+    coverage_marker = "# pragma: no cov" + "er"
+    diff = f"""diff --git a/src/app.py b/src/app.py
+--- a/src/app.py
++++ b/src/app.py
+@@ -1,1 +1,3 @@
+ pass  {coverage_marker}
++pass  {coverage_marker}
++value = 1
+"""
+
+    assert gates.bypass_diff_findings(diff) == ["src/app.py:2: no-coverage-pragma: POLICY.NO_QC_SILENCING"]
+
+
+def test_bypass_diff_rules_block_ts_expect_error_with_trailing_whitespace() -> None:
+    marker = "@ts-expect-err" + "or"
+    trailing_spaces = "   "
+    diff = f"""diff --git a/src/app.ts b/src/app.ts
+--- a/src/app.ts
++++ b/src/app.ts
+@@ -0,0 +1,1 @@
++// {marker}{trailing_spaces}
+"""
+
+    assert gates.bypass_diff_findings(diff) == [
+        "src/app.ts:1: no-unjustified-ts-expect-error: POLICY.NO_QC_SILENCING"
+    ]
 
 
 def test_diff_gate_blocks_uppercase_literals_but_not_local_const_calls() -> None:
@@ -30,7 +76,7 @@ def test_diff_gate_blocks_uppercase_literals_but_not_local_const_calls() -> None
  export const existing = buildValue();
 """
 
-    assert gates.diff_findings(diff) == ["src/settings.ts:1: no-const-assignment: Hardcoded config-shaped constants belong in required config."]
+    assert gates.diff_findings(diff) == ["src/settings.ts:1: no-const-assignment: POLICY.NO_HIDDEN_CONFIG"]
 
 
 def test_delegation_accepts_canonical_scaffold(tmp_path: pathlib.Path) -> None:
@@ -58,7 +104,7 @@ def test_delegation_accepts_central_bun_python_composite_profile(tmp_path: pathl
 def test_delegation_rejects_local_qc_override(tmp_path: pathlib.Path) -> None:
     project = tmp_path / "project"
     project.mkdir()
-    (project / "justfile").write_text("test:\n    @true\n\ntest-ci:\n    @true\n")
+    (project / "justfile").write_text("test-commit:\n    @true\n\ntest-push:\n    @true\n\ntest-ci:\n    @true\n")
     (project / "package.json").write_text('{"scripts": {}}\n')
     (project / "bun.lock").write_text("")
 
@@ -185,6 +231,7 @@ def test_branch_protection_payload_uses_profile_check_contexts() -> None:
 
     assert payload["required_status_checks"]["contexts"] == []
     assert payload["required_status_checks"]["checks"] == [
+        {"context": "qc-ci / qc", "app_id": -1},
         {"context": "deterministic-diff / deterministic-diff", "app_id": -1},
         {"context": "delegation-conformance / delegation-conformance", "app_id": -1},
         {"context": "qc-doctor / qc-doctor", "app_id": -1},
@@ -201,28 +248,104 @@ def test_branch_protection_payload_requires_app_boot_for_bun_playwright() -> Non
     assert {"context": "app-boot / app-boot", "app_id": -1} in checks
 
 
-def test_thread_resolution_evidence_accepts_commit_or_ledger() -> None:
-    commit_node = {
-        "comments": {
-            "nodes": [
-                {"body": "<!-- ai-review-fingerprint: " + "a" * 64 + " -->"},
-                {"body": "Resolved by commit 123456789abc."},
-            ]
+def test_thread_resolution_evidence_requires_a_thread_local_disposition() -> None:
+    def node(reply: str) -> dict[str, object]:
+        return {
+            "comments": {
+                "nodes": [
+                    {"body": "<!-- ai-review-fingerprint: " + "a" * 64 + " -->"},
+                    {"body": reply},
+                ]
+            }
         }
-    }
-    ledger_node = {
-        "comments": {
-            "nodes": [
-                {"body": "<!-- ai-review-fingerprint: " + "b" * 64 + " -->"},
-                {"body": "Disposition-ledger: accepted in PR body."},
-            ]
-        }
-    }
-    empty_node = {"comments": {"nodes": [{"body": "<!-- ai-review-fingerprint: " + "c" * 64 + " -->"}]}}
 
-    assert gates._has_resolution_evidence(commit_node)
-    assert gates._has_resolution_evidence(ledger_node)
-    assert not gates._has_resolution_evidence(empty_node)
+    accepted = """\
+Disposition: Accepted as written
+Policy basis: POLICY.NO_ERROR_DISCARD
+Pre-filter: Gate 1 correctness defect -> current-PR remediation
+Claim: Read failures are discarded as partial success.
+Remediation: Propagate the failure with path context.
+Code/action taken or explicit non-change: Propagate the read error with path context.
+Proof: The boundary test proves a failed read cannot return partial success.
+Commit: 123456789abc
+Audit anchor: tests/test_reader.py::test_read_failure_is_visible
+Deleted artifact: None
+"""
+    rejected = """\
+Disposition: Rejected
+Factual/contract basis: The requested fixture is present in the reviewed tree.
+Pre-filter: Gate 1 factual premise false -> no change
+Claim: The review says the fixture is absent.
+Code/action taken or explicit non-change: No code change.
+Audit anchor: tests/fixtures/extract_link.pdf
+"""
+    duplicate = """\
+Disposition: Duplicate
+Policy basis: POLICY.NO_MOCK_PROOF
+Pre-filter: Same semantic finding -> inherit canonical disposition
+Claim: This repeats the canonical proof concern.
+Canonical thread: https://github.com/owner/repo/pull/7#discussion_r123
+Code/action taken or explicit non-change: No additional code change.
+Audit anchor: https://github.com/owner/repo/pull/7#discussion_r123
+"""
+    outdated = """\
+Disposition: Outdated
+Policy basis: POLICY.NO_ERROR_DISCARD
+Pre-filter: Finding targets replaced code -> superseded
+Claim: The former branch discarded read errors.
+Superseding commit: abcdef123456
+Code/action taken or explicit non-change: No additional code change.
+Audit anchor: abcdef123456
+"""
+
+    assert gates._has_resolution_evidence(node(accepted))
+    assert gates._has_resolution_evidence(node(rejected))
+    assert gates._has_resolution_evidence(node(duplicate))
+    assert gates._has_resolution_evidence(node(outdated))
+    assert not gates._has_resolution_evidence(
+        node(accepted.replace("Commit: 123456789abc", "Commit: 123456789abc trailing junk"))
+    )
+    assert not gates._has_resolution_evidence(
+        node(accepted.replace("Pre-filter: Gate 1 correctness defect -> current-PR remediation", "Pre-filter: <gate>"))
+    )
+    assert not gates._has_resolution_evidence(
+        node(accepted.replace("Deleted artifact: None\n", ""))
+    )
+    deleted = accepted.replace(
+        "Deleted artifact: None",
+        "Deleted artifact: tests/test_legacy.py\n"
+        "Original burden: Prove read failures remain visible.\n"
+        "Burden disposition: solved by tests/test_reader.py::test_read_failure_is_visible\n"
+        "Verification: Focused boundary test passes.",
+    )
+    assert gates._has_resolution_evidence(node(deleted))
+    assert not gates._has_resolution_evidence(node("Resolved by commit 123456789abc."))
+    assert not gates._has_resolution_evidence(node("Disposition-ledger: accepted in PR body."))
+    assert not gates._has_resolution_evidence(
+        node(
+            """\
+Disposition: Accepted as written
+Policy basis: POLICY.NO_ERROR_DISCARD
+Pre-filter: Gate 1 correctness defect -> current-PR remediation
+Claim: Read failures are discarded.
+Remediation: Propagate the read error.
+Code/action taken or explicit non-change: Propagate the read error.
+Proof: Focused boundary test.
+Audit anchor: tests/test_reader.py
+"""
+        )
+    )
+    assert not gates._has_resolution_evidence(
+        {
+            "comments": {
+                "nodes": [
+                    {
+                        "body": accepted,
+                    }
+                ]
+            }
+        }
+    )
 
 
 def test_thread_resolution_gate_blocks_unresolved_non_ai_review_threads(
@@ -258,7 +381,7 @@ def test_thread_resolution_gate_requires_evidence_for_resolved_non_ai_review_thr
             {
                 "path": "src/app.py",
                 "isResolved": True,
-                "comments": {"nodes": [{"body": "Resolved in the UI without a commit or ledger citation."}]},
+                "comments": {"nodes": [{"body": "Resolved in the UI without a thread-local disposition."}]},
             }
         ],
     )
@@ -266,14 +389,12 @@ def test_thread_resolution_gate_requires_evidence_for_resolved_non_ai_review_thr
     with pytest.raises(SystemExit):
         gates.check_review_threads("owner/repo", 7)
 
-    assert "src/app.py: resolved review thread lacks commit or disposition-ledger evidence" in capsys.readouterr().err
+    assert "src/app.py: resolved review thread lacks a thread-local evidenced disposition" in capsys.readouterr().err
 
 
-def test_thread_resolution_auto_resolves_stale_ai_review_proof(
+def test_thread_resolution_does_not_auto_resolve_stale_ai_review_proof(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    resolved: list[str] = []
-    ran: list[list[str]] = []
     node = {
         "id": "THREAD_1",
         "path": "src/app.py",
@@ -293,23 +414,16 @@ def test_thread_resolution_auto_resolves_stale_ai_review_proof(
     }
 
     monkeypatch.setattr(gates, "_thread_nodes", lambda repo, pr_number: [node])
+    monkeypatch.setattr(gates, "_pr_commit_shas", lambda repo, pr_number: set(), raising=False)
 
-    def fake_run(args: list[str], **kwargs: object) -> subprocess.CompletedProcess[str]:
-        ran.append(args)
-        return subprocess.CompletedProcess(args, 1, "", "")
+    def reject_mutation(*args: object, **kwargs: object) -> gates.JsonDict:
+        raise AssertionError("an unresolved thread must never be auto-resolved")
 
-    def fake_gh(args: list[str], body: gates.JsonDict | None = None) -> gates.JsonDict:
-        assert "resolveReviewThread" in args[3]
-        resolved.append(args[-1])
-        return {"data": {"resolveReviewThread": {"thread": {"id": "THREAD_1", "isResolved": True}}}}
+    monkeypatch.setattr(gates, "_gh_json", reject_mutation)
 
-    monkeypatch.setattr(gates.subprocess, "run", fake_run)
-    monkeypatch.setattr(gates, "_gh_json", fake_gh)
+    with pytest.raises(SystemExit):
+        gates.check_review_threads("owner/repo", 7)
 
-    gates.check_review_threads("owner/repo", 7)
-
-    assert ran == [["grep", "-n", "stderr.*pipe", "src/pandoc-config.ts"]]
-    assert resolved == ["threadId=THREAD_1"]
 
 
 def test_thread_resolution_does_not_auto_resolve_reproducing_proof(
@@ -347,12 +461,9 @@ def test_thread_resolution_does_not_auto_resolve_reproducing_proof(
     assert "src/app.py: unresolved review thread" in capsys.readouterr().err
 
 
-def test_thread_resolution_rejects_shell_proof_for_auto_resolution() -> None:
-    assert gates._safe_proof_args("grep stale src/app.ts && rm -rf /") is None
-
-
-def test_thread_resolution_gate_accepts_resolved_non_ai_review_threads_with_evidence(
+def test_thread_resolution_gate_rejects_legacy_root_only_evidence(
     monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
     monkeypatch.setattr(
         gates,
@@ -365,5 +476,75 @@ def test_thread_resolution_gate_accepts_resolved_non_ai_review_threads_with_evid
             }
         ],
     )
+    monkeypatch.setattr(gates, "_pr_commit_shas", lambda repo, pr_number: set(), raising=False)
 
-    gates.check_review_threads("owner/repo", 7)
+    with pytest.raises(SystemExit):
+        gates.check_review_threads("owner/repo", 7)
+
+    assert "resolved review thread lacks a thread-local evidenced disposition" in capsys.readouterr().err
+
+
+def test_thread_resolution_gate_rejects_fabricated_commit_and_uncheckable_proof(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: pathlib.Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    accepted = """\
+Disposition: Accepted as written
+Policy basis: POLICY.NO_ADMIN_COMPLETION
+Pre-filter: Gate 1 proof defect -> current-PR remediation
+Claim: The resolution gate accepts syntax instead of evidence.
+Remediation: Verify the commit and proof witness.
+Code/action taken or explicit non-change: Added semantic evidence validation.
+Proof: Focused gate test rejects fabricated evidence.
+Commit: 123456789abc
+Audit anchor: tests/test_missing.py::test_evidence
+Deleted artifact: None
+"""
+    monkeypatch.setattr(
+        gates,
+        "_thread_nodes",
+        lambda repo, pr_number: [
+            {
+                "path": "src/app.py",
+                "isResolved": True,
+                "comments": {"nodes": [{"body": "finding"}, {"body": accepted}]},
+            }
+        ],
+    )
+    monkeypatch.setattr(
+        gates,
+        "_pr_commit_shas",
+        lambda repo, pr_number: {"f" * 40},
+        raising=False,
+    )
+
+    with pytest.raises(SystemExit):
+        gates.check_review_threads("owner/repo", 7, repo_root=tmp_path)
+
+    error = capsys.readouterr().err
+    assert "cited commit 123456789abc is not on this PR" in error
+    assert "proof anchor tests/test_missing.py::test_evidence does not exist" in error
+
+
+
+def test_delegation_accepts_docs_and_configs_profile(tmp_path: pathlib.Path) -> None:
+    project = tmp_path / "project"
+    project.mkdir()
+    (project / "justfile").write_text(
+        "\n".join(
+            [
+                "test-commit:",
+                "    @just -f ~/ai-review-ci/justfiles/docs-and-configs.just -d . test-commit",
+                "",
+                "test-push:",
+                "    @just -f ~/ai-review-ci/justfiles/docs-and-configs.just -d . test-push",
+                "",
+                "test-ci:",
+                "    @just -f ~/ai-review-ci/justfiles/docs-and-configs.just -d . test-ci",
+                "",
+            ]
+        )
+    )
+
+    gates.check_delegation(project, "docs-and-configs")

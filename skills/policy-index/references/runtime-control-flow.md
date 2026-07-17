@@ -257,6 +257,8 @@ def load_document(path: Path) -> str:
 If this is a public command boundary, convert the exception once into a structured fatal error.
 Do not return a falsy value.
 
+When a catch selects an expected branch, treats failed attempts as capability discovery, or initiates unmodeled retry, classify `POLICY.NO_EXCEPTION_CONTROL_FLOW` and use [Error Handling as Control Flow](error-handling-as-control-flow.md). The remedy is an explicit domain state model, not a better-ordered catch tree.
+
 ### **[ASSERTION-CATCH]** Banned: catching assertion failures
 
 ```python

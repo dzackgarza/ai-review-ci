@@ -2,7 +2,7 @@
 #
 # Imports shared and Python QC recipes and adds Sage-specific checks.
 # Sage projects delegate to this file:
-#   just -f ~/ai-review-ci/justfiles/sage.just -d . test
+#   just -f ~/ai-review-ci/justfiles/sage.just -d . test-commit
 #
 # Shared + Python recipes (imported transitively via justfile-python):
 #   All cross-language (justfile) and Python (justfile-python) recipes.
@@ -10,12 +10,10 @@
 # Sage-specific recipes:
 #   _sage-qc-files, _sage-syntax, _vulture, _sage-ast-grep (Sage-aware preparse)
 #
-# WORKFLOW (two-tier):
-#   just test     — COMMIT gate: Sage syntax + Python correctness/normalize
-#                   (normalize, syntax, mypy, plain pytest, bypass check).
-#   just test-ci  — PUSH/CI gate: test + the full style/slop/coverage stack
-#                   (vulture, deptry, import-linter, jscpd, lizard, ast-grep,
-#                   grain, coverage + diff-cover, semgrep, vibecheck, ai-slop).
+# WORKFLOW (three-tier):
+#   just test-commit — Sage/Python syntax, normalization, mypy, bypass check.
+#   just test-push   — commit checks plus the full Sage test suite.
+#   just test-ci     — push checks plus coverage and policy-sensitive gates.
 
 infra := justfile_directory() / ".."
 configs := infra / "tool-configs"
@@ -23,15 +21,17 @@ artifacts := infra / "tool-artifacts"
 justfiles := infra / "justfiles"
 
 default:
-	@just test
+	@just test-commit
 
 # public: print the wiring contract for putting a Sage project on this QC
 setup:
 	@echo "Sage QC wiring contract (what _sage-preflight enforces):"
 	@echo ""
 	@echo "1. Delegate the project justfile to this file:"
-	@echo "     test:"
-	@echo "         @just -f ~/ai-review-ci/justfiles/sage.just -d . test"
+	@echo "     test-commit:"
+	@echo "         @just -f ~/ai-review-ci/justfiles/sage.just -d . test-commit"
+	@echo "     test-push:"
+	@echo "         @just -f ~/ai-review-ci/justfiles/sage.just -d . test-push"
 	@echo "     test-ci:"
 	@echo "         @just -f ~/ai-review-ci/justfiles/sage.just -d . test-ci"
 	@echo ""
@@ -55,21 +55,65 @@ setup:
 	@echo "   The package must be importable there (PYTHONPATH via .envrc, or"
 	@echo "   installed into Sage's python)."
 	@echo ""
-	@echo "6. Gates: pre-commit hook runs 'just test' (syntax, mypy, pytest);"
-	@echo "   pre-push runs 'just test-ci' (adds style/slop/coverage stack)."
-	@echo "   Run 'just test' locally first — every failure prints its own fix."
+	@echo "6. Gates: pre-commit runs 'just test-commit' (syntax and mypy);"
+	@echo "   pre-push runs 'just test-push' (adds Sage tests); CI runs 'just test-ci'."
+	@echo "   Commit/push failures are direct repair; CI policy findings are triaged."
 
 _sage-qc-files:
 	#!/usr/bin/env bash
 	set -euo pipefail
+	exclude_dirs_output="$(uv run {{artifacts}}/scripts/read_qc_excludes.py {{configs}}/qc-excludes.toml)"
+	exclude_dirs=()
+	if [ -n "$exclude_dirs_output" ]; then
+		mapfile -t exclude_dirs <<<"$exclude_dirs_output"
+	fi
 	exclude_args=()
-	while IFS= read -r dir; do
+	for dir in "${exclude_dirs[@]}"; do
 		exclude_args+=(-g "!**/$dir/**")
-	done < <(uv run {{artifacts}}/scripts/read_qc_excludes.py {{configs}}/qc-excludes.toml)
+	done
 	rg --files \
 		-g '*.sage' \
 		-g '!*.sage.py' \
 		"${exclude_args[@]}"
+
+_sage-vulture-files:
+	#!/usr/bin/env bash
+	set -euo pipefail
+	if ! mapfile -t sage_files < <(just --justfile {{justfile()}} -d . _sage-qc-files 2>/dev/null); then :; fi
+	for sage_file in "${sage_files[@]}"; do
+		case "$sage_file" in
+			scripts/*|*/scripts/*) continue ;;
+		esac
+		printf '%s\n' "$sage_file"
+	done
+
+_sage-test-files:
+	#!/usr/bin/env bash
+	set -euo pipefail
+	sage_files_output="$(just --justfile {{justfile()}} -d . _sage-qc-files)"
+	sage_files=()
+	if [ -n "$sage_files_output" ]; then
+		mapfile -t sage_files <<<"$sage_files_output"
+	fi
+	for sage_file in "${sage_files[@]}"; do
+		case "${sage_file##*/}" in
+			test_*.sage|*_test.sage) printf '%s\n' "$sage_file" ;;
+		esac
+	done
+
+_sage-python-test-files:
+	#!/usr/bin/env bash
+	set -euo pipefail
+	python_files_output="$(just -f {{justfiles}}/python.just -d . _python-qc-files)"
+	python_files=()
+	if [ -n "$python_files_output" ]; then
+		mapfile -t python_files <<<"$python_files_output"
+	fi
+	for python_file in "${python_files[@]}"; do
+		case "$python_file" in
+			tests/test_*.py|tests/*_test.py|tests/*/test_*.py|tests/*/*_test.py) printf '%s\n' "$python_file" ;;
+		esac
+	done
 
 # Wiring preflight: every failure prints the exact remediation so a
 # misconfigured repo converges to correct QC wiring instead of guessing.
@@ -137,7 +181,11 @@ _sage-syntax:
 	echo "============================="
 	echo "=== Running: Sage syntax validation ==="
 	echo "# Preparses .sage files and byte-compiles the generated Python to catch syntax errors early"
-	mapfile -t sage_files < <(just --justfile {{justfile()}} -d . _sage-qc-files)
+	sage_files_output="$(just --justfile {{justfile()}} -d . _sage-qc-files)"
+	sage_files=()
+	if [ -n "$sage_files_output" ]; then
+		mapfile -t sage_files <<<"$sage_files_output"
+	fi
 	if [ "${#sage_files[@]}" -eq 0 ]; then
 		echo "ERROR: Sage syntax validation: no .sage files found in a Sage project."
 		"{{artifacts}}/scripts/emit-triage-directive.sh"
@@ -212,14 +260,36 @@ _vulture: _sage-qc-files
 	echo "============================="
 	echo "=== Running: vulture dead code detection (Sage-aware) ==="
 	echo "# Finds unused code in Python and Sage files"
-	mapfile -t python_files < <(just -f {{justfiles}}/python.just -d . _python-qc-files)
-	mapfile -t sage_files < <(just --justfile {{justfile()}} -d . _sage-qc-files)
+	all_python_files_output="$(just -f {{justfiles}}/python.just -d . _python-qc-files)"
+	all_python_files=()
+	if [ -n "$all_python_files_output" ]; then
+		mapfile -t all_python_files <<<"$all_python_files_output"
+	fi
+	all_sage_files_output="$(just --justfile {{justfile()}} -d . _sage-qc-files)"
+	all_sage_files=()
+	if [ -n "$all_sage_files_output" ]; then
+		mapfile -t all_sage_files <<<"$all_sage_files_output"
+	fi
+	python_files_output="$(just -f {{justfiles}}/python.just -d . _python-vulture-files)"
+	python_files=()
+	if [ -n "$python_files_output" ]; then
+		mapfile -t python_files <<<"$python_files_output"
+	fi
+	sage_files_output="$(just --justfile {{justfile()}} -d . _sage-vulture-files)"
+	sage_files=()
+	if [ -n "$sage_files_output" ]; then
+		mapfile -t sage_files <<<"$sage_files_output"
+	fi
 	generated_sage_python_files=()
 	whitelist_file="{{artifacts}}/vulture_whitelist.py"
-	if [ "${#python_files[@]}" -eq 0 ] && [ "${#sage_files[@]}" -eq 0 ]; then
+	if [ "${#all_python_files[@]}" -eq 0 ] && [ "${#all_sage_files[@]}" -eq 0 ]; then
 		echo "ERROR: vulture: no Python or Sage files found in a Sage project."
 		"{{artifacts}}/scripts/emit-triage-directive.sh"
 		exit 1
+	fi
+	if [ "${#python_files[@]}" -eq 0 ] && [ "${#sage_files[@]}" -eq 0 ]; then
+		echo "# No Python or Sage files eligible for vulture after excluding scripts/."
+		exit 0
 	fi
 
 	if [ "${#sage_files[@]}" -gt 0 ]; then
@@ -264,10 +334,19 @@ _sage-pytest:
 	echo "# then runs pytest on the generated .py files."
 	sage_bin="$(just --justfile {{justfile()}} -d . _sage-bin)"
 
-	# Collect .sage test files
-	mapfile -t sage_test_files < <(rg --files -g 'test_*.sage' -g '*_test.sage' 2>/dev/null || true)
-	# Also collect any .py test files (mixed projects)
-	mapfile -t py_test_files < <(rg --files tests -g 'test_*.py' -g '*_test.py' -g '!*.sage.py' 2>/dev/null || true)
+	# Collect only files owned by this repository; the shared discovery boundary
+	# excludes gitlinks and independently initialized nested repositories.
+	sage_test_files_output="$(just --justfile {{justfile()}} -d . _sage-test-files)"
+	sage_test_files=()
+	if [ -n "$sage_test_files_output" ]; then
+		mapfile -t sage_test_files <<<"$sage_test_files_output"
+	fi
+	# Also collect any .py test files (mixed projects).
+	py_test_files_output="$(just --justfile {{justfile()}} -d . _sage-python-test-files)"
+	py_test_files=()
+	if [ -n "$py_test_files_output" ]; then
+		mapfile -t py_test_files <<<"$py_test_files_output"
+	fi
 
 	if [ "${#sage_test_files[@]}" -eq 0 ] && [ "${#py_test_files[@]}" -eq 0 ]; then
 		echo "ERROR: pytest: no test files found (.sage or .py)."
@@ -337,8 +416,16 @@ _sage-pytest-coverage:
 	echo "# Same preparse flow as _sage-pytest, run under coverage.py inside Sage's"
 	echo "# Python (uvx CPython cannot import sage.*); emits coverage.xml for diff-cover."
 	sage_bin="$(just --justfile {{justfile()}} -d . _sage-bin)"
-	mapfile -t sage_test_files < <(rg --files -g 'test_*.sage' -g '*_test.sage' 2>/dev/null || true)
-	mapfile -t py_test_files < <(rg --files tests -g 'test_*.py' -g '*_test.py' -g '!*.sage.py' 2>/dev/null || true)
+	sage_test_files_output="$(just --justfile {{justfile()}} -d . _sage-test-files)"
+	sage_test_files=()
+	if [ -n "$sage_test_files_output" ]; then
+		mapfile -t sage_test_files <<<"$sage_test_files_output"
+	fi
+	py_test_files_output="$(just --justfile {{justfile()}} -d . _sage-python-test-files)"
+	py_test_files=()
+	if [ -n "$py_test_files_output" ]; then
+		mapfile -t py_test_files <<<"$py_test_files_output"
+	fi
 	if [ "${#sage_test_files[@]}" -eq 0 ] && [ "${#py_test_files[@]}" -eq 0 ]; then
 		echo "ERROR: pytest/coverage: no test files found (.sage or .py)."
 		"{{artifacts}}/scripts/emit-test-writing-directive.sh"
@@ -432,16 +519,25 @@ _sage-diff-cover: _sage-pytest-coverage
 		exit $ec
 	fi
 
-# public: COMMIT gate — Sage syntax + Python correctness/normalization
-test: _doctor-preflight _sage-preflight _normalize-common _sage-syntax
+# public: COMMIT gate — immediate, directly repairable feedback
+test-commit:
 	#!/usr/bin/env bash
 	set -euo pipefail
+	export AI_REVIEW_CI_FAILURE_MODE=direct
+	just --justfile {{justfile()}} -d . _doctor-preflight _sage-preflight _normalize-common _sage-syntax
 	python_qc_repo="{{justfiles}}/python.just"
 	python_qc_recipes=(_normalize _python-syntax _mypy)
 	just -f "$python_qc_repo" -d . "${python_qc_recipes[@]}"
-	just --justfile {{justfile()}} -d . _sage-pytest
 	just -f {{justfiles}}/shared.just -d . _no-bypass
-	echo "Sage commit-tier quality checks completed"
+	echo "Sage commit quality checks completed"
+
+# public: PUSH gate — commit checks plus the full project-owned test suite
+test-push:
+	#!/usr/bin/env bash
+	set -euo pipefail
+	export AI_REVIEW_CI_FAILURE_MODE=direct
+	just --justfile {{justfile()}} -d . test-commit _sage-pytest
+	echo "Sage push quality checks completed"
 
 _sage-ast-grep:
 	#!/usr/bin/env bash
@@ -451,8 +547,16 @@ _sage-ast-grep:
 	echo "# Bans runtime type introspection (hasattr/getattr/setattr/delattr, type(x) comparisons,"
 	echo "# __class__/__dict__ probing). Sage research code must declare the mathematical objects it"
 	echo "# expects through the type system, not discover them at runtime."
-	mapfile -t python_files < <(just -f {{justfiles}}/python.just -d . _python-qc-files)
-	mapfile -t sage_files < <(just --justfile {{justfile()}} -d . _sage-qc-files)
+	python_files_output="$(just -f {{justfiles}}/python.just -d . _python-qc-files)"
+	python_files=()
+	if [ -n "$python_files_output" ]; then
+		mapfile -t python_files <<<"$python_files_output"
+	fi
+	sage_files_output="$(just --justfile {{justfile()}} -d . _sage-qc-files)"
+	sage_files=()
+	if [ -n "$sage_files_output" ]; then
+		mapfile -t sage_files <<<"$sage_files_output"
+	fi
 	scan_files=("${python_files[@]}")
 	if [ "${#python_files[@]}" -eq 0 ] && [ "${#sage_files[@]}" -eq 0 ]; then
 		echo "ERROR: ast-grep duck-typing audit: no Python or Sage files found in a Sage project."
@@ -495,16 +599,17 @@ _sage-ast-grep:
 		--report-style short \
 		"${scan_files[@]}" | tee "$findings_file"
 	if [ -s "$findings_file" ]; then
-		echo "Blocking just test-ci: duck-typing introspection found. Declare the expected"
-		echo "mathematical object types explicitly (POLICY.NO_TYPE_ESCAPE -> REMEDIATE.STRUCTURED_TYPES)."
+		echo "Blocking just test-ci: POLICY.NO_TYPE_ESCAPE"
 		"{{artifacts}}/scripts/emit-triage-directive.sh"
 		exit 1
 	fi
 
-# public: PUSH/CI gate — test + the full style/slop/coverage stack
-test-ci: test _vulture _sage-ast-grep
+# public: CI gate — push checks plus gameable and long-running acceptance gates
+test-ci:
 	#!/usr/bin/env bash
 	set -euo pipefail
+	export AI_REVIEW_CI_FAILURE_MODE=triage
+	just --justfile {{justfile()}} -d . test-push _vulture _sage-ast-grep
 	python_qc_repo="{{justfiles}}/python.just"
 	python_qc_recipes=(_deptry _import-linter _ast-grep _jscpd-python _grain)
 	just -f "$python_qc_repo" -d . "${python_qc_recipes[@]}"
@@ -515,4 +620,4 @@ test-ci: test _vulture _sage-ast-grep
 	# import sage.* or see preparsed .sage tests).
 	just --justfile {{justfile()}} -d . _sage-diff-cover
 	just -f {{justfiles}}/shared.just -d . _global-qc
-	echo "Sage push/CI quality checks completed"
+	echo "Sage CI quality checks completed"

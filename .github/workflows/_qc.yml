@@ -1,16 +1,16 @@
+# Reusable deterministic acceptance workflow. It runs the consuming repo's
+# standardized test-ci recipe; commit and push tiers remain local hooks.
+# Downstream recipes delegate to the selected ai-review-ci profile.
 name: QC (reusable)
 
-# Uniform deterministic-QC workflow: it does nothing tool-specific itself — it
-# just runs the consuming repo's own standardized `just test` / `just test-ci`,
-# which delegate to the upstream profile justfile in ai-review-ci. ai-review-ci
-# consumes this on itself (via the qc-tooling profile); downstream repos consume
-# it through the installed trigger. Same shape everywhere.
+# The workflow executes the selected consuming-repository recipe; all tool
+# ownership stays in the delegated profile justfile.
 
 on:
   workflow_call:
     inputs:
       tier:
-        description: 'QC tier: test (commit gate), test-ci (push/CI gate), or ambient (scheduled full-repo debt audit)'
+        description: 'QC tier: test-ci (PR acceptance gate) or ambient (scheduled full-repo debt audit)'
         required: true
         type: string
       infra_ref:
@@ -43,7 +43,7 @@ jobs:
       - name: Validate inputs
         run: |
           case "$QC_TIER" in
-            test|test-ci|ambient) ;;
+            test-ci|ambient) ;;
             *) echo "invalid tier: $QC_TIER" >&2; exit 1 ;;
           esac
           if [[ -z "$QC_INFRA_REF" || "$QC_INFRA_REF" =~ [^A-Za-z0-9._/-] ]]; then
@@ -100,3 +100,4 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: just test-gh-boundary
+        if: github.repository == 'dzackgarza/ai-review-ci'

@@ -31,10 +31,15 @@ _format-structured-text:
 	echo "============================="
 	echo "=== Running: structured text formatting ==="
 	echo "# Formats Markdown (flowmark), JSON, and YAML (prettier) before agents spend time on whitespace"
+	exclude_dirs_output="$(uv run {{artifacts}}/scripts/read_qc_excludes.py {{configs}}/qc-excludes.toml)"
+	exclude_dirs=()
+	if [ -n "$exclude_dirs_output" ]; then
+		mapfile -t exclude_dirs <<<"$exclude_dirs_output"
+	fi
 	prune_args=()
-	while IFS= read -r dir; do
+	for dir in "${exclude_dirs[@]}"; do
 		prune_args+=(-path "./$dir" -o -path "*/$dir" -o -path "*/$dir/*" -o)
-	done < <(uv run {{artifacts}}/scripts/read_qc_excludes.py {{configs}}/qc-excludes.toml)
+	done
 	if [ "${#prune_args[@]}" -eq 0 ]; then
 		echo "ERROR: qc-excludes.toml produced no exclusions for structured text formatting."
 		"{{artifacts}}/scripts/emit-triage-directive.sh"
@@ -84,14 +89,22 @@ _semgrep-autofix:
 	set -euo pipefail
 	echo "============================="
 	echo "=== Running: semgrep auto-fix ==="
-	echo "# Applies Semgrep autofixes; push-tier Semgrep verification owns remaining findings"
+	echo "# Applies Semgrep autofixes; CI-tier Semgrep verification owns remaining findings"
+	exclude_dirs_output="$(uv run {{artifacts}}/scripts/read_qc_excludes.py {{configs}}/qc-excludes.toml)"
+	exclude_dirs=()
+	if [ -n "$exclude_dirs_output" ]; then
+		mapfile -t exclude_dirs <<<"$exclude_dirs_output"
+	fi
 	exclude_args=()
-	while IFS= read -r dir; do
+	for dir in "${exclude_dirs[@]}"; do
 		exclude_args+=("--exclude=$dir")
-	done < <(uv run {{artifacts}}/scripts/read_qc_excludes.py {{configs}}/qc-excludes.toml)
+	done
+	exclude_args+=("--exclude=*.html")
+	exclude_args+=("--exclude=**/*.html")
 	if uvx --from semgrep semgrep scan \
 		--config={{configs}}/semgrep.yml \
 		--config=p/ci \
+		--exclude=codeql-db \
 		"${exclude_args[@]}" \
 		--scan-unknown-extensions \
 		--autofix; then
@@ -178,49 +191,10 @@ _no-bypass:
 	echo "============================="
 	echo "=== Running: bypass comment detection ==="
 	echo "# Blocks staged changes from hiding QC issues via bypass comments"
-	if ! files=$(git diff --cached --name-only --diff-filter=ACM 2>/dev/null); then
-		files=""
+	if ! uv run --project {{infra}} ai-review-ci check-staged-bypass; then
+		"{{artifacts}}/scripts/emit-triage-directive.sh"
+		exit 1
 	fi
-	[ -z "$files" ] && exit 0
-	for file in $files; do
-		if [ ! -f "$file" ]; then
-			continue
-		fi
-		# Documentation/prose files cannot bypass QC; their bypass-token strings are
-		# inert text (e.g. guidance that forbids @ts-ignore). Skip them.
-		case "$file" in
-			*.md|*.markdown|*.mdx) continue ;;
-		esac
-		if ! staged_diff=$(git diff --cached -U0 -- "$file" 2>/dev/null); then
-			continue
-		fi
-		check_added_bypass() {
-			local pattern="$1"
-			local message="$2"
-			if printf '%s\n' "$staged_diff" | grep -nE "^\+[^+].*${pattern}"; then
-				echo "$message"
-				"{{artifacts}}/scripts/emit-triage-directive.sh"
-				exit 1
-			fi
-		}
-		coverage_pragma='# pragma: no cov''er'
-		istanbul_ignore='// istanbul ign''ore'
-		noqa_marker='# no''qa'
-		type_ignore='# type: ign''ore'
-		double_cast='as[[:space:]]+(unknown|any|never)[[:space:]]+as[[:space:]]'
-		ts_ignore='@ts-ign''ore'
-		ts_expect_error='@ts-expect-err''or$'
-		eslint_disable='// eslint-dis''able'
-		check_added_bypass "$coverage_pragma" "ERROR: $file introduces a coverage bypass marker — fix coverage, don't hide it"
-		check_added_bypass "$istanbul_ignore" "ERROR: $file introduces an Istanbul coverage bypass — fix coverage, don't hide it"
-		check_added_bypass "$noqa_marker" "ERROR: $file introduces a lint bypass marker — fix lint errors, don't hide them"
-		check_added_bypass "$type_ignore" "ERROR: $file introduces a type-checking bypass marker — fix type errors, don't hide them"
-		check_added_bypass "$double_cast" "ERROR: $file introduces a double-cast bypass — use a proper type assertion or restructure the code"
-		check_added_bypass "$ts_ignore" "ERROR: $file introduces a TypeScript ignore bypass — fix type errors, don't hide them"
-		check_added_bypass "$ts_expect_error" "ERROR: $file introduces an unjustified TypeScript expect-error bypass — add a comment explaining why"
-		check_added_bypass "$eslint_disable" "ERROR: $file introduces an ESLint bypass marker — fix lint errors, don't hide them"
-	done
-	echo "No bypass comments detected in staged files"
 
 _check-no-local-qc-override:
 	#!/usr/bin/env bash
@@ -340,6 +314,7 @@ _semgrep:
 	}
 	trap restore_semgrepignore EXIT
 	uv run {{artifacts}}/scripts/read_qc_excludes.py {{configs}}/qc-excludes.toml > "$ignore_file"
+	printf '%s\n' '*.html' '**/*.html' >> "$ignore_file"
 	if uvx --from semgrep semgrep scan \
 		--config={{configs}}/semgrep.yml \
 		--config=p/ci \
@@ -367,7 +342,16 @@ _ast-grep:
 	echo "# Structural code pattern analysis for bridge-burning policy violations"
 	sg_config="{{configs}}/ast-grep/sgconfig.yml"
 	if [ -f "$sg_config" ]; then
-		if npx -y --package @ast-grep/cli ast-grep scan --config "$sg_config" .; then
+		exclude_dirs_output="$(uv run {{artifacts}}/scripts/read_qc_excludes.py {{configs}}/qc-excludes.toml)"
+		exclude_dirs=()
+		if [ -n "$exclude_dirs_output" ]; then
+			mapfile -t exclude_dirs <<<"$exclude_dirs_output"
+		fi
+		ast_grep_globs=()
+		for dir in "${exclude_dirs[@]}"; do
+			ast_grep_globs+=(--globs "!**/$dir/**")
+		done
+		if npx -y --package @ast-grep/cli ast-grep scan --config "$sg_config" "${ast_grep_globs[@]}" .; then
 			:
 		else
 			ec=$?
@@ -399,6 +383,40 @@ _vibecheck:
 	echo "============================="
 	echo "=== Running: vibecheck anti-slop pattern detection ==="
 	echo "# Runs qinnovates/vibecheck-slop-stopper via uvx against the project root"
+	# vibecheck delegates file discovery to ripgrep. Install the QC-owned
+	# exclusions as a temporary project-root .ignore file so ripgrep excludes
+	# user-authored research scripts and notebooks before it parses them.
+	ignore_file=".ignore"
+	had_preexisting_ignore=0
+	ignore_backup=""
+	if [ -L "$ignore_file" ]; then
+		echo "ERROR: cannot temporarily install QC exclusions: $ignore_file is a symlink."
+		echo "       Refusing to follow a user-owned symlink while configuring vibecheck."
+		"{{artifacts}}/scripts/emit-triage-directive.sh"
+		exit 1
+	fi
+	if [ -e "$ignore_file" ]; then
+		had_preexisting_ignore=1
+		if ! ignore_backup="$(mktemp)" || ! cp "$ignore_file" "$ignore_backup"; then
+			echo "ERROR: failed to back up existing $ignore_file before running vibecheck."
+			"{{artifacts}}/scripts/emit-triage-directive.sh"
+			exit 1
+		fi
+	fi
+	restore_ignore() {
+		if [ "$had_preexisting_ignore" -eq 1 ]; then
+			cat "$ignore_backup" > "$ignore_file"
+			rm -f "$ignore_backup"
+		else
+			rm -f "$ignore_file"
+		fi
+	}
+	trap restore_ignore EXIT
+	if [ "$had_preexisting_ignore" -eq 1 ]; then
+		cat "$ignore_backup" > "$ignore_file"
+	fi
+	printf '\n' >> "$ignore_file"
+	uv run {{artifacts}}/scripts/read_qc_excludes.py {{configs}}/qc-excludes.toml >> "$ignore_file"
 	if raw_output=$(uvx --from git+https://github.com/qinnovates/vibecheck-slop-stopper vibecheck . --severity high --json); then
 		ec=0
 	else
@@ -416,7 +434,11 @@ _vibecheck:
 		exit "$ec"
 	fi
 	filter_input=$(mktemp)
-	trap 'rm -f -- "$filter_input"' EXIT
+	cleanup_vibecheck() {
+		rm -f -- "$filter_input"
+		restore_ignore
+	}
+	trap cleanup_vibecheck EXIT
 	printf '%s\n' "$raw_output" > "$filter_input"
 	filter_result=$(python3 - "$filter_input" <<-'PY'
 	import json
@@ -575,7 +597,17 @@ _aislop:
 	echo "============================="
 	echo "=== Running: aislop AI-slop quality scan ==="
 	echo "# Runs scanaislop.com's aislop scanner; blocks on error-severity findings (warnings surface but do not block)"
-	if raw_output=$(npx -y aislop@latest scan --json .); then
+	exclude_dirs_output="$(uv run {{artifacts}}/scripts/read_qc_excludes.py {{configs}}/qc-excludes.toml)"
+	exclude_dirs=()
+	if [ -n "$exclude_dirs_output" ]; then
+		mapfile -t exclude_dirs <<<"$exclude_dirs_output"
+	fi
+	aislop_exclude_patterns=()
+	for dir in "${exclude_dirs[@]}"; do
+		aislop_exclude_patterns+=("**/$dir/**")
+	done
+	aislop_exclude_csv="$(IFS=,; printf '%s' "${aislop_exclude_patterns[*]}")"
+	if raw_output=$(npx -y aislop@latest scan --json --exclude "$aislop_exclude_csv" .); then
 		:
 	else
 		ec=$?
@@ -653,7 +685,7 @@ _sync-qc-excludes:
 # ── Entry Points ──────────────────────────────────────────────────
 
 # Push/CI-tier cross-language stack. `_no-bypass` is NOT here — it is a
-# commit-tier check invoked directly by each language's `test` recipe.
+# commit-tier check invoked directly by each language's `test-commit` recipe.
 _global-qc: _ensure-qc-repo-current _check-envrc _check-no-local-qc-override _semgrep _ast-grep _vibecheck _slop _aislop
 	#!/usr/bin/env bash
 	set -euo pipefail

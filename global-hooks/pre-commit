@@ -36,14 +36,14 @@ case "$remote" in
   *) echo "ai-review-ci hook: origin is not under the dzackgarza account — QC not owned here; proceeding without verification." >&2; exit 0 ;;
 esac
 
-if just test; then
+if just test-commit; then
   exit 0
 fi
 
 cat >&2 <<'MSG'
 
 ────────────────────────────────────────────────────────────────
-ai-review-ci QC gate FAILED (just test).
+ai-review-ci commit gate FAILED (just test-commit).
 
 If this is an INTENTIONAL red proof — a test that genuinely fails because it
 reproduces a bug, landing before its green fix per the red/green workflow —
@@ -57,7 +57,8 @@ audit case (and for wiki repos / repos not under the dzackgarza account, which
 are auto-detected and skipped above). See the git-integration-workflow skill
 (red-proof route) and test-guidelines.
 
-Any other failure is a REAL QC failure — do not bypass it, fix it.
+Any other failure is direct local repair work. Fix the reported object and
+recommit; do not start a PR disposition or subagent remediation workflow.
 ────────────────────────────────────────────────────────────────
 MSG
 exit 1

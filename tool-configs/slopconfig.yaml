@@ -1,50 +1,45 @@
 # Maximally strict production config for ai-slop-detector
 # Based on AI-SLOP-Detector Strict Mode + maximally informative extensions
 # https://github.com/flamehaven01/AI-SLOP-Detector/blob/main/docs/CONFIGURATION.md
-
 weights:
-  ldr: 0.50
-  inflation: 0.30
-  ddc: 0.20
-
+  ldr: 0.5
+  inflation: 0.3
+  ddc: 0.2
 thresholds:
   ldr:
-    critical: 0.40
-    warning: 0.70
+    critical: 0.4
+    warning: 0.7
   inflation:
     critical: 0.8
     warning: 0.4
   ddc:
-    critical: 0.60
-    warning: 0.80
-
+    critical: 0.6
+    warning: 0.8
 patterns:
   disabled: []
-
 evidence:
   tests:
     integration:
       enabled: true
       dir_patterns:
-        - 'tests/integration/**'
-        - 'integration_tests/**'
-        - 'tests/e2e/**'
-        - 'e2e/**'
+      - tests/integration/**
+      - integration_tests/**
+      - tests/e2e/**
+      - e2e/**
       file_patterns:
-        - 'test_integration_*.py'
-        - '*_integration_test.py'
-        - 'it_*.py'
+      - test_integration_*.py
+      - '*_integration_test.py'
+      - it_*.py
       pytest_markers:
-        - 'integration'
-        - 'e2e'
-        - 'slow'
+      - integration
+      - e2e
+      - slow
       runtime_signals:
         enabled: true
         keywords:
-          - 'testcontainers'
-          - 'docker-compose'
-          - 'TestClient'
-
+        - testcontainers
+        - docker-compose
+        - TestClient
 claims:
   production_ready:
     require_integration_tests: true
@@ -55,15 +50,71 @@ claims:
     require_integration_tests: true
     require_monitoring: true
     require_security: true
-
 reporting:
   formats:
-    - text
-    - json
-    - html
+  - text
+  - json
+  - html
   html:
-    theme: 'dark'
+    theme: dark
     show_charts: true
   ci:
     fail_threshold: 30
     fail_on_critical: true
+ignore:
+- tests/fixtures/slop-torture/**
+- '**/tests/fixtures/slop-torture/**'
+- tests/fixtures/ast-grep/**
+- '**/tests/fixtures/ast-grep/**'
+- node_modules/**
+- '**/node_modules/**'
+- .venv/**
+- '**/.venv/**'
+- .pytest_cache/**
+- '**/.pytest_cache/**'
+- .import_linter_cache/**
+- '**/.import_linter_cache/**'
+- __pycache__/**
+- '**/__pycache__/**'
+- dist/**
+- '**/dist/**'
+- build/**
+- '**/build/**'
+- coverage/**
+- '**/coverage/**'
+- _ci-support/**
+- '**/_ci-support/**'
+- codeql-db/**
+- '**/codeql-db/**'
+- tool-artifacts/models/**
+- '**/tool-artifacts/models/**'
+- '@girs/**'
+- '**/@girs/**'
+- __stubs__/**
+- '**/__stubs__/**'
+- external/**
+- '**/external/**'
+- target/**
+- '**/target/**'
+- '*.bak/**'
+- '**/*.bak/**'
+- .git/**
+- '**/.git/**'
+- .next/**
+- '**/.next/**'
+- .lake/**
+- '**/.lake/**'
+- .worktrees/**
+- '**/.worktrees/**'
+- .claude/worktrees/**
+- '**/.claude/worktrees/**'
+- vendor/**
+- '**/vendor/**'
+- third_party/**
+- '**/third_party/**'
+- venv/**
+- '**/venv/**'
+- scripts/**
+- '**/scripts/**'
+- notebooks/**
+- '**/notebooks/**'

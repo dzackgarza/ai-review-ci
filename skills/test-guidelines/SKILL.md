@@ -3,11 +3,12 @@ name: test-guidelines
 description: 'Use any and every time you interact with a test file, period.'
 ---
 
-Note: if you are working with a PR, read the adjacent pr-guide.md file.
+For PR-scoped test or QC work, follow the [Git integration workflow](../git-integration-workflow/SKILL.md) for the PR lifecycle and returned review/check feedback.
+This skill remains the source of truth for test and proof quality.
 
 # HIGH-QUALITY TESTING STANDARDS (GUIDELINES)
 
-Before writing, reviewing, or modifying tests or Quality Control configurations, consult the central policy index: [policy-index](../policy-index/SKILL.md)
+Before writing, reviewing, or modifying tests or Quality Control configurations, consult the central policy index: [[policy-index/SKILL|policy-index]]
 
 **MANDATORY FIRST STEP: You MUST read this entire file before taking ANY action.
 This is the source of truth for all test work.**
@@ -145,10 +146,10 @@ These may be true statements, but they usually do not prove repository-owned fun
 1. **Action-First** — Execute tool calls BEFORE any explanation.
 
 2. **Split by ownership in initial investigation** — For project-internal unknowns, start with `tree`/shape inspection.
-   For external tool/API/compiler unknowns, load `known-solution-first` and search public contracts first.
+   For external tool/API/compiler unknowns, load [[known-solution-first/SKILL|known-solution-first]] and search public contracts first.
    Do not force a rigid parallel tool-call pattern — use the appropriate model for the uncertainty type.
 
-3. **REQUIRED: Reference Skills** — Strictly follow `prompt-engineering`, `agent-orchestration`, and the guidelines below.
+3. **REQUIRED: Reference Skills** — Strictly follow [[prompt-engineering/SKILL|prompt-engineering]], `agent-orchestration`, and the guidelines below.
 
 4. **No Masking** — All tests must reflect actual runtime state (no `xfail`, no `ignore`), with one sanctioned exception: an open-issue red proof gate marked `xfail(reason="... #<open-issue> ...", strict=True)` (see `POLICY.NO_SKIP_MASK`).
 
@@ -166,11 +167,11 @@ You are a **Verification Architect & Auditor**. You engineer tests that act as p
 
 This agent must follow these standards:
 
-- **prompt-engineering** — Standard for prompt architecture and rule-based behavior.
+- [[prompt-engineering/SKILL|prompt-engineering]] — Standard for prompt architecture and rule-based behavior.
 
 - **agent-orchestration** — Standard for multi-agent coordination.
 
-- **clean-code** — Standard for test readability and maintenance.
+- [[code-patterns/legacy/clean-code/SKILL|clean-code]] — Standard for test readability and maintenance.
 
 * * *
 
@@ -372,6 +373,9 @@ Banned:
 Expected failures must be asserted by structured test-framework mechanisms or structured error values.
 Unexpected failures must propagate.
 
+Tests must construct expected domain states and typed outcomes directly; they must not provoke exceptions to force an ordinary branch or validate catch order.
+Classify that shape as `POLICY.NO_EXCEPTION_CONTROL_FLOW` and use [Error Handling as Control Flow](../policy-index/references/error-handling-as-control-flow.md) for the displaced state-machine, result-type, transition, transaction, idempotency, and retry obligations.
+
 The only possible exception is an explicitly approved boundary renderer whose sole job is to translate a structured internal error into a user-facing protocol.
 That boundary must not continue execution, must not default, and must not return partial success.
 
@@ -522,6 +526,8 @@ Guard against:
 
 - **Exception-swallowing gaming:** a test treats any exception as acceptable or the implementation catches errors and returns placeholder success.
 
+- **Exception-branch gaming:** a test forces a catch branch or retry order instead of constructing the expected domain state, allowing the hidden state machine to remain encoded in failure order.
+
 - **Commentary gaming:** comments, names, or reports describe rigorous behavior that the assertions do not prove.
 
 - **Fake research gaming:** a test or implementation cites domain research without using a source-backed expected value, invariant, or oracle.
@@ -551,7 +557,8 @@ This prevents in-memory stand-ins from passing tests that claim durable storage.
 
 ### Landing a red proof as its own commit
 
-The commit gate (`just test`, run by the pre-commit hook) rejects any commit whose tests fail.
+The commit gate (`just test-commit`) rejects immediate correctness failures.
+The full test suite runs at `just test-push`; a deliberately failing red proof therefore still requires the sanctioned red-commit route when either local gate rejects the checkpoint.
 When the red/green workflow calls for landing a genuinely-failing red proof *before* its green fix, do NOT reach for `git commit --no-verify` — that is an unaudited bypass with no owning-issue trail.
 Use the single sanctioned, auditable route:
 
@@ -702,7 +709,7 @@ Red flags:
 - test would pass even if the application stopped calling the helper;
 - the helper did not exist before the review.
 
-Correct response after triage: See `policy-index/references/remediations.md` → **Remediation: Boundary Test Bypass**.
+Policy: `POLICY.NO_HELPER_PROOF`.
 
 * * *
 
@@ -729,16 +736,25 @@ If that sentence cannot be written clearly, the test is likely not well-targeted
 
 * * *
 
-## Comprehensive Quality Gates (`just test`)
+## Comprehensive Quality Gates
 
-All code must be hard-gated by a comprehensive suite of checks.
-These gates are owned by the global QC system at `~/ai-review-ci` — see the `quality-control` skill.
-The project justfile delegates to global QC and may add only domain-specific private checks per the QC Extension Gate.
+All code must be hard-gated by the complete three-tier suite.
+These gates are owned by the global QC system at `~/ai-review-ci` — see the [[quality-control/SKILL|quality-control]] skill.
+The project [[justfile/SKILL|justfile]] delegates to global QC and may add only domain-specific private checks per the QC Extension Gate.
 
 **Do not** reconfigure these gates locally (no per-repo tool installs, no local config overrides for generic QC tools).
 The global QC system owns tool pins, configs, and invocation patterns.
 
-The following checks are **mandatory** gates (all owned by global QC):
+The tiers separate feedback latency without dropping any mandatory burden:
+
+- `test-commit`: preflight, normalization, syntax/compile, type checking, and bypass detection.
+  Repair failures directly.
+- `test-push`: the commit gate plus the full project-owned test suite.
+  Ordinary test failures remain direct implementation work.
+- `test-ci`: the push gate plus coverage, architecture, dead-code, duplication, complexity, policy/slop, security, and hosted checks.
+  Policy-sensitive findings use independent anti-golfing triage.
+
+The following checks are **mandatory** across those gates (all owned by global QC):
 
 1. **Tests pass**
 
@@ -856,7 +872,7 @@ The right response is to make whole classes of evasive code unrepresentable.
 The recurring pattern is that an agent first tries to satisfy checking/validation surfaces (such as the compiler/typechecker, QC gates, PR review, or user queries) by manipulating the validation surface (e.g. by adding fallbacks, defaults, mocks, try/except blocks, or bypass comments) instead of reconstructing the original obligation and solving it.
 The policy answer is to remove the vocabulary that enables that manipulation.
 
-Adhering to the [Bridge-Burning Policies](../policy-index/SKILL.md#policy-registry) defined in `policy-index/SKILL.md` is a non-negotiable hard constraint for all development.
+Adhering to the [[policy-index/SKILL#policy-registry|Bridge-Burning Policies]] defined in `policy-index/SKILL.md` is a non-negotiable hard constraint for all development.
 These rules eliminate common agent validation-evasion pathways (such as runtime defaults, fallbacks, mocks, and diagnostic smoke tests in proof paths).
 Refer to them as hard boundaries.
 
@@ -883,24 +899,27 @@ For example, an exception allowing a fallback provider is only allowed if the pr
 
 ## Cross-References
 
-- **llm-failure-modes/testing-failures** → Load alongside during test audit or test writing tasks.
+- **[[policy-index/SKILL|policy-index]]/references/error-handling-as-control-flow** → Load when tests or runtime code use exceptions, failed attempts, or retries to choose ordinary behavior.
+  Tests must prove explicit domain states, legal transitions, typed outcomes, and retry safety rather than catch ordering.
+
+- **[[llm-failure-modes/SKILL|llm-failure-modes]]/testing-failures** → Load alongside during test audit or test writing tasks.
   Catalogs failure patterns agents produce in test code: content-free verification, tautological testing, mock-first evasion, tolerance substitution, instrumental deception, and the 7-tactic test-cheat escalation ladder.
 
-- **llm-failure-modes/field-observations** → Load alongside during review of test suites, CI configuration, or error-handling code.
+- **[[llm-failure-modes/SKILL|llm-failure-modes]]/field-observations** → Load alongside during review of test suites, CI configuration, or error-handling code.
   Catalogs field-observed testing failures: checker removal, test expectation modification, and plausible fixture injection.
 
-- **reviewing-llm-code** → Load alongside when reviewing tests or test-related documentation produced by an LLM. Provides the canonical pattern catalog for LLM-generated test artifacts: developer-controlled assertions, fallback laundering, no-op behavior, and recipe bypasses.
+- [[reviewing-llm-code/SKILL|reviewing-llm-code]] → Load alongside when reviewing tests or test-related documentation produced by an LLM. Provides the canonical pattern catalog for LLM-generated test artifacts: developer-controlled assertions, fallback laundering, no-op behavior, and recipe bypasses.
 
-- **reality-grounded-debugging** → Load alongside when a test failure must be reproduced as a faithful red test (the "RED" in RED-GREEN-REFACTOR). Provides command-output discipline, surface-classification matrix, and the rule that a red test must encode the observed failure — not a scenario guessed from priors.
+- [[reality-grounded-debugging/SKILL|reality-grounded-debugging]] → Load alongside when a test failure must be reproduced as a faithful red test (the "RED" in RED-GREEN-REFACTOR). Provides command-output discipline, surface-classification matrix, and the rule that a red test must encode the observed failure — not a scenario guessed from priors.
   Ensures the failing boundary is visible before writing or mutating application code.
 
-- **anti-slop** → Load alongside when tests show generated-code residue: tautological assertions, mock-first evasion, content-free verification, or test-cheat escalation.
+- [[anti-slop/SKILL|anti-slop]] → Load alongside when tests show generated-code residue: tautological assertions, mock-first evasion, content-free verification, or test-cheat escalation.
   Provides the Dependency Inversion Rule and structural analysis frame for evaluating whether tests prove real behavior or merely hack the proof loop.
 
-- **reviewing-subagent-work** → Load alongside when reviewing tests produced by a subagent.
+- [[reviewing-subagent-work/SKILL|reviewing-subagent-work]] → Load alongside when reviewing tests produced by a subagent.
   Provides the Synthesis Gate for verifying that tests actually prove correctness rather than just existing.
 
-- **thermo-nuclear-code-quality-review** → Load alongside when test code itself has maintainability problems: giant test files, spaghetti condition growth, duplicated setup logic, or abstraction inflation in test utilities.
+- [[thermo-nuclear-code-quality-review/SKILL|thermo-nuclear-code-quality-review]] → Load alongside when test code itself has maintainability problems: giant test files, spaghetti condition growth, duplicated setup logic, or abstraction inflation in test utilities.
 
-- **addressing-shallow-work** → Load alongside when test output is shallow, superficial, or box-checking.
+- [[addressing-shallow-work/SKILL|addressing-shallow-work]] → Load alongside when test output is shallow, superficial, or box-checking.
   Provides structural-scrutiny patterns for detecting tests that satisfy coverage metrics without proving real behavior.

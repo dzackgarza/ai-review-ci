@@ -30,7 +30,7 @@ def hook_source_repo(tmp_path: pathlib.Path) -> pathlib.Path:
     repo = tmp_path / "ai-review-ci"
     repo.mkdir()
     subprocess.run(["git", "init", "-q"], cwd=repo, env=git_test_env(), check=True)
-    (repo / "justfile").write_text("test:\n    @true\n\ntest-ci:\n    @true\n")
+    (repo / "justfile").write_text("test-commit:\n    @true\n\ntest-push:\n    @true\n\ntest-ci:\n    @true\n")
     subprocess.run(["git", "add", "justfile"], cwd=repo, env=git_test_env(), check=True)
     subprocess.run(
         [
@@ -64,10 +64,10 @@ def hook_source_repo(tmp_path: pathlib.Path) -> pathlib.Path:
 @pytest.mark.parametrize(
     ("hook_dir", "hook", "recipe"),
     [
-        ("global-hooks", "pre-commit", "test"),
-        ("global-hooks", "pre-push", "test-ci"),
-        ("repo-hooks", "pre-commit", "test"),
-        ("repo-hooks", "pre-push", "test-ci"),
+        ("global-hooks", "pre-commit", "test-commit"),
+        ("global-hooks", "pre-push", "test-push"),
+        ("repo-hooks", "pre-commit", "test-commit"),
+        ("repo-hooks", "pre-push", "test-push"),
     ],
 )
 def test_ai_review_ci_hooks_skip_linked_ai_review_ci_worktrees(
@@ -103,10 +103,10 @@ def test_ai_review_ci_hooks_skip_linked_ai_review_ci_worktrees(
 @pytest.mark.parametrize(
     ("hook_dir", "hook", "recipe"),
     [
-        ("global-hooks", "pre-commit", "test"),
-        ("global-hooks", "pre-push", "test-ci"),
-        ("repo-hooks", "pre-commit", "test"),
-        ("repo-hooks", "pre-push", "test-ci"),
+        ("global-hooks", "pre-commit", "test-commit"),
+        ("global-hooks", "pre-push", "test-push"),
+        ("repo-hooks", "pre-commit", "test-commit"),
+        ("repo-hooks", "pre-push", "test-push"),
     ],
 )
 def test_ai_review_ci_hooks_still_run_in_downstream_repos(
@@ -155,10 +155,10 @@ def _init_downstream(path: pathlib.Path, recipe: str, body: str, remote: str | N
 
 
 BYPASS_HOOKS = [
-    ("global-hooks", "pre-commit", "test"),
-    ("global-hooks", "pre-push", "test-ci"),
-    ("repo-hooks", "pre-commit", "test"),
-    ("repo-hooks", "pre-push", "test-ci"),
+    ("global-hooks", "pre-commit", "test-commit"),
+    ("global-hooks", "pre-push", "test-push"),
+    ("repo-hooks", "pre-commit", "test-commit"),
+    ("repo-hooks", "pre-push", "test-push"),
 ]
 
 

@@ -5,7 +5,7 @@
 The durable doctrine for global QC and review behavior lives in the [Global QC and Review Doctrine](https://github.com/dzackgarza/ai-review-ci/wiki/Global-QC-and-Review-Doctrine) wiki page.
 Use it when changing gates, scaffolds, review runners, reviewer state, or downstream enforcement contracts.
 
-Centrally-managed, OpenCode-powered review CI. Target repositories carry three thin trigger workflows plus a root `.ai-review-ci.toml` declaration; everything else — the reusable workflow, the review runner, the validator, the reviewer home template, the prompt corpus — lives here and is cloned inside the CI runner at execution time.
+Centrally-managed, OpenCode-powered review CI. Target repositories carry three thin trigger workflows plus explicit `ai_review_ci_*` contract variables in their root `justfile`; everything else — the reusable workflow, the review runner, the validator, the reviewer home template, the prompt corpus — lives here and is cloned inside the CI runner at execution time.
 Updating this repo updates every consumer on their next run.
 
 Two review types:
@@ -40,7 +40,7 @@ uvx --from git+https://github.com/dzackgarza/ai-review-ci ai-review-ci install -
 
 Pass `--profile <profile>` with one of `python`, `bun`, `bun-playwright`, `bun-python`, `rust`, or `sage`. The profile is the enforced project bin: it selects the required project shape, the central justfile delegation target, the installed PR gates, and the branch-protection checks.
 
-This installs the complete QC enforcement surface: it writes the root manifest, writes the three trigger workflows, and applies branch protection requiring the installed PR gate jobs for the declared profile.
+This installs the complete QC enforcement surface: it writes the root `justfile` contract, writes the three trigger workflows, and applies branch protection requiring the installed PR gate jobs for the declared profile.
 
 | File | Triggers |
 | --- | --- |
@@ -80,33 +80,48 @@ The canonical templates live in [`src/ai_review_ci/templates/`](src/ai_review_ci
 
 The reusable workflow also accepts three optional repo-owned configuration inputs:
 
-- `advisory` (boolean, default `false`): advisory runs upload the full SARIF ledger snapshot but never let findings determine the workflow conclusion — the tier-1 enforcement step is skipped while every infrastructure step still fails loudly. Use this for a continuous, non-blocking stream of review reports on `main`; findings are then triaged as code scanning alerts (dismissed with reason, or fixed), and dispositions feed later reviewer context as do-not-re-raise instructions.
-- `policy_paths` (string, default empty): newline-delimited repo-relative document paths inlined into the reviewer prompt in every scope (`#` comments and blank lines are skipped; a missing path fails the run). Use it to hand the reviewer a repo-local policy catalogue — style guides, terminology dictionaries, mathematical specifications — beyond the README/AGENTS docs that repo sweeps auto-collect.
+- `advisory` (boolean, default `false`): advisory runs upload the full SARIF ledger snapshot but never let findings determine the workflow conclusion — the tier-1 enforcement step is skipped while every infrastructure step still fails loudly.
+  Use this for a continuous, non-blocking stream of review reports on `main`; findings are then triaged as code scanning alerts (dismissed with reason, or fixed), and dispositions feed later reviewer context as do-not-re-raise instructions.
+- `policy_paths` (string, default empty): newline-delimited repo-relative document paths inlined into the reviewer prompt in every scope (`#` comments and blank lines are skipped; a missing path fails the run).
+  Use it to hand the reviewer a repo-local policy catalogue — style guides, terminology dictionaries, mathematical specifications — beyond the README/AGENTS docs that repo sweeps auto-collect.
 - `focus_prompt` (string, default empty): short repo-specific instructions inlined into the reviewer prompt, for narrowing the review to particular concerns (for example, mathematical correctness against a named specification).
-- `context_archive` (string, default empty): repo-relative path to a tar archive — the repo-assembled **review packet**. The runner explodes it into `.review-context/` inside the reviewer repo; a top-level `PROMPT.md` leads the inlined section, every other `*.md` document is inlined in sorted path order, and non-Markdown files are listed by path for the reviewer to read from disk. This is the extensible context surface: the consumer repo owns a recipe that assembles the packet (from tracked files, untracked vault documents, other repos — anything), and the archive itself is the only thing tracked.
+- `context_archive` (string, default empty): repo-relative path to a tar archive — the repo-assembled **review packet**. The runner explodes it into `.review-context/` inside the reviewer repo; a top-level `PROMPT.md` leads the inlined section, every other `*.md` document is inlined in sorted path order, and non-Markdown files are listed by path for the reviewer to read from disk.
+  This is the extensible context surface: the consumer repo owns a recipe that assembles the packet (from tracked files, untracked vault documents, other repos — anything), and the archive itself is the only thing tracked.
 
-Report schemas accept an honest empty report: `findings: []` is valid, and the substantive-finding requirement only rejects padding in non-empty reports. A reviewer that finds nothing must submit an empty report rather than invent debt.
+Report schemas accept an honest empty report: `findings: []` is valid, and the substantive-finding requirement only rejects padding in non-empty reports.
+A reviewer that finds nothing must submit an empty report rather than invent debt.
 
 Requirements in the target repo: GitHub code scanning enabled (free for public repos), GitHub CLI auth with permission to edit branch protection, the target branch named in `--branch`, and a repo shape that satisfies the declared `--profile`. LLM review jobs are signal-only process checks: they upload SARIF and post review threads, but they do not compute or fail on a health score.
 The merge gate is deterministic QC plus evidence-backed resolution of reviewer-authored PR threads.
 
-### QC manifest and doctor
+### QC justfile contract and doctor
 
-Each installed target repo carries `.ai-review-ci.toml` at repository root.
-The manifest is the dashboard and gate declaration of record:
+Each installed target repo carries an executable QC contract in its repository-root `justfile`. The `ai_review_ci_*` variables are the declaration surface that `doctor` evaluates, and the public recipes are the execution surface that `doctor` cross-checks:
 
-```toml
-schema_version = 1
-profile = "bun-playwright"
-installed_ref = "main"
-release_channel = "main"
-workflow_template_version = 1
-local_delegation = "global-justfile"
-default_branch = "main"
+```justfile
+ai_review_ci_schema_version := "1"
+ai_review_ci_profile := "bun-playwright"
+ai_review_ci_ref := "main"
+ai_review_ci_release_channel := "main"
+ai_review_ci_workflow_template_version := "1"
+ai_review_ci_local_delegation := "global-justfile"
+ai_review_ci_default_branch := "main"
+
+test-commit:
+    @just -f ~/ai-review-ci/justfiles/bun.just -d . test-commit
+
+test-push:
+    @just -f ~/ai-review-ci/justfiles/bun.just -d . test-push
+
+test-ci:
+    @just -f ~/ai-review-ci/justfiles/bun.just -d . test-ci
+
+app-boot:
+    @just -f ~/ai-review-ci/justfiles/bun.just -d . app-boot
 ```
 
-`schema_version`, `profile`, `installed_ref`, `release_channel`, `workflow_template_version`, `local_delegation`, and `default_branch` are required.
-A repo declares only what type of project it is; there is no local opt-out of global QC. A repo with active findings is noncompliant — there is no manifest field that suppresses a finding.
+`ai_review_ci_schema_version`, `ai_review_ci_profile`, `ai_review_ci_ref`, `ai_review_ci_release_channel`, `ai_review_ci_workflow_template_version`, `ai_review_ci_local_delegation`, and `ai_review_ci_default_branch` are required.
+A repo declares its executable QC contract; there is no local opt-out of global QC. A repo with active findings is noncompliant — extra justfile variables do not suppress findings.
 
 Inspect a target repo with:
 
@@ -117,21 +132,23 @@ uvx --from git+https://github.com/dzackgarza/ai-review-ci ai-review-ci doctor-pr
 uvx --from git+https://github.com/dzackgarza/ai-review-ci ai-review-ci doctor-schema
 ```
 
-The doctor reports the tool and schema version, target root, origin remote, HEAD, declaration hash, declared and effective profile, required and observed workflow refs, required and observed justfile delegation, branch-protection requirements and observations, canonical label-set alignment (missing, drifted, and case/spelling-variant labels against `data/labels.json`; extra repo-specific labels are allowed), profile proof requirements, findings, remediation commands, invalidation inputs, installation state, and dashboard `global_status`. Consumers should use `global_status` rather than re-infer status from workflow filenames.
+The doctor reports the tool and schema version, target root, origin remote, HEAD, justfile declaration hash, declared and effective profile, required and observed workflow refs, required and observed justfile delegation, branch-protection requirements and observations, canonical label-set alignment (missing, drifted, and case/spelling-variant labels against `data/labels.json`; extra repo-specific labels are allowed), profile proof requirements, findings, remediation commands, invalidation inputs, installation state, and dashboard `global_status`. Consumers should use `global_status` rather than re-infer status from workflow filenames.
 
 Status mapping is fixed:
 
 | Doctor observation | `installation_state` | Dashboard `global_status` |
 | --- | --- | --- |
-| manifest, workflows, delegation, profile proof, branch protection, and canonical label alignment satisfy the declared contract | `compliant` | `current` |
-| installed workflow refs differ from the manifest's required ref | `outdated` | `stale` |
-| manifest missing, required workflow missing, wrong profile, wrong delegation, missing `bun-playwright` app boot, missing branch-protection contexts, or canonical labels missing/drifted/present only as a case or spelling variant | `uninstalled` or `noncompliant` | `misconfigured` |
+| justfile contract, workflows, delegation, profile proof, branch protection, and canonical label alignment satisfy the declared contract | `compliant` | `current` |
+| installed workflow refs differ from the justfile contract's required ref | `outdated` | `stale` |
+| justfile contract missing, required workflow missing, wrong profile, wrong delegation, missing `bun-playwright` app boot, missing branch-protection contexts, or canonical labels missing/drifted/present only as a case or spelling variant | `uninstalled` or `noncompliant` | `misconfigured` |
 | branch protection or canonical label alignment cannot be verified from the target remote/API state | `unknown` | `unverifiable` |
 
 Only `current` exits zero.
 All other statuses fail the command and the `qc-doctor` PR gate.
 
-Every public `just test` begins with `doctor-preflight`. It is the local, no-network subset of doctor: it requires a valid manifest and the declared profile's required project shape before normalization, type checking, or tests run. Composite project shapes are centrally defined profiles; `bun-python` requires both Python and Bun project evidence and delegates to both central gates. A preflight failure is project initialization work, not a code-quality finding and must not enter the QC triage routes.
+Every public `just test-commit` begins with `doctor-preflight`. It is the local, no-network subset of doctor: it requires a valid justfile contract and the declared profile's required project shape before normalization or type checking runs.
+Composite project shapes are centrally defined profiles; `bun-python` requires both Python and Bun project evidence and delegates to all three central gates.
+A preflight failure is project initialization work, not a policy-triage finding.
 
 ## Installing QC Surfaces
 
@@ -146,7 +163,8 @@ cd ~/ai-review-ci
 ### Global Git hooks
 
 Global hooks are user-level Git hooks.
-The QC stack is two-tier: `pre-commit` runs `just test` (the commit gate — correctness and normalization only) and `pre-push` runs `just test-ci` (the push gate — the full style/slop/coverage stack on top of the commit gate).
+The QC stack has three gates: `pre-commit` runs `just test-commit` for immediate local correctness, `pre-push` runs `just test-push` for the full project-owned suite, and pull-request CI runs `just test-ci` for long, hosted, and policy-sensitive acceptance checks.
+General and slop review start on the first coherent push in parallel with `test-ci`, so architectural drift is reviewed before the branch is polished around the wrong design.
 The install recipe requires `GIT_GLOBAL_HOOKS_DIR` to name the explicit hooks directory, symlinks `global-hooks/pre-commit` and `global-hooks/pre-push` into that directory, and sets the user's global `core.hooksPath` to the same value:
 
 ```bash
@@ -192,6 +210,7 @@ just install-qc-scaffold sage /path/to/new/repo
 
 The recipe copies files from `scaffolds/<profile>/` and refuses to overwrite existing files.
 Edit the tracked scaffold here when the standard project surface changes; do not copy sample snippets into downstream repos by hand.
+Because installed justfiles are repo-owned, changing a public gate recipe is an atomic rollout rather than an installer upgrade: update the central justfiles, scaffolds, doctor, and hooks, then commit the matching thin delegation recipes to every governed downstream default branch before the hook starts calling the new names.
 
 The scaffold contents are intentionally small.
 They install the repo-local command surface; the actual QC behavior remains global.
@@ -199,8 +218,11 @@ They install the repo-local command surface; the actual QC behavior remains glob
 Python:
 
 ```justfile
-test:
-    @just -f ~/ai-review-ci/justfiles/python.just -d . test
+test-commit:
+    @just -f ~/ai-review-ci/justfiles/python.just -d . test-commit
+
+test-push:
+    @just -f ~/ai-review-ci/justfiles/python.just -d . test-push
 
 test-ci:
     @just -f ~/ai-review-ci/justfiles/python.just -d . test-ci
@@ -209,8 +231,11 @@ test-ci:
 TypeScript/Bun:
 
 ```justfile
-test:
-    @just -f ~/ai-review-ci/justfiles/bun.just -d . test
+test-commit:
+    @just -f ~/ai-review-ci/justfiles/bun.just -d . test-commit
+
+test-push:
+    @just -f ~/ai-review-ci/justfiles/bun.just -d . test-push
 
 test-ci:
     @just -f ~/ai-review-ci/justfiles/bun.just -d . test-ci
@@ -219,8 +244,11 @@ test-ci:
 TypeScript/Bun project with mandatory Playwright GUI proof:
 
 ```justfile
-test:
-    @just -f ~/ai-review-ci/justfiles/bun.just -d . test
+test-commit:
+    @just -f ~/ai-review-ci/justfiles/bun.just -d . test-commit
+
+test-push:
+    @just -f ~/ai-review-ci/justfiles/bun.just -d . test-push
 
 test-ci:
     @just -f ~/ai-review-ci/justfiles/bun.just -d . test-ci
@@ -234,8 +262,11 @@ app-boot:
 Rust:
 
 ```justfile
-test:
-    @just -f ~/ai-review-ci/justfiles/rust.just -d . test
+test-commit:
+    @just -f ~/ai-review-ci/justfiles/rust.just -d . test-commit
+
+test-push:
+    @just -f ~/ai-review-ci/justfiles/rust.just -d . test-push
 
 test-ci:
     @just -f ~/ai-review-ci/justfiles/rust.just -d . test-ci
@@ -244,8 +275,11 @@ test-ci:
 SageMath:
 
 ```justfile
-test:
-    @just -f ~/ai-review-ci/justfiles/sage.just -d . test
+test-commit:
+    @just -f ~/ai-review-ci/justfiles/sage.just -d . test-commit
+
+test-push:
+    @just -f ~/ai-review-ci/justfiles/sage.just -d . test-push
 
 test-ci:
     @just -f ~/ai-review-ci/justfiles/sage.just -d . test-ci
@@ -328,17 +362,25 @@ The non-CI quality-control stack is split by operational concern:
 Use the migrated quality gate directly from a target repo:
 
 ```bash
-just -f ~/ai-review-ci/justfiles/python.just -d . test
+just -f ~/ai-review-ci/justfiles/python.just -d . test-commit
 ```
 
-The quality gate is split into two tiers so that committing during feature work is cheap while heavier triage is deferred to push:
+The gates are split by failure ownership, runtime, and gaming surface:
 
-- `just test` (commit tier, run by `pre-commit`) catches *plainly incorrect* code: project preflight, shared normalization (Markdown/JSON/YAML formatting + Semgrep autofix), language auto-fixers (ruff/biome/cargo fmt), syntax, type-checking (mypy/tsc/clippy), the project's own tests (no coverage threshold), and bypass-comment detection.
-- `just test-ci` (push tier, run by `pre-push`) depends on `test` and adds the *style/slop/coverage* stack: 100% coverage + diff-cover, deptry, import-linter, dead-code (vulture/grain/knip), jscpd, lizard, ast-grep, semgrep, vibecheck, and ai-slop.
+- `just test-commit` (pre-commit) runs preflight, deterministic normalization, syntax/compile checks, type checking, and bypass detection.
+  Its failures are immediate local repair: fix the reported object and recommit.
+  They do not enter the returned-PR-feedback triage workflow.
+- `just test-push` (pre-push) includes the commit gate and runs the full project-owned test suite.
+  Ordinary build and test failures remain direct implementation work.
+- `just test-ci` (required PR context) includes the push gate and adds coverage/diff-cover, dependency and import boundaries, dead-code, duplication, complexity, policy, slop, security, and hosted checks.
+  Policy-sensitive findings retain independent triage because agents can game them by suppressing diagnostics, weakening thresholds, or golfing error counts.
+
+The first coherent push starts deterministic CI and general/slop review in parallel.
+Review is a separate acceptance channel, not a final step postponed until every CI detail is already green.
 
 Every language-specific tier runs shared normalization first: Markdown/JSON/YAML formatting and Semgrep autofix happen before language-specific checks and before verification gates.
 
-The root `test` recipe for this repo routes through that same migrated hierarchy.
+The root recipes for this repo route through that same hierarchy.
 
 ### How a run works
 
@@ -360,7 +402,7 @@ trigger -> _review.yml (cross-repo reusable workflow)
               FIX-guided rejection -> repeat until exit 0
   -> `ai-review-ci to-sarif` -> upload to code scanning
   -> [diff scope] `ai-review-ci post-threads` posts resolvable review threads to the PR
-  -> [diff scope] thread-resolution gate verifies ai-review PR threads are resolved with commit or disposition-ledger evidence
+  -> [diff scope] thread-resolution gate verifies resolved review threads carry complete thread-local disposition evidence
 ```
 
 ### The agent contract
@@ -385,4 +427,4 @@ Resolved PR threads and dismissed/fixed code-scanning alerts are dispositions, n
 ## Developing
 
 Edit here, push to `main`, and every consumer's next run uses the new behavior (consumers that pinned a different `@ref` in their trigger files update on their chosen ref).
-The reusable workflow and the runner recipes take all paths from the CI-time clone, so downstream repos contain only their trigger files and root `.ai-review-ci.toml` declaration.
+The reusable workflow and the runner recipes take all paths from the CI-time clone, so downstream repos contain only their trigger files and root `justfile` contract.

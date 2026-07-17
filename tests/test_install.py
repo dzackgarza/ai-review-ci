@@ -15,7 +15,6 @@ from ai_review_ci.install import (
     _prove_installation,
     _template_text,
     _write_aislop_config,
-    _write_manifest,
     _write_pr_template,
     _write_review_guidelines,
     _write_scaffold,
@@ -109,7 +108,7 @@ def test_install_writes_pr_template_with_gate_marker(tmp_path: pathlib.Path) -> 
     assert "Linked triaged issue(s)" in text
     assert "started as a draft" in text
     assert "Ready-for-review was requested only after" in text
-    assert "top-level PR comment titled `Review feedback disposition ledger`" in text
+    assert "every resolved substantive item carries its own evidenced disposition" in text
 
 
 def test_install_writes_canonical_aislop_config(tmp_path: pathlib.Path) -> None:
@@ -174,6 +173,8 @@ def test_install_writes_trigger_workflows(tmp_path: pathlib.Path) -> None:
     assert "report_type: general" in general
     assert "scope: repo" in general
     pr = (wf / "review-pr.yml").read_text()
+    assert "uses: dzackgarza/ai-review-ci/.github/workflows/_qc.yml@main" in pr
+    assert "tier: test-ci" in pr
     assert "scope: diff" in pr
     assert "gate: deterministic-diff" in pr
     assert "gate: delegation-conformance" in pr
@@ -185,6 +186,14 @@ def test_install_writes_trigger_workflows(tmp_path: pathlib.Path) -> None:
     assert "pull_request" in pr
 
 
+@pytest.mark.parametrize("profile", ["python", "bun", "bun-playwright", "bun-python", "rust", "sage"])
+def test_repo_and_packaged_scaffolds_are_identical(profile: str) -> None:
+    repo_scaffold = (ROOT / "scaffolds" / profile / "justfile").read_text()
+    packaged_scaffold = (ROOT / "src" / "ai_review_ci" / "scaffolds" / profile / "justfile").read_text()
+
+    assert repo_scaffold == packaged_scaffold
+
+
 def test_install_writes_bun_playwright_app_boot_gate(tmp_path: pathlib.Path) -> None:
     repo = _git_repo(tmp_path)
     _write_trigger_workflows(repo, "bun-playwright")
@@ -194,16 +203,19 @@ def test_install_writes_bun_playwright_app_boot_gate(tmp_path: pathlib.Path) -> 
     assert "profile: 'bun-playwright'" in pr
 
 
-def test_install_writes_manifest_contract(tmp_path: pathlib.Path) -> None:
+def test_install_writes_justfile_contract_variables(tmp_path: pathlib.Path) -> None:
     repo = _git_repo(tmp_path)
 
-    _write_manifest(repo, "python", "main", "main", "main")
+    _write_scaffold(repo, "python", branch="trunk", ref="release/v1", release_channel="stable")
 
-    manifest = (repo / ".ai-review-ci.toml").read_text()
-    assert 'profile = "python"' in manifest
-    assert 'installed_ref = "main"' in manifest
-    assert 'release_channel = "main"' in manifest
-    assert 'local_delegation = "global-justfile"' in manifest
+    justfile = (repo / "justfile").read_text()
+    assert 'ai_review_ci_schema_version := "1"' in justfile
+    assert 'ai_review_ci_profile := "python"' in justfile
+    assert 'ai_review_ci_ref := "release/v1"' in justfile
+    assert 'ai_review_ci_release_channel := "stable"' in justfile
+    assert 'ai_review_ci_workflow_template_version := "1"' in justfile
+    assert 'ai_review_ci_local_delegation := "global-justfile"' in justfile
+    assert 'ai_review_ci_default_branch := "trunk"' in justfile
 
 
 def test_install_writes_profile_scaffold(tmp_path: pathlib.Path) -> None:
@@ -271,7 +283,6 @@ def test_install_local_files_finalize_with_doctor(tmp_path: pathlib.Path) -> Non
 
     _write_scaffold(repo, "python")
     _write_trigger_workflows(repo, "python")
-    _write_manifest(repo, "python", "main", "main", "main")
     _prove_installation(repo)
 
     assert (repo / "justfile").read_text() == (ROOT / "scaffolds" / "python" / "justfile").read_text()
@@ -289,7 +300,7 @@ def test_cli_install_uses_real_gh_and_fails_before_final_doctor_for_unavailable_
     assert "FATAL: gh api --method PUT failed:" in result.stderr
     assert (repo / "justfile").read_text() == (ROOT / "scaffolds" / "python" / "justfile").read_text()
     assert (repo / ".github" / "workflows" / "review-pr.yml").exists()
-    assert (repo / ".ai-review-ci.toml").exists()
+    assert not (repo / ".ai-review-ci.toml").exists()
     assert "doctor final proof" not in result.stdout
     assert "\nDone." not in result.stdout
 
@@ -301,7 +312,6 @@ def test_install_final_doctor_rejects_target_without_profile_shape(
     repo = _git_repo(tmp_path)
     _write_scaffold(repo, "python")
     _write_trigger_workflows(repo, "python")
-    _write_manifest(repo, "python", "main", "main", "main")
 
     with pytest.raises(SystemExit):
         _prove_installation(repo)
@@ -314,9 +324,34 @@ def test_install_final_doctor_rejects_broken_local_delegation(
 ) -> None:
     repo = _git_repo(tmp_path)
     (repo / "pyproject.toml").write_text('[project]\nname = "target"\nversion = "0.1.0"\n')
-    (repo / "justfile").write_text("test:\n    @true\n\ntest-ci:\n    @true\n")
+    (repo / "justfile").write_text(
+        "\n".join(
+            [
+                "# broken local delegation.",
+                'ai_review_ci_schema_version := "1"',
+                'ai_review_ci_profile := "python"',
+                'ai_review_ci_ref := "main"',
+                'ai_review_ci_release_channel := "main"',
+                'ai_review_ci_workflow_template_version := "1"',
+                'ai_review_ci_local_delegation := "global-justfile"',
+                'ai_review_ci_default_branch := "main"',
+                "",
+                "# Broken commit gate.",
+                "test-commit:",
+                "    @true",
+                "",
+                "# Broken push gate.",
+                "test-push:",
+                "    @true",
+                "",
+                "# Broken CI gate.",
+                "test-ci:",
+                "    @true",
+                "",
+            ]
+        )
+    )
     _write_trigger_workflows(repo, "python")
-    _write_manifest(repo, "python", "main", "main", "main")
 
     with pytest.raises(SystemExit):
         _prove_installation(repo)
@@ -421,6 +456,38 @@ def test_trigger_inputs_are_declared_by_reusable_workflow(template: str, profile
     assert checked_a_reusable_call, f"{template} (profile={profile}) calls no in-repo reusable workflow"
 
 
+@pytest.mark.parametrize("profile", SUPPORTED_PROFILES)
+@pytest.mark.parametrize("template", TEMPLATES)
+def test_trigger_permissions_cover_reusable_workflow_permissions(template: str, profile: str) -> None:
+    """A called workflow cannot elevate permissions omitted by its caller."""
+    workflow = yaml.safe_load(_template_text(template, profile, "main"))
+    checked_reusable_call = False
+    permission_rank = {"none": 0, "read": 1, "write": 2}
+
+    for job_name, job in workflow["jobs"].items():
+        target = _reusable_target(job)
+        if target is None:
+            continue
+        checked_reusable_call = True
+        callee_jobs = _workflow_jobs(target)
+        required: dict[str, str] = {}
+        for callee in callee_jobs.values():
+            for scope, level in (callee.get("permissions") or {}).items():
+                if permission_rank[level] > permission_rank[required.get(scope, "none")]:
+                    required[scope] = level
+        granted = job.get("permissions") or {}
+        insufficient = {
+            scope: {"required": level, "granted": granted.get(scope, "none")}
+            for scope, level in required.items()
+            if permission_rank[granted.get(scope, "none")] < permission_rank[level]
+        }
+        assert not insufficient, (
+            f"{template} (profile={profile}) job {job_name!r} under-grants reusable-workflow permissions {insufficient} required by {target}; GitHub rejects this at startup"
+        )
+
+    assert checked_reusable_call, f"{template} (profile={profile}) calls no reusable workflow"
+
+
 def test_gates_qc_doctor_grants_labels_read_scope() -> None:
     """Regression guard for #224.
 
@@ -473,7 +540,7 @@ def test_skip_scaffold_final_proof_adopts_brownfield_non_delegating_justfile(
 ) -> None:
     # Brownfield adoption (#202): a repo that predates ai-review-ci owns a
     # substantive, non-delegating top-level justfile. Under --skip-scaffold the
-    # installer writes the manifest, triggers, and PR template and leaves the
+    # installer writes the triggers and PR template and leaves the
     # justfile untouched — justfile delegation/conformance convergence is
     # deferred to a `doctor` finding by design. The final proof step must
     # therefore reach SUCCESS on exactly this intended-success state: everything
@@ -494,7 +561,6 @@ def test_skip_scaffold_final_proof_adopts_brownfield_non_delegating_justfile(
     existing.write_text(brownfield_justfile)
     # Everything install writes under --skip-scaffold (the scaffold itself is skipped):
     _write_trigger_workflows(repo, "python")
-    _write_manifest(repo, "python", "main", "main", "main")
     _write_pr_template(repo)
     # A conformant adopted repo carries the current review-guidelines section
     # (the doctor gate requires it; #232 tracks install writing it). Only the
@@ -508,7 +574,7 @@ def test_skip_scaffold_final_proof_adopts_brownfield_non_delegating_justfile(
 
     # Success end state: adoption completed and the brownfield justfile is intact.
     assert existing.read_text() == brownfield_justfile
-    assert (repo / ".ai-review-ci.toml").exists()
+    assert not (repo / ".ai-review-ci.toml").exists()
     for name in TEMPLATES:
         assert (repo / ".github" / "workflows" / name).is_file()
 
@@ -527,7 +593,6 @@ def test_skip_scaffold_final_proof_still_aborts_on_non_justfile_fault(
     repo = _git_repo(tmp_path)
     (repo / "pyproject.toml").write_text('[project]\nname = "target"\nversion = "0.1.0"\n')
     (repo / "justfile").write_text("# pre-existing brownfield justfile\ntest:\n    @true\n")
-    _write_manifest(repo, "python", "main", "main", "main")
     # Triggers deliberately NOT written: a genuine non-deferred fault remains.
 
     with pytest.raises(SystemExit):
@@ -546,7 +611,7 @@ def test_cli_install_skip_scaffold_bypasses_scaffold_overwrite_guard(
     # lets install proceed on a repo that already owns a top-level justfile
     # instead of hard-exiting at the scaffold-overwrite guard. This proves the
     # CLI threads the flag end to end: the scaffold guard does NOT fire, the
-    # existing justfile is left untouched, and the manifest/triggers are written.
+    # existing justfile is left untouched, and the triggers are written.
     # Full adoption completion is proven at the proof-step boundary by
     # test_skip_scaffold_final_proof_adopts_brownfield_non_delegating_justfile;
     # here execution reaches the real gh branch-protection boundary and fails
@@ -554,7 +619,7 @@ def test_cli_install_skip_scaffold_bypasses_scaffold_overwrite_guard(
     repo = _git_repo(tmp_path)
     (repo / "pyproject.toml").write_text('[project]\nname = "target"\nversion = "0.1.0"\n')
     existing = repo / "justfile"
-    existing.write_text("# pre-existing brownfield justfile\ntest:\n    @true\n")
+    existing.write_text("# pre-existing brownfield justfile\ntest-commit:\n    @true\n")
 
     result = _run_cli_install(repo, skip_scaffold=True)
 
@@ -562,8 +627,8 @@ def test_cli_install_skip_scaffold_bypasses_scaffold_overwrite_guard(
     assert "refusing to overwrite existing scaffold" not in combined, combined
     assert result.returncode == 1, combined
     assert "FATAL: gh api --method PUT failed:" in result.stderr, combined
-    assert existing.read_text() == "# pre-existing brownfield justfile\ntest:\n    @true\n"
-    assert (repo / ".ai-review-ci.toml").exists()
+    assert existing.read_text() == "# pre-existing brownfield justfile\ntest-commit:\n    @true\n"
+    assert not (repo / ".ai-review-ci.toml").exists()
     assert (repo / ".github" / "workflows" / "review-pr.yml").exists()
 
 
@@ -574,7 +639,7 @@ def test_cli_install_without_skip_scaffold_still_refuses_existing_justfile(
     # --skip-scaffold a pre-existing justfile still hard-exits and nothing is
     # written (#202 keeps the honest refusal for the accidental case).
     repo = _git_repo(tmp_path)
-    (repo / "justfile").write_text("test:\n    @true\n")
+    (repo / "justfile").write_text("test-commit:\n    @true\n")
 
     result = _run_cli_install(repo)
 
@@ -594,6 +659,25 @@ def test_qc_tier_step_does_not_export_gh_token_tier_wide() -> None:
     assert "GH_TOKEN" not in (tier.get("env") or {})
 
 
+def test_qc_workflow_accepts_only_remote_acceptance_tiers() -> None:
+    job = _workflow_jobs("_qc.yml")["qc"]
+    validation = next(step for step in job["steps"] if isinstance(step, dict) and step.get("name") == "Validate inputs")
+
+    assert "test-ci|ambient" in validation["run"]
+    assert "test|test-ci|ambient" not in validation["run"]
+
+
+@pytest.mark.parametrize("profile", ["python", "bun-playwright"])
+def test_pr_qc_and_reviews_start_in_parallel(profile: str) -> None:
+    workflow = yaml.safe_load(_template_text("review-pr.yml", profile, "main"))
+    jobs = workflow["jobs"]
+
+    assert jobs["qc-ci"]["with"]["tier"] == "test-ci"
+    assert "needs" not in jobs["qc-ci"]
+    assert "needs" not in jobs["general"]
+    assert "needs" not in jobs["slop"]
+
+
 def test_qc_scopes_gh_token_to_isolated_gh_boundary_step() -> None:
     # #218: only the label suite's real-boundary gh tests receive the token, in
     # their own step running an isolated recipe — not the tier-wide
@@ -605,3 +689,4 @@ def test_qc_scopes_gh_token_to_isolated_gh_boundary_step() -> None:
     run = step.get("run", "")
     assert "test-gh-boundary" in run
     assert '"$QC_TIER"' not in run
+    assert step["if"] == "github.repository == 'dzackgarza/ai-review-ci'"

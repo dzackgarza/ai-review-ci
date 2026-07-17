@@ -7,7 +7,7 @@ on:
         required: true
         type: string
       profile:
-        description: 'Curated project profile: python, bun, bun-playwright, rust, or sage'
+        description: 'Curated project profile: python, bun, bun-python, bun-playwright, rust, or sage'
         required: true
         type: string
       infra_ref:
@@ -32,7 +32,7 @@ jobs:
       - name: Locate infrastructure clone path
         run: echo "INFRA=$RUNNER_TEMP/ai-review-ci" >> "$GITHUB_ENV"
       - name: Validate gate inputs
-        run: "if [[ \"$REVIEW_INFRA_REF\" =~ [^A-Za-z0-9._/-] ]]; then\n  echo \"invalid infra_ref: $REVIEW_INFRA_REF\" >&2\n  exit 1\nfi\nif [[ -z \"$REVIEW_BASE_REF\" || \"$REVIEW_BASE_REF\" =~ [^A-Za-z0-9._/-] ]]; then\n  echo \"invalid base_ref: $REVIEW_BASE_REF\" >&2\n  exit 1\nfi\ncase \"$REVIEW_PROFILE\" in\n  python|bun|bun-playwright|rust|sage) ;;\n  *)\n    echo \"invalid profile: $REVIEW_PROFILE\" >&2\n    exit 1\n    ;;\nesac\n"
+        run: "if [[ \"$REVIEW_INFRA_REF\" =~ [^A-Za-z0-9._/-] ]]; then\n  echo \"invalid infra_ref: $REVIEW_INFRA_REF\" >&2\n  exit 1\nfi\nif [[ -z \"$REVIEW_BASE_REF\" || \"$REVIEW_BASE_REF\" =~ [^A-Za-z0-9._/-] ]]; then\n  echo \"invalid base_ref: $REVIEW_BASE_REF\" >&2\n  exit 1\nfi\ncase \"$REVIEW_PROFILE\" in\n  python|bun|bun-python|bun-playwright|rust|sage) ;;\n  *)\n    echo \"invalid profile: $REVIEW_PROFILE\" >&2\n    exit 1\n    ;;\nesac\n"
       - name: Clone review infrastructure
         run: git clone --depth 1 --branch "$REVIEW_INFRA_REF" https://github.com/dzackgarza/ai-review-ci.git "$INFRA"
       - name: Setup Python
@@ -65,7 +65,7 @@ jobs:
       - name: Locate infrastructure clone path
         run: echo "INFRA=$RUNNER_TEMP/ai-review-ci" >> "$GITHUB_ENV"
       - name: Validate gate inputs
-        run: "if [[ \"$REVIEW_INFRA_REF\" =~ [^A-Za-z0-9._/-] ]]; then\n  echo \"invalid infra_ref: $REVIEW_INFRA_REF\" >&2\n  exit 1\nfi\ncase \"$REVIEW_PROFILE\" in\n  python|bun|bun-playwright|rust|sage) ;;\n  *)\n    echo \"invalid profile: $REVIEW_PROFILE\" >&2\n    exit 1\n    ;;\nesac\n"
+        run: "if [[ \"$REVIEW_INFRA_REF\" =~ [^A-Za-z0-9._/-] ]]; then\n  echo \"invalid infra_ref: $REVIEW_INFRA_REF\" >&2\n  exit 1\nfi\ncase \"$REVIEW_PROFILE\" in\n  python|bun|bun-python|bun-playwright|rust|sage) ;;\n  *)\n    echo \"invalid profile: $REVIEW_PROFILE\" >&2\n    exit 1\n    ;;\nesac\n"
       - name: Clone review infrastructure
         run: git clone --depth 1 --branch "$REVIEW_INFRA_REF" https://github.com/dzackgarza/ai-review-ci.git "$INFRA"
       - name: Setup Python
@@ -100,7 +100,7 @@ jobs:
       - name: Locate infrastructure clone path
         run: echo "INFRA=$RUNNER_TEMP/ai-review-ci" >> "$GITHUB_ENV"
       - name: Validate gate inputs
-        run: "if [[ \"$REVIEW_INFRA_REF\" =~ [^A-Za-z0-9._/-] ]]; then\n  echo \"invalid infra_ref: $REVIEW_INFRA_REF\" >&2\n  exit 1\nfi\ncase \"$REVIEW_PROFILE\" in\n  python|bun|bun-playwright|rust|sage) ;;\n  *)\n    echo \"invalid profile: $REVIEW_PROFILE\" >&2\n    exit 1\n    ;;\nesac"
+        run: "if [[ \"$REVIEW_INFRA_REF\" =~ [^A-Za-z0-9._/-] ]]; then\n  echo \"invalid infra_ref: $REVIEW_INFRA_REF\" >&2\n  exit 1\nfi\ncase \"$REVIEW_PROFILE\" in\n  python|bun|bun-python|bun-playwright|rust|sage) ;;\n  *)\n    echo \"invalid profile: $REVIEW_PROFILE\" >&2\n    exit 1\n    ;;\nesac"
       - name: Clone review infrastructure
         run: git clone --depth 1 --branch "$REVIEW_INFRA_REF" https://github.com/dzackgarza/ai-review-ci.git "$INFRA"
       - name: Setup Python
@@ -139,7 +139,7 @@ jobs:
       - name: Locate infrastructure clone path
         run: echo "INFRA=$RUNNER_TEMP/ai-review-ci" >> "$GITHUB_ENV"
       - name: Validate gate inputs
-        run: "if [[ \"$REVIEW_INFRA_REF\" =~ [^A-Za-z0-9._/-] ]]; then\n  echo \"invalid infra_ref: $REVIEW_INFRA_REF\" >&2\n  exit 1\nfi\ncase \"$REVIEW_PROFILE\" in\n  python|bun|bun-playwright|rust|sage) ;;\n  *)\n    echo \"invalid profile: $REVIEW_PROFILE\" >&2\n    exit 1\n    ;;\nesac\n"
+        run: "if [[ \"$REVIEW_INFRA_REF\" =~ [^A-Za-z0-9._/-] ]]; then\n  echo \"invalid infra_ref: $REVIEW_INFRA_REF\" >&2\n  exit 1\nfi\ncase \"$REVIEW_PROFILE\" in\n  python|bun|bun-python|bun-playwright|rust|sage) ;;\n  *)\n    echo \"invalid profile: $REVIEW_PROFILE\" >&2\n    exit 1\n    ;;\nesac\n"
       - name: Clone review infrastructure
         run: git clone --depth 1 --branch "$REVIEW_INFRA_REF" https://github.com/dzackgarza/ai-review-ci.git "$INFRA"
       - name: Setup Python
@@ -176,7 +176,7 @@ jobs:
       - name: Locate infrastructure clone path
         run: echo "INFRA=$RUNNER_TEMP/ai-review-ci" >> "$GITHUB_ENV"
       - name: Validate gate inputs
-        run: "if [[ \"$REVIEW_INFRA_REF\" =~ [^A-Za-z0-9._/-] ]]; then\n  echo \"invalid infra_ref: $REVIEW_INFRA_REF\" >&2\n  exit 1\nfi\ncase \"$REVIEW_PROFILE\" in\n  python|bun|bun-playwright|rust|sage) ;;\n  *)\n    echo \"invalid profile: $REVIEW_PROFILE\" >&2\n    exit 1\n    ;;\nesac\nif [[ ! \"$REVIEW_PR_NUMBER\" =~ ^[0-9]+$ || \"$REVIEW_PR_NUMBER\" == 0 ]]; then\n  echo \"invalid pull request number: $REVIEW_PR_NUMBER\" >&2\n  exit 1\nfi\n"
+        run: "if [[ \"$REVIEW_INFRA_REF\" =~ [^A-Za-z0-9._/-] ]]; then\n  echo \"invalid infra_ref: $REVIEW_INFRA_REF\" >&2\n  exit 1\nfi\ncase \"$REVIEW_PROFILE\" in\n  python|bun|bun-python|bun-playwright|rust|sage) ;;\n  *)\n    echo \"invalid profile: $REVIEW_PROFILE\" >&2\n    exit 1\n    ;;\nesac\nif [[ ! \"$REVIEW_PR_NUMBER\" =~ ^[0-9]+$ || \"$REVIEW_PR_NUMBER\" == 0 ]]; then\n  echo \"invalid pull request number: $REVIEW_PR_NUMBER\" >&2\n  exit 1\nfi\n"
       - name: Clone review infrastructure
         run: git clone --depth 1 --branch "$REVIEW_INFRA_REF" https://github.com/dzackgarza/ai-review-ci.git "$INFRA"
       - name: Setup Python
@@ -208,7 +208,7 @@ jobs:
       - name: Locate infrastructure clone path
         run: echo "INFRA=$RUNNER_TEMP/ai-review-ci" >> "$GITHUB_ENV"
       - name: Validate gate inputs
-        run: "if [[ \"$REVIEW_INFRA_REF\" =~ [^A-Za-z0-9._/-] ]]; then\n  echo \"invalid infra_ref: $REVIEW_INFRA_REF\" >&2\n  exit 1\nfi\nif [[ ! \"$REVIEW_PR_NUMBER\" =~ ^[0-9]+$ ]]; then\n  echo \"invalid pull request number: $REVIEW_PR_NUMBER\" >&2\n  exit 1\nfi\ncase \"$REVIEW_PROFILE\" in\n  python|bun|bun-playwright|rust|sage) ;;\n  *)\n    echo \"invalid profile: $REVIEW_PROFILE\" >&2\n    exit 1\n    ;;\nesac\n"
+        run: "if [[ \"$REVIEW_INFRA_REF\" =~ [^A-Za-z0-9._/-] ]]; then\n  echo \"invalid infra_ref: $REVIEW_INFRA_REF\" >&2\n  exit 1\nfi\nif [[ ! \"$REVIEW_PR_NUMBER\" =~ ^[0-9]+$ ]]; then\n  echo \"invalid pull request number: $REVIEW_PR_NUMBER\" >&2\n  exit 1\nfi\ncase \"$REVIEW_PROFILE\" in\n  python|bun|bun-python|bun-playwright|rust|sage) ;;\n  *)\n    echo \"invalid profile: $REVIEW_PROFILE\" >&2\n    exit 1\n    ;;\nesac\n"
       - name: Clone review infrastructure
         run: git clone --depth 1 --branch "$REVIEW_INFRA_REF" https://github.com/dzackgarza/ai-review-ci.git "$INFRA"
       - name: Setup Python

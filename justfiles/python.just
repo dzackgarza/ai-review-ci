@@ -2,7 +2,7 @@
 #
 # Imports cross-language QC recipes from `justfile` (shared) and adds
 # Python-specific recipes. Python projects delegate to this file:
-#   just -f ~/ai-review-ci/justfiles/python.just -d . test
+#   just -f ~/ai-review-ci/justfiles/python.just -d . test-commit
 #
 # Shared recipes (imported from justfile):
 #   _no-bypass, _semgrep, _vibecheck, _slop
@@ -12,14 +12,12 @@
 #   _pytest_with_coverage, _diff-cover, _vulture, _deptry,
 #   _import-linter, _grain, _ast-grep, _jscpd, _lizard, _codeql
 #
-# WORKFLOW (two-tier):
-#   just test     — COMMIT gate: correctness + normalization only (preflight,
-#                   normalize/auto-fix, syntax, mypy, plain pytest, bypass check).
-#   just test-ci  — PUSH/CI gate: test + changed-line coverage and deterministic
-#                   dependency/import/AST/duplication gates. Broad debt scans
-#                   stay available through _ambient-python-debt.
+# WORKFLOW (three-tier):
+#   just test-commit — preflight, normalization, syntax, mypy, bypass check.
+#   just test-push   — commit checks plus the full pytest suite.
+#   just test-ci     — push checks plus coverage and policy-sensitive gates.
 #
-# HOOKS: pre-commit blocks on `just test`; pre-push blocks on `just test-ci`.
+# HOOKS: pre-commit blocks on `just test-commit`; pre-push blocks on `just test-push`.
 #   Run `just install-global-hooks` from ~/ai-review-ci to activate them globally.
 #
 # CONFIG: this justfile resolves configs and artifacts from the ai-review-ci repo.
@@ -34,8 +32,10 @@ setup:
 	@echo "Python QC wiring contract (what _check-python-project enforces):"
 	@echo ""
 	@echo "1. Delegate the project justfile to this file:"
-	@echo "     test:"
-	@echo "         @just -f ~/ai-review-ci/justfiles/python.just -d . test"
+	@echo "     test-commit:"
+	@echo "         @just -f ~/ai-review-ci/justfiles/python.just -d . test-commit"
+	@echo "     test-push:"
+	@echo "         @just -f ~/ai-review-ci/justfiles/python.just -d . test-push"
 	@echo "     test-ci:"
 	@echo "         @just -f ~/ai-review-ci/justfiles/python.just -d . test-ci"
 	@echo ""
@@ -49,9 +49,9 @@ setup:
 	@echo ""
 	@echo "4. Tests must exist (test_*.py / *_test.py / tests/*.py)."
 	@echo ""
-	@echo "5. Gates: pre-commit hook runs 'just test' (syntax, mypy, pytest);"
-	@echo "   pre-push runs 'just test-ci' (adds style/slop/coverage stack)."
-	@echo "   Run 'just test' locally first — every failure prints its own fix."
+	@echo "5. Gates: pre-commit runs 'just test-commit' (syntax and mypy);"
+	@echo "   pre-push runs 'just test-push' (adds pytest); CI runs 'just test-ci'."
+	@echo "   Commit/push failures are direct repair; CI policy findings are triaged."
 	@echo ""
 	@echo "Sage projects: use sage.just instead ('just -f ~/ai-review-ci/justfiles/sage.just setup')."
 
@@ -59,15 +59,40 @@ setup:
 _python-qc-files:
 	#!/usr/bin/env bash
 	set -euo pipefail
+	exclude_dirs_output="$(uv run {{artifacts}}/scripts/read_qc_excludes.py {{configs}}/qc-excludes.toml)"
+	exclude_dirs=()
+	if [ -n "$exclude_dirs_output" ]; then
+		mapfile -t exclude_dirs <<<"$exclude_dirs_output"
+	fi
 	exclude_args=()
-	while IFS= read -r dir; do
+	for dir in "${exclude_dirs[@]}"; do
 		exclude_args+=(-g "!**/$dir/**")
-	done < <(uv run {{artifacts}}/scripts/read_qc_excludes.py {{configs}}/qc-excludes.toml)
-	rg --files \
+	done
+	if rg --files \
 		-g '*.py' \
 		-g '!*.sage.py' \
 		-g '!tool-artifacts/vulture_whitelist.py' \
-		"${exclude_args[@]}"
+		"${exclude_args[@]}"; then
+		:
+	else
+		status=$?
+		# rg uses 1 for an empty selection. Callers decide whether a selected
+		# language is required; source-discovery errors still propagate.
+		if [ "$status" -ne 1 ]; then
+			exit "$status"
+		fi
+	fi
+
+_python-vulture-files:
+	#!/usr/bin/env bash
+	set -euo pipefail
+	if ! mapfile -t python_files < <(just --justfile {{justfile()}} -d . _python-qc-files 2>/dev/null); then :; fi
+	for python_file in "${python_files[@]}"; do
+		case "$python_file" in
+			scripts/*|*/scripts/*) continue ;;
+		esac
+		printf '%s\n' "$python_file"
+	done
 
 _python-syntax:
 	#!/usr/bin/env bash
@@ -75,7 +100,11 @@ _python-syntax:
 	echo "============================="
 	echo "=== Running: Python syntax validation ==="
 	echo "# Compiles Python source with the configured target interpreter before linting or analysis"
-	if ! mapfile -t python_files < <(just --justfile {{justfile()}} -d . _python-qc-files 2>/dev/null); then :; fi
+	python_files_output="$(just --justfile {{justfile()}} -d . _python-qc-files)"
+	python_files=()
+	if [ -n "$python_files_output" ]; then
+		mapfile -t python_files <<<"$python_files_output"
+	fi
 	if [ "${#python_files[@]}" -eq 0 ]; then
 		echo "ERROR: Python syntax validation: no Python files found in a Python project."
 		"{{artifacts}}/scripts/emit-triage-directive.sh"
@@ -247,7 +276,11 @@ _normalize: _install-tools
 	echo "============================="
 	echo "=== Running: ruff format and check (auto-fix) ==="
 	echo "# Enforces PEP 8 style + auto-fixes common issues (import sorting, unused imports, pyupgrade patterns)"
-	if ! mapfile -t python_files < <(just --justfile {{justfile()}} -d . _python-qc-files 2>/dev/null); then :; fi
+	python_files_output="$(just --justfile {{justfile()}} -d . _python-qc-files)"
+	python_files=()
+	if [ -n "$python_files_output" ]; then
+		mapfile -t python_files <<<"$python_files_output"
+	fi
 	if [ "${#python_files[@]}" -eq 0 ]; then
 		echo "ERROR: ruff normalization: no Python files found in a Python project."
 		"{{artifacts}}/scripts/emit-triage-directive.sh"
@@ -274,8 +307,8 @@ _pytest: _install-tools
 	#!/usr/bin/env bash
 	set -euo pipefail
 	echo "============================="
-	echo "=== Running: pytest (commit tier — no coverage gate) ==="
-	echo "# Runs the project's own test suite; must pass. Coverage thresholds are enforced at push (test-ci)."
+	echo "=== Running: pytest (push tier — no coverage gate) ==="
+	echo "# Runs the project's own test suite; coverage thresholds are enforced in CI."
 	if ! rg --files tests -g 'test_*.py' -g '*_test.py' -g '!*.sage.py' >/dev/null 2>&1; then
 		echo "ERROR: pytest: no test files found in a Python project."
 		"{{artifacts}}/scripts/emit-test-writing-directive.sh"
@@ -383,12 +416,25 @@ _vulture: _install-tools
 	echo "============================="
 	echo "=== Running: vulture dead code detection ==="
 	echo "# Finds unused code (functions, classes, variables) that can be safely removed"
-	if ! mapfile -t python_files < <(just --justfile {{justfile()}} -d . _python-qc-files 2>/dev/null); then :; fi
+	all_python_files_output="$(just --justfile {{justfile()}} -d . _python-qc-files)"
+	all_python_files=()
+	if [ -n "$all_python_files_output" ]; then
+		mapfile -t all_python_files <<<"$all_python_files_output"
+	fi
+	python_files_output="$(just --justfile {{justfile()}} -d . _python-vulture-files)"
+	python_files=()
+	if [ -n "$python_files_output" ]; then
+		mapfile -t python_files <<<"$python_files_output"
+	fi
 	whitelist_file="{{artifacts}}/vulture_whitelist.py"
-	if [ "${#python_files[@]}" -eq 0 ]; then
+	if [ "${#all_python_files[@]}" -eq 0 ]; then
 		echo "ERROR: vulture: no Python files found in a Python project."
 		"{{artifacts}}/scripts/emit-triage-directive.sh"
 		exit 1
+	fi
+	if [ "${#python_files[@]}" -eq 0 ]; then
+		echo "# No Python files eligible for vulture after excluding scripts/."
+		exit 0
 	fi
 
 	if uvx --from vulture vulture \
@@ -428,10 +474,15 @@ _deptry: _install-tools
 	# qc-excludes.toml is the single source of truth for never-scanned
 	# directories; deptry takes path regexes, so literal dots are escaped
 	# and glob stars widen to `.*`.
-	while IFS= read -r exclude_dir; do
+	exclude_dirs_output="$(uv run --no-project python "{{artifacts}}/scripts/read_qc_excludes.py" "{{configs}}/qc-excludes.toml")"
+	exclude_dirs=()
+	if [ -n "$exclude_dirs_output" ]; then
+		mapfile -t exclude_dirs <<<"$exclude_dirs_output"
+	fi
+	for exclude_dir in "${exclude_dirs[@]}"; do
 		exclude_regex="${exclude_dir//./\\.}"
 		deptry_args+=(--extend-exclude "(^|.*/)${exclude_regex//\*/.*}")
-	done < <(uv run --no-project python "{{artifacts}}/scripts/read_qc_excludes.py" "{{configs}}/qc-excludes.toml")
+	done
 	first_party_modules_output="$(uv run --no-project python "{{artifacts}}/scripts/python_qc_metadata.py" first-party-modules .)"
 	if [ -n "$first_party_modules_output" ]; then
 		mapfile -t first_party_modules <<<"$first_party_modules_output"
@@ -461,7 +512,11 @@ _ast-grep: _install-tools
 	echo "============================="
 	echo "=== Running: ast-grep code quality audit ==="
 	echo "# Custom AST rules for fraud detection (boolean assignment, loops without asserts, numeric bounds, self-reinforcing prints)"
-	if ! mapfile -t python_files < <(just --justfile {{justfile()}} -d . _python-qc-files 2>/dev/null); then :; fi
+	python_files_output="$(just --justfile {{justfile()}} -d . _python-qc-files)"
+	python_files=()
+	if [ -n "$python_files_output" ]; then
+		mapfile -t python_files <<<"$python_files_output"
+	fi
 	if [ "${#python_files[@]}" -eq 0 ]; then
 		echo "ERROR: ast-grep: no Python files found in a Python project."
 		"{{artifacts}}/scripts/emit-triage-directive.sh"
@@ -479,7 +534,7 @@ _ast-grep: _install-tools
 	# rather than emitting an ignorable warning, so every rule is error-tier and
 	# blocks here — `error[` matches all of them.
 	if grep -q "error\[" "$findings_file"; then
-		echo "Blocking just test: error-severity findings must be resolved against repository audit guidelines."
+		echo "Blocking just test-ci: error-severity findings must be resolved against repository audit guidelines."
 		"{{artifacts}}/scripts/emit-triage-directive.sh"
 		exit 1
 	fi
@@ -490,7 +545,11 @@ _jscpd-python:
 	echo "============================="
 	echo "=== Running: jscpd copy-paste detection ==="
 	echo "# Finds duplicate code blocks across the codebase that may indicate copypaste or missing refactoring"
-	if ! mapfile -t python_files < <(just --justfile {{justfile()}} -d . _python-qc-files 2>/dev/null); then :; fi
+	python_files_output="$(just --justfile {{justfile()}} -d . _python-qc-files)"
+	python_files=()
+	if [ -n "$python_files_output" ]; then
+		mapfile -t python_files <<<"$python_files_output"
+	fi
 	if [ "${#python_files[@]}" -eq 0 ]; then
 		echo "ERROR: jscpd: no Python files found in a Python project."
 		"{{artifacts}}/scripts/emit-triage-directive.sh"
@@ -515,7 +574,11 @@ _lizard-python ccn="7": _install-tools
 	echo "============================="
 	echo "=== Running: lizard complexity analysis ==="
 	echo "# Computes cyclomatic complexity number (CCN) and line count to flag overly complex functions"
-	if ! mapfile -t python_files < <(just --justfile {{justfile()}} -d . _python-qc-files 2>/dev/null); then :; fi
+	python_files_output="$(just --justfile {{justfile()}} -d . _python-qc-files)"
+	python_files=()
+	if [ -n "$python_files_output" ]; then
+		mapfile -t python_files <<<"$python_files_output"
+	fi
 	if [ "${#python_files[@]}" -eq 0 ]; then
 		echo "ERROR: lizard: no Python files found in a Python project."
 		"{{artifacts}}/scripts/emit-triage-directive.sh"
@@ -659,19 +722,31 @@ _codeql:
 		print(f"- ... {len(findings) - 50} more findings omitted; see SARIF report above.")
 	PY
 
-# public: COMMIT gate — correctness + normalization, plus bypass detection
-test: _doctor-preflight _check-python-project _normalize-common _normalize _python-syntax _mypy _pytest
+# public: COMMIT gate — immediate, directly repairable feedback
+test-commit:
 	#!/usr/bin/env bash
 	set -euo pipefail
+	export AI_REVIEW_CI_FAILURE_MODE=direct
+	just --justfile {{justfile()}} -d . _doctor-preflight _check-python-project _normalize-common _normalize _python-syntax _mypy
 	just -f {{justfiles}}/shared.just -d . _no-bypass
-	echo "Commit-tier quality checks completed"
+	echo "Commit quality checks completed"
+
+# public: PUSH gate — commit checks plus the full project-owned test suite
+test-push:
+	#!/usr/bin/env bash
+	set -euo pipefail
+	export AI_REVIEW_CI_FAILURE_MODE=direct
+	just --justfile {{justfile()}} -d . test-commit _pytest
+	echo "Push quality checks completed"
 
 # private: ambient broad-debt audit — not push-blocking for unrelated diffs
 _ambient-python-debt: _lizard-python _vulture _grain
 
-# public: PUSH/CI gate — test + changed-line coverage and deterministic project gates
-test-ci: test _pytest_with_coverage _diff-cover _deptry _import-linter _ast-grep _jscpd-python
+# public: CI gate — push checks plus gameable and long-running acceptance gates
+test-ci:
 	#!/usr/bin/env bash
 	set -euo pipefail
+	export AI_REVIEW_CI_FAILURE_MODE=triage
+	just --justfile {{justfile()}} -d . test-push _pytest_with_coverage _diff-cover _deptry _import-linter _ast-grep _jscpd-python
 	just -f {{justfiles}}/shared.just -d . _global-qc
-	echo "Push/CI quality checks completed"
+	echo "CI quality checks completed"

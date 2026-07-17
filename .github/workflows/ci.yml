@@ -1,11 +1,10 @@
+# Authoritative remote acceptance tier (just test-ci). Local pre-commit and
+# pre-push hooks run test-commit and test-push respectively.
 name: CI
 
-# ai-review-ci dogfoods its own standardized QC: the same reusable _qc.yml that
-# downstream repos install. A push/PR is the *push* boundary, so CI runs the
-# PUSH/CI tier (`just test-ci`) — the authoritative remote mirror of the
-# pre-push hook. The COMMIT tier (`just test`) is the local pre-commit hook's
-# fast gate and is not a CI concern (nothing is committed in CI, and test-ci is
-# a superset of test). The full-repo ambient debt audit is separate (ambient.yml).
+# ai-review-ci dogfoods the same required test-ci workflow installed in downstream
+# pull requests. Local test-commit and test-push remain hook boundaries; this
+# workflow owns remote acceptance. The ambient debt audit remains separate.
 
 on:
   push:
@@ -13,7 +12,7 @@ on:
   pull_request: {}
 
 jobs:
-  test-ci:
+  qc-ci:
     uses: ./.github/workflows/_qc.yml
     permissions:
       contents: read

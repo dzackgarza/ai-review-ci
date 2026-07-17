@@ -23,6 +23,7 @@ When one appears, ask:
 | :--- | :--- |
 | **[RUNTIME-DEFAULTS] Runtime defaults** | Defaults preserve missing-data paths and force weak proof obligations. |
 | **[FALLBACK-CHAINS] Fallback chains** | The app makes unreviewed decisions for the user. |
+| **[EXCEPTION-CONTROL-FLOW] Failure-selected ordinary branches** | Catch order, failed probes, and retry order become a hidden state machine; expected states and legal transitions remain unmodeled. |
 | **[OPTIONAL-DEPS] Optional critical dependencies** | Lets the app pretend required tools are optional. |
 | **[PARTIAL-SUCCESS] Partial success objects** | Converts failed work into "mostly OK." |
 | **[BOOLEAN-FLAGS] Boolean mode flags** | Tests can force branches instead of constructing real state. |
@@ -48,6 +49,8 @@ When one appears, ask:
 | **[ADMIN-COMPLETION] Administrative completion** | Issues/comments/docs replace implementation or proof. |
 
 If a construct would let an agent preserve the appearance of correctness while weakening the obligation, treat it as a red flag even if the code currently works.
+
+For `[EXCEPTION-CONTROL-FLOW]`, use [Error Handling as Control Flow](error-handling-as-control-flow.md) to inspect the displaced domain model, readability loss, side-effect risk, retry safety, and language-semantic abuse.
 
 ### **[VERBOSITY-COMPLEXITY]** Code Verbosity and Complexity Red Flags
 
@@ -215,7 +218,7 @@ Red flags:
 - `# type: ignore[import-untyped]`, `ignore_missing_imports`, or local mypy excludes;
 - wrappers that re-export untyped objects without named project-owned types.
 
-Allowed detector carve-out: a global-QC-owned typed-firewall convention may exempt the single module that imports the untyped dependency.
+Allowed boundary carve-out: a global-QC-owned typed-firewall convention may exempt the single module that imports the untyped dependency.
 That module must be named and shaped as a boundary, and global QC must still forbid direct imports elsewhere.
 
 ### **[MOCK-TEST-POISON]** Mock/Test Poison
@@ -251,6 +254,7 @@ as any
 as unknown as
 Record<string, any>
 Partial<T> in normalized/core state
+value! // non-null assertion used instead of total state
 // @ts-ignore
 // @ts-expect-error
 eslint-disable
@@ -485,11 +489,12 @@ The correct pattern is: feedback claim disposition, remediation disposition, pol
 
 * * *
 
-## **[QC-TARGETS]** Mechanical QC Targets
+## **[CROSS-LANGUAGE-SIGNATURES]** Cross-Language Review Signatures
 
-These can be compiled into global QC detectors to act as warning or error gates.
+These signatures prompt source inspection.
+A textual or structural match is not itself a disposition; inspect the complete local workflow and classify the weakened obligation through the policy catalog.
 
-### **[TEXT-GREP-CANDIDATES]** Text / Grep Candidates
+### **[TEXT-SIGNATURES]** Textual Signatures
 
 - `unwrap_or`, `unwrap_or_default`, `serde(default)`
 - `Result<.*, String>`, `let _ =`
@@ -504,7 +509,7 @@ These can be compiled into global QC detectors to act as warning or error gates.
 - `fallback`, `default`, `best effort`, `graceful`, `smoke`, `non-proof`, `quarantine`, `covered elsewhere`
 - `import-untyped`, `missing library stubs`, `py.typed`, `ignore_missing_imports`
 
-### **[AST-PYTHON]** AST-Level Candidates (Python)
+### **[PYTHON-SHAPES]** Python Shapes
 
 - `ExceptHandler` for `AssertionError`, `ImportError`, or broad `Exception`
 - `Call` to `os.getenv` or `dict.get` with default value
@@ -512,7 +517,7 @@ These can be compiled into global QC detectors to act as warning or error gates.
 - `pytest` skip/xfail markers (strict open-issue xfail gates are sanctioned; verify the issue is open)
 - `unittest.mock` imports
 
-### **[AST-TYPESCRIPT]** AST-Level Candidates (TypeScript)
+### **[TYPESCRIPT-SHAPES]** TypeScript Shapes
 
 - `TSAnyKeyword`
 - `TSAsExpression` to `any`
@@ -522,14 +527,14 @@ These can be compiled into global QC detectors to act as warning or error gates.
 - `LogicalExpression` `||` with literal fallback
 - `NullishCoalescingExpression` with literal fallback
 
-### **[AST-RUST]** AST-Level Candidates (Rust)
+### **[RUST-SHAPES]** Rust Shapes
 
 - Method call `unwrap_or`, `unwrap_or_default`, `ok`
 - Attributes `serde(default)`, `allow`, `ignore`
 - `Result<T, String>`
 - `let _ =` for calls returning a `Result`
 
-### **[AST-BASH]** AST-Level Candidates (Bash)
+### **[BASH-SHAPES]** Bash Shapes
 
 - Redirecting stderr to `/dev/null`
 - `command -v` gating runtime behavior
@@ -575,5 +580,5 @@ For the canonical inventory of these banned patterns and their allowed replaceme
 
 ## Remediation Boundary
 
-This detector-facing catalog names suspicious constructs and maps them to policy.
-Fixer-side remediation instructions live in `remediations.md` and are loaded only after triage assigns a `POLICY.*` code.
+This catalog teaches suspicious constructs.
+The canonical policy records index their named handles and own the exact fixer-side route into `../../style-guide/references/style-guide-index.md`.

@@ -5,7 +5,7 @@ description: Use when reviewing code, tests, QC, or documentation produced by an
 
 # Reviewing LLM Code
 
-Before reviewing, testing, or triaging code, consult the central policy index to locate the canonical source-of-truth skill: [policy-index](../policy-index/SKILL.md)
+Before reviewing, testing, or triaging code, consult the central policy index to locate the canonical source-of-truth skill: [[policy-index/SKILL|policy-index]]
 
 Review LLM-produced code as an agent-failure audit, not as a normal bug list.
 The point is to identify the mechanisms that made bad work look acceptable.
@@ -86,7 +86,7 @@ If none of these signals are true AND you can point to a specific code pattern f
 
 Before producing review findings, load these skills in this order:
 
-- **`anti-slop`** — Read first.
+- **[[anti-slop/SKILL|anti-slop]]** — Read first.
   This skill teaches you what slop looks like.
   You cannot recognize generated-code residue without it.
   All code you review is agent-produced and almost always contains slop.
@@ -104,7 +104,7 @@ Before producing review findings, load these skills in this order:
   The canonical reference catalog of runtime control-flow policy rules, invariant assertions, and disallowed control-flow shapes.
   Read this to audit control-flow branching in runtime code.
 
-- **`llm-failure-modes`** — Read fifth.
+- **[[llm-failure-modes/SKILL|llm-failure-modes]]** — Read fifth.
   This teaches the cognitive failure modes that produce slop: ground-up bias, dependency aversion, meta-artifact delegation, replacement instinct, overconfidence, confabulation.
   You must understand WHY agents produce bad code before you can spot it.
 
@@ -120,24 +120,24 @@ Before producing review findings, load these skills in this order:
 
 - **`llm-failure-modes/references/behavioral-detection-methodology.md`** — How to detect behavioral failures without turning observations into interaction-specific narratives.
 
-- **`addressing-shallow-work`** — How to avoid adding structure instead of fixing the actual problem.
+- **[[addressing-shallow-work/SKILL|addressing-shallow-work]]** — How to avoid adding structure instead of fixing the actual problem.
 
-- **`reviewing-subagent-work`** — The Synthesis Gate for verifying subagent output.
+- **[[reviewing-subagent-work/SKILL|reviewing-subagent-work]]** — The Synthesis Gate for verifying subagent output.
 
 Also load as applicable:
 
-- `test-guidelines` when the review includes tests, QC, smoke checks, CI, or proof surfaces.
+- [[test-guidelines/SKILL|test-guidelines]] when the review includes tests, QC, smoke checks, CI, or proof surfaces.
 
-- `thermo-nuclear-code-quality-review` when the review includes maintainability, architecture, abstractions, giant files, or code that feels obviously badly shaped.
+- [[thermo-nuclear-code-quality-review/SKILL|thermo-nuclear-code-quality-review]] when the review includes maintainability, architecture, abstractions, giant files, or code that feels obviously badly shaped.
 
-- **Jules Review Delegation** (if the user asks to use Jules for review): Load:
-  - `jules`
+- **[[jules/SKILL|Jules]] Review Delegation** (if the user asks to use [[jules/SKILL|Jules]] for review): Load:
+  - [[jules/SKILL|jules]]
   - `jules/references/anti-slop-report-review.md`
-  - [reviewing-llm-code](SKILL.md)
-  - [anti-slop](../anti-slop/SKILL.md)
-  - `reviewing-subagent-work`
-  - `test-guidelines` if tests/QC/proof surfaces are in scope
-  - `pr-feedback-triage` if existing review comments are being evaluated
+  - [[reviewing-llm-code/SKILL|reviewing-llm-code]]
+  - [[anti-slop/SKILL|anti-slop]]
+  - [[reviewing-subagent-work/SKILL|reviewing-subagent-work]]
+  - [[test-guidelines/SKILL|test-guidelines]] if tests/QC/proof surfaces are in scope
+  - [[pr-feedback-triage/SKILL|pr-feedback-triage]] if existing review comments are being evaluated
 
 Do not summarize these skills in the review.
 Use them to shape the judgment.
@@ -440,10 +440,10 @@ Two posture rules apply before any finding:
 The concrete patterns are catalogued, not duplicated here:
 
 - Document patterns and forcing questions: `llm-failure-modes/documentation-failures.md` and the `PRIVATE-ONTOLOGY` / `CONTROL-PAYLOAD-INVERSION` / `DISCLOSURE-AS-REPAIR` / `CIRCULAR-DOCTRINE` / `FRAME-CAPTURE-REVIEW` entries in [references/pattern-catalog.md](references/pattern-catalog.md).
-- Project-structure tells (empty-stub sprawl, classification baked into the filesystem, control plane larger than payload): `anti-slop` → **Structural and Organizational Slop (Project-Level)**.
-- The proportionality rule that prevents false-positiving intentional bespoke complexity: `bespoke-software-policy` → **Proportionality: Earned vs. Manufactured Complexity**.
+- Project-structure tells (empty-stub sprawl, classification baked into the filesystem, control plane larger than payload): [[anti-slop/SKILL|anti-slop]] → **Structural and Organizational Slop (Project-Level)**.
+- The proportionality rule that prevents false-positiving intentional bespoke complexity: [[bespoke-software-policy/SKILL|bespoke-software-policy]] → **Proportionality: Earned vs. Manufactured Complexity**.
 
-When a document's or structure's whole frame is contaminated, do not propose in-place edits as the fix — route to `fixing-slop` → **Contaminated Artifacts Cannot Be Repaired In Place**.
+When a document's or structure's whole frame is contaminated, do not propose in-place edits as the fix — route to [[fixing-slop/SKILL|fixing-slop]] → **Contaminated Artifacts Cannot Be Repaired In Place**.
 
 ## Review Procedure
 
@@ -745,7 +745,7 @@ Do not invent alternatives that preserve the red flag while laundering the imple
 
 Before doing any refactor prescribed by a finding, check the EXISTING tests for LLM idiocy.
 Tests that assert on strings, formatting, whitespace, or byte-level output are a HUGE sign of slop — the skill flags this as "superficial state assertions."
-Fix the test slop FIRST: replace bad tests with proper tests that follow the test-guidelines skill.
+Fix the test slop FIRST: replace bad tests with proper tests that follow the [[test-guidelines/SKILL|test-guidelines]] skill.
 Verify they are green.
 
 Then add regression tests that capture the current behavior BEFORE the refactor.
@@ -797,7 +797,7 @@ The right response is to make whole classes of evasive code unrepresentable.
 The recurring pattern is that an agent first tries to satisfy checking/validation surfaces (such as the compiler/typechecker, QC gates, PR review, or user queries) by manipulating the validation surface (e.g. by adding fallbacks, defaults, mocks, try/except blocks, or bypass comments) instead of reconstructing the original obligation and solving it.
 The policy answer is to remove the vocabulary that enables that manipulation.
 
-Adhering to the [Bridge-Burning Policies](../policy-index/SKILL.md#policy-registry) defined in `policy-index/SKILL.md` is a non-negotiable hard constraint for all development.
+Adhering to the [[policy-index/SKILL#policy-registry|Bridge-Burning Policies]] defined in `policy-index/SKILL.md` is a non-negotiable hard constraint for all development.
 These rules eliminate common agent validation-evasion pathways (such as runtime defaults, fallbacks, mocks, and diagnostic smoke tests in proof paths).
 Refer to them as hard boundaries.
 

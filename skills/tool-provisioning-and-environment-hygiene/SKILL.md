@@ -11,7 +11,7 @@ Use the right provisioning mechanism for the intended lifetime:
 
 | Scope | Mechanism | Example |
 | --- | --- | --- |
-| Generic tool / QC tool / inspection tool | Ephemeral runner, usually from global QC | `uvx`, `npx -y`, `bunx`; see `quality-control` |
+| Generic tool / QC tool / inspection tool | Ephemeral runner, usually from global QC | `uvx`, `npx -y`, `bunx`; see [[quality-control/SKILL|quality-control]] |
 | Python CLI one-off | Ephemeral runner | `uvx`, `uvx --from package` |
 | Project dependency (repo-owned runtime/build/plugin/domain-test only) | Project package manager | `uv add`, `npm install --save-dev`, `bun add --dev` |
 | Agent-authored Python script with deps | PEP 723 + `uv run` | See self-contained scripts policy below |
@@ -27,7 +27,7 @@ Only reach for the OS package manager when the task requires it and the user has
 ## Prohibitions
 
 > [!IMPORTANT]
-> All code produced under this skill must adhere to the [Bridge-Burning Policies](../policy-index/SKILL.md#policy-registry) in `policy-index/SKILL.md`. These are non-negotiable hard constraints that eliminate runtime defaults, fallbacks, mocks, optional critical dependencies, and other agent validation-evasion pathways.
+> All code produced under this skill must adhere to the [[policy-index/SKILL#policy-registry|Bridge-Burning Policies]] in `policy-index/SKILL.md`. These are non-negotiable hard constraints that eliminate runtime defaults, fallbacks, mocks, optional critical dependencies, and other agent validation-evasion pathways.
 
 - Never use `pip install --break-system-packages`.
 - Never install into system Python.
@@ -107,7 +107,7 @@ chmod +x script.py
 
 | Scenario | Mechanism |
 | --- | --- |
-| Generic QC tool / inspection tool | Ephemeral runner, usually from global QC (`~/ai-review-ci`). See `quality-control`. |
+| Generic QC tool / inspection tool | Ephemeral runner, usually from global QC (`~/ai-review-ci`). See [[quality-control/SKILL|quality-control]]. |
 | Python CLI tool | `uvx tool ...` |
 | Python CLI where package name differs from command | `uvx --from package command ...` |
 | One-shot Python snippet with dependencies | `uv run --with package python - <<'PY' ... PY` |
@@ -139,10 +139,10 @@ This must be checked in every review pass — code review, PR review, gate revie
 
 ### Related Skills
 
-- `known-solution-first` — external-tool uncertainty: start with public contracts, docs, and known solutions before CLI probing or local artifact inspection.
+- [[known-solution-first/SKILL|known-solution-first]] — external-tool uncertainty: start with public contracts, docs, and known solutions before CLI probing or local artifact inspection.
 
-- `reality-grounded-debugging` — command-output discipline, stderr preservation, surface-classification matrix.
+- [[reality-grounded-debugging/SKILL|reality-grounded-debugging]] — command-output discipline, stderr preservation, surface-classification matrix.
 
-- `code-patterns-python` — uv-only, PEP 723 inline metadata for standalone scripts.
+- [[code-patterns/python/SKILL|code-patterns-python]] — uv-only, PEP 723 inline metadata for standalone scripts.
 
-- `writing-scripts-and-cli-interfaces` — standalone script template, Cyclopts/Pydantic.
+- [[writing-scripts-and-cli-interfaces/SKILL|writing-scripts-and-cli-interfaces]] — standalone script template, Cyclopts/Pydantic.

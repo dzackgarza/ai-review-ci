@@ -56,10 +56,31 @@
     "**/.claude/worktrees/**",
     "**/vendor/**",
     "**/third_party/**",
-    "**/venv/**"
+    "**/venv/**",
+    "**/archives/**",
+    "**/src.bak/**",
+    "**/scripts/**",
+    "**/notebooks/**"
   ],
-  "ignoreDependencies": ["gi", "@girs", "@logtape/logtape", "@ags/shared", "ags", "@tailwindcss/cli", "@tailwindcss/typography", "tailwindcss", "tw-animate-css"],
-  "ignoreBinaries": ["ags", "xdg-open", "direnv"],
+  "ignoreDependencies": [
+    "gi",
+    "@girs",
+    "@logtape/logtape",
+    "@ags/shared",
+    "ags",
+    "@tailwindcss/cli",
+    "@tailwindcss/typography",
+    "tailwindcss",
+    "tw-animate-css"
+  ],
+  "ignoreBinaries": [
+    "ags",
+    "xdg-open",
+    "direnv"
+  ],
   "ignoreExportsUsedInFile": true,
-  "ignoreUnresolved": ["./vendor/backend.js", "./vendor/pdfjs/pdf_viewer.mjs"]
+  "ignoreUnresolved": [
+    "./vendor/backend.js",
+    "./vendor/pdfjs/pdf_viewer.mjs"
+  ]
 }

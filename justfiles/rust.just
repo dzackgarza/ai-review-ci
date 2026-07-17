@@ -2,7 +2,7 @@
 #
 # Imports cross-language QC recipes from `justfile` (shared) and adds
 # Rust-specific recipes. Rust projects delegate to this file:
-#   just -f ~/ai-review-ci/justfiles/rust.just -d . test
+#   just -f ~/ai-review-ci/justfiles/rust.just -d . test-commit
 #
 # Shared recipes (imported from justfile):
 #   _no-bypass, _semgrep, _ast-grep, _jscpd, _vibecheck, _slop
@@ -10,13 +10,12 @@
 # Rust-specific recipes:
 #   _clippy, _rustfmt, _cargo-test, _lizard, _codeql
 #
-# WORKFLOW (two-tier):
-#   just test     — COMMIT gate: correctness + normalization only (preflight,
-#                   cargo fmt, clippy, rustfmt --check, cargo test, bypass check).
-#   just test-ci  — PUSH/CI gate: test + the full style/slop stack
-#                   (jscpd, lizard, codeql, semgrep, ast-grep, vibecheck, ai-slop).
+# WORKFLOW (three-tier):
+#   just test-commit — preflight, formatting, clippy, bypass check.
+#   just test-push   — commit checks plus the full Cargo test suite.
+#   just test-ci     — push checks plus policy, complexity, and security gates.
 #
-# HOOKS: pre-commit blocks on `just test`; pre-push blocks on `just test-ci`.
+# HOOKS: pre-commit blocks on `just test-commit`; pre-push blocks on `just test-push`.
 #   Run `just install-global-hooks` from ~/ai-review-ci to activate them globally.
 
 infra := justfile_directory() / ".."
@@ -25,24 +24,34 @@ artifacts := infra / "tool-artifacts"
 justfiles := infra / "justfiles"
 
 default:
-	@just test
+	@just test-commit
 
 _rust-qc-files:
 	#!/usr/bin/env bash
 	set -euo pipefail
+	exclude_dirs_output="$(uv run {{artifacts}}/scripts/read_qc_excludes.py {{configs}}/qc-excludes.toml)"
+	exclude_dirs=()
+	if [ -n "$exclude_dirs_output" ]; then
+		mapfile -t exclude_dirs <<<"$exclude_dirs_output"
+	fi
 	exclude_args=()
-	while IFS= read -r dir; do
+	for dir in "${exclude_dirs[@]}"; do
 		exclude_args+=(-not -path "*/$dir/*")
-	done < <(uv run {{artifacts}}/scripts/read_qc_excludes.py {{configs}}/qc-excludes.toml)
+	done
 	find . -name '*.rs' "${exclude_args[@]}"
 
 _rust-cargo-manifests:
 	#!/usr/bin/env bash
 	set -euo pipefail
+	exclude_dirs_output="$(uv run {{artifacts}}/scripts/read_qc_excludes.py {{configs}}/qc-excludes.toml)"
+	exclude_dirs=()
+	if [ -n "$exclude_dirs_output" ]; then
+		mapfile -t exclude_dirs <<<"$exclude_dirs_output"
+	fi
 	exclude_args=()
-	while IFS= read -r dir; do
+	for dir in "${exclude_dirs[@]}"; do
 		exclude_args+=(-not -path "*/$dir/*")
-	done < <(uv run {{artifacts}}/scripts/read_qc_excludes.py {{configs}}/qc-excludes.toml)
+	done
 	find . -name 'Cargo.toml' "${exclude_args[@]}" | sort
 
 _check-rust-project:
@@ -54,7 +63,11 @@ _check-rust-project:
 	failed=0
 	missing_tests=0
 	# 1. At least one Cargo.toml must exist in the repository.
-	mapfile -t cargo_manifests < <(just --justfile {{justfile()}} -d . _rust-cargo-manifests)
+	cargo_manifests_output="$(just --justfile {{justfile()}} -d . _rust-cargo-manifests)"
+	cargo_manifests=()
+	if [ -n "$cargo_manifests_output" ]; then
+		mapfile -t cargo_manifests <<<"$cargo_manifests_output"
+	fi
 	if [ "${#cargo_manifests[@]}" -eq 0 ]; then
 		echo "ERROR: Rust project must have at least one Cargo.toml file."
 		failed=1
@@ -87,7 +100,11 @@ _normalize:
 	echo "============================="
 	echo "=== Running: cargo fmt auto-format ==="
 	echo "# Formats Rust source before clippy, rustfmt --check, and tests run"
-	mapfile -t cargo_manifests < <(just --justfile {{justfile()}} -d . _rust-cargo-manifests)
+	cargo_manifests_output="$(just --justfile {{justfile()}} -d . _rust-cargo-manifests)"
+	cargo_manifests=()
+	if [ -n "$cargo_manifests_output" ]; then
+		mapfile -t cargo_manifests <<<"$cargo_manifests_output"
+	fi
 	if [ "${#cargo_manifests[@]}" -eq 0 ]; then
 		echo "ERROR: cargo fmt: no Cargo.toml found anywhere in this Rust project."
 		"{{artifacts}}/scripts/emit-triage-directive.sh"
@@ -110,13 +127,21 @@ _clippy:
 	echo "============================="
 	echo "=== Running: clippy Rust linting ==="
 	echo "# Runs cargo clippy with deny-level warnings"
-	mapfile -t rust_files < <(just --justfile {{justfile()}} -d . _rust-qc-files)
+	rust_files_output="$(just --justfile {{justfile()}} -d . _rust-qc-files)"
+	rust_files=()
+	if [ -n "$rust_files_output" ]; then
+		mapfile -t rust_files <<<"$rust_files_output"
+	fi
 	if [ "${#rust_files[@]}" -eq 0 ]; then
 		echo "ERROR: clippy: no Rust files found in a Rust project."
 		"{{artifacts}}/scripts/emit-triage-directive.sh"
 		exit 1
 	fi
-	mapfile -t cargo_manifests < <(just --justfile {{justfile()}} -d . _rust-cargo-manifests)
+	cargo_manifests_output="$(just --justfile {{justfile()}} -d . _rust-cargo-manifests)"
+	cargo_manifests=()
+	if [ -n "$cargo_manifests_output" ]; then
+		mapfile -t cargo_manifests <<<"$cargo_manifests_output"
+	fi
 	if [ "${#cargo_manifests[@]}" -eq 0 ]; then
 		echo "ERROR: cargo clippy: no Cargo.toml found anywhere in this Rust project."
 		"{{artifacts}}/scripts/emit-triage-directive.sh"
@@ -132,13 +157,21 @@ _rustfmt:
 	echo "============================="
 	echo "=== Running: rustfmt formatting check ==="
 	echo "# Checks Rust source formatting against rustfmt defaults"
-	mapfile -t rust_files < <(just --justfile {{justfile()}} -d . _rust-qc-files)
+	rust_files_output="$(just --justfile {{justfile()}} -d . _rust-qc-files)"
+	rust_files=()
+	if [ -n "$rust_files_output" ]; then
+		mapfile -t rust_files <<<"$rust_files_output"
+	fi
 	if [ "${#rust_files[@]}" -eq 0 ]; then
 		echo "ERROR: rustfmt: no Rust files found in a Rust project."
 		"{{artifacts}}/scripts/emit-triage-directive.sh"
 		exit 1
 	fi
-	mapfile -t cargo_manifests < <(just --justfile {{justfile()}} -d . _rust-cargo-manifests)
+	cargo_manifests_output="$(just --justfile {{justfile()}} -d . _rust-cargo-manifests)"
+	cargo_manifests=()
+	if [ -n "$cargo_manifests_output" ]; then
+		mapfile -t cargo_manifests <<<"$cargo_manifests_output"
+	fi
 	if [ "${#cargo_manifests[@]}" -eq 0 ]; then
 		echo "ERROR: cargo fmt: no Cargo.toml found anywhere in this Rust project."
 		"{{artifacts}}/scripts/emit-triage-directive.sh"
@@ -154,7 +187,11 @@ _cargo-test:
 	echo "============================="
 	echo "=== Running: cargo test ==="
 	echo "# Runs Rust unit and integration tests"
-	mapfile -t cargo_manifests < <(just --justfile {{justfile()}} -d . _rust-cargo-manifests)
+	cargo_manifests_output="$(just --justfile {{justfile()}} -d . _rust-cargo-manifests)"
+	cargo_manifests=()
+	if [ -n "$cargo_manifests_output" ]; then
+		mapfile -t cargo_manifests <<<"$cargo_manifests_output"
+	fi
 	if [ "${#cargo_manifests[@]}" -eq 0 ]; then
 		echo "ERROR: cargo test: no Cargo.toml found — Rust project must have one."
 		"{{artifacts}}/scripts/emit-triage-directive.sh"
@@ -170,7 +207,11 @@ _codeql:
 	echo "============================="
 	echo "=== Running: codeql security analysis (Rust) ==="
 	echo "# GitHub's static analysis engine for code quality and security vulnerabilities"
-	mapfile -t cargo_manifests < <(just --justfile {{justfile()}} -d . _rust-cargo-manifests)
+	cargo_manifests_output="$(just --justfile {{justfile()}} -d . _rust-cargo-manifests)"
+	cargo_manifests=()
+	if [ -n "$cargo_manifests_output" ]; then
+		mapfile -t cargo_manifests <<<"$cargo_manifests_output"
+	fi
 	if [ "${#cargo_manifests[@]}" -eq 0 ]; then
 		echo "ERROR: codeql: no Cargo.toml found anywhere in this Rust project."
 		"{{artifacts}}/scripts/emit-triage-directive.sh"
@@ -195,7 +236,11 @@ _jscpd:
 	echo "============================="
 	echo "=== Running: jscpd copy-paste detection ==="
 	echo "# Finds duplicate code blocks across Rust files"
-	mapfile -t rust_files < <(just --justfile {{justfile()}} -d . _rust-qc-files)
+	rust_files_output="$(just --justfile {{justfile()}} -d . _rust-qc-files)"
+	rust_files=()
+	if [ -n "$rust_files_output" ]; then
+		mapfile -t rust_files <<<"$rust_files_output"
+	fi
 	if [ "${#rust_files[@]}" -eq 0 ]; then
 		echo "ERROR: jscpd: no Rust files found."
 		"{{artifacts}}/scripts/emit-triage-directive.sh"
@@ -211,16 +256,25 @@ _lizard:
 	echo "============================="
 	echo "=== Running: lizard complexity analysis (Rust) ==="
 	echo "# Computes cyclomatic complexity number (CCN), line count, and parameter count"
-	mapfile -t rust_files < <(just --justfile {{justfile()}} -d . _rust-qc-files)
+	rust_files_output="$(just --justfile {{justfile()}} -d . _rust-qc-files)"
+	rust_files=()
+	if [ -n "$rust_files_output" ]; then
+		mapfile -t rust_files <<<"$rust_files_output"
+	fi
 	if [ "${#rust_files[@]}" -eq 0 ]; then
 		echo "ERROR: lizard: no Rust files found in a Rust project."
 		"{{artifacts}}/scripts/emit-triage-directive.sh"
 		exit 1
 	fi
+	exclude_dirs_output="$(uv run {{artifacts}}/scripts/read_qc_excludes.py {{configs}}/qc-excludes.toml)"
+	exclude_dirs=()
+	if [ -n "$exclude_dirs_output" ]; then
+		mapfile -t exclude_dirs <<<"$exclude_dirs_output"
+	fi
 	lizard_excludes=()
-	while IFS= read -r dir; do
+	for dir in "${exclude_dirs[@]}"; do
 		lizard_excludes+=(-x "*/$dir/*")
-	done < <(uv run {{artifacts}}/scripts/read_qc_excludes.py {{configs}}/qc-excludes.toml)
+	done
 	uvx --from lizard lizard -l rust -C 7 -L 150 -a 5 -i 0 \
 		"${lizard_excludes[@]}" \
 		"${rust_files[@]}"
@@ -230,16 +284,28 @@ _doctor-preflight:
 	set -euo pipefail
 	uv run --project {{infra}} ai-review-ci doctor-preflight --target .
 
-# public: COMMIT gate — correctness + normalization, plus bypass detection
-test: _doctor-preflight _check-rust-project _normalize-common _normalize _clippy _rustfmt _cargo-test
+# public: COMMIT gate — immediate, directly repairable feedback
+test-commit:
 	#!/usr/bin/env bash
 	set -euo pipefail
+	export AI_REVIEW_CI_FAILURE_MODE=direct
+	just --justfile {{justfile()}} -d . _doctor-preflight _check-rust-project _normalize-common _normalize _clippy _rustfmt
 	just -f {{justfiles}}/shared.just -d . _no-bypass
-	echo "Commit-tier quality checks completed"
+	echo "Commit quality checks completed"
 
-# public: PUSH/CI gate — test + the full style/slop stack
-test-ci: test _jscpd _lizard _codeql
+# public: PUSH gate — commit checks plus the full project-owned test suite
+test-push:
 	#!/usr/bin/env bash
 	set -euo pipefail
+	export AI_REVIEW_CI_FAILURE_MODE=direct
+	just --justfile {{justfile()}} -d . test-commit _cargo-test
+	echo "Push quality checks completed"
+
+# public: CI gate — push checks plus gameable and long-running acceptance gates
+test-ci:
+	#!/usr/bin/env bash
+	set -euo pipefail
+	export AI_REVIEW_CI_FAILURE_MODE=triage
+	just --justfile {{justfile()}} -d . test-push _jscpd _lizard _codeql
 	just -f {{justfiles}}/shared.just -d . _global-qc
-	echo "Push/CI quality checks completed"
+	echo "CI quality checks completed"

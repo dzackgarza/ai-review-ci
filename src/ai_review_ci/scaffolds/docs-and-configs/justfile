@@ -1,0 +1,28 @@
+# ai-review-ci docs-and-configs QC delegation justfile.
+# The central implementation lives in ~/ai-review-ci/justfiles/docs-and-configs.just.
+# Public recipes preserve this repository as the caller root.
+
+# ai-review-ci contract variables consumed by doctor and workflow installers.
+ai_review_ci_schema_version := "1"
+ai_review_ci_profile := "docs-and-configs"
+ai_review_ci_ref := "main"
+ai_review_ci_release_channel := "main"
+ai_review_ci_workflow_template_version := "1"
+ai_review_ci_local_delegation := "global-justfile"
+ai_review_ci_default_branch := "main"
+
+# List available recipes.
+default:
+    @just --list
+
+# Reformat Markdown and structured configuration before commit.
+test-commit:
+    @just -d . -f ~/ai-review-ci/justfiles/docs-and-configs.just test-commit
+
+# Validate documentation links before push.
+test-push:
+    @just -d . -f ~/ai-review-ci/justfiles/docs-and-configs.just test-push
+
+# Validate documentation links in CI.
+test-ci:
+    @just -d . -f ~/ai-review-ci/justfiles/docs-and-configs.just test-ci

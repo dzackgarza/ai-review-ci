@@ -41,14 +41,14 @@ esac
 # issues' verbatim asks. Consumes this hook's stdin (the ref lines).
 python3 "$hook_repo/global-hooks/confront_closes.py" "$1" || exit 1
 
-if just test-ci; then
+if just test-push; then
   exit 0
 fi
 
 cat >&2 <<'MSG'
 
 ────────────────────────────────────────────────────────────────
-ai-review-ci QC gate FAILED (just test-ci).
+ai-review-ci push gate FAILED (just test-push).
 
 `git push --no-verify` is a SANCTIONED bypass ONLY for these pushes:
   • a TDD red-proof audit commit — a deliberately failing test landed
@@ -58,7 +58,8 @@ ai-review-ci QC gate FAILED (just test-ci).
 The last two are auto-detected and skipped above, so if you see this
 message the repo IS gated and only the TDD red-proof exception applies.
 
-Any other failure is a REAL QC failure — do not bypass it, fix it.
+Any other failure is direct project/test repair work. Fix the reported object
+and push again; do not start a PR disposition or subagent remediation workflow.
 ────────────────────────────────────────────────────────────────
 MSG
 exit 1

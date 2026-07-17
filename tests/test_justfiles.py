@@ -17,6 +17,12 @@ TRIAGE_MARKER = "QC FAILURE"
 LINT_STAGED_CONFIG = TypeAdapter(dict[str, list[str]])
 
 
+@pytest.fixture(autouse=True)
+def private_recipe_failure_mode(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Private-recipe tests exercise CI-style directives unless overridden."""
+    monkeypatch.setenv("AI_REVIEW_CI_FAILURE_MODE", "triage")
+
+
 def run_just(
     justfile: pathlib.Path,
     workdir: pathlib.Path,
@@ -177,7 +183,50 @@ def test_no_bypass_blocks_newly_staged_markers(tmp_path: pathlib.Path) -> None:
 
     output = result.stdout + result.stderr
     assert result.returncode != 0, output
-    assert "coverage bypass marker" in output
+    assert "POLICY.NO_QC_SILENCING" in output
+    assert TRIAGE_MARKER in output
+
+
+def test_no_bypass_accepts_staged_non_utf8_generated_assets(tmp_path: pathlib.Path) -> None:
+    project = tmp_path / "git-project"
+    project.mkdir()
+    source = project / "app.py"
+    source.write_text("def clean() -> None:\n    pass\n")
+    init_git_repo(project)
+    assert run_git(project, "add", "app.py").returncode == 0
+    commit_without_hooks(project, "baseline")
+
+    (project / "viewer.bcmap").write_bytes(b"See ./LICENSE\x81\x0b\x81z\nnext\n")
+    assert run_git(project, "add", "viewer.bcmap").returncode == 0
+
+    result = run_just(ROOT / "justfiles" / "shared.just", project, "_no-bypass")
+
+    output = result.stdout + result.stderr
+    assert result.returncode == 0, output
+    assert "No bypass comments detected" in output
+
+
+def test_no_bypass_checks_text_sources_beside_non_text_generated_assets(
+    tmp_path: pathlib.Path,
+) -> None:
+    project = tmp_path / "git-project"
+    project.mkdir()
+    source = project / "app.py"
+    coverage_marker = "# pragma: no cov" + "er"
+    source.write_text("def clean() -> None:\n    pass\n")
+    init_git_repo(project)
+    assert run_git(project, "add", "app.py").returncode == 0
+    commit_without_hooks(project, "baseline")
+
+    source.write_text(f"def clean() -> None:\n    pass  {coverage_marker}\n")
+    (project / "viewer.bcmap").write_bytes(b"See ./LICENSE\x81\x0b\x81z\nnext\n")
+    assert run_git(project, "add", "app.py", "viewer.bcmap").returncode == 0
+
+    result = run_just(ROOT / "justfiles" / "shared.just", project, "_no-bypass")
+
+    output = result.stdout + result.stderr
+    assert result.returncode != 0, output
+    assert "POLICY.NO_QC_SILENCING" in output
     assert TRIAGE_MARKER in output
 
 
@@ -201,6 +250,124 @@ def test_sage_recipes_require_configured_executable_sage_path(
     output = result.stdout + result.stderr
     assert result.returncode != 0, output
     assert TRIAGE_MARKER in output
+
+
+def test_qc_excludes_notebooks_as_user_work() -> None:
+    data = tomllib.loads((ROOT / "tool-configs" / "qc-excludes.toml").read_text())
+
+    assert "notebooks" in data["directories"]
+
+
+def test_python_vulture_files_ignore_scripts_and_global_notebooks_directories(
+    tmp_path: pathlib.Path,
+) -> None:
+    project = tmp_path / "project"
+    project.mkdir()
+    for relative in (
+        "src/app.py",
+        "scripts/tool.py",
+        "pkg/scripts/nested_tool.py",
+        "notebooks/analysis.py",
+        "pkg/notebooks/nested_analysis.py",
+    ):
+        path = project / relative
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text("def target() -> None:\n    pass\n")
+
+    result = run_just(ROOT / "justfiles" / "python.just", project, "_python-vulture-files")
+
+    output = result.stdout + result.stderr
+    assert result.returncode == 0, output
+    assert result.stdout.splitlines() == ["src/app.py"]
+
+
+def test_sage_vulture_files_ignore_scripts_and_global_notebooks_directories(
+    tmp_path: pathlib.Path,
+) -> None:
+    project = tmp_path / "project"
+    project.mkdir()
+    for relative in (
+        "src/app.sage",
+        "scripts/tool.sage",
+        "pkg/scripts/nested_tool.sage",
+        "notebooks/analysis.sage",
+        "pkg/notebooks/nested_analysis.sage",
+    ):
+        path = project / relative
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text("def target():\n    pass\n")
+
+    result = run_just(ROOT / "justfiles" / "sage.just", project, "_sage-vulture-files")
+
+    output = result.stdout + result.stderr
+    assert result.returncode == 0, output
+    assert result.stdout.splitlines() == ["src/app.sage"]
+
+
+@pytest.mark.parametrize(
+    ("justfile_name", "recipe", "suffix", "expected_active"),
+    [
+        ("python.just", "_python-qc-files", ".py", "src/active.py"),
+        ("sage.just", "_sage-qc-files", ".sage", "src/active.sage"),
+        ("bun.just", "_js-qc-files", ".ts", "src/active.ts"),
+        ("rust.just", "_rust-qc-files", ".rs", "./src/active.rs"),
+    ],
+)
+def test_qc_file_selection_excludes_user_authored_scripts_and_notebooks(
+    tmp_path: pathlib.Path,
+    justfile_name: str,
+    recipe: str,
+    suffix: str,
+    expected_active: str,
+) -> None:
+    project = tmp_path / "project"
+    for relative in (
+        f"src/active{suffix}",
+        f"scripts/derivation{suffix}",
+        f"research/scripts/nested_derivation{suffix}",
+        f"notebooks/exploration{suffix}",
+        f"research/notebooks/nested_exploration{suffix}",
+    ):
+        path = project / relative
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text("source\n")
+
+    result = run_just(ROOT / "justfiles" / justfile_name, project, recipe)
+
+    output = result.stdout + result.stderr
+    assert result.returncode == 0, output
+    assert result.stdout.splitlines() == [expected_active]
+
+
+@pytest.mark.parametrize(
+    ("justfile_name", "recipe"),
+    [
+        ("python.just", "_python-qc-files"),
+        ("sage.just", "_sage-qc-files"),
+        ("bun.just", "_js-qc-files"),
+        ("rust.just", "_rust-qc-files"),
+    ],
+)
+def test_qc_file_selection_fails_loudly_when_exclusion_lookup_fails(
+    tmp_path: pathlib.Path,
+    justfile_name: str,
+    recipe: str,
+) -> None:
+    project = tmp_path / "project"
+    (project / "src").mkdir(parents=True)
+    (project / "src" / "active.py").write_text("source\n")
+    shim_dir = tmp_path / "shim"
+    shim_dir.mkdir()
+    uv_shim = shim_dir / "uv"
+    uv_shim.write_text("#!/usr/bin/env bash\necho forced exclusion lookup failure >&2\nexit 86\n")
+    uv_shim.chmod(0o755)
+    env = os.environ | {"PATH": f"{shim_dir}:{os.environ['PATH']}"}
+
+    result = run_just(ROOT / "justfiles" / justfile_name, project, recipe, env=env)
+
+    output = result.stdout + result.stderr
+    assert result.returncode != 0, output
+    assert "forced exclusion lookup failure" in output
 
 
 def test_tsc_requires_ags_when_tsconfig_declares_ags(tmp_path: pathlib.Path) -> None:
@@ -262,6 +429,7 @@ def test_sync_qc_excludes_preserves_non_owned_artifacts_and_updates_grain(
         "jscpd.json",
         "slop-scan.config.json",
         "pyright-local.json",
+        "slopconfig.yaml",
         "grain.toml",
     ):
         shutil.copy(ROOT / "tool-configs" / file_name, qc_root / file_name)
@@ -289,6 +457,10 @@ def test_sync_qc_excludes_preserves_non_owned_artifacts_and_updates_grain(
     grain = tomllib.loads((qc_root / "grain.toml").read_text())
     assert "fail_on" in grain["grain"]
     assert "central-owned/*" in grain["grain"]["exclude"]
+    slopconfig_text = (qc_root / "slopconfig.yaml").read_text()
+    assert slopconfig_text.startswith("# Maximally strict production config for ai-slop-detector\n")
+    slopconfig = yaml.safe_load(slopconfig_text)
+    assert slopconfig["ignore"] == ["central-owned/**", "**/central-owned/**"]
     assert eslint_config.read_text() == "export default [{ ignores: ['sentinel'] }];\n"
     assert rust_justfile.read_text() == "# rust sentinel\n"
 
@@ -570,6 +742,29 @@ def test_shared_ast_grep_uses_official_cli_and_central_rules_without_parsing_mar
     assert "SyntaxError" not in output
 
 
+def test_shared_ast_grep_excludes_user_authored_scripts_and_notebooks(
+    tmp_path: pathlib.Path,
+) -> None:
+    project = tmp_path / "project"
+    source_dir = project / "src"
+    script_dir = project / "research" / "scripts"
+    notebook_dir = project / "notebooks"
+    source_dir.mkdir(parents=True)
+    script_dir.mkdir(parents=True)
+    notebook_dir.mkdir(parents=True)
+    (source_dir / "app.py").write_text("VALUE = 1\n")
+    # The rule is intentionally real and blocking. A generic AST scan must
+    # not turn an exploratory research artifact into a defect in that artifact.
+    (script_dir / "derivation.py").write_text("CONFIG_VALUE = Field(default=1)\n")
+    (notebook_dir / "exploration.py").write_text("CONFIG_VALUE = Field(default=1)\n")
+
+    result = run_just(ROOT / "justfiles" / "shared.just", project, "_ast-grep")
+
+    output = result.stdout + result.stderr
+    assert result.returncode == 0, output
+    assert "no-field-default" not in output
+
+
 def test_python_ast_grep_uses_official_cli_and_central_rules(
     tmp_path: pathlib.Path,
 ) -> None:
@@ -843,6 +1038,21 @@ def test_semgrep_scans_tests_tree_for_banned_test_patterns(tmp_path: pathlib.Pat
         assert rule in output, f"{rule} did not fire on test-file code:\n{output}"
 
 
+def test_semgrep_ignores_exported_html_under_notebooks(
+    tmp_path: pathlib.Path,
+) -> None:
+    project = tmp_path / "semgrep-notebook-html-project"
+    notebook_export = project / "computations" / "notebooks" / "periods" / "fermat-periods-nbviewer.html"
+    notebook_export.parent.mkdir(parents=True)
+    notebook_export.write_text('<a href="http://example.com">nbviewer export</a>\n')
+
+    result = run_just(ROOT / "justfiles" / "shared.just", project, "_semgrep")
+
+    output = result.stdout + result.stderr
+    assert result.returncode == 0, output
+    assert "fermat-periods-nbviewer.html" not in output
+
+
 def test_semgrep_preserves_tracked_ignore_and_fails_loud_on_backup_failure(
     tmp_path: pathlib.Path,
 ) -> None:
@@ -910,6 +1120,37 @@ def vibecheck_payload(*findings: dict[str, Any]) -> dict[str, Any]:
         "findings": list(findings),
         "errors": [],
     }
+
+
+def test_vibecheck_installs_central_exclusions_without_persisting_them(
+    tmp_path: pathlib.Path,
+) -> None:
+    project = tmp_path / "vibe-project"
+    project.mkdir()
+    ignore_file = project / ".ignore"
+    sentinel = "user-owned-pattern"
+    ignore_file.write_text(sentinel)
+    fake_bin = tmp_path / "fake-bin"
+    fake_bin.mkdir()
+    uvx = fake_bin / "uvx"
+    uvx.write_text(
+        "#!/usr/bin/env bash\n"
+        "for expected in scripts notebooks; do\n"
+        '  if ! grep -Fxq "$expected" .ignore; then\n'
+        '    echo "missing temporary exclusion: $expected" >&2\n'
+        "    exit 86\n"
+        "  fi\n"
+        "done\n"
+        f"cat <<'JSON'\n{json.dumps(vibecheck_payload())}\nJSON\n",
+    )
+    uvx.chmod(0o755)
+    env = os.environ | {"PATH": f"{fake_bin}:{os.environ['PATH']}"}
+
+    result = run_just(ROOT / "justfiles" / "shared.just", project, "_vibecheck", env=env)
+
+    output = result.stdout + result.stderr
+    assert result.returncode == 0, output
+    assert ignore_file.read_text() == sentinel
 
 
 def test_vibecheck_ignores_g141_non_comment_matches(tmp_path: pathlib.Path) -> None:
@@ -1009,6 +1250,33 @@ def aislop_payload(*diagnostics: dict[str, Any]) -> dict[str, Any]:
         },
         "diagnostics": list(diagnostics),
     }
+
+
+def test_aislop_receives_central_script_and_notebook_exclusions(
+    tmp_path: pathlib.Path,
+) -> None:
+    project = tmp_path / "aislop-project"
+    project.mkdir()
+    fake_bin = tmp_path / "fake-bin"
+    fake_bin.mkdir()
+    npx = fake_bin / "npx"
+    npx.write_text(
+        "#!/usr/bin/env bash\n"
+        "for expected in '**/scripts/**' '**/notebooks/**'; do\n"
+        '  case "$*" in\n'
+        '    *"$expected"*) ;;\n'
+        '    *) echo "missing aislop exclusion: $expected" >&2; exit 86 ;;\n'
+        "  esac\n"
+        "done\n"
+        f"cat <<'JSON'\n{json.dumps(aislop_payload())}\nJSON\n",
+    )
+    npx.chmod(0o755)
+    env = os.environ | {"PATH": f"{fake_bin}:{os.environ['PATH']}"}
+
+    result = run_just(ROOT / "justfiles" / "shared.just", project, "_aislop", env=env)
+
+    output = result.stdout + result.stderr
+    assert result.returncode == 0, output
 
 
 def test_aislop_blocks_on_error_severity_findings(tmp_path: pathlib.Path) -> None:
@@ -1198,7 +1466,7 @@ def test_envrc_check_accepts_root_envrc_and_rejects_dotenv_files(
     assert rejected.returncode != 0, rejected.stdout + rejected.stderr
 
 
-def test_python_scaffold_bare_just_test_reaches_downstream_preflight_without_working_directory_env(
+def test_python_scaffold_bare_push_gate_reaches_downstream_preflight_without_working_directory_env(
     tmp_path: pathlib.Path,
 ) -> None:
     project = tmp_path / "python-scaffold-project"
@@ -1219,7 +1487,7 @@ def test_python_scaffold_bare_just_test_reaches_downstream_preflight_without_wor
     env = os.environ | {"DIRENV_CONFIGURED_CORRECTLY": "1"}
 
     result = subprocess.run(
-        ["just", "test"],
+        ["just", "test-push"],
         cwd=project,
         env=env,
         text=True,
@@ -1233,7 +1501,7 @@ def test_python_scaffold_bare_just_test_reaches_downstream_preflight_without_wor
     assert "the following required arguments were not provided" not in output
 
 
-def test_python_scaffold_bare_just_test_breaks_when_just_working_directory_is_exported(
+def test_python_scaffold_bare_push_gate_breaks_when_just_working_directory_is_exported(
     tmp_path: pathlib.Path,
 ) -> None:
     project = tmp_path / "python-scaffold-project"
@@ -1257,7 +1525,7 @@ def test_python_scaffold_bare_just_test_breaks_when_just_working_directory_is_ex
     }
 
     result = subprocess.run(
-        ["just", "test"],
+        ["just", "test-push"],
         cwd=project,
         env=env,
         text=True,
@@ -1321,7 +1589,7 @@ def test_bun_scaffold_delegates_qc_in_project_directory(
             str(ROOT / "scaffolds" / "bun" / "justfile"),
             "-d",
             str(project),
-            "test",
+            "test-push",
         ],
         cwd=project,
         text=True,
@@ -1431,7 +1699,7 @@ def test_scaffolds_delegate_qc_in_project_directory(
             str(ROOT / "scaffolds" / language / "justfile"),
             "-d",
             str(project),
-            "test",
+            "test-commit",
         ],
         cwd=project,
         env=env,
@@ -1502,10 +1770,10 @@ def test_bun_playwright_gate_requires_standard_config(tmp_path: pathlib.Path) ->
 @pytest.mark.parametrize(
     ("justfile_name", "recipes"),
     [
-        ("bun.just", ("test", "test-ci")),
-        ("python.just", ("test", "test-ci")),
-        ("rust.just", ("test", "test-ci")),
-        ("sage.just", ("test", "test-ci")),
+        ("bun.just", ("test-commit", "test-push", "test-ci")),
+        ("python.just", ("test-commit", "test-push", "test-ci")),
+        ("rust.just", ("test-commit", "test-push", "test-ci")),
+        ("sage.just", ("test-commit", "test-push", "test-ci")),
     ],
 )
 def test_language_qc_delegates_nested_global_recipes_in_project_directory(
@@ -1539,6 +1807,48 @@ def test_language_qc_delegates_nested_global_recipes_in_project_directory(
         assert delegated_lines, output
         for line in delegated_lines:
             assert " -d . " in f" {line} ", line
+
+
+@pytest.mark.parametrize(
+    ("justfile_name", "full_suite_recipe"),
+    [
+        ("python.just", "_pytest"),
+        ("bun.just", "_bun-test"),
+        ("rust.just", "_cargo-test"),
+        ("sage.just", "_sage-pytest"),
+    ],
+)
+def test_public_gate_composition_separates_immediate_checks_from_full_suite(
+    justfile_name: str,
+    full_suite_recipe: str,
+) -> None:
+    text = (ROOT / "justfiles" / justfile_name).read_text()
+
+    commit = re.search(r"(?ms)^test-commit:\n(?P<body>.*?)(?=^# public:)", text)
+    push = re.search(r"(?ms)^test-push:\n(?P<body>.*?)(?=^# public:|\Z)", text)
+    ci = re.search(r"(?ms)^test-ci:\n(?P<body>.*)\Z", text)
+
+    assert commit is not None
+    assert push is not None
+    assert ci is not None
+    assert full_suite_recipe not in commit.group("body")
+    assert full_suite_recipe in push.group("body")
+    assert "test-push" in ci.group("body")
+
+
+@pytest.mark.parametrize(
+    "path",
+    [
+        ROOT / "justfile",
+        ROOT / "justfiles" / "python.just",
+        ROOT / "justfiles" / "bun.just",
+        ROOT / "justfiles" / "rust.just",
+        ROOT / "justfiles" / "sage.just",
+        ROOT / "justfiles" / "qc-tooling.just",
+    ],
+)
+def test_old_test_gate_alias_is_removed(path: pathlib.Path) -> None:
+    assert re.search(r"(?m)^test:", path.read_text()) is None
 
 
 def test_tsc_removes_temp_output_on_success(tmp_path: pathlib.Path) -> None:
@@ -2181,22 +2491,8 @@ def test_commit_gate_stops_at_doctor_preflight_before_typechecking(
     (tests_dir / "test_placeholder.py").write_text("def test_placeholder() -> None:\n    assert True\n")
 
     (project / "justfile").write_text((ROOT / "scaffolds" / "python" / "justfile").read_text())
-    (project / ".ai-review-ci.toml").write_text(
-        "\n".join(
-            [
-                "schema_version = 1",
-                'profile = "python"',
-                'installed_ref = "main"',
-                'release_channel = "main"',
-                "workflow_template_version = 1",
-                'local_delegation = "global-justfile"',
-                'default_branch = "main"',
-                "",
-            ]
-        )
-    )
 
-    result = run_just(ROOT / "justfiles" / "python.just", project, "test")
+    result = run_just(ROOT / "justfiles" / "python.just", project, "test-commit")
     output = result.stdout + result.stderr
 
     assert result.returncode != 0, output
@@ -2215,20 +2511,6 @@ def test_python_subgate_doctor_preflight_accepts_central_bun_python_profile(
     (project / "package.json").write_text('{"scripts": {}}\n')
     (project / "bun.lock").write_text("")
     (project / "justfile").write_text((ROOT / "scaffolds" / "bun-python" / "justfile").read_text())
-    (project / ".ai-review-ci.toml").write_text(
-        "\n".join(
-            [
-                "schema_version = 1",
-                'profile = "bun-python"',
-                'installed_ref = "main"',
-                'release_channel = "main"',
-                "workflow_template_version = 1",
-                'local_delegation = "global-justfile"',
-                'default_branch = "main"',
-                "",
-            ]
-        )
-    )
 
     result = run_just(ROOT / "justfiles" / "python.just", project, "_doctor-preflight")
     output = result.stdout + result.stderr
@@ -2487,6 +2769,7 @@ def test_rust_preflight_accepts_nested_cargo_manifest_and_routes_missing_tests(
             "_check-rust-project",
         ],
         cwd=project,
+        env=os.environ | {"AI_REVIEW_CI_FAILURE_MODE": "triage"},
         text=True,
         capture_output=True,
         check=False,
@@ -2541,7 +2824,7 @@ def test_rust_normalization_formats_nested_manifest_project(
 # Regression for #17: just >= 1.46 binds JUST_WORKING_DIRECTORY to
 # -d/--working-directory, which then requires --justfile — so any consumer that
 # exported JUST_WORKING_DIRECTORY (the old delegated-gate routing hint) could no
-# longer run a bare `just test`. The scaffolds resolve this by routing with an
+# longer run a bare public gate. The scaffolds resolve this by routing with an
 # explicit `-d .` and never exporting JUST_WORKING_DIRECTORY, so the bare
 # entrypoint keeps working. These tests lock both halves of that contract.
 
@@ -2555,8 +2838,39 @@ SCAFFOLD_DELEGATES = {
 }
 
 
+def test_direct_failure_mode_forbids_review_ceremony() -> None:
+    result = subprocess.run(
+        [str(ROOT / "tool-artifacts" / "scripts" / "emit-triage-directive.sh")],
+        env=os.environ | {"AI_REVIEW_CI_FAILURE_MODE": "direct"},
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+
+    assert result.returncode == 0
+    assert "DIRECT REPAIR REQUIRED" in result.stdout
+    assert "does not enter returned-PR-feedback triage" in result.stdout
+    assert "TRIAGE REQUIRED" not in result.stdout
+    assert "subagent" in result.stdout
+
+
+def test_ci_failure_mode_retains_anti_golfing_triage() -> None:
+    result = subprocess.run(
+        [str(ROOT / "tool-artifacts" / "scripts" / "emit-triage-directive.sh")],
+        env=os.environ | {"AI_REVIEW_CI_FAILURE_MODE": "triage"},
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+
+    assert result.returncode == 0
+    assert "QC FAILURE — TRIAGE REQUIRED" in result.stdout
+    assert "golf" in result.stdout
+    assert "subagent" in result.stdout
+
+
 @pytest.mark.parametrize("language", sorted(SCAFFOLD_DELEGATES))
-@pytest.mark.parametrize("recipe", ["test", "test-ci"])
+@pytest.mark.parametrize("recipe", ["test-commit", "test-push", "test-ci"])
 def test_scaffold_bare_just_entrypoint_survives_working_directory_binding(
     tmp_path: pathlib.Path,
     language: str,
@@ -2598,3 +2912,58 @@ def test_scaffold_does_not_export_working_directory_routing_hint(language: str) 
 # The collision itself (JUST_WORKING_DIRECTORY set -> bare `just` fails at
 # arg-parse) is covered with the real delegated chain by
 # test_python_scaffold_bare_just_test_breaks_when_just_working_directory_is_exported.
+
+
+def test_docs_and_configs_qc_routes_formatting_and_link_validation(tmp_path: pathlib.Path) -> None:
+    commit = subprocess.run(
+        [
+            "just",
+            "--dry-run",
+            "--justfile",
+            str(ROOT / "justfiles" / "docs-and-configs.just"),
+            "-d",
+            str(tmp_path),
+            "test-commit",
+        ],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    push = subprocess.run(
+        [
+            "just",
+            "--dry-run",
+            "--justfile",
+            str(ROOT / "justfiles" / "docs-and-configs.just"),
+            "-d",
+            str(tmp_path),
+            "test-push",
+        ],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    links = subprocess.run(
+        [
+            "just",
+            "--dry-run",
+            "--justfile",
+            str(ROOT / "justfiles" / "docs-and-configs.just"),
+            "-d",
+            str(tmp_path),
+            "_check-links",
+        ],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    profile_justfile = str(ROOT / "justfiles" / "docs-and-configs.just")
+
+    assert commit.returncode == 0, commit.stderr
+    assert f"--justfile {profile_justfile} _format-structured-text" in commit.stderr
+    assert push.returncode == 0, push.stderr
+    assert f"--justfile {profile_justfile} _check-links" in push.stderr
+    assert links.returncode == 0, links.stderr
+    assert "lychee --no-progress" in links.stderr

@@ -2,15 +2,14 @@ import json
 import pathlib
 import subprocess
 import sys
-import tomllib
 from typing import Any
 
 import pytest
-from pydantic import ValidationError
 
 from ai_review_ci.doctor import (
     DoctorReport,
-    QcManifest,
+    ProfileAdapter,
+    QcJustfileContract,
     _classify,
     _evaluate_label_alignment,
     _has_private_attribute,
@@ -18,7 +17,7 @@ from ai_review_ci.doctor import (
     _label_alignment_findings,
     doctor_preflight,
     doctor_report,
-    manifest_text,
+    justfile_contract_variables_text,
 )
 from ai_review_ci.install import _write_trigger_workflows
 from ai_review_ci.labels import RemoteLabel, load_taxonomy
@@ -58,16 +57,6 @@ def create_target(tmp_path: pathlib.Path, profile: str) -> pathlib.Path:
     (project / "AGENTS.md").write_text(f"# {profile} target\n\nIntro.\n\n{load_canonical_review_guidelines()}\n", encoding="utf-8")
     (project / "justfile").write_text((ROOT / "scaffolds" / profile / "justfile").read_text())
     _write_trigger_workflows(project, profile)
-    (project / ".ai-review-ci.toml").write_text(
-        manifest_text(
-            profile=profile,
-            installed_ref="main",
-            release_channel="main",
-            workflow_template_version=1,
-            local_delegation="global-justfile",
-            default_branch="main",
-        )
-    )
     return project
 
 
@@ -100,6 +89,15 @@ def status_for(project: pathlib.Path) -> tuple[str, dict[str, Any]]:
     return str(payload["global_status"]), payload
 
 
+def replace_just_variable(project: pathlib.Path, variable: str, value: str) -> None:
+    justfile = project / "justfile"
+    lines = justfile.read_text().splitlines()
+    prefix = f"{variable} :="
+    replaced = [f'{variable} := "{value}"' if line.startswith(prefix) else line for line in lines]
+    assert replaced != lines, f"{variable} was not present in {justfile}"
+    justfile.write_text("\n".join(replaced) + "\n")
+
+
 @pytest.mark.parametrize("profile", ["python", "bun", "bun-playwright", "bun-python", "rust", "sage"])
 def test_doctor_reports_current_for_installed_profile_targets(tmp_path: pathlib.Path, profile: str) -> None:
     project = create_target(tmp_path, profile)
@@ -113,8 +111,38 @@ def test_doctor_reports_current_for_installed_profile_targets(tmp_path: pathlib.
     assert payload["findings"] == []
     assert payload["branch_protection"]["observed_state"] == "not_applicable"
     assert "qc-doctor / qc-doctor" in payload["branch_protection"]["required_contexts"]
-    assert payload["justfile_delegation"]["test"]["observed"]["caller_root_preserved"] is True
+    assert payload["justfile_delegation"]["test-commit"]["observed"]["caller_root_preserved"] is True
     assert payload["workflow_refs"]["review-pr.yml"]["observed_ref"] == "main"
+
+
+def test_doctor_ci_preserves_advisory_unverifiable_report_without_failing_gate(
+    tmp_path: pathlib.Path,
+) -> None:
+    project = create_target(tmp_path, "python")
+    remote = run_git(project, "remote", "add", "origin", "https://example.invalid/owner/repo.git")
+    assert remote.returncode == 0, remote.stderr
+
+    result = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "ai_review_ci.cli",
+            "doctor-ci",
+            "--target",
+            str(project),
+            "--json",
+        ],
+        cwd=ROOT,
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    payload = json.loads(result.stdout)
+    assert payload["global_status"] == "unverifiable"
+    assert payload["findings"]
+    assert {finding["severity"] for finding in payload["findings"]} == {"warning"}
 
 
 def test_doctor_preflight_rejects_declared_profile_missing_required_path(
@@ -140,7 +168,7 @@ def test_doctor_preflight_rejects_undeclared_python_subgate(
     with pytest.raises(SystemExit):
         doctor_preflight(project)
 
-    assert "declares 'bun'" in capsys.readouterr().err
+    assert "declares 'bun-python'" in capsys.readouterr().err
 
 
 def test_doctor_preflight_accepts_central_composite_profile(
@@ -154,8 +182,8 @@ def test_doctor_preflight_accepts_central_composite_profile(
     assert "QC doctor preflight passed" in capsys.readouterr().out
 
 
-def test_manifest_text_round_trips_through_toml_parser() -> None:
-    text = manifest_text(
+def test_justfile_contract_variables_render_all_manifest_replacement_fields() -> None:
+    text = justfile_contract_variables_text(
         profile="python",
         installed_ref="main",
         release_channel="main",
@@ -164,17 +192,18 @@ def test_manifest_text_round_trips_through_toml_parser() -> None:
         default_branch="main",
     )
 
-    parsed = tomllib.loads(text)
-
-    assert parsed == {
-        "schema_version": 1,
-        "profile": "python",
-        "installed_ref": "main",
-        "release_channel": "main",
-        "workflow_template_version": 1,
-        "local_delegation": "global-justfile",
-        "default_branch": "main",
-    }
+    assert text == "\n".join(
+        [
+            'ai_review_ci_schema_version := "1"',
+            'ai_review_ci_profile := "python"',
+            'ai_review_ci_ref := "main"',
+            'ai_review_ci_release_channel := "main"',
+            'ai_review_ci_workflow_template_version := "1"',
+            'ai_review_ci_local_delegation := "global-justfile"',
+            'ai_review_ci_default_branch := "main"',
+            "",
+        ]
+    )
 
 
 def test_doctor_cli_exits_zero_only_for_current_target(tmp_path: pathlib.Path) -> None:
@@ -268,16 +297,8 @@ def test_doctor_golden_example_validates_against_owned_model() -> None:
 
 def test_doctor_classifies_outdated_workflow_refs_as_stale(tmp_path: pathlib.Path) -> None:
     project = create_target(tmp_path, "python")
-    (project / ".ai-review-ci.toml").write_text(
-        manifest_text(
-            profile="python",
-            installed_ref="release/v1",
-            release_channel="stable",
-            workflow_template_version=1,
-            local_delegation="global-justfile",
-            default_branch="main",
-        )
-    )
+    replace_just_variable(project, "ai_review_ci_ref", "release/v1")
+    replace_just_variable(project, "ai_review_ci_release_channel", "stable")
 
     status, payload = status_for(project)
 
@@ -288,29 +309,25 @@ def test_doctor_classifies_outdated_workflow_refs_as_stale(tmp_path: pathlib.Pat
     assert payload["workflow_refs"]["review-pr.yml"]["observed_ref"] == "main"
 
 
-def test_doctor_classifies_missing_manifest_as_misconfigured(tmp_path: pathlib.Path) -> None:
+def test_doctor_classifies_missing_justfile_contract_as_misconfigured(tmp_path: pathlib.Path) -> None:
     project = create_target(tmp_path, "python")
-    (project / ".ai-review-ci.toml").unlink()
+    lines = [
+        line
+        for line in (project / "justfile").read_text().splitlines()
+        if not line.startswith("ai_review_ci_")
+    ]
+    (project / "justfile").write_text("\n".join(lines) + "\n")
 
     status, payload = status_for(project)
 
     assert status == "misconfigured"
     assert payload["installation_state"] == "uninstalled"
-    assert payload["findings"][0]["surface"] == "manifest"
+    assert payload["findings"][0]["surface"] == "justfile_contract"
 
 
 def test_doctor_classifies_wrong_profile_shape_as_misconfigured(tmp_path: pathlib.Path) -> None:
     project = create_target(tmp_path, "python")
-    (project / ".ai-review-ci.toml").write_text(
-        manifest_text(
-            profile="rust",
-            installed_ref="main",
-            release_channel="main",
-            workflow_template_version=1,
-            local_delegation="global-justfile",
-            default_branch="main",
-        )
-    )
+    replace_just_variable(project, "ai_review_ci_profile", "rust")
 
     status, payload = status_for(project)
 
@@ -345,24 +362,13 @@ def test_doctor_classifies_missing_bun_playwright_app_boot_as_misconfigured(tmp_
 
 def test_doctor_classifies_wrong_caller_root_delegation_as_misconfigured(tmp_path: pathlib.Path) -> None:
     project = create_target(tmp_path, "python")
-    (project / "justfile").write_text(
-        "\n".join(
-            [
-                "test:",
-                "    @just -f ~/ai-review-ci/justfiles/python.just test",
-                "",
-                "test-ci:",
-                "    @just -f ~/ai-review-ci/justfiles/python.just test-ci",
-                "",
-            ]
-        )
-    )
+    (project / "justfile").write_text((ROOT / "scaffolds" / "python" / "justfile").read_text().replace(" -d . test-commit", " test-commit"))
 
     status, payload = status_for(project)
 
     assert status == "misconfigured"
     assert payload["installation_state"] == "noncompliant"
-    assert payload["justfile_delegation"]["test"]["observed"]["caller_root_preserved"] is False
+    assert payload["justfile_delegation"]["test-commit"]["observed"]["caller_root_preserved"] is False
     assert payload["findings"][0]["remediation_commands"] == ["just install-qc-scaffold python <target-repo>"]
 
 
@@ -371,10 +377,21 @@ def test_doctor_reports_justfile_baseline_violations(tmp_path: pathlib.Path) -> 
     (project / "justfile").write_text(
         "\n".join(
             [
-                "test:",
-                "    @just -f ~/ai-review-ci/justfiles/python.just -d . test",
+                'ai_review_ci_schema_version := "1"',
+                'ai_review_ci_profile := "python"',
+                'ai_review_ci_ref := "main"',
+                'ai_review_ci_release_channel := "main"',
+                'ai_review_ci_workflow_template_version := "1"',
+                'ai_review_ci_local_delegation := "global-justfile"',
+                'ai_review_ci_default_branch := "main"',
+                "test-commit:",
+                "    @just -f ~/ai-review-ci/justfiles/python.just -d . test-commit",
                 "",
                 "# Run push-tier Python QC through the central implementation.",
+                "test-push:",
+                "    @just -f ~/ai-review-ci/justfiles/python.just -d . test-push",
+                "",
+                "# Run CI-tier Python QC through the central implementation.",
                 "test-ci:",
                 "    @just -f ~/ai-review-ci/justfiles/python.just -d . test-ci",
                 "",
@@ -389,7 +406,7 @@ def test_doctor_reports_justfile_baseline_violations(tmp_path: pathlib.Path) -> 
     assert [finding["evidence"].split(" ", 1)[1] for finding in justfile_findings] == [
         "header-comment: justfile must begin with a comment block",
         "default-recipe: no default recipe; bare just must list recipes",
-        "public-recipe-doc: recipe `test` has no immediate # doc comment",
+        "public-recipe-doc: recipe `test-commit` has no immediate # doc comment",
     ]
 
 
@@ -398,13 +415,24 @@ def test_check_justfile_cli_reports_baseline_violations(tmp_path: pathlib.Path) 
     (project / "justfile").write_text(
         "\n".join(
             [
+                'ai_review_ci_schema_version := "1"',
+                'ai_review_ci_profile := "python"',
+                'ai_review_ci_ref := "main"',
+                'ai_review_ci_release_channel := "main"',
+                'ai_review_ci_workflow_template_version := "1"',
+                'ai_review_ci_local_delegation := "global-justfile"',
+                'ai_review_ci_default_branch := "main"',
                 "# Delegates Python QC.",
                 "",
                 "# Run commit-tier Python QC through the central implementation.",
-                "test:",
-                "    @just -f ~/ai-review-ci/justfiles/python.just -d . test",
+                "test-commit:",
+                "    @just -f ~/ai-review-ci/justfiles/python.just -d . test-commit",
                 "",
                 "# Run push-tier Python QC through the central implementation.",
+                "test-push:",
+                "    @just -f ~/ai-review-ci/justfiles/python.just -d . test-push",
+                "",
+                "# Run CI-tier Python QC through the central implementation.",
                 "test-ci:",
                 "    @just -f ~/ai-review-ci/justfiles/python.just -d . test-ci",
                 "",
@@ -430,6 +458,13 @@ def test_doctor_justfile_parser_accepts_parameter_defaults_and_recipe_attributes
         "\n".join(
             [
                 "# Delegates Python QC.",
+                'ai_review_ci_schema_version := "1"',
+                'ai_review_ci_profile := "python"',
+                'ai_review_ci_ref := "main"',
+                'ai_review_ci_release_channel := "main"',
+                'ai_review_ci_workflow_template_version := "1"',
+                'ai_review_ci_local_delegation := "global-justfile"',
+                'ai_review_ci_default_branch := "main"',
                 'api_url := "https://example.invalid:443"',
                 "",
                 "# List available recipes.",
@@ -439,10 +474,14 @@ def test_doctor_justfile_parser_accepts_parameter_defaults_and_recipe_attributes
                 "",
                 "# Run commit-tier Python QC through the central implementation.",
                 "[no-cd]",
-                'test mode="fast":',
-                "    @just -f ~/ai-review-ci/justfiles/python.just -d . test",
+                'test-commit mode="fast":',
+                "    @just -f ~/ai-review-ci/justfiles/python.just -d . test-commit",
                 "",
                 "# Run push-tier Python QC through the central implementation.",
+                "test-push:",
+                "    @just -f ~/ai-review-ci/justfiles/python.just -d . test-push",
+                "",
+                "# Run CI-tier Python QC through the central implementation.",
                 "test-ci:",
                 "    @just -f ~/ai-review-ci/justfiles/python.just -d . test-ci",
                 "",
@@ -483,8 +522,8 @@ def test_doctor_classifies_non_github_remote_branch_protection_as_unverifiable(t
     assert payload["findings"][0]["surface"] == "branch_protection"
 
 
-def _compliant_manifest() -> QcManifest:
-    return QcManifest.model_validate(
+def _compliant_contract() -> QcJustfileContract:
+    return QcJustfileContract.model_validate(
         {
             "schema_version": 1,
             "profile": "python",
@@ -559,37 +598,22 @@ def test_label_alignment_misalignment_is_a_required_error_feeding_global_status(
     assert "missing" in findings[0].evidence
     assert "drifted" in findings[0].evidence
     assert "Bug" in findings[0].evidence
-    _, global_status = _classify(_compliant_manifest(), findings)
+    _, global_status = _classify(_compliant_contract(), findings)
     assert global_status == "misconfigured"
 
 
-def test_manifest_declaring_exceptions_is_rejected_not_honored(tmp_path: pathlib.Path) -> None:
-    """A manifest that declares an exception is invalid config; there is no suppression path."""
+def test_justfile_declaring_exceptions_is_ignored_not_honored(tmp_path: pathlib.Path) -> None:
+    """A justfile variable that declares an exception is not a suppression path."""
     project = create_target(tmp_path, "bun-playwright")
-    (project / "justfile").write_text((ROOT / "scaffolds" / "bun" / "justfile").read_text())
-    (project / ".ai-review-ci.toml").write_text(
-        "\n".join(
-            [
-                "schema_version = 1",
-                'profile = "bun-playwright"',
-                'installed_ref = "main"',
-                'release_channel = "main"',
-                "workflow_template_version = 1",
-                'local_delegation = "global-justfile"',
-                'default_branch = "main"',
-                "",
-                "[[exceptions]]",
-                'id = "app-boot-bootstrap"',
-                'surface = "justfile_delegation"',
-                'reason = "tracked downstream bootstrap exception"',
-                "active = true",
-                "",
-            ]
-        )
-    )
+    text = (ROOT / "scaffolds" / "bun" / "justfile").read_text().replace('ai_review_ci_profile := "bun"', 'ai_review_ci_profile := "bun-playwright"')
+    (project / "justfile").write_text(text + 'ai_review_ci_exceptions := "app-boot-bootstrap"\n')
 
-    with pytest.raises(ValidationError):
-        doctor_report(project)
+    status, payload = status_for(project)
+
+    assert status == "misconfigured"
+    assert payload["installation_state"] == "noncompliant"
+    assert payload["findings"][0]["surface"] == "justfile_delegation"
+    assert "exceptions" not in payload
 
 
 def test_active_findings_are_noncompliant_with_no_exception_path(tmp_path: pathlib.Path) -> None:
@@ -603,3 +627,7 @@ def test_active_findings_are_noncompliant_with_no_exception_path(tmp_path: pathl
     assert payload["installation_state"] == "noncompliant"
     assert payload["findings"]
     assert "exceptions" not in payload
+
+
+def test_docs_and_configs_profile_is_doctor_compatible() -> None:
+    assert ProfileAdapter.validate_python("docs-and-configs") == "docs-and-configs"

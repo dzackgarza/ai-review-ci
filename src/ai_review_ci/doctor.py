@@ -1,11 +1,10 @@
-"""QC doctor manifest parsing and target repository observations."""
+"""QC doctor justfile contract parsing and target repository observations."""
 
 import hashlib
 import json as jsonlib
 import re
 import subprocess
 import sys
-import tomllib
 from collections.abc import Mapping, Sequence
 from importlib.metadata import version
 from pathlib import Path
@@ -20,20 +19,25 @@ from ai_review_ci.install import TEMPLATES
 from ai_review_ci.labels import Label, RemoteLabel, compute_label_actions, load_taxonomy
 from ai_review_ci.review_guidelines import classify_review_guidelines, load_canonical_review_guidelines
 
-MANIFEST_NAME = ".ai-review-ci.toml"
 SCHEMA_VERSION: Literal[1] = 1
-WORKFLOW_TEMPLATE_VERSION: Literal[1] = 1
-LOCAL_DELEGATION_MODE = "global-justfile"
-DOCTOR_CHECK_CONTEXT = "qc-doctor / qc-doctor"
 MISSING_JUSTFILE_NAME = ".ai-review-ci-missing-justfile"
+JUSTFILE_CONTRACT_VARIABLES = {
+    "schema_version": "ai_review_ci_schema_version",
+    "profile": "ai_review_ci_profile",
+    "installed_ref": "ai_review_ci_ref",
+    "release_channel": "ai_review_ci_release_channel",
+    "workflow_template_version": "ai_review_ci_workflow_template_version",
+    "local_delegation": "ai_review_ci_local_delegation",
+    "default_branch": "ai_review_ci_default_branch",
+}
 
-ProfileName = Literal["python", "bun", "bun-playwright", "bun-python", "rust", "sage"]
-ObservedProfile = Literal["python", "bun", "bun-playwright", "bun-python", "rust", "sage", "unknown"]
+ProfileName = Literal["python", "bun", "bun-playwright", "bun-python", "docs-and-configs", "rust", "sage"]
+ObservedProfile = Literal["python", "bun", "bun-playwright", "bun-python", "docs-and-configs", "rust", "sage", "unknown"]
 InstallationState = Literal["compliant", "outdated", "noncompliant", "uninstalled", "unknown"]
 GlobalStatus = Literal["current", "stale", "misconfigured", "unverifiable"]
 FindingSeverity = Literal["error", "warning"]
 FindingSurface = Literal[
-    "manifest",
+    "justfile_contract",
     "profile",
     "workflow",
     "workflow_ref",
@@ -51,7 +55,7 @@ ProfileAdapter: TypeAdapter[ProfileName] = TypeAdapter(ProfileName)
 UNKNOWN_PROFILE: ObservedProfile = "unknown"
 
 
-class QcManifest(BaseModel):
+class QcJustfileContract(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     schema_version: Literal[1]
@@ -63,14 +67,14 @@ class QcManifest(BaseModel):
     default_branch: str = Field(min_length=1)
 
 
-class MissingManifest(BaseModel):
+class MissingJustfileContract(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     present: Literal[False]
     reason: str
 
 
-ManifestDeclaration = QcManifest | MissingManifest
+JustfileContractDeclaration = QcJustfileContract | MissingJustfileContract
 
 
 class TargetObservation(BaseModel):
@@ -86,7 +90,7 @@ class DeclarationObservation(BaseModel):
 
     path: str
     sha256: str
-    manifest: ManifestDeclaration
+    justfile_contract: JustfileContractDeclaration
 
 
 class ProfileProofObservation(BaseModel):
@@ -186,7 +190,7 @@ class DoctorReport(BaseModel):
     global_status: GlobalStatus
 
 
-def manifest_text(
+def justfile_contract_variables_text(
     *,
     profile: str,
     installed_ref: str,
@@ -195,16 +199,16 @@ def manifest_text(
     local_delegation: str,
     default_branch: str,
 ) -> str:
-    """Render the repo-owned QC manifest deterministically."""
+    """Render the repo-owned QC justfile contract variables deterministically."""
     ProfileAdapter.validate_python(profile)
     lines = [
-        "schema_version = 1",
-        f'profile = "{profile}"',
-        f'installed_ref = "{installed_ref}"',
-        f'release_channel = "{release_channel}"',
-        f"workflow_template_version = {workflow_template_version}",
-        f'local_delegation = "{local_delegation}"',
-        f'default_branch = "{default_branch}"',
+        "ai_review_ci_schema_version := \"1\"",
+        f'ai_review_ci_profile := "{profile}"',
+        f'ai_review_ci_ref := "{installed_ref}"',
+        f'ai_review_ci_release_channel := "{release_channel}"',
+        f'ai_review_ci_workflow_template_version := "{workflow_template_version}"',
+        f'ai_review_ci_local_delegation := "{local_delegation}"',
+        f'ai_review_ci_default_branch := "{default_branch}"',
     ]
     return "\n".join(lines) + "\n"
 
@@ -222,39 +226,47 @@ def doctor(target: Path, *, json: Annotated[int, Parameter(name="--json", count=
         sys.exit(1)
 
 
+def doctor_ci(target: Path, *, json: Annotated[int, Parameter(name="--json", count=True)] = 0) -> None:
+    """Evaluate repository-owned QC health without failing on advisory remote-state gaps."""
+    report = doctor_report(target)
+    if json > 0:
+        print(report.model_dump_json(indent=2))
+    else:
+        print(f"{report.global_status}: {target.resolve()}")
+        for finding in report.findings:
+            print(f"- {finding.surface}: {finding.evidence}")
+    if report.global_status in ("stale", "misconfigured"):
+        sys.exit(1)
+
+
 def doctor_preflight(target: Path) -> None:
-    """Validate central manifest/profile initialization before any QC code checks run."""
+    """Validate central justfile/profile initialization before any QC code checks run."""
     target_root = _target_root(target)
-    manifest_path = target_root / MANIFEST_NAME
-    if not manifest_path.is_file():
-        print(f"FATAL: QC doctor preflight failed: {manifest_path} is missing", file=sys.stderr)
+    contract = _load_justfile_contract(target_root)
+    if not isinstance(contract, QcJustfileContract):
+        print(f"FATAL: QC doctor preflight failed: {contract.reason}", file=sys.stderr)
         sys.exit(1)
-    try:
-        manifest = _load_manifest(manifest_path)
-    except (tomllib.TOMLDecodeError, ValidationError) as exc:
-        print(f"FATAL: QC doctor preflight failed: {manifest_path} is invalid: {exc}", file=sys.stderr)
-        sys.exit(1)
-    missing = _profile_missing_paths(target_root, PROJECT_PROFILES[manifest.profile])
+    missing = _profile_missing_paths(target_root, PROJECT_PROFILES[contract.profile])
     if missing:
         print(
-            f"FATAL: QC doctor preflight failed: {target_root} does not satisfy its declared {manifest.profile!r} profile; missing: {', '.join(missing)}",
+            f"FATAL: QC doctor preflight failed: {target_root} does not satisfy its declared {contract.profile!r} profile; missing: {', '.join(missing)}",
             file=sys.stderr,
         )
         sys.exit(1)
-    delegation = _justfile_delegation(target_root, manifest.profile)
+    delegation = _justfile_delegation(target_root, contract.profile)
     failed = [
         recipe
         for recipe, observation in delegation.items()
         if not (observation.observed.present and observation.observed.delegates_to_global_qc and observation.observed.caller_root_preserved)
     ]
     if failed:
-        required = ", ".join(f"~/ai-review-ci/justfiles/{name}" for name in PROJECT_PROFILES[manifest.profile].justfile_names)
+        required = ", ".join(f"~/ai-review-ci/justfiles/{name}" for name in PROJECT_PROFILES[contract.profile].justfile_names)
         print(
-            f"FATAL: QC doctor preflight failed: {target_root} declares {manifest.profile!r}, which requires exactly {required} with -d . for: {', '.join(failed)}",
+            f"FATAL: QC doctor preflight failed: {target_root} declares {contract.profile!r}, which requires exactly {required} with -d . for: {', '.join(failed)}",
             file=sys.stderr,
         )
         sys.exit(1)
-    print(f"QC doctor preflight passed for {target_root} ({manifest.profile}).")
+    print(f"QC doctor preflight passed for {target_root} ({contract.profile}).")
 
 
 def check_justfile(target: Path) -> None:
@@ -281,19 +293,19 @@ def version_command() -> None:
 def doctor_report(target: Path) -> DoctorReport:
     """Build a machine-readable doctor report for a target repository."""
     target_root = _target_root(target)
-    manifest_path = target_root / MANIFEST_NAME
-    manifest = _load_manifest(manifest_path) if manifest_path.is_file() else MissingManifest(present=False, reason="manifest file is missing")
-    declared_profile: ObservedProfile = manifest.profile if isinstance(manifest, QcManifest) else UNKNOWN_PROFILE
+    justfile_path = _justfile_path(target_root)
+    contract = _load_justfile_contract(target_root)
+    declared_profile: ObservedProfile = contract.profile if isinstance(contract, QcJustfileContract) else UNKNOWN_PROFILE
     effective_profile = _effective_profile(target_root, declared_profile)
-    report_profile = _report_profile(manifest, effective_profile)
+    report_profile = _report_profile(contract, effective_profile)
     profile_proof = _profile_proofs(target_root)
-    workflow_refs = _workflow_refs(target_root, manifest, report_profile)
+    workflow_refs = _workflow_refs(target_root, contract, report_profile)
     justfile_delegation = _justfile_delegation(target_root, report_profile)
-    branch_protection = _branch_protection(target_root, manifest, report_profile)
+    branch_protection = _branch_protection(target_root, contract, report_profile)
     label_alignment = _label_alignment(target_root)
     findings = _findings(
         target_root=target_root,
-        manifest=manifest,
+        contract=contract,
         report_profile=report_profile,
         declared_profile=declared_profile,
         effective_profile=effective_profile,
@@ -303,8 +315,8 @@ def doctor_report(target: Path) -> DoctorReport:
         label_alignment=label_alignment,
         profile_proof=profile_proof,
     )
-    installation_state, global_status = _classify(manifest, findings)
-    declaration_hash = _sha256(manifest_path) if manifest_path.is_file() else ""
+    installation_state, global_status = _classify(contract, findings)
+    declaration_hash = _sha256(justfile_path) if justfile_path.is_file() else ""
     return DoctorReport(
         schema_version=SCHEMA_VERSION,
         tool_version=version("ai-review-ci"),
@@ -313,7 +325,7 @@ def doctor_report(target: Path) -> DoctorReport:
             remote=_remote(target_root),
             head=_head(target_root),
         ),
-        declaration=DeclarationObservation(path=str(manifest_path), sha256=declaration_hash, manifest=manifest),
+        declaration=DeclarationObservation(path=str(justfile_path), sha256=declaration_hash, justfile_contract=contract),
         declaration_hash=declaration_hash,
         declared_profile=declared_profile,
         effective_profile=effective_profile,
@@ -340,9 +352,37 @@ def _target_root(target: Path) -> Path:
     return target.resolve()
 
 
-def _load_manifest(path: Path) -> QcManifest:
-    data = tomllib.loads(path.read_text())
-    return QcManifest.model_validate(data)
+def _load_justfile_contract(target: Path) -> JustfileContractDeclaration:
+    justfile = _justfile_path(target)
+    if not justfile.is_file():
+        return MissingJustfileContract(present=False, reason=f"{target} must contain exactly one justfile or Justfile")
+    values: dict[str, str] = {}
+    for field, variable in JUSTFILE_CONTRACT_VARIABLES.items():
+        result = subprocess.run(
+            ["just", "--justfile", str(justfile), "-d", str(target), "--evaluate", variable],
+            text=True,
+            capture_output=True,
+        )
+        if result.returncode != 0:
+            detail = result.stderr.strip() or result.stdout.strip()
+            return MissingJustfileContract(present=False, reason=f"{justfile} does not define required variable {variable}: {detail}")
+        values[field] = result.stdout.strip()
+    try:
+        data: dict[str, Any] = {
+            "schema_version": int(values["schema_version"]),
+            "profile": values["profile"],
+            "installed_ref": values["installed_ref"],
+            "release_channel": values["release_channel"],
+            "workflow_template_version": int(values["workflow_template_version"]),
+            "local_delegation": values["local_delegation"],
+            "default_branch": values["default_branch"],
+        }
+    except ValueError as exc:
+        return MissingJustfileContract(present=False, reason=f"{justfile} has an invalid ai-review-ci numeric contract variable: {exc}")
+    try:
+        return QcJustfileContract.model_validate(data)
+    except ValidationError as exc:
+        return MissingJustfileContract(present=False, reason=f"{justfile} has an invalid ai-review-ci justfile contract: {exc}")
 
 
 def _effective_profile(target: Path, declared_profile: ObservedProfile) -> ObservedProfile:
@@ -354,9 +394,9 @@ def _effective_profile(target: Path, declared_profile: ObservedProfile) -> Obser
     return UNKNOWN_PROFILE
 
 
-def _report_profile(manifest: ManifestDeclaration, effective_profile: ObservedProfile) -> ProfileName:
-    if isinstance(manifest, QcManifest):
-        return manifest.profile
+def _report_profile(contract: JustfileContractDeclaration, effective_profile: ObservedProfile) -> ProfileName:
+    if isinstance(contract, QcJustfileContract):
+        return contract.profile
     if effective_profile != UNKNOWN_PROFILE:
         return ProfileAdapter.validate_python(effective_profile)
     return "python"
@@ -366,6 +406,8 @@ def _profile_missing_paths(target: Path, project_profile: ProjectProfile) -> tup
     missing = [path for path in project_profile.required_paths if not (target / path).exists()]
     if project_profile.requires_bun_lock and not ((target / "bun.lock").exists() or (target / "bun.lockb").exists()):
         missing.append("bun.lock or bun.lockb")
+    if project_profile.requires_cargo_manifest and not any(path.name == "Cargo.toml" and ".git" not in path.parts for path in target.rglob("Cargo.toml")):
+        missing.append("at least one Cargo.toml file")
     if project_profile.requires_sage_file and not any(path.suffix == ".sage" and ".git" not in path.parts for path in target.rglob("*.sage")):
         missing.append("at least one .sage file")
     return tuple(missing)
@@ -382,9 +424,9 @@ def _profile_proofs(target: Path) -> dict[str, ProfileProofObservation]:
     }
 
 
-def _workflow_refs(target: Path, manifest: ManifestDeclaration, profile: ProfileName) -> dict[str, WorkflowRefObservation]:
+def _workflow_refs(target: Path, contract: JustfileContractDeclaration, profile: ProfileName) -> dict[str, WorkflowRefObservation]:
     workflows: dict[str, WorkflowRefObservation] = {}
-    required_ref = manifest.installed_ref if isinstance(manifest, QcManifest) else ""
+    required_ref = contract.installed_ref if isinstance(contract, QcJustfileContract) else ""
     for name in TEMPLATES:
         path = target / ".github" / "workflows" / name
         refs: set[str] = set()
@@ -422,6 +464,7 @@ def _required_workflow_gates(name: str, profile: ProfileName) -> tuple[str, ...]
     if name != "review-pr.yml":
         return ()
     gates = (
+        "qc-ci",
         "deterministic-diff",
         "delegation-conformance",
         "qc-doctor",
@@ -435,7 +478,7 @@ def _required_workflow_gates(name: str, profile: ProfileName) -> tuple[str, ...]
 
 def _justfile_delegation(target: Path, profile: ProfileName) -> dict[str, DelegationObservation]:
     project_profile = PROJECT_PROFILES[profile]
-    recipes = ["test", "test-ci"]
+    recipes = ["test-commit", "test-push", "test-ci"]
     if project_profile.requires_app_boot:
         recipes.append("app-boot")
     justfile = _justfile_path(target)
@@ -478,7 +521,7 @@ def _recipe_delegation(target: Path, justfile: Path, project_profile: ProjectPro
     )
 
 
-def _branch_protection(target: Path, manifest: ManifestDeclaration, profile: ProfileName) -> BranchProtectionObservation:
+def _branch_protection(target: Path, contract: JustfileContractDeclaration, profile: ProfileName) -> BranchProtectionObservation:
     required = required_check_contexts(profile)
     remote = _remote(target)
     if remote == "":
@@ -496,7 +539,7 @@ def _branch_protection(target: Path, manifest: ManifestDeclaration, profile: Pro
             observed_state="unverifiable",
             evidence=f"origin remote is not a GitHub repository: {remote}",
         )
-    branch = manifest.default_branch if isinstance(manifest, QcManifest) else "main"
+    branch = contract.default_branch if isinstance(contract, QcJustfileContract) else "main"
     result = subprocess.run(
         ["gh", "api", f"repos/{repo}/branches/{branch}/protection"],
         text=True,
@@ -621,7 +664,7 @@ def _label_alignment_findings(observation: LabelAlignmentObservation) -> list[Do
 def _findings(
     *,
     target_root: Path,
-    manifest: ManifestDeclaration,
+    contract: JustfileContractDeclaration,
     report_profile: ProfileName,
     declared_profile: ObservedProfile,
     effective_profile: ObservedProfile,
@@ -633,30 +676,27 @@ def _findings(
 ) -> list[DoctorFinding]:
     findings: list[DoctorFinding] = []
     findings.extend(_review_guidelines_findings(target_root))
-    if not isinstance(manifest, QcManifest):
+    if not isinstance(contract, QcJustfileContract):
         findings.append(
             DoctorFinding(
                 severity="error",
-                surface="manifest",
-                evidence=f"{target_root / MANIFEST_NAME} is missing",
+                surface="justfile_contract",
+                evidence=contract.reason,
                 remediation_commands=(
                     "uvx --from git+https://github.com/dzackgarza/ai-review-ci ai-review-ci install --target <target-repo> --repo owner/repo --branch main --profile <profile>",
                 ),
             )
         )
-        findings.extend(_justfile_conformance_findings(target_root, report_profile))
-        return findings
-    declared = manifest.profile
-    if effective_profile != declared:
+    if isinstance(contract, QcJustfileContract) and effective_profile != contract.profile:
         findings.append(
             DoctorFinding(
                 severity="error",
                 surface="profile",
                 evidence=(
-                    f"declared profile {declared} does not match observed target shape {effective_profile}; "
-                    f"missing for declared profile: {', '.join(profile_proof[declared].missing_paths)}"
+                    f"declared profile {contract.profile} does not match observed target shape {effective_profile}; "
+                    f"missing for declared profile: {', '.join(profile_proof[contract.profile].missing_paths)}"
                 ),
-                remediation_commands=(f"just install-qc-scaffold {declared} <target-repo>",),
+                remediation_commands=(f"just install-qc-scaffold {contract.profile} <target-repo>",),
             )
         )
     for workflow in workflow_refs.values():
@@ -685,7 +725,7 @@ def _findings(
                 DoctorFinding(
                     severity="warning",
                     surface="workflow_ref",
-                    evidence=f"{workflow.path} uses {workflow.observed_ref}; manifest requires {workflow.required_ref}",
+                    evidence=f"{workflow.path} uses {workflow.observed_ref}; justfile contract requires {workflow.required_ref}",
                     remediation_commands=(f"edit {workflow.path} to use dzackgarza/ai-review-ci reusable workflows at @{workflow.required_ref}",),
                 )
             )
@@ -697,17 +737,18 @@ def _findings(
                     severity="error",
                     surface="justfile_delegation",
                     evidence=(f"{recipe} must delegate through {', '.join(f'~/ai-review-ci/justfiles/{name}' for name in observation.required_justfiles)} with -d ."),
-                    remediation_commands=(f"just install-qc-scaffold {declared} <target-repo>",),
+                    remediation_commands=(f"just install-qc-scaffold {report_profile} <target-repo>",),
                 )
             )
-    findings.extend(_justfile_conformance_findings(target_root, declared))
+    findings.extend(_justfile_conformance_findings(target_root, report_profile))
     if branch_protection.observed_state in ("missing", "missing_contexts"):
+        branch = contract.default_branch if isinstance(contract, QcJustfileContract) else "main"
         findings.append(
             DoctorFinding(
                 severity="error",
                 surface="branch_protection",
                 evidence=branch_protection.evidence,
-                remediation_commands=(f"ai-review-ci protect-branch --repo owner/repo --branch {manifest.default_branch} --profile {manifest.profile}",),
+                remediation_commands=(f"ai-review-ci protect-branch --repo owner/repo --branch {branch} --profile {report_profile}",),
             )
         )
     if branch_protection.observed_state == "unverifiable":
@@ -835,8 +876,8 @@ def _has_private_attribute(lines: list[str], line_no: int) -> bool:
     return False
 
 
-def _classify(manifest: ManifestDeclaration, findings: list[DoctorFinding]) -> tuple[InstallationState, GlobalStatus]:
-    if not isinstance(manifest, QcManifest):
+def _classify(contract: JustfileContractDeclaration, findings: list[DoctorFinding]) -> tuple[InstallationState, GlobalStatus]:
+    if not isinstance(contract, QcJustfileContract):
         return "uninstalled", "misconfigured"
     if not findings:
         return "compliant", "current"
@@ -874,7 +915,7 @@ def _sha256(path: Path) -> str:
 
 
 def _invalidation_inputs(target: Path, declaration_hash: str) -> tuple[str, ...]:
-    inputs = [f"target_head:{_head(target)}", f"manifest_sha256:{declaration_hash}"]
+    inputs = [f"target_head:{_head(target)}", f"justfile_contract_sha256:{declaration_hash}"]
     for path in [
         target / "justfile",
         target / "Justfile",

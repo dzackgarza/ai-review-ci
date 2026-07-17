@@ -10,12 +10,16 @@ Follow these rules exactly:
 
 ### Do not waste effort
 
-Every command you run should serve a finding. Specifically:
+Every command you run should serve a finding.
+Specifically:
 
 - The review copy has **no `.git` directory**. Git commands (`git status`, `git log`, `git diff`, …) are denied and answer nothing; work from the files on disk.
-- The complete set of valid `POLICY.*` and `REMEDIATE.*` codes is already inlined in the policy-index documents above. Do not probe Python modules, importable packages, or the review infrastructure to discover policy registries — cite codes from the inlined index or use `null`.
+- The complete set of valid `POLICY.*` codes is already inlined in the policy-index documents above.
+  Do not probe Python modules, importable packages, or the review infrastructure to discover policy registries — cite a policy code from the inlined index or use `null`. The canonical policy record owns remediation routing.
 - Do not re-run `submit-candidate --help` more than once; the schema does not change between calls.
-- **Never read, `cat`, `ls`, `file`, or stat anything outside the repository** — including `/home/reviewer/bin/submit-candidate` itself. Reads outside the repo are auto-rejected and each rejection wastes a turn. `submit-candidate` is only ever *executed*: `--help` for the schema, then with no arguments to submit.
+- **Never read, `cat`, `ls`, `file`, or stat anything outside the repository** — including `/home/reviewer/bin/submit-candidate` itself.
+  Reads outside the repo are auto-rejected and each rejection wastes a turn.
+  `submit-candidate` is only ever *executed*: `--help` for the schema, then with no arguments to submit.
 
 ## Task: Slop Audit
 
@@ -99,7 +103,7 @@ Key rules every finding must satisfy:
   Not a file path — the actual command output or code flow that demonstrates the failure.
 - `policy_code`: the vendored `POLICY.*` ID for the bridge-burning obligation being weakened.
   Do not invent IDs and do not write remediation prose.
-  Leave `remediation_code` absent unless the canonical index requires an explicit override; deterministic rendering resolves the canonical remediation after validation.
+  Do not emit a remediation code; deterministic rendering derives it from the canonical policy record after validation.
 - All seven slop-specific narrative fields (`pattern`, `task_narrative`, `slop_narrative`, `why_it_matters`, `user_surprise`, `existential_justification`, `failure_mode`).
 - `evidence`: At least one entry with `kind`, `path`, and `lines`.
 

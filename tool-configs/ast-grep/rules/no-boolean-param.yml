@@ -7,4 +7,3 @@ message: POLICY.NO_BOOLEAN_MODE
 severity: error
 metadata:
   policy_code: POLICY.NO_BOOLEAN_MODE
-  remediation_code: REMEDIATE.API_SPLIT_OR_VARIANT

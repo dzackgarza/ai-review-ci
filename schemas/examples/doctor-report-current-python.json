@@ -7,9 +7,9 @@
     "head": "0000000000000000000000000000000000000000"
   },
   "declaration": {
-    "path": "/example/python-target/.ai-review-ci.toml",
+    "path": "/example/python-target/justfile",
     "sha256": "098ccd89f37e1ff7474701c27925a02c74e094d3ce1a9b392704d94415ae6ed4",
-    "manifest": {
+    "justfile_contract": {
       "schema_version": 1,
       "profile": "python",
       "installed_ref": "main",
@@ -41,18 +41,43 @@
       "path": "/example/python-target/.github/workflows/review-pr.yml",
       "required_ref": "main",
       "observed_ref": "main",
-      "required_gates": ["deterministic-diff", "delegation-conformance", "qc-doctor", "pr-description-checklist", "thread-resolution"],
-      "observed_gates": ["delegation-conformance", "deterministic-diff", "qc-doctor", "pr-description-checklist", "thread-resolution"]
+      "required_gates": [
+        "qc-ci",
+        "deterministic-diff",
+        "delegation-conformance",
+        "qc-doctor",
+        "pr-description-checklist",
+        "thread-resolution"
+      ],
+      "observed_gates": [
+        "qc-ci",
+        "delegation-conformance",
+        "deterministic-diff",
+        "qc-doctor",
+        "pr-description-checklist",
+        "thread-resolution"
+      ]
     }
   },
   "justfile_delegation": {
-    "test": {
+    "test-commit": {
       "required_justfiles": [
         "python.just"
       ],
       "observed": {
         "present": true,
-        "command": "just -f ~/ai-review-ci/justfiles/python.just -d . test\n",
+        "command": "just -f ~/ai-review-ci/justfiles/python.just -d . test-commit\n",
+        "delegates_to_global_qc": true,
+        "caller_root_preserved": true
+      }
+    },
+    "test-push": {
+      "required_justfiles": [
+        "python.just"
+      ],
+      "observed": {
+        "present": true,
+        "command": "just -f ~/ai-review-ci/justfiles/python.just -d . test-push\n",
         "delegates_to_global_qc": true,
         "caller_root_preserved": true
       }
@@ -71,6 +96,7 @@
   },
   "branch_protection": {
     "required_contexts": [
+      "qc-ci / qc",
       "deterministic-diff / deterministic-diff",
       "delegation-conformance / delegation-conformance",
       "qc-doctor / qc-doctor",
@@ -79,7 +105,9 @@
       "slop / review",
       "thread-resolution / thread-resolution"
     ],
-    "observed_contexts": [],
+    "observed_contexts": [
+      "qc-ci / qc"
+    ],
     "observed_state": "not_applicable",
     "evidence": "target repository has no origin remote"
   },
@@ -93,34 +121,54 @@
   "profile_proof_requirements": {
     "python": {
       "profile": "python",
-      "required_paths": ["pyproject.toml"],
+      "required_paths": [
+        "pyproject.toml"
+      ],
       "missing_paths": []
     },
     "bun": {
       "profile": "bun",
-      "required_paths": ["package.json"],
-      "missing_paths": ["package.json", "bun.lock or bun.lockb"]
+      "required_paths": [
+        "package.json"
+      ],
+      "missing_paths": [
+        "package.json",
+        "bun.lock or bun.lockb"
+      ]
     },
     "bun-playwright": {
       "profile": "bun-playwright",
-      "required_paths": ["package.json", "playwright.config.ts"],
-      "missing_paths": ["package.json", "playwright.config.ts", "bun.lock or bun.lockb"]
+      "required_paths": [
+        "package.json",
+        "playwright.config.ts"
+      ],
+      "missing_paths": [
+        "package.json",
+        "playwright.config.ts",
+        "bun.lock or bun.lockb"
+      ]
     },
     "rust": {
       "profile": "rust",
-      "required_paths": ["Cargo.toml"],
-      "missing_paths": ["Cargo.toml"]
+      "required_paths": [
+        "Cargo.toml"
+      ],
+      "missing_paths": [
+        "Cargo.toml"
+      ]
     },
     "sage": {
       "profile": "sage",
       "required_paths": [],
-      "missing_paths": ["at least one .sage file"]
+      "missing_paths": [
+        "at least one .sage file"
+      ]
     }
   },
   "findings": [],
   "invalidation_inputs": [
     "target_head:0000000000000000000000000000000000000000",
-    "manifest_sha256:098ccd89f37e1ff7474701c27925a02c74e094d3ce1a9b392704d94415ae6ed4",
+    "justfile_contract_sha256:098ccd89f37e1ff7474701c27925a02c74e094d3ce1a9b392704d94415ae6ed4",
     "justfile:057c325c857b467d56dcd952fd026801a7aa94b0ba7bf95b63eb5189f97d8f6f",
     ".github/workflows/review-general.yml:dd12285d12de661bff2c791feb67c99d998169b921d45785b7ae8c2a8cfcbb85",
     ".github/workflows/review-slop.yml:cf467e20b6e95722a1d1bce9f13284f2dc9bbb638367981b6a105257a1ec194f",

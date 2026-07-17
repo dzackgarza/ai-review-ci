@@ -158,7 +158,7 @@ Do not report the same issue as a single blended finding; state which part is sp
   - final report says the review item is resolved because the artifact is gone;
   - the original requirement is absent from the new PR narrative.
 
-  Correct response after triage: See `policy-index/references/remediations.md` → **Remediation: Deletion Laundering / Proof-Burden Erasure**.
+  Policy: `POLICY.NO_DELETION_LAUNDERING`.
 
 - **[WHACK-A-MOLE] Reviewer-signal whack-a-mole**: The agent treats every evaluator as a layer to appease: typechecker, compiler, test, QC, PR review, user.
   At each layer it performs the minimum mutation to silence that evaluator, rather than reconstructing the original story and solving the problem.
@@ -335,7 +335,7 @@ Do not report the same issue as a single blended finding; state which part is sp
   - No real fixture or boundary artifact (TOML file, temp directory) appears in the test.
   - The test would still pass even if the application stopped calling the helper entirely (meaningless for product correctness).
 
-  Correct response after triage: See `policy-index/references/remediations.md` → **Remediation: Boundary Test Bypass**.
+  Policy: `POLICY.NO_HELPER_PROOF`.
 
 ## Documentation Patterns
 

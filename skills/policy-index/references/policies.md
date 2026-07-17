@@ -3,8 +3,8 @@
 This file is the canonical database of named bridge-burning policies.
 Other skills may teach review, testing, debugging, or remediation workflows, but policy identity and policy text live here.
 
-Detector and reviewer agents may load this file.
-Fixer agents load `remediations.md` only after triage assigns a `POLICY.*` code.
+Disposition and reviewer agents load this file to classify the source and inspect adjacent obligations.
+Fixer agents follow the assigned policy's exact route into `../../style-guide/references/style-guide-index.md`.
 
 ## Record Schema
 
@@ -14,18 +14,8 @@ Each policy record contains:
 - `Rule`: the canonical obligation.
 - `Invalid local fixes`: local edits that preserve the violation.
 - `Detection handles`: red-flag or banned-shape labels that map to the policy.
-- `Related remediation`: the fixer-side remediation code, loaded only from `remediations.md` after triage.
-
-## Category Index
-
-- **Runtime, Config, and State**: `POLICY.RUNTIME_DEFAULT`, `POLICY.TOTAL_CORE_STATE`, `POLICY.NO_UNJUSTIFIED_OPTIONALITY`, `POLICY.NO_HIDDEN_CONFIG`, `POLICY.NO_AMBIENT_DISCOVERY`, `POLICY.NO_DEFENSIVE_HOTPATH`
-- **Fail-Loud Execution**: `POLICY.FAIL_OPEN`, `POLICY.CRITICAL_DEPENDENCY`, `POLICY.NO_PARTIAL_SUCCESS`, `POLICY.NO_ERROR_DISCARD`
-- **Proof and Test Integrity**: `POLICY.NO_SMOKE_PROOF`, `POLICY.NO_MOCK_PROOF`, `POLICY.NO_SKIP_MASK`, `POLICY.NO_HELPER_PROOF`, `POLICY.NO_EXACT_STRING_PROOF`
-- **Type and Interface Integrity**: `POLICY.NO_BOOLEAN_MODE`, `POLICY.NO_TYPE_ESCAPE`, `POLICY.NO_UNTYPED_IMPORT_LEAK`
-- **QC Authority**: `POLICY.NO_QC_SILENCING`, `POLICY.GLOBAL_QC_AUTHORITY`
-- **Artifact Ownership**: `POLICY.NO_DYNAMIC_ARTIFACTS`
-- **Migration and Remediation Integrity**: `POLICY.NO_LEGACY_SHIM`, `POLICY.NO_QUARANTINE_REMEDIATION`, `POLICY.NO_ADMIN_COMPLETION`, `POLICY.NO_DELETION_LAUNDERING`
-- **Anti-Speculation**: `POLICY.NO_HYPOTHETICAL_PATH`, `POLICY.PREFER_ASSERTION`
+- `Related remediation`: the exact fixer-side route owned by this policy.
+  The named construction is defined in `../../style-guide/references/style-guide-index.md`.
 
 ## Policy Records
 
@@ -164,6 +154,22 @@ Detection handles: `SWALLOWED-ERRORS`, `OK-DISCARD`, `SUPPRESSION-FALLBACK`, `PI
 
 Related remediation: `REMEDIATE.FAIL_LOUD_BOUNDARY`
 
+#### `POLICY.NO_EXCEPTION_CONTROL_FLOW` — No exception-driven ordinary control flow
+
+Category: Fail-Loud Execution
+
+Rule: Expected domain states, legal transitions, and routine alternatives must be represented explicitly before effects execute.
+Do not deliberately provoke and catch failures to discover state, select ordinary behavior, probe an API or object shape, or drive fallback and retry trees.
+Exceptions mean that the current computation cannot fulfill its contract; retries are admissible only for a classified transient failure when the operation is safe to repeat, the attempt count is bounded, backoff is explicit, and every attempt remains observable.
+
+Canonical rationale: [Error Handling as Control Flow](error-handling-as-control-flow.md).
+
+Invalid local fixes: Reordering catches; narrowing a catch while retaining exception-selected routine behavior; moving the probing loop into a helper; renaming retries as resilience; catching an exception only to return a domain sentinel; adding preflight attempts that still mutate state; retrying without a typed transient-failure class and idempotency proof.
+
+Detection handles: `EXCEPTION-CONTROL-FLOW`, `TRY-EXCEPT-FALLBACK`, `SWALLOWED-ERRORS`, `ASSERTION-CATCH`
+
+Related remediation: `REMEDIATE.EXPLICIT_STATE_MODEL`
+
 ### Proof and Test Integrity
 
 #### `POLICY.NO_SMOKE_PROOF` — No proof-free smoke paths
@@ -272,6 +278,36 @@ Invalid local fixes: Replacing the library solely to satisfy mypy; hand-rolling 
 Detection handles: `UNTYPED-IMPORT`, `IMPORT-UNTYPED`, `MISSING-STUBS`, `MISSING-PY-TYPED`, `ANY-INGRESS`, `TYPE-FIREWALL`
 
 Related remediation: `REMEDIATE.TYPED_DEPENDENCY_BOUNDARY`
+
+### Architecture Ownership
+
+#### `POLICY.NO_BESPOKE_REINVENTION` — No bespoke reinvention of available capabilities
+
+Category: Architecture Ownership
+
+Rule: Before implementing a capability, inspect the language, framework, installed dependencies, and project-owned component inventory.
+When an existing surface owns the capability, use it.
+Custom implementation is admissible only after a concrete contract gap is established.
+
+Invalid local fixes: Calling the available surface too abstract or complex without comparing its contract; wrapping a bespoke implementation in an adapter; retaining both implementations; removing the dependency because the reinvention left it unused.
+
+Detection handles: `DEPENDENCY-AVERSION`, `BESPOKE-DEP`, `COMPLEXITY-SIGNAL`
+
+Related remediation: `REMEDIATE.USE_EXISTING_CAPABILITY`
+
+#### `POLICY.NO_MYOPIC_PATCHING` — No token-local repair of architectural violations
+
+Category: Architecture Ownership
+
+Rule: Treat a finding as evidence of a weakened obligation, not as a token to silence.
+Inspect the owning boundary, adjacent callers, tests, configuration, and repeated instances of the same failure process.
+Repair the complete obligation rather than only the cited line.
+
+Invalid local fixes: Replacing only the matched syntax; adding a guard, special case, adapter, suppression, or parallel helper around the reported site; fixing one call site while the same failure process remains elsewhere.
+
+Detection handles: `MYOPIC-PATCHING`, `BLAST-RADIUS`, `PATCH-ACCUMULATION`, `WHACK-A-MOLE`
+
+Related remediation: `REMEDIATE.BLAST_RADIUS_REPAIR`
 
 ### QC Authority
 
@@ -402,3 +438,18 @@ Invalid local fixes: Replacing an `assert` with `if/raise`/`ValueError`/`Runtime
 Detection handles: `RAISE-FOR-INVARIANT`, `ASSERT-TO-RAISE-O-STRIP`, `ASSERT-WEAKENING`, `ASSERTION-CATCH`, `ASSERTION-AS-RUNTIME-ERROR`
 
 Related remediation: `REMEDIATE.PREFER_ASSERTION`
+
+#### `POLICY.NO_UNVERIFIED_CONVENTION_CLAIMS` — Reviewer convention-claims are untrusted priors
+
+Category: Anti-Speculation
+
+Rule: Any claim that an external dependency's name, namespace, API shape, or convention is X — whether emitted by an agent or an automated reviewer — is an untrusted prior until verified against the pinned checkout or live source.
+A building usage against the pinned dependency outranks every prior.
+A review suggestion justified by convention-alignment ("the standard namespace is …", "for easier upstreaming …", "X is a LinearEquiv") that fails that one verification is slop: rejected wholesale, with the verifying file:line evidence recorded in the thread reply and the disposition ledger.
+One falsified convention-claim in a review batch drops the confidence prior on the reviewer's remaining unsourced convention-claims — each still receives its single verification; none receives accommodation.
+
+Invalid local fixes: Partially adopting the suggested rename; adding an alias or `open` so both spellings resolve; renaming "toward" the claimed convention; resolving the thread as accepted-with-modification without checkout evidence; deferring the claim to a follow-up instead of verifying it once.
+
+Detection handles: `STALE-CONVENTION-SUGGESTION`, `REVIEWER-PRIOR-RENAME`, `UNSOURCED-CONVENTION-CLAIM`, `DEPRECATED-NAMESPACE-SUGGESTION`, `CONVENTION-ALIGNMENT-JUSTIFICATION`
+
+Related remediation: none — triage-side rejection policy; the disposition is wholesale rejection with pinned-checkout evidence (file:line), per the review-feedback disposition ledger discipline.

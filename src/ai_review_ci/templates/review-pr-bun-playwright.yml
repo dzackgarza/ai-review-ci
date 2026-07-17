@@ -2,10 +2,21 @@ name: PR Review
 on:
   pull_request: {}
 jobs:
+  qc-ci:
+    uses: dzackgarza/ai-review-ci/.github/workflows/_qc.yml@{{ ref }}
+    permissions:
+      contents: read
+      issues: read
+    with:
+      tier: test-ci
+      infra_ref: '{{ ref }}'
   deterministic-diff:
     uses: dzackgarza/ai-review-ci/.github/workflows/_gates.yml@{{ ref }}
     permissions:
       contents: read
+      actions: read
+      issues: read
+      pull-requests: read
     with:
       gate: deterministic-diff
       profile: '{{ profile }}'
@@ -13,6 +24,9 @@ jobs:
     uses: dzackgarza/ai-review-ci/.github/workflows/_gates.yml@{{ ref }}
     permissions:
       contents: read
+      actions: read
+      issues: read
+      pull-requests: read
     with:
       gate: delegation-conformance
       profile: '{{ profile }}'
@@ -24,6 +38,7 @@ jobs:
       # Label-alignment check reads live labels via `gh label list`
       # (GET /repos/{owner}/{repo}/labels), which requires Issues (read).
       issues: read
+      pull-requests: read
     with:
       gate: qc-doctor
       profile: '{{ profile }}'
@@ -31,6 +46,9 @@ jobs:
     uses: dzackgarza/ai-review-ci/.github/workflows/_gates.yml@{{ ref }}
     permissions:
       contents: read
+      actions: read
+      issues: read
+      pull-requests: read
     with:
       gate: app-boot
       profile: '{{ profile }}'
@@ -39,6 +57,8 @@ jobs:
     permissions:
       contents: read
       pull-requests: read
+      actions: read
+      issues: read
     with:
       gate: pr-description-checklist
       profile: '{{ profile }}'
@@ -49,6 +69,7 @@ jobs:
       security-events: write
       actions: read
       pull-requests: write
+      issues: write
     with:
       report_type: general
       scope: diff
@@ -59,6 +80,7 @@ jobs:
       security-events: write
       actions: read
       pull-requests: write
+      issues: write
     with:
       report_type: slop
       scope: diff
@@ -70,6 +92,8 @@ jobs:
     permissions:
       contents: read
       pull-requests: read
+      actions: read
+      issues: read
     with:
       gate: thread-resolution
       profile: '{{ profile }}'

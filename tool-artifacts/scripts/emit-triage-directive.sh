@@ -11,6 +11,32 @@
 
 set -euo pipefail
 
+failure_mode="${AI_REVIEW_CI_FAILURE_MODE:?AI_REVIEW_CI_FAILURE_MODE must be set by test-commit, test-push, test-ci, or ambient}"
+
+if [[ "$failure_mode" == "direct" ]]; then
+  cat << 'DIRECT_EOF'
+
+================================================================================
+  LOCAL QC FAILURE — DIRECT REPAIR REQUIRED
+================================================================================
+
+  Fix the reported compiler, formatter, type, or test failure in the object
+  being changed, then rerun the same gate. This is not PR review feedback and
+  does not enter returned-PR-feedback triage or require independent policy/remediation subagents.
+
+  Do not weaken the checker, suppress the diagnostic, golf the error count, or
+  edit ai-review-ci to make the signal disappear.
+
+================================================================================
+DIRECT_EOF
+  exit 0
+fi
+
+if [[ "$failure_mode" != "triage" ]]; then
+  printf 'invalid AI_REVIEW_CI_FAILURE_MODE: %s\n' "$failure_mode" >&2
+  exit 2
+fi
+
 cat << 'TRIAGE_EOF'
 
 ================================================================================

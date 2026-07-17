@@ -1,12 +1,12 @@
 """Real-boundary proof for the sanctioned red-proof commit route (#222).
 
 Every case drives the actual `ai-review-ci red-commit` CLI (via `-m
-ai_review_ci.cli`) against a real on-disk git repo whose `just test` gate
+ai_review_ci.cli`) against a real on-disk git repo whose `just test-commit` gate
 genuinely passes or fails from repo state. No internals are monkeypatched: the
 CLI shells out to real `just` and real `git`, exactly as an agent would.
 
 The gate keys on a staged `RED` marker file:
-    test:  fails iff a `RED` file exists in the working tree.
+    test-commit:  fails iff a `RED` file exists in the working tree.
 So an ordinary (green) commit passes the gate; a red proof (RED staged) fails it.
 """
 
@@ -18,8 +18,8 @@ import pytest
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 
-# `just test` fails iff a RED marker file is present — a real state-keyed gate.
-_GATE_JUSTFILE = 'test:\n    @test ! -f RED || (echo "red proof present" && exit 1)\n'
+# `just test-commit` fails iff a RED marker file is present.
+_GATE_JUSTFILE = 'test-commit:\n    @test ! -f RED || (echo "red proof present" && exit 1)\n'
 
 
 def _git(repo: pathlib.Path, *args: str) -> subprocess.CompletedProcess[str]:

@@ -1,6 +1,6 @@
 """Sanctioned route for committing an intentionally hook-failing red proof.
 
-The repo's pre-commit gate runs ``just test`` and rejects any commit whose tests
+The repo's pre-commit gate runs ``just test-commit`` and rejects any commit whose checks
 fail. That is correct for ordinary commits, but the red/green workflow requires
 landing a genuinely-failing test (a red proof) *before* its fix. The only ad-hoc
 escape is ``git commit --no-verify`` — an unaudited bypass with no owning-issue
@@ -43,7 +43,7 @@ def red_commit(
 ) -> None:
     """Commit an intentionally hook-failing red proof without disabling hooks.
 
-    The commit gate (``just test``) is run in ``target`` and MUST fail: a red
+    The commit gate (``just test-commit``) is run in ``target`` and MUST fail: a red
     proof is a test that genuinely fails because the bug is unfixed. If the gate
     passes, this is not a red proof — commit normally with ``git commit``. On a
     genuine red gate, an auditable ``Red-Proof: #<issue>`` trailer is stamped and
@@ -65,7 +65,7 @@ def red_commit(
     if not message.strip():
         _reject("a commit message describing the red proof is required (-m).")
 
-    gate = subprocess.run(["just", "test"], cwd=target)
+    gate = subprocess.run(["just", "test-commit"], cwd=target)
     if gate.returncode == 0:
         _reject("the commit gate PASSED, so this is not a red proof. A red proof is a test that genuinely fails because the bug is unfixed. Commit normally with `git commit`.")
 

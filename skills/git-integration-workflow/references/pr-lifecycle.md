@@ -3,7 +3,7 @@
 The enforced PR integration lifecycle.
 Part A is the PR worker guide (work-unit issue admission gate, PR review synthesis, TDD-before-implementation, exhaustive review reading), sourced from `creating-prs.md`. Part B is the branch → commit → push → CI → merge mechanics, sourced from `pr-workflow.md`. The integration/handoff cadence rules are stated first.
 
-For disposition of returned review feedback, see [pr-review-disposition.md](./pr-review-disposition.md).
+For returned review feedback, route to [[pr-feedback-triage/SKILL|pr-feedback-triage]]. This lifecycle does not restate that workflow.
 The during-writing edit-hygiene workflow (Read → Checkpoint → Edit → Verify → Commit), commit-message format, staging discipline, and hard constraints remain advisory in the `git-guidelines` skill in `~/ai`.
 
 ## Push and Commit Cadence (integration / handoff)
@@ -85,8 +85,7 @@ The canonical model for the issue tree and milestone mapping is owned by the `pl
 Before implementation, the work-unit issue must already satisfy that reference's Plan Fit Gate: tree root, parent or roadmap node, GitHub Milestone scope, the issue this PR will close, parent issues referenced but not closed, and the proof obligations owned by the issue.
 
 In an `itree`-governed repository, route work-unit creation through `itree new` with an explicit grouping parent, and route new GitHub Milestone plus ledger creation through `itree milestone` with an explicit grouping parent.
-Follow the ownership and partial failure contract in [issue-workflow.md](./issue-workflow.md).
-Raw GitHub issue or milestone construction is valid only for a repository explicitly outside `itree` governance.
+Follow the ownership and partial failure contract in [[git-integration-workflow/references/issue-workflow|issue workflow]]. Raw GitHub issue or milestone construction is valid only for a repository explicitly outside `itree` governance.
 
 This guide adds only the PR-execution specializations: the review-synthesis body shape below, closing-keyword discipline, and the stop rules specific to deriving one PR from one work-unit issue.
 
@@ -377,221 +376,24 @@ The PR must remain easy to evaluate against the work-unit issue.
 
 * * *
 
-## Phase 4: Read every review comment with `gh` or bundled tools, not selectively
+## Phase 4: Route returned review feedback to its canonical workflow
 
-A worker must not rely on memory, inbox summaries, or partial UI reading.
-Review feedback is part of the task state.
-It must be read exhaustively and tracked explicitly.
+Load [[pr-feedback-triage/SKILL|pr-feedback-triage]] when review or check feedback arrives.
+That skill owns exhaustive collection, stable identities, independent disposition, policy-to-style-card remediation, thread-local replies, resolution, and convergence.
+Do not copy its commands, fields, state machine, or reply contract into this lifecycle.
 
-The worker must read:
+## Phase 5: Reflect reopened obligations in public PR state
 
-1. the PR body as currently published,
+This lifecycle resumes when B returns an accepted current-PR finding whose first-principles concern changes the PR contract or reopens a claimed proof burden, before C begins remediation.
+That concrete triage result—not a generic “ownership handoff”—authorizes the following public-state mutations:
 
-2. issue-style PR comments,
+1. update the work-unit issue with the corrected obligation;
+2. update the PR body from the issue;
+3. mark the PR not ready until the obligation is implemented and evidenced;
+4. return control to [[pr-feedback-triage/references/remediation|remediation]] and [[pr-feedback-triage/references/convergence|convergence]].
 
-3. formal reviews,
-
-4. line-level review comments,
-
-5. CI/check failures,
-
-6. review decision state.
-
-### Minimum command set
-
-#### 1. Use the bundled CLI tool to read all feedback surfaces at once
-
-The most robust way to gather all feedback is to use the `extract_unresolved_issues` tool bundled with the git-guidelines skill:
-
-```bash
-extract_tool="$AI_SKILLS_DIR/git-guidelines/scripts/extract_unresolved_issues"
-uv run --directory "$extract_tool" -m extract_unresolved_issues summarize <OWNER>/<REPO>#<PR_NUMBER>
-```
-
-This will automatically fetch:
-
-- Top-level PR comments
-
-- Inline code review threads
-
-- Automated check-run errors
-
-#### 2. Inspect structured PR state manually (fallback)
-
-```bash
-gh pr view <PR_NUMBER> \
-  --json title,body,reviewDecision,latestReviews,reviews,comments,files,statusCheckRollup
-```
-
-This should be treated as the baseline state snapshot.
-
-#### 3. Read CI/check status until it settles
-
-```bash
-gh pr checks <PR_NUMBER> --watch
-```
-
-For machine-readable inspection:
-
-```bash
-gh pr checks <PR_NUMBER> --json name,state,bucket,link
-```
-
-#### Automated Check Runs
-
-Automated checks can post annotations surfaced via GitHub's API. Treat GitHub check state and the linked check details as the current authority for that check.
-
-**Read check status:**
-
-```bash
-# List check runs for the PR head commit
-gh api repos/<OWNER>/<REPO>/commits/<HEAD_SHA>/check-runs
-
-# Extract annotations from a specific check run
-gh api repos/<OWNER>/<REPO>/check-runs/<CHECK_RUN_ID>/annotations
-```
-
-Each annotation includes `message`, `path`, `start_line`, `annotation_level`, and a `details_url` pointing to the check's detailed report when the provider exposes one.
-
-#### 4. Read formal review objects in chronological order
-
-```bash
-gh api repos/<OWNER>/<REPO>/pulls/<PR_NUMBER>/reviews
-```
-
-#### 5. Read line-level review comments on the diff
-
-```bash
-gh api repos/<OWNER>/<REPO>/pulls/<PR_NUMBER>/comments
-```
-
-#### 6. Read issue-style PR comments
-
-```bash
-gh api repos/<OWNER>/<REPO>/issues/<PR_NUMBER>/comments
-```
-
-These are distinct surfaces.
-A worker that reads only one of them will miss actionable feedback.
-
-* * *
-
-## Required review-log discipline
-
-Every actionable review item must be copied into a tracked log file.
-
-Create:
-
-```bash
-$EDITOR .pr/REVIEW_LOG.md
-```
-
-### Required fields for each item
-
-```markdown
-## Review item <N>
-
-- Source: <review / review-comment / issue-comment / CI>
-- URL or identifier: <link or id>
-- Reviewer:
-- File/line:
-- Exact actionable request:
-- Worker interpretation:
-- Planned action:
-- Status: open | addressed | rejected-with-rationale
-- Commit addressing it:
-- Notes:
-```
-
-### Hard rules
-
-1. **No silent ignoring.** Every actionable item must appear in the log.
-
-2. **No bundling multiple requests into vague summaries.** Preserve atomicity.
-
-3. **No "addressed" without a commit.**
-
-4. **No rejection without explicit rationale tied to the work-unit issue.**
-
-5. **If a review item reveals that the issue contract is wrong, update the issue first.**
-
-This is necessary because agentic workers often continue from their prior frame and treat review feedback as advisory decoration.
-The log must force integration of each item into the task state.
-
-* * *
-
-## Phase 5: Respond to feedback by updating the issue, code, or both
-
-Feedback should be handled through one of only three legal moves.
-
-### Move A: The reviewer found a real defect within the existing issue contract
-
-Action:
-
-- update code/tests,
-
-- update evidence,
-
-- mark the review item addressed.
-
-### Move B: The reviewer exposed missing or weak acceptance criteria
-
-Action:
-
-- strengthen the work-unit issue,
-
-- add or revise tests first if needed,
-
-- then update code.
-
-### Move C: The reviewer identified that the issue contract itself is wrong
-
-Action:
-
-- revise the work-unit issue explicitly,
-
-- commit that revision,
-
-- then proceed with implementation changes.
-
-### Illegal move
-
-- silently keep the same implementation direction while merely adding a local constraint,
-
-- say "addressed" without changing the issue or the code appropriately,
-
-- reinterpret the reviewer's feedback into something easier and solve that instead.
-
-* * *
-
-## Example of proper feedback integration
-
-Reviewer comment:
-
-> This test only checks that a value is returned.
-> It would pass on arbitrary non-empty junk.
-
-Incorrect response pattern:
-
-- add another `isinstance(...)` check,
-
-- reply "done,"
-
-- leave acceptance criteria unchanged.
-
-Required response pattern:
-
-1. add the review item to `.pr/REVIEW_LOG.md`,
-
-2. update the work-unit issue so the acceptance criterion names the exact invariant or exact value to be proven,
-
-3. replace the weak test with a substantive one,
-
-4. commit,
-
-5. cite the commit when marking the item addressed.
-
-* * *
+A thread reply is not a replacement for an issue update when the underlying contract changed.
+Conversely, an issue update is not a disposition or substitute for the reply on the finding's own surface.
 
 ## Phase 6: Keep reviewers anchored to outcome, not process theater
 
@@ -681,47 +483,35 @@ gh issue edit <ISSUE_W1_NUMBER> --add-blocked-by <ISSUE_F1_NUMBER>
 gh issue view <WORK_UNIT_ISSUE_NUMBER>
 gh issue comment <WORK_UNIT_ISSUE_NUMBER> --body-file issue-update.md
 
-# 2. create a review log if the branch needs one
-mkdir -p .pr
-$EDITOR .pr/REVIEW_LOG.md
-
-# 3. write failing tests / failing verification
+# 2. write failing tests / failing verification
 pytest path/to/test_file.py -q
 
-# 4. implement narrowly and re-run verification
+# 3. implement narrowly and re-run verification
 pytest path/to/test_file.py -q
 
-# 5. update the issue with proof status and any changed decisions
+# 4. update the issue with proof status and any changed decisions
 gh issue comment <WORK_UNIT_ISSUE_NUMBER> --body-file issue-proof-update.md
 
-# 6. open the PR when implementation starts; synthesize the body from the issue
+# 5. open the PR when implementation starts; synthesize the body from the issue
 $EDITOR .pr/PR_BODY.md   # include Closes only for the work-unit issue; use Refs for parents/deferred work
-git add .pr/PR_BODY.md .pr/REVIEW_LOG.md <changed code/tests>
+git add .pr/PR_BODY.md <changed code/tests>
 git commit -m "Complete work-unit implementation"
 git push -u origin HEAD
 gh pr create --title "<title>" --body-file .pr/PR_BODY.md --milestone "<milestone>"
 gh pr edit <PR_NUMBER> --body-file .pr/PR_BODY.md --milestone "<milestone>"
 
-# 7. after review arrives, read all feedback surfaces
-gh pr view <PR_NUMBER> --comments
-gh pr view <PR_NUMBER> --json title,body,milestone,closingIssuesReferences,reviewDecision,latestReviews,reviews,comments,files,statusCheckRollup
-gh api repos/<OWNER>/<REPO>/pulls/<PR_NUMBER>/reviews
-gh api repos/<OWNER>/<REPO>/pulls/<PR_NUMBER>/comments
-gh api repos/<OWNER>/<REPO>/issues/<PR_NUMBER>/comments
-gh pr checks <PR_NUMBER> --watch
-
-# 8. if review feedback reopens required work, update the issue before continuing
+# 6. after review arrives, stop this shell lifecycle and load the canonical
+#    pr-feedback-triage skill. Return here only if triage reopens public issue state.
 gh issue comment <WORK_UNIT_ISSUE_NUMBER> --body-file issue-review-update.md
 $EDITOR .pr/PR_BODY.md
-$EDITOR .pr/REVIEW_LOG.md
+git add .pr/PR_BODY.md <changed code/tests>
+git commit -m "Remediate accepted review feedback"
+git push -u origin HEAD
 
-git add .pr/PR_BODY.md .pr/REVIEW_LOG.md <changed code/tests>
-git commit -m "Address review feedback"
-
-# 9. republish PR body from the updated issue synthesis
+# 7. republish the PR body only when triage reopened the issue synthesis
 gh pr edit <PR_NUMBER> --body-file .pr/PR_BODY.md --milestone "<milestone>"
 
-# 10. after reopened obligation work is complete and evidenced, request review again
+# 8. after reopened obligation work is complete and evidenced, request review again
 gh pr comment <PR_NUMBER> --body '@codex review'
 ```
 
@@ -775,17 +565,15 @@ If the PR does not expose those answers directly, it is not review-ready.
 
 13. Keep the diff within the declared boundary.
 
-14. Read every review surface with `gh`.
+14. Route returned feedback through [[pr-feedback-triage/SKILL|pr-feedback-triage]].
 
-15. Log every actionable review item atomically.
+15. Keep every disposition and its evidence on the finding's own surface; commit accepted remediation before a positive reply.
 
-16. Do not mark feedback addressed without an identifying commit.
+16. If feedback changes the target, update the work-unit issue, issue tree, and milestone scope first.
 
-17. If feedback changes the target, update the work-unit issue, issue tree, and milestone scope first.
+17. Do not let the implementation define its own success criteria.
 
-18. Do not let the implementation define its own success criteria.
-
-19. Do not let a reviewer guess what "done" means.
+18. Do not let a reviewer guess what "done" means.
 
 A PR that follows these rules is much easier to review well, much harder to rubber-stamp for the wrong reasons, and much less likely to drift into post-hoc self-justifying completion theater.
 
@@ -964,7 +752,7 @@ Re-check CI status using the commands from Section 4 above.
 
 > CI failures and PR review comments are different.
 > CI failures can be fixed mechanically after root-cause diagnosis.
-> Review comments must first be routed to `pr-feedback-triage` (see [pr-review-disposition.md](./pr-review-disposition.md)). Do not auto-fix review comments merely because they are unresolved.
+> Review comments must first be routed to [[pr-feedback-triage/SKILL|pr-feedback-triage]]. Do not auto-fix review comments merely because they are unresolved.
 
 ### Auto-Fix Loop Pattern
 

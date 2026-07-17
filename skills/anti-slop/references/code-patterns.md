@@ -848,9 +848,7 @@ For every custom function or component, ask: **“Is there a standard library or
 If yes, the custom code is slop.
 The absence of an import is the defect, not the presence of the dependency.
 
-### Correct Response
-
-See `policy-index/references/remediations.md` → **Remediation: Bespoke Dependency Reinvention**.
+Policy: `POLICY.NO_BESPOKE_REINVENTION`.
 
 * * *
 
@@ -1007,7 +1005,7 @@ The bad patterns are the OPPOSITE of what a normal code review would flag:
   The bug, when it surfaces weeks later as subtly wrong behavior, is undiscoverable.
 
   The fix declares the hard dependency and fails loudly if it is missing.
-  If the user actually needed both binaries (they don't — `xournalpp` replaced `xournal`), the correct shape is a tool-config record (`executables: ['xournalpp', 'xournal']` probed in order), not a ternary embedded in control flow.
+  If the user actually needed both binaries (they don't — `xournalpp` replaced `xournal`), the correct shape is a required configured executable or an explicit named backend variant validated before execution, not a list probed until one survives and not a ternary embedded in control flow.
   The agent patched the control flow because it refused to update the data model.
 
 - **Squishy input shapes**: the code accepts many different input formats, “normalizes” them, handles “various” data shapes.
@@ -1036,6 +1034,7 @@ The following are immediate red flags that surface slop without requiring you to
   If a dependency fails, the app should crash.
   The user owns the system, they can fix the dependency.
   A caught error hides the broken state.
+  When catches select expected behavior, attempts probe state or capability, or retries begin without a typed transient failure and idempotency proof, classify `POLICY.NO_EXCEPTION_CONTROL_FLOW` and load [Error Handling as Control Flow](../../policy-index/references/error-handling-as-control-flow.md).
 
 - **Any hard-coding of a path, command name, or identifier that should be in config.** Hard-coding mixes data and logic.
   A binary name belongs in a tool-config record, not in the body of an `if` statement.
@@ -1570,6 +1569,8 @@ If it cannot, it is accretion slop.
 
 ## **[BLAST-RADIUS]** Brittleness as Blast-Radius Smell
 
+Policy: `POLICY.NO_MYOPIC_PATCHING`.
+
 **“Brittle” does NOT mean “doesn’t handle many edge cases.”** Edge-case handling is a natural consequence of bugs that surface during planned development.
 It is not a quality signal and its absence is not a defect.
 Do not critique code for lacking speculative edge-case handling.
@@ -1711,6 +1712,8 @@ The short-circuit proves the code was intentionally preserved.
 * * *
 
 ## **[MYOPIC-PATCHING]** Myopic Patching & Patch Accretion
+
+Policy: `POLICY.NO_MYOPIC_PATCHING`.
 
 LLMs patch locally without understanding the global structure.
 Over time, this produces **patch accretion**: evidence of continued monkey-patching with no refactor.

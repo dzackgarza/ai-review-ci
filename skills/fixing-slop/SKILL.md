@@ -1,11 +1,11 @@
 ---
 name: fixing-slop
-description: Use when fixing slop identified by anti-slop or reviewing-llm-code — converting fraudulent artifacts back into correct implementations without laundering. Also use when an agent proposes "renaming to be honest," "deleting the dead code," or any label-only remediation of a slop finding.
+description: Use when fixing slop identified by [[anti-slop/SKILL|anti-slop]] or [[reviewing-llm-code/SKILL|reviewing-llm-code]] — converting fraudulent artifacts back into correct implementations without laundering. Also use when an agent proposes "renaming to be honest," "deleting the dead code," or any label-only remediation of a slop finding.
 ---
 
 # Fixing Slop
 
-Before attempting to remediate or fix code quality/slop findings, consult the central policy index: [policy-index](../policy-index/SKILL.md)
+Before attempting to remediate or fix code quality/slop findings, consult the central policy index: [[policy-index/SKILL|policy-index]]
 
 ## Core Rule
 
@@ -15,7 +15,9 @@ The slop artifact records what an agent was *trying to do* — obliterating it w
 You cannot fix slop by removing it.
 You fix slop by reconstructing the narrative that produced it, identifying the correct intention, and fulfilling that intention with the right implementation.
 
-Remediation must strictly respect the **Bridge-Burning Policies** (defined in [policy-index/SKILL.md](../policy-index/SKILL.md#policy-registry)). Any fix that introduces fallbacks, defaults, mocks, optional critical dependencies, or boolean flags to "remediate" a finding is violating policy and is considered laundering.
+Remediation must strictly respect the **Bridge-Burning Policies** (defined in [[policy-index/SKILL#policy-registry|policy-index/SKILL.md]]). Any fix that introduces fallbacks, defaults, mocks, optional critical dependencies, or boolean flags to "remediate" a finding is violating policy and is considered laundering.
+
+For `POLICY.NO_EXCEPTION_CONTROL_FLOW`, follow the remediation route named by its canonical policy record into the [[style-guide/references/style-guide-index|style-guide index]]. Do not restate or improvise that route here.
 
 ## Slop Is Never Localized: The Blast Radius Rule
 
@@ -179,7 +181,7 @@ See `llm-failure-modes/documentation-failures.md` and the `L10`/`C9`/`T8` codes 
 In-place editing reseeds the same slop in cleaner prose.
 Agents do reliable greenfield work and unreliable brownfield work, so the only safe repair is to **force the brownfield job to look like a greenfield job**:
 
-1. **Encode the standard.** The skill that owns the artifact type must already state what a correct and an incorrect such artifact looks like (`writing-documentation`, the `plan` skill, etc.). This is the priming, not the contaminated artifact.
+1. **Encode the standard.** The skill that owns the artifact type must already state what a correct and an incorrect such artifact looks like ([[writing/documentation/SKILL|writing-documentation]], the [[plan/SKILL|plan]] skill, etc.). This is the priming, not the contaminated artifact.
 2. **Adversarial requirement extraction (fresh agent).** A fresh agent, primed on the owning skill and *not* carrying the correction history, audits the contaminated artifact and extracts only the real, externally-verifiable, user-facing requirements and surviving facts.
    It must verify each surviving claim against inspected reality (code, data, command output, external sources), not against other generated documents.
    Anything that cannot be grounded is dropped, not relabeled.
@@ -190,13 +192,14 @@ Do not skip to step 3 by handing an agent the old artifact and asking it to "rew
 That is brownfield work wearing a greenfield label, and it reinfects.
 
 This protocol is the correct disposition for the **mold-on-bread** case in the Blast Radius Rule: when the visible artifact is a sample of a contaminated production process, you throw out the loaf and rebake from sound ingredients — you do not scrape the mold off.
-The delegation mechanics (two fresh subagents, no shared contaminated context) live in `subagent-delegation`.
+The delegation mechanics (two fresh subagents, no shared contaminated context) live in [[subagent-delegation/SKILL|subagent-delegation]].
 
 ## Cross-References
 
 - **`anti-slop/references/code-patterns.md`** → **Honest-Label Laundering** — The specific detection heuristics for renaming/relabeling.
 - **`anti-slop/SKILL.md`** — The analysis skill; use this FIRST to identify slop, then use fixing-slop to remediate.
-- **policy-index -> Bridge-Burning Policies** — The [Bridge-Burning Policies](../policy-index/SKILL.md#policy-registry) are the core criteria for what constitutes a correct, non-evasive implementation.
+- **[[policy-index/SKILL|policy-index]] -> Bridge-Burning Policies** — The [[policy-index/SKILL#policy-registry|Bridge-Burning Policies]] are the core criteria for what constitutes a correct, non-evasive implementation.
+- **[Error Handling as Control Flow](../policy-index/references/error-handling-as-control-flow.md)** — Use with `POLICY.NO_EXCEPTION_CONTROL_FLOW` to reconstruct the missing domain model before following that policy record's remediation route.
   Any fix must follow them as hard constraints.
   For a detailed list of prohibited code constructs and testing red flags, see the [Bridge-Burning Red Flags Catalog](../policy-index/references/red-flags.md) and the [Runtime Control-Flow Red Flags Catalog](../policy-index/references/runtime-control-flow.md).
 - **`handling-corrections/SKILL.md`** — The anti-thrashing protocol; use when a fix attempt is rejected as laundering.

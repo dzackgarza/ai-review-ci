@@ -2,7 +2,6 @@
 
 import json
 import re
-import shlex
 import subprocess
 import sys
 from pathlib import Path
@@ -11,8 +10,6 @@ from typing import Any, NoReturn
 from pydantic import BaseModel, ConfigDict
 from unidiff import PatchSet
 
-from ai_review_ci.threads import FINGERPRINT_MARKER
-
 JsonDict = dict[str, Any]
 
 _TS_JS_SUFFIXES = (".ts", ".tsx", ".js", ".jsx", ".mjs", ".cjs")
@@ -20,15 +17,20 @@ _PY_SUFFIXES = (".py",)
 _RUST_SUFFIXES = (".rs",)
 _SHELL_SUFFIXES = (".sh",)
 _JUST_SUFFIXES = (".just",)
+_DIFF_SECTION_START = re.compile(r"(?m)(?=^diff --git )")
+_NON_TEXT_DIFF_CONTENT = re.compile(r"[\udc80-\udcff\x0b\x0c\x1c-\x1e\x85\u2028\u2029]|\r(?!\n)")
 
 
 class DiffRule(BaseModel):
-    model_config = ConfigDict(frozen=True, arbitrary_types_allowed=True)
+    model_config = ConfigDict(extra="forbid", frozen=True, arbitrary_types_allowed=True)
 
     rule_id: str
+    policy_code: str
+    signal_keys: tuple[str, ...]
     pattern: re.Pattern[str]
     suffixes: tuple[str, ...]
-    message: str
+    excluded_suffixes: tuple[str, ...] = ()
+    exclude_config_paths: bool = False
 
 
 class ProjectProfile(BaseModel):
@@ -38,6 +40,7 @@ class ProjectProfile(BaseModel):
     justfile_names: tuple[str, ...]
     required_paths: tuple[str, ...]
     requires_bun_lock: bool = False
+    requires_cargo_manifest: bool = False
     requires_sage_file: bool = False
     requires_app_boot: bool = False
 
@@ -58,11 +61,13 @@ PROJECT_PROFILES = {
         required_paths=("pyproject.toml", "package.json"),
         requires_bun_lock=True,
     ),
-    "rust": ProjectProfile(name="rust", justfile_names=("rust.just",), required_paths=("Cargo.toml",)),
+    "docs-and-configs": ProjectProfile(name="docs-and-configs", justfile_names=("docs-and-configs.just",), required_paths=()),
+    "rust": ProjectProfile(name="rust", justfile_names=("rust.just",), required_paths=(), requires_cargo_manifest=True),
     "sage": ProjectProfile(name="sage", justfile_names=("sage.just",), required_paths=("pyproject.toml",), requires_sage_file=True),
 }
 
 BASE_REQUIRED_CHECK_CONTEXTS = (
+    "qc-ci / qc",
     "deterministic-diff / deterministic-diff",
     "delegation-conformance / delegation-conformance",
     "qc-doctor / qc-doctor",
@@ -82,42 +87,60 @@ REQUIRED_CHECK_CONTEXTS = BASE_REQUIRED_CHECK_CONTEXTS
 DIFF_RULES = (
     DiffRule(
         rule_id="no-nullish-coalescing",
+        policy_code="POLICY.RUNTIME_DEFAULT",
+        signal_keys=("no-nullish-coalescing",),
         pattern=re.compile(r"\?\?"),
         suffixes=_TS_JS_SUFFIXES,
-        message="Nullish coalescing introduces a runtime fallback.",
     ),
     DiffRule(
         rule_id="ts-no-or-default",
+        policy_code="POLICY.RUNTIME_DEFAULT",
+        signal_keys=("ts-no-or-default",),
         pattern=re.compile(r"\|\|"),
         suffixes=_TS_JS_SUFFIXES + _SHELL_SUFFIXES + _JUST_SUFFIXES,
-        message="Logical OR introduces a fallback/default path.",
     ),
     DiffRule(
         rule_id="no-double-cast",
+        policy_code="POLICY.NO_TYPE_ESCAPE",
+        signal_keys=("no-double-cast",),
         pattern=re.compile(r"\bas\s+(?:unknown|any|never)\s+as\b"),
         suffixes=_TS_JS_SUFFIXES,
-        message="Double-casting bypasses TypeScript's type system.",
     ),
     DiffRule(
         rule_id="ts-no-any-cast",
+        policy_code="POLICY.NO_TYPE_ESCAPE",
+        signal_keys=("ts-no-any-cast",),
         pattern=re.compile(r"\bas\s+any\b"),
         suffixes=_TS_JS_SUFFIXES,
-        message="as any disables TypeScript evidence at the boundary.",
     ),
     DiffRule(
         rule_id="ts-no-vitest-mock-boundary",
+        policy_code="POLICY.NO_MOCK_PROOF",
+        signal_keys=(
+            "ts-no-vi-mock",
+            "ts-no-vi-stub-global",
+            "ts-no-vi-fn",
+            "ts-no-vi-spyon",
+            "ts-no-vi-stub-env",
+        ),
         pattern=re.compile(r"\bvi\.(?:mock|stubGlobal|fn|spyOn|stubEnv)\s*\("),
         suffixes=_TS_JS_SUFFIXES,
-        message="Vitest mock helpers replace real proof boundaries.",
     ),
     DiffRule(
         rule_id="ts-no-jest-mock-boundary",
+        policy_code="POLICY.NO_MOCK_PROOF",
+        signal_keys=(
+            "ts-no-jest-mock",
+            "ts-no-jest-fn",
+            "ts-no-jest-spyon",
+        ),
         pattern=re.compile(r"\bjest\.(?:mock|fn|spyOn)\s*\("),
         suffixes=_TS_JS_SUFFIXES,
-        message="Jest mock helpers replace real proof boundaries.",
     ),
     DiffRule(
         rule_id="no-const-assignment",
+        policy_code="POLICY.NO_HIDDEN_CONFIG",
+        signal_keys=("no-const-assignment",),
         pattern=re.compile(
             r"^\s*(?:export\s+)?const\s+(?:"
             r"[A-Z][A-Z0-9_]*(?:URL|URI|ENDPOINT|HOST|PORT|SERVER|DATABASE|COMMAND|CWD|PATH|DIR|DIRECTORY|TIMEOUT|RETRY|THRESHOLD|SECRET|TOKEN)[A-Z0-9_]*"
@@ -126,25 +149,98 @@ DIFF_RULES = (
             r")",
         ),
         suffixes=_TS_JS_SUFFIXES,
-        message="Hardcoded config-shaped constants belong in required config.",
+        exclude_config_paths=True,
     ),
     DiffRule(
         rule_id="py-no-getenv-default",
+        policy_code="POLICY.RUNTIME_DEFAULT",
+        signal_keys=("py-no-getenv-default",),
         pattern=re.compile(r"\bos\.getenv\s*\([^,\n]+,"),
         suffixes=_PY_SUFFIXES,
-        message="os.getenv with a default creates a runtime fallback.",
     ),
     DiffRule(
         rule_id="py-no-dict-get-default",
+        policy_code="POLICY.RUNTIME_DEFAULT",
+        signal_keys=("py-no-dict-get-default",),
         pattern=re.compile(r"\.get\s*\([^,\n]+,"),
         suffixes=_PY_SUFFIXES,
-        message="dict.get with a default hides missing required data.",
     ),
     DiffRule(
         rule_id="rs-no-unwrap-or",
+        policy_code="POLICY.RUNTIME_DEFAULT",
+        signal_keys=("rs-no-unwrap-or", "rs-no-unwrap-or-default"),
         pattern=re.compile(r"\.unwrap_or(?:_default)?\s*\("),
         suffixes=_RUST_SUFFIXES,
-        message="unwrap_or fallback paths hide failed Rust results.",
+    ),
+)
+
+
+_NON_CODE_SUFFIXES = (".md", ".markdown", ".mdx")
+
+BYPASS_DIFF_RULES = (
+    DiffRule(
+        rule_id="no-coverage-pragma",
+        policy_code="POLICY.NO_QC_SILENCING",
+        signal_keys=("no-coverage-pragma",),
+        pattern=re.compile(r"# pragma: no cov" + "er"),
+        suffixes=(),
+        excluded_suffixes=_NON_CODE_SUFFIXES,
+    ),
+    DiffRule(
+        rule_id="no-istanbul-ignore",
+        policy_code="POLICY.NO_QC_SILENCING",
+        signal_keys=("no-istanbul-ignore",),
+        pattern=re.compile(r"// istanbul ign" + "ore"),
+        suffixes=(),
+        excluded_suffixes=_NON_CODE_SUFFIXES,
+    ),
+    DiffRule(
+        rule_id="no-noqa",
+        policy_code="POLICY.NO_QC_SILENCING",
+        signal_keys=("no-noqa",),
+        pattern=re.compile(r"# no" + "qa"),
+        suffixes=(),
+        excluded_suffixes=_NON_CODE_SUFFIXES,
+    ),
+    DiffRule(
+        rule_id="no-type-ignore",
+        policy_code="POLICY.NO_QC_SILENCING",
+        signal_keys=("no-type-ignore",),
+        pattern=re.compile(r"# type: ign" + "ore"),
+        suffixes=(),
+        excluded_suffixes=_NON_CODE_SUFFIXES,
+    ),
+    DiffRule(
+        rule_id="no-double-cast",
+        policy_code="POLICY.NO_TYPE_ESCAPE",
+        signal_keys=("no-double-cast",),
+        pattern=re.compile(r"\bas\s+(?:unknown|any|never)\s+as\s+"),
+        suffixes=(),
+        excluded_suffixes=_NON_CODE_SUFFIXES,
+    ),
+    DiffRule(
+        rule_id="no-ts-ignore",
+        policy_code="POLICY.NO_QC_SILENCING",
+        signal_keys=("no-ts-ignore",),
+        pattern=re.compile(r"@ts-ign" + "ore"),
+        suffixes=(),
+        excluded_suffixes=_NON_CODE_SUFFIXES,
+    ),
+    DiffRule(
+        rule_id="no-unjustified-ts-expect-error",
+        policy_code="POLICY.NO_QC_SILENCING",
+        signal_keys=("no-unjustified-ts-expect-error",),
+        pattern=re.compile(r"@ts-expect-err" + r"or[ \t]*$"),
+        suffixes=(),
+        excluded_suffixes=_NON_CODE_SUFFIXES,
+    ),
+    DiffRule(
+        rule_id="no-eslint-disable",
+        policy_code="POLICY.NO_QC_SILENCING",
+        signal_keys=("no-eslint-disable",),
+        pattern=re.compile(r"// eslint-dis" + "able"),
+        suffixes=(),
+        excluded_suffixes=_NON_CODE_SUFFIXES,
     ),
 )
 
@@ -158,7 +254,8 @@ query($owner: String!, $name: String!, $number: Int!, $cursor: String) {
           id
           path
           isResolved
-          comments(first: 50) {
+          comments(first: 100) {
+            pageInfo { hasNextPage endCursor }
             nodes {
               body
               url
@@ -171,17 +268,60 @@ query($owner: String!, $name: String!, $number: Int!, $cursor: String) {
 }
 """
 
-_COMMIT_EVIDENCE = re.compile(r"(?:commit|commits/|[/-])\s*[0-9a-f]{7,40}\b|\b[0-9a-f]{12,40}\b", re.IGNORECASE)
-_LEDGER_EVIDENCE = re.compile(r"disposition[- ]ledger|resolution[- ]ledger", re.IGNORECASE)
-_DIRECT_PLAYWRIGHT = re.compile(r"\b(?:bunx|npx|npm|pnpm|yarn)\s+(?:exec\s+)?playwright\b|\bplaywright\s+test\b")
-_PROOF_COMMAND = re.compile(r"\*\*Proof:\*\*\s*`([^`]+)`")
-_RESOLVE_THREAD_MUTATION = """
-mutation($threadId: ID!) {
-  resolveReviewThread(input: {threadId: $threadId}) {
-    thread { id isResolved }
+_THREAD_COMMENTS_QUERY = """
+query($threadId: ID!, $cursor: String!) {
+  node(id: $threadId) {
+    ... on PullRequestReviewThread {
+      comments(first: 100, after: $cursor) {
+        pageInfo { hasNextPage endCursor }
+        nodes { body url }
+      }
+    }
   }
 }
 """
+
+_PR_COMMITS_QUERY = """
+query($owner: String!, $name: String!, $number: Int!, $cursor: String) {
+  repository(owner: $owner, name: $name) {
+    pullRequest(number: $number) {
+      commits(first: 100, after: $cursor) {
+        pageInfo { hasNextPage endCursor }
+        nodes { commit { oid } }
+      }
+    }
+  }
+}
+"""
+
+_DISPOSITION_FIELD = re.compile(
+    r"^\s*Disposition:\s*"
+    r"(?P<disposition>Accepted as written|Accepted with modified remediation|Rejected|Duplicate|Outdated|"
+    r"Backlogged as minor technical debt)\s*\.?\s*$",
+    re.IGNORECASE | re.MULTILINE,
+)
+_POLICY_CODE = re.compile(r"\bPOLICY\.[A-Z][A-Z0-9_]*\b", re.IGNORECASE)
+_COMMIT_FIELD = re.compile(
+    r"^\s*Commit:\s*(?P<commit>[0-9a-f]{7,40})\s*$",
+    re.IGNORECASE | re.MULTILINE,
+)
+_SUPERSEDING_COMMIT_FIELD = re.compile(
+    r"^\s*Superseding commit:\s*(?P<commit>[0-9a-f]{7,40})\s*$",
+    re.IGNORECASE | re.MULTILINE,
+)
+_CANONICAL_THREAD_FIELD = re.compile(
+    r"^\s*Canonical thread:\s*(?:https?://\S+|[A-Za-z0-9_-]+)\s*$",
+    re.IGNORECASE | re.MULTILINE,
+)
+_DEBT_ISSUE_FIELD = re.compile(
+    r"^\s*Debt issue:\s*https://github\.com/\S+/issues/\d+\s*$",
+    re.IGNORECASE | re.MULTILINE,
+)
+_BURDEN_DISPOSITION = re.compile(
+    r"^(?:solved by|invalidated by|transferred to|remains open in)\b",
+    re.IGNORECASE,
+)
+_DIRECT_PLAYWRIGHT = re.compile(r"\b(?:bunx|npx|npm|pnpm|yarn)\s+(?:exec\s+)?playwright\b|\bplaywright\s+test\b")
 
 
 def _fail(message: str) -> NoReturn:
@@ -220,12 +360,16 @@ def _is_config_path(path: str) -> bool:
 
 
 def _rule_applies(path: str, rule: DiffRule) -> bool:
-    if rule.rule_id == "no-const-assignment" and _is_config_path(path):
+    if rule.exclude_config_paths and _is_config_path(path):
         return False
-    return Path(path).name == "justfile" or path.endswith(rule.suffixes)
+    if path.lower().endswith(rule.excluded_suffixes):
+        return False
+    if not rule.suffixes:
+        return True
+    return Path(path).name.lower() == "justfile" or path.endswith(rule.suffixes)
 
 
-def diff_findings(diff_text: str) -> list[str]:
+def diff_findings(diff_text: str, rules: tuple[DiffRule, ...] = DIFF_RULES) -> list[str]:
     """Return deterministic findings introduced by added lines in a unified diff."""
     findings: list[str] = []
     for patched_file in PatchSet(diff_text.splitlines(keepends=True)):
@@ -239,10 +383,21 @@ def diff_findings(diff_text: str) -> list[str]:
                 if line.target_line_no is None:
                     _fail(f"missing target line number in diff for {file_path}")
                 text = line.value.rstrip("\n")
-                for rule in DIFF_RULES:
+                for rule in rules:
                     if _rule_applies(file_path, rule) and rule.pattern.search(text):
-                        findings.append(f"{file_path}:{line.target_line_no}: {rule.rule_id}: {rule.message}")
+                        findings.append(f"{file_path}:{line.target_line_no}: {rule.rule_id}: {rule.policy_code}")
     return findings
+
+
+def bypass_diff_findings(diff_text: str) -> list[str]:
+    """Return staged-line findings for validator and type-system bypasses."""
+    return diff_findings(diff_text, BYPASS_DIFF_RULES)
+
+
+def _text_diff_sections(diff_text: str) -> str:
+    """Keep file sections whose content is safe for unified-text parsing."""
+    sections = _DIFF_SECTION_START.split(diff_text)
+    return "".join(section for section in sections if _NON_TEXT_DIFF_CONTENT.search(section) is None)
 
 
 def check_diff(diff: Path) -> None:
@@ -254,6 +409,26 @@ def check_diff(diff: Path) -> None:
             print(f"- {finding}", file=sys.stderr)
         sys.exit(1)
     print("Deterministic diff gate found no introduced violations.")
+
+
+def check_staged_bypass() -> None:
+    """Fail if staged added lines introduce validator or type-system bypasses."""
+    result = subprocess.run(
+        ["git", "diff", "--cached", "--unified=0", "--diff-filter=ACM"],
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="surrogateescape",
+    )
+    if result.returncode != 0:
+        _fail(f"git diff --cached failed: {result.stderr.strip()}")
+    findings = bypass_diff_findings(_text_diff_sections(result.stdout))
+    if findings:
+        print("Staged bypass gate found introduced violations:", file=sys.stderr)
+        for finding in findings:
+            print(f"- {finding}", file=sys.stderr)
+        sys.exit(1)
+    print("No bypass comments detected in staged files.")
 
 
 def _justfile_for(target: Path) -> Path:
@@ -287,13 +462,13 @@ def delegates_to_global_qc(output: str, project_profile: ProjectProfile) -> bool
 
 
 def check_delegation(target: Path, profile: str) -> None:
-    """Fail if target test/test-ci recipes do not delegate to global QC."""
+    """Fail unless every public QC tier delegates to global QC."""
     target = target.resolve()
     project_profile = _profile(profile)
     check_profile(target, profile)
     justfile = _justfile_for(target)
     failed: list[str] = []
-    for recipe in ("test", "test-ci"):
+    for recipe in ("test-commit", "test-push", "test-ci"):
         output = _dry_run_recipe(target, justfile, recipe)
         if not delegates_to_global_qc(output, project_profile):
             failed.append(recipe)
@@ -395,8 +570,59 @@ def check_pr_description(repo: str, pr_number: int, repo_root: Path = Path("."))
     print("PR description checklist gate found no unchecked items.")
 
 
+def _graphql_object(value: object, context: str) -> JsonDict:
+    if not isinstance(value, dict):
+        _fail(f"GitHub returned invalid {context}: expected an object")
+    return value
+
+
+def _graphql_nodes(value: object, context: str) -> list[JsonDict]:
+    if not isinstance(value, list) or not all(isinstance(item, dict) for item in value):
+        _fail(f"GitHub returned invalid {context}: expected an object array")
+    return value
+
+
+def _append_remaining_thread_comments(node: JsonDict) -> None:
+    connection = _graphql_object(node.get("comments"), "review-thread comments connection")
+    comments = _graphql_nodes(connection.get("nodes"), "review-thread comments")
+    page_info = _graphql_object(connection.get("pageInfo"), "review-thread comment page info")
+    cursor = page_info.get("endCursor")
+    while page_info.get("hasNextPage"):
+        if not isinstance(cursor, str) or not cursor:
+            _fail("GitHub reported another review-thread comment page without an end cursor")
+        payload = _gh_json(
+            [
+                "api",
+                "graphql",
+                "-f",
+                f"query={_THREAD_COMMENTS_QUERY}",
+                "-F",
+                f"threadId={node['id']}",
+                "-F",
+                f"cursor={cursor}",
+            ]
+        )
+        data = _graphql_object(payload.get("data"), "GraphQL data")
+        thread = data.get("node")
+        if thread is None:
+            _fail(f"review thread {node['id']} not found or inaccessible")
+        connection = _graphql_object(
+            _graphql_object(thread, "review thread").get("comments"),
+            "review-thread comments connection",
+        )
+        comments.extend(
+            _graphql_nodes(connection.get("nodes"), "review-thread comments")
+        )
+        page_info = _graphql_object(
+            connection.get("pageInfo"),
+            "review-thread comment page info",
+        )
+        cursor = page_info.get("endCursor")
+    _graphql_object(node.get("comments"), "review-thread comments connection")["nodes"] = comments
+
+
 def _thread_nodes(repo: str, pr_number: int) -> list[JsonDict]:
-    owner, name = repo.split("/")
+    owner, name = repo.split("/", 1)
     nodes: list[JsonDict] = []
     cursor: str | None = None
     while True:
@@ -414,104 +640,241 @@ def _thread_nodes(repo: str, pr_number: int) -> list[JsonDict]:
         ]
         if cursor:
             args.extend(["-F", f"cursor={cursor}"])
-        page = _gh_json(args)["data"]["repository"]["pullRequest"]["reviewThreads"]
-        nodes.extend(page["nodes"])
-        if not page["pageInfo"]["hasNextPage"]:
+        payload = _gh_json(args)
+        data = _graphql_object(payload.get("data"), "GraphQL data")
+        repository = data.get("repository")
+        if repository is None:
+            _fail(f"repository {repo} not found or inaccessible")
+        pull_request = _graphql_object(repository, "repository").get("pullRequest")
+        if pull_request is None:
+            _fail(f"pull request #{pr_number} not found in {repo}")
+        page = _graphql_object(
+            _graphql_object(pull_request, "pull request").get("reviewThreads"),
+            "review-threads connection",
+        )
+        page_nodes = _graphql_nodes(page.get("nodes"), "review-thread nodes")
+        for node in page_nodes:
+            _append_remaining_thread_comments(node)
+            nodes.append(node)
+        page_info = _graphql_object(page.get("pageInfo"), "review-thread page info")
+        if not page_info.get("hasNextPage"):
             return nodes
-        cursor = page["pageInfo"]["endCursor"]
+        cursor = page_info.get("endCursor")
+        if not isinstance(cursor, str) or not cursor:
+            _fail("GitHub reported another review-thread page without an end cursor")
 
 
 def _comments(node: JsonDict) -> list[JsonDict]:
-    comments = node["comments"]["nodes"]
-    if not isinstance(comments, list):
-        _fail("review thread comments were not an array")
-    return comments
+    connection = _graphql_object(node.get("comments"), "review-thread comments connection")
+    return _graphql_nodes(connection.get("nodes"), "review-thread comments")
 
 
-def _first_ai_review_proof(node: JsonDict) -> str | None:
-    """Proof command from an ai-review thread body, if the body uses our marker."""
-    for comment in _comments(node):
-        body = str(comment["body"])
-        if FINGERPRINT_MARKER not in body:
-            continue
-        match = _PROOF_COMMAND.search(body)
-        if match is not None:
-            return match.group(1)
-    return None
-
-
-def _safe_proof_args(proof_command: str) -> list[str] | None:
-    """Return argv for safe grep/rg proof commands; reject shell features."""
-    try:
-        args = shlex.split(proof_command)
-    except ValueError:
+def _field_value(body: str, label: str) -> str | None:
+    match = re.search(
+        rf"^\s*{re.escape(label)}:\s*(?P<value>\S(?:.*\S)?)\s*$",
+        body,
+        re.IGNORECASE | re.MULTILINE,
+    )
+    if match is None:
         return None
-    if not args or args[0] not in {"grep", "rg"}:
+    value = match.group("value").strip()
+    if re.fullmatch(r"<[^>]+>", value):
         return None
-    if any(token in {";", "&&", "||", "|", ">", "<"} for token in args):
-        return None
-    if args[0] == "grep":
-        # grep proofs must name at least a pattern and a target path. Recursive
-        # project scans are too broad to auto-resolve safely.
-        operands = [arg for arg in args[1:] if not arg.startswith("-")]
-        if len(operands) < 2:
-            return None
-    return args
+    return value
 
 
-def _proof_is_stale(proof_command: str) -> bool:
-    args = _safe_proof_args(proof_command)
-    if args is None:
+def _basis_is_valid(body: str) -> bool:
+    policy = _field_value(body, "Policy basis")
+    if policy is not None and _POLICY_CODE.search(policy):
+        return True
+    return _field_value(body, "Factual/contract basis") is not None
+
+
+def _deletion_fields_are_valid(body: str) -> bool:
+    artifact = _field_value(body, "Deleted artifact")
+    if artifact is None:
         return False
-    result = subprocess.run(args, capture_output=True, text=True, check=False)
-    # grep/rg exit 1 means no matches. Any other non-zero status is an
-    # execution error and must not auto-resolve the thread.
-    return result.returncode == 1
-
-
-def _resolve_review_thread(thread_id: str) -> None:
-    _gh_json(
-        [
-            "api",
-            "graphql",
-            "-f",
-            f"query={_RESOLVE_THREAD_MUTATION}",
-            "-F",
-            f"threadId={thread_id}",
-        ]
+    if artifact.casefold() == "none":
+        return True
+    disposition = _field_value(body, "Burden disposition")
+    return bool(
+        _field_value(body, "Original burden")
+        and disposition
+        and _BURDEN_DISPOSITION.search(disposition)
+        and _field_value(body, "Verification")
     )
 
 
-def _auto_resolve_stale_thread(node: JsonDict) -> bool:
-    proof = _first_ai_review_proof(node)
-    if proof is None or not _proof_is_stale(proof):
+def _reply_has_resolution_evidence(body: str) -> bool:
+    disposition_match = _DISPOSITION_FIELD.search(body)
+    if disposition_match is None or not _basis_is_valid(body):
         return False
-    thread_id = str(node.get("id", ""))
-    if not thread_id:
-        _fail("cannot auto-resolve stale proof thread without a thread id")
-    _resolve_review_thread(thread_id)
-    return True
+    if not all(
+        _field_value(body, label)
+        for label in (
+            "Pre-filter",
+            "Claim",
+            "Code/action taken or explicit non-change",
+            "Audit anchor",
+        )
+    ):
+        return False
+
+    disposition = disposition_match.group("disposition").lower()
+    if disposition.startswith("accepted"):
+        return bool(
+            _field_value(body, "Remediation")
+            and _field_value(body, "Proof")
+            and _COMMIT_FIELD.search(body)
+            and _deletion_fields_are_valid(body)
+        )
+    if disposition == "duplicate":
+        return bool(_CANONICAL_THREAD_FIELD.search(body))
+    if disposition == "outdated":
+        return bool(_SUPERSEDING_COMMIT_FIELD.search(body))
+    if disposition == "backlogged as minor technical debt":
+        return bool(_DEBT_ISSUE_FIELD.search(body))
+    return disposition == "rejected"
+
+
+def _resolution_reply(node: JsonDict) -> str | None:
+    for comment in reversed(_comments(node)[1:]):
+        body = str(comment.get("body", ""))
+        if _reply_has_resolution_evidence(body):
+            return body
+    return None
 
 
 def _has_resolution_evidence(node: JsonDict) -> bool:
-    for comment in _comments(node):
-        body = str(comment["body"])
-        if _COMMIT_EVIDENCE.search(body) or _LEDGER_EVIDENCE.search(body):
-            return True
-    return False
+    return _resolution_reply(node) is not None
 
 
-def check_review_threads(repo: str, pr_number: int) -> None:
+def _pr_commit_shas(repo: str, pr_number: int) -> set[str]:
+    owner, name = repo.split("/", 1)
+    commits: set[str] = set()
+    cursor: str | None = None
+    while True:
+        args = [
+            "api",
+            "graphql",
+            "-f",
+            f"query={_PR_COMMITS_QUERY}",
+            "-F",
+            f"owner={owner}",
+            "-F",
+            f"name={name}",
+            "-F",
+            f"number={pr_number}",
+        ]
+        if cursor:
+            args.extend(["-F", f"cursor={cursor}"])
+        payload = _gh_json(args)
+        data = _graphql_object(payload.get("data"), "GraphQL data")
+        repository = data.get("repository")
+        if repository is None:
+            _fail(f"repository {repo} not found or inaccessible")
+        pull_request = _graphql_object(repository, "repository").get("pullRequest")
+        if pull_request is None:
+            _fail(f"pull request #{pr_number} not found in {repo}")
+        connection = _graphql_object(
+            _graphql_object(pull_request, "pull request").get("commits"),
+            "pull-request commits connection",
+        )
+        for node in _graphql_nodes(connection.get("nodes"), "pull-request commit nodes"):
+            commit = _graphql_object(node.get("commit"), "pull-request commit")
+            oid = commit.get("oid")
+            if not isinstance(oid, str) or not re.fullmatch(
+                r"[0-9a-f]{40}", oid, re.IGNORECASE
+            ):
+                _fail("GitHub returned an invalid pull-request commit SHA")
+            commits.add(oid.lower())
+        page_info = _graphql_object(connection.get("pageInfo"), "commit page info")
+        if not page_info.get("hasNextPage"):
+            return commits
+        cursor = page_info.get("endCursor")
+        if not isinstance(cursor, str) or not cursor:
+            _fail("GitHub reported another commit page without an end cursor")
+
+
+def _commit_match_count(cited: str, commits: set[str]) -> int:
+    return sum(sha.startswith(cited.lower()) for sha in commits)
+
+
+def _audit_anchor_error(
+    body: str,
+    commits: set[str],
+    repo_root: Path,
+) -> str | None:
+    anchor = _field_value(body, "Audit anchor")
+    assert anchor is not None
+    if re.fullmatch(r"https?://\S+", anchor):
+        return None
+    if re.fullmatch(r"[0-9a-f]{7,40}", anchor, re.IGNORECASE):
+        if _commit_match_count(anchor, commits) == 1:
+            return None
+        return f"proof anchor {anchor} is not a unique commit on this PR"
+    path_text = anchor.split("::", 1)[0]
+    path_text = re.sub(r"#L\d+(?:-L\d+)?$", "", path_text)
+    path_text = re.sub(r":\d+(?::\d+)?$", "", path_text)
+    if path_text and (repo_root / path_text).is_file():
+        return None
+    return f"proof anchor {anchor} does not exist"
+
+
+def _reply_semantic_errors(
+    body: str,
+    commits: set[str],
+    repo_root: Path,
+) -> list[str]:
+    disposition_match = _DISPOSITION_FIELD.search(body)
+    assert disposition_match is not None
+    disposition = disposition_match.group("disposition").lower()
+    errors: list[str] = []
+    if disposition.startswith("accepted"):
+        commit_match = _COMMIT_FIELD.search(body)
+        assert commit_match is not None
+        cited = commit_match.group("commit")
+        if _commit_match_count(cited, commits) != 1:
+            errors.append(f"cited commit {cited} is not on this PR")
+        anchor_error = _audit_anchor_error(body, commits, repo_root)
+        if anchor_error:
+            errors.append(anchor_error)
+    elif disposition == "outdated":
+        commit_match = _SUPERSEDING_COMMIT_FIELD.search(body)
+        assert commit_match is not None
+        cited = commit_match.group("commit")
+        if _commit_match_count(cited, commits) != 1:
+            errors.append(f"superseding commit {cited} is not on this PR")
+    return errors
+
+
+def check_review_threads(
+    repo: str,
+    pr_number: int,
+    repo_root: Path = Path("."),
+) -> None:
     """Fail unless every PR review thread is resolved with visible evidence."""
     failures: list[str] = []
+    commits: set[str] | None = None
     for node in _thread_nodes(repo, pr_number):
         path = str(node["path"])
         if not node["isResolved"]:
-            if _auto_resolve_stale_thread(node):
-                continue
             failures.append(f"{path}: unresolved review thread")
-        elif not _has_resolution_evidence(node):
-            failures.append(f"{path}: resolved review thread lacks commit or disposition-ledger evidence")
+            continue
+        reply = _resolution_reply(node)
+        if reply is None:
+            failures.append(
+                f"{path}: resolved review thread lacks a thread-local evidenced disposition"
+            )
+            continue
+        disposition_match = _DISPOSITION_FIELD.search(reply)
+        assert disposition_match is not None
+        disposition = disposition_match.group("disposition").lower()
+        if disposition.startswith("accepted") or disposition == "outdated":
+            if commits is None:
+                commits = _pr_commit_shas(repo, pr_number)
+            for error in _reply_semantic_errors(reply, commits, repo_root):
+                failures.append(f"{path}: {error}")
     if failures:
         print("Review thread gate found unresolved or unevidenced threads:", file=sys.stderr)
         for failure in failures:
@@ -524,7 +887,8 @@ def required_check_contexts(profile: str) -> tuple[str, ...]:
     """Required branch-protection check contexts for a curated project profile."""
     project_profile = _profile(profile)
     if project_profile.requires_app_boot:
-        return BASE_REQUIRED_CHECK_CONTEXTS[:2] + (APP_BOOT_CHECK_CONTEXT,) + BASE_REQUIRED_CHECK_CONTEXTS[2:]
+        insertion = BASE_REQUIRED_CHECK_CONTEXTS.index("pr-description-checklist / pr-description-checklist")
+        return BASE_REQUIRED_CHECK_CONTEXTS[:insertion] + (APP_BOOT_CHECK_CONTEXT,) + BASE_REQUIRED_CHECK_CONTEXTS[insertion:]
     return BASE_REQUIRED_CHECK_CONTEXTS
 
 

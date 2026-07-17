@@ -15,7 +15,7 @@ Apply these rules to EVERY finding before reporting.
 They will not introduce code that crashes on the happy path.
 The far more insidious residue is code that *silently fails* — it does not crash, it does not produce obviously wrong output, but it has disabled some safety guarantee, erased some diagnostic signal, or introduced a path where wrong behavior would be invisible.
 That is the defect category this policy exists to catch.
-The bridge-burning policies, anti-slop red flags, and fail-loudly rule all exist for this reason.
+The bridge-burning policies, [[anti-slop/SKILL|anti-slop]] red flags, and fail-loudly rule all exist for this reason.
 
 An agent may frame silent-failure constructs as "speculative" or "enterprise."
 They are not.
@@ -61,7 +61,7 @@ The following are BANNED at external boundaries:
   The cast does not check the actual runtime shape.
   If the upstream schema changes, the cast succeeds silently and wrong data flows through.
 - **Schema validation that defaults or falls back** — `z.object({...}).passthrough()`, `parse()` with a fallback default, or any construct that accepts data that doesn't match the expected shape and tries to "make it work."
-  See the `policy-index` bridge-burning policies.
+  See the [[policy-index/SKILL|policy-index]] bridge-burning policies.
 
 **The correct pattern:** A runtime assertion that crashes on mismatch.
 
@@ -93,7 +93,7 @@ If the schema changes, the handler code must change too — and the crash ensure
 ## Foundational Principle: Default to the Dependency
 
 **The default is: use a mature dependency for the job.** The burden of proof is on the ABSENCE of a dependency, not its presence.
-Dependency-dodging code (hand-rolling what a library already provides) must have a strong, explicit, auditable justification for remaining in the codebase — recorded as a comment at the site or in `agent-memory`.
+Dependency-dodging code (hand-rolling what a library already provides) must have a strong, explicit, auditable justification for remaining in the codebase — recorded as a comment at the site or in [[agent-memory/SKILL|agent-memory]].
 
 **Bespoke tools are GLUE.** A "small tool" / "not a production service" / "259-line CLI utility" has almost NO need to reproduce any solved problem, ever.
 Its entire reason for existing is to wire existing solutions together — calling APIs, transforming data, formatting output.
@@ -162,7 +162,7 @@ Constantly ask: **am I introducing timid, unambitious, or partial work as a mean
 The same test as every other finding applies: does this restraint help the owner on their actual machine right now?
 Restraint that only protects hypothetical consumers fails the Verification Rule.
 
-Work-unit sizing, PR scope floors, and the direct-to-main path are owned by `pr-scoping`; load it before scoping any PR or triaging a backlog.
+Work-unit sizing, PR scope floors, and the direct-to-main path are owned by [[pr-scoping/SKILL|pr-scoping]]; load it before scoping any PR or triaging a backlog.
 
 ## Foundational Principle: Every Line Must Be Proven
 
@@ -242,12 +242,12 @@ Report these even if no crash or wrong output has been observed:
 ### Diagnostic Signal Suppression
 
 - **Assertions that test the wrong thing** — assertions that would pass on a broken implementation, smoke tests in proof paths, helper-level assertions substituted for boundary-level proof.
-  See `test-guidelines`.
+  See [[test-guidelines/SKILL|test-guidelines]].
 - **Mocks in proof paths** — substituting a simulated component for a real one in a test that is supposed to prove correctness.
   Mocks prove nothing.
   See `policy-index/references/red-flags.md`.
 - **Deletion without burden transfer** — deleting dead code, quarantined paths, or legacy branches without adding an assertion or invariant that would warn if the deletion was wrong.
-  See `fixing-slop`.
+  See [[fixing-slop/SKILL|fixing-slop]].
 
 ### Actual Bugs, Build Failures, Broken Workflows
 
@@ -329,7 +329,7 @@ Do NOT suppress them:
 
 - **`any` function parameters, silent `catch` clauses (`catch {}`), and `!` non-null assertions on values whose nullability is not proven by an immediately preceding guard.** These erase or evade safety guarantees that exist for a reason.
 
-- **Runtime-suppression patterns like `try { ... } catch { /* ignore */ }` or `2>/dev/null` without an explicit reason.** See the `policy-index` bridge-burning policies and `policy-index/references/red-flags.md`.
+- **Runtime-suppression patterns like `try { ... } catch { /* ignore */ }` or `2>/dev/null` without an explicit reason.** See the [[policy-index/SKILL|policy-index]] bridge-burning policies and `policy-index/references/red-flags.md`.
 
 ### Comments Are Laundering (Treat Adversarially)
 

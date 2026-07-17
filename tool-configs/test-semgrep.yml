@@ -7,5 +7,4 @@ rules:
     pattern-regex: ^\s*from\s+typing\s+import.*?\b(Dict|List|Tuple|Set|Type|Optional|Union|Callable|Iterable|Mapping|Sequence)\b
     metadata:
       policy_code: POLICY.NO_LEGACY_SHIM
-      remediation_code: REMEDIATE.REPLACE_LEGACY_PATH
       fixture_policy_detector: true
