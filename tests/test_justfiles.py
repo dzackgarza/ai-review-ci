@@ -926,6 +926,26 @@ def test_semgrep_autofix_defers_unfixed_findings_to_push_tier(
     assert push_tier.returncode != 0, push_tier.stdout + push_tier.stderr
 
 
+def test_archived_directories_are_excluded_from_qc_file_discovery_and_semgrep(
+    tmp_path: pathlib.Path,
+) -> None:
+    project = tmp_path / "archived-project"
+    archive = project / "archives"
+    archive.mkdir(parents=True)
+    (project / "active.py").write_text("def current() -> str:\n    return 'current'\n")
+    (archive / "historical.py").write_text("from os import getenv\n\nMODE = getenv('MODE', 'historical')\n")
+
+    files = run_just(ROOT / "justfiles" / "python.just", project, "_python-qc-files")
+    assert files.returncode == 0, files.stdout + files.stderr
+    assert files.stdout.splitlines() == ["active.py"]
+
+    autofix = run_just(ROOT / "justfiles" / "shared.just", project, "_semgrep-autofix")
+    verification = run_just(ROOT / "justfiles" / "shared.just", project, "_semgrep")
+    assert autofix.returncode == 0, autofix.stdout + autofix.stderr
+    assert "archives/historical.py" not in autofix.stdout + autofix.stderr
+    assert verification.returncode == 0, verification.stdout + verification.stderr
+
+
 def test_semgrep_blocks_typescript_value_defaults(tmp_path: pathlib.Path) -> None:
     project = tmp_path / "semgrep-value-default-project"
     project.mkdir()
