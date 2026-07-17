@@ -168,7 +168,7 @@ def test_doctor_preflight_rejects_undeclared_python_subgate(
     with pytest.raises(SystemExit):
         doctor_preflight(project)
 
-    assert "declares 'bun-python'" in capsys.readouterr().err
+    assert "declared 'bun-python' profile; missing: pyproject.toml" in capsys.readouterr().err
 
 
 def test_doctor_preflight_accepts_central_composite_profile(

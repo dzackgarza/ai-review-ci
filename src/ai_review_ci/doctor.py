@@ -249,7 +249,7 @@ def doctor_preflight(target: Path) -> None:
     missing = _profile_missing_paths(target_root, PROJECT_PROFILES[contract.profile])
     if missing:
         print(
-            f"FATAL: QC doctor preflight failed: {target_root} declares {contract.profile!r} but does not satisfy that profile; missing: {', '.join(missing)}",
+            f"FATAL: QC doctor preflight failed: {target_root} does not satisfy its declared {contract.profile!r} profile; missing: {', '.join(missing)}",
             file=sys.stderr,
         )
         sys.exit(1)
