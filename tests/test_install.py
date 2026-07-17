@@ -659,6 +659,17 @@ def test_qc_tier_step_does_not_export_gh_token_tier_wide() -> None:
     assert "GH_TOKEN" not in (tier.get("env") or {})
 
 
+def test_qc_workflow_installs_flowmark_runtime_dependencies() -> None:
+    job = _workflow_jobs("_qc.yml")["qc"]
+    install_index = next(index for index, step in enumerate(job["steps"]) if isinstance(step, dict) and step.get("name") == "Install QC system packages")
+    install = job["steps"][install_index]
+    run_index = next(index for index, step in enumerate(job["steps"]) if isinstance(step, dict) and step.get("name") == "Run QC tier")
+
+    assert install_index < run_index
+    assert isinstance(install, dict)
+    assert install["run"] == "sudo apt-get update && sudo apt-get install -y pandoc ripgrep"
+
+
 def test_qc_workflow_accepts_only_remote_acceptance_tiers() -> None:
     job = _workflow_jobs("_qc.yml")["qc"]
     validation = next(step for step in job["steps"] if isinstance(step, dict) and step.get("name") == "Validate inputs")

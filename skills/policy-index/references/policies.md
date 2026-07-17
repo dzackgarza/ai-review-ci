@@ -452,4 +452,4 @@ Invalid local fixes: Partially adopting the suggested rename; adding an alias or
 
 Detection handles: `STALE-CONVENTION-SUGGESTION`, `REVIEWER-PRIOR-RENAME`, `UNSOURCED-CONVENTION-CLAIM`, `DEPRECATED-NAMESPACE-SUGGESTION`, `CONVENTION-ALIGNMENT-JUSTIFICATION`
 
-Related remediation: none — triage-side rejection policy; the disposition is wholesale rejection with pinned-checkout evidence (file:line), per the review-feedback disposition ledger discipline.
+Related remediation: `REMEDIATE.VERIFY_CONVENTION_CLAIM`

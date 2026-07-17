@@ -37,6 +37,7 @@ This index defines only the construction named by that code; it does not repeat 
 | `REMEDIATE.REPLACE_LEGACY_PATH` | Migrate all callers to the new path, prove the migrated behavior, then remove the obsolete interface with burden disposition. |
 | `REMEDIATE.OBSERVE_BEFORE_BRANCHING` | Do not add code. Preserve the invariant as an assertion or fail-loud boundary. Add a branch only after a real observed incident establishes the domain case. |
 | `REMEDIATE.PREFER_ASSERTION` | Reject suggestions to replace `assert` with `if/raise` (especially the `python -O` argument). Keep the assertion, make it ADDD-shaped, delete any `AssertionError` catch path, and strengthen it to the strongest provably-true invariant. See `[ASSERT-OVER-RAISE]`. |
+| `REMEDIATE.VERIFY_CONVENTION_CLAIM` | Verify an external convention claim once against the pinned checkout or live source. If falsified, reject the suggestion wholesale and record the source file and line in the review disposition. |
 | `REMEDIATE.BURDEN_DISPOSITION` | Reconstruct the original obligation, then mark it solved, invalidated, transferred to a real proof surface, or recorded unresolved. Do not treat labels, docs, deletion, or comments as resolution. |
 | `REMEDIATE.BLAST_RADIUS_REPAIR` | Inspect the owning boundary, adjacent call sites, tests, config surface, and history for the same failure process. Fix the full damaged obligation, not only the matched token. |
 
