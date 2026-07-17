@@ -340,6 +340,31 @@ def test_qc_file_selection_excludes_user_authored_scripts_and_notebooks(
 
 
 @pytest.mark.parametrize(
+    ("justfile_name", "recipe", "suffix"),
+    [
+        ("bun.just", "_ast-grep", ".ts"),
+        ("sage.just", "_sage-syntax", ".sage"),
+    ],
+)
+def test_empty_qc_selection_reaches_language_diagnostic(
+    tmp_path: pathlib.Path,
+    justfile_name: str,
+    recipe: str,
+    suffix: str,
+) -> None:
+    project = tmp_path / "project"
+    source = project / "scripts" / f"excluded{suffix}"
+    source.parent.mkdir(parents=True)
+    source.write_text("source\n")
+
+    result = run_just(ROOT / "justfiles" / justfile_name, project, recipe)
+
+    output = result.stdout + result.stderr
+    assert result.returncode != 0, output
+    assert TRIAGE_MARKER in output
+
+
+@pytest.mark.parametrize(
     ("justfile_name", "recipe"),
     [
         ("python.just", "_python-qc-files"),
@@ -460,7 +485,7 @@ def test_sync_qc_excludes_preserves_non_owned_artifacts_and_updates_grain(
     slopconfig_text = (qc_root / "slopconfig.yaml").read_text()
     assert slopconfig_text.startswith("# Maximally strict production config for ai-slop-detector\n")
     slopconfig = yaml.safe_load(slopconfig_text)
-    assert slopconfig["ignore"] == ["central-owned/**", "**/central-owned/**"]
+    assert slopconfig["ignore"] == ["**/central-owned/**"]
     assert eslint_config.read_text() == "export default [{ ignores: ['sentinel'] }];\n"
     assert rust_justfile.read_text() == "# rust sentinel\n"
 
@@ -1277,6 +1302,21 @@ def test_aislop_receives_central_script_and_notebook_exclusions(
 
     output = result.stdout + result.stderr
     assert result.returncode == 0, output
+
+
+def test_aislop_rejects_unrepresentable_comma_in_exclusion_path(
+    tmp_path: pathlib.Path,
+) -> None:
+    project = tmp_path / "aislop-project"
+    nested = project / "nested,repository"
+    nested.mkdir(parents=True)
+    (nested / ".git").write_text("gitdir: elsewhere\n")
+
+    result = run_just(ROOT / "justfiles" / "shared.just", project, "_aislop")
+
+    output = result.stdout + result.stderr
+    assert result.returncode != 0, output
+    assert TRIAGE_MARKER in output
 
 
 def test_aislop_blocks_on_error_severity_findings(tmp_path: pathlib.Path) -> None:

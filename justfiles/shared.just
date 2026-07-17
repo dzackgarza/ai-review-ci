@@ -604,6 +604,11 @@ _aislop:
 	fi
 	aislop_exclude_patterns=()
 	for dir in "${exclude_dirs[@]}"; do
+		if [[ "$dir" == *,* ]]; then
+			echo "ERROR: aislop cannot represent an exclusion path containing a comma: $dir"
+			"{{artifacts}}/scripts/emit-triage-directive.sh"
+			exit 1
+		fi
 		aislop_exclude_patterns+=("**/$dir/**")
 	done
 	aislop_exclude_csv="$(IFS=,; printf '%s' "${aislop_exclude_patterns[*]}")"

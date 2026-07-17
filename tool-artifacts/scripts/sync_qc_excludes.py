@@ -101,10 +101,9 @@ configs: list[ToolConfig] = [
             "Based on AI-SLOP-Detector Strict Mode + maximally informative extensions\n"
             "https://github.com/flamehaven01/AI-SLOP-Detector/blob/main/docs/CONFIGURATION.md"
         ),
-        # The detector's config accepts gitignore-style globs. Emit both
-        # root and nested forms so user-authored research trees stay outside
-        # the scanner wherever they occur in a target repository.
-        "is_dir_fn": lambda d: [f"{d}/**", f"**/{d}/**"],
+        # The detector retries a **/ pattern without that prefix, so one
+        # recursive form covers both root and nested occurrences.
+        "is_dir_fn": lambda d: f"**/{d}/**",
         "static": [],
     },
     {
