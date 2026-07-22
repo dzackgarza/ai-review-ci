@@ -20,6 +20,7 @@ check: _normalize
     just -f justfiles/bun.just --list >/dev/null
     just -f justfiles/rust.just --list >/dev/null
     just -f justfiles/sage.just --list >/dev/null
+    just -f justfiles/lean.just --list >/dev/null
     bash -n ci/private/submit-candidate
     sh -n ci/reviewer_home/bin/submit-candidate
     bash -n tool-artifacts/scripts/emit-test-writing-directive.sh

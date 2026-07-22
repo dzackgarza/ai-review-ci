@@ -146,6 +146,46 @@ def project_with_sage_file(tmp_path: pathlib.Path) -> pathlib.Path:
     return project
 
 
+def test_lean_push_gate_propagates_target_axiom_audit_failure(tmp_path: pathlib.Path) -> None:
+    """The shared gate must run the target's explicit audit command at its root."""
+    project = tmp_path / "lean-project"
+    project.mkdir()
+    (project / "lakefile.toml").write_text('name = "fixture"\n')
+    (project / "lean-toolchain").write_text("leanprover/lean4:v4.32.0\n")
+    (project / "justfile").write_text(
+        "_lean-axiom-audit:\n"
+        "    #!/usr/bin/env bash\n"
+        "    set -euo pipefail\n"
+        "    test \"$(pwd -P)\" = \"$PWD\"\n"
+        "    echo target axiom audit rejected a nonstandard dependency >&2\n"
+        "    exit 1\n"
+    )
+
+    result = run_just(ROOT / "justfiles" / "lean.just", project, "lean-axiom-audit")
+
+    output = result.stdout + result.stderr
+    assert result.returncode != 0, output
+    assert "target axiom audit rejected a nonstandard dependency" in output
+
+
+def test_lean_push_gate_runs_target_axiom_audit_at_target_root(tmp_path: pathlib.Path) -> None:
+    project = tmp_path / "lean-project"
+    project.mkdir()
+    (project / "justfile").write_text(
+        "_lean-axiom-audit:\n"
+        "    #!/usr/bin/env bash\n"
+        "    set -euo pipefail\n"
+        "    test \"$(pwd -P)\" = \"$PWD\"\n"
+        "    echo target axiom audit passed\n"
+    )
+
+    result = run_just(ROOT / "justfiles" / "lean.just", project, "lean-axiom-audit")
+
+    output = result.stdout + result.stderr
+    assert result.returncode == 0, output
+    assert "target axiom audit passed" in output
+
+
 def test_no_bypass_ignores_preexisting_markers_when_staging_other_changes(
     tmp_path: pathlib.Path,
 ) -> None:
