@@ -544,7 +544,7 @@ def _recipe_delegation(target: Path, justfile: Path, project_profile: ProjectPro
         observed=DelegationCommandObservation(
             present=result.returncode == 0,
             command=command,
-            delegates_to_global_qc=delegates_to_global_qc(command, project_profile),
+            delegates_to_global_qc=delegates_to_global_qc(command, project_profile, recipe),
             caller_root_preserved=" -d . " in f" {command} ",
         ),
     )
