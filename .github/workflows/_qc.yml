@@ -96,14 +96,20 @@ jobs:
         # deselected from this run (gh_boundary marker) and run in the isolated
         # token-scoped step below.
         #
-        # DIRENV_CONFIGURED_CORRECTLY (#300): _check-envrc proves that a dev
-        # machine loads the repo env through direnv. CI has no direnv; the
-        # workflow env IS the declared config surface here, so the workflow
-        # asserts the contract it provides. The repo-owned half of the check
-        # (.envrc present and inheriting the global env) still runs for real.
-        env:
-          DIRENV_CONFIGURED_CORRECTLY: '1'
-        run: just "$QC_TIER"
+        # Environment config (#300): every repo's .envrc is the declared config
+        # surface for constants factored out of code, inheriting the global
+        # ~/.envrc (which sets DIRENV_CONFIGURED_CORRECTLY on dev machines).
+        # Runners have no direnv, so reproduce the same chain for real:
+        # provision the global stub, then source the repo's .envrc into the QC
+        # environment so its constants are actually present — never just stamp
+        # the marker. A missing .envrc is reported by _check-envrc itself.
+        run: |
+          printf 'export DIRENV_CONFIGURED_CORRECTLY=1\n' > "$HOME/.envrc"
+          source_up() { . "$HOME/.envrc"; }  # direnv builtin, mapped for bash
+          set -a
+          [ -f .envrc ] && . .envrc
+          set +a
+          just "$QC_TIER"
 
       - name: Run gh-boundary tests
         # Least privilege (#218): an explicit downstream opt-in scopes the
