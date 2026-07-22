@@ -95,6 +95,14 @@ jobs:
         # with the token in their environment. The gh-dependent label tests are
         # deselected from this run (gh_boundary marker) and run in the isolated
         # token-scoped step below.
+        #
+        # DIRENV_CONFIGURED_CORRECTLY (#300): _check-envrc proves that a dev
+        # machine loads the repo env through direnv. CI has no direnv; the
+        # workflow env IS the declared config surface here, so the workflow
+        # asserts the contract it provides. The repo-owned half of the check
+        # (.envrc present and inheriting the global env) still runs for real.
+        env:
+          DIRENV_CONFIGURED_CORRECTLY: '1'
         run: just "$QC_TIER"
 
       - name: Run gh-boundary tests
