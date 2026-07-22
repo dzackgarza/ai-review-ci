@@ -347,14 +347,15 @@ def _dry_run_recipe(target: Path, justfile: Path, recipe: str) -> str:
     return result.stdout + result.stderr
 
 
-def delegates_to_global_qc(output: str, project_profile: ProjectProfile) -> bool:
-    """Require exactly the centrally declared delegation set for a profile."""
+def delegates_to_global_qc(output: str, project_profile: ProjectProfile, recipe: str) -> bool:
+    """Require the declared profile delegation, plus Lean auditing only at push/CI tiers."""
     observed = set(re.findall(r"ai-review-ci/justfiles/([a-z-]+\.just)", output))
     expected = set(project_profile.justfile_names)
+    allowed = expected | ({"lean.just"} if recipe in {"test-push", "test-ci"} else set())
     command_lines = output.splitlines()
-    return observed == expected and all(
+    return expected <= observed <= allowed and all(
         any(f"ai-review-ci/justfiles/{justfile_name}" in line and re.search(r"(?:-d|--working-directory)\s+\.", line) is not None for line in command_lines)
-        for justfile_name in project_profile.justfile_names
+        for justfile_name in observed
     )
 
 
@@ -367,7 +368,7 @@ def check_delegation(target: Path, profile: str) -> None:
     failed: list[str] = []
     for recipe in ("test-commit", "test-push", "test-ci"):
         output = _dry_run_recipe(target, justfile, recipe)
-        if not delegates_to_global_qc(output, project_profile):
+        if not delegates_to_global_qc(output, project_profile, recipe):
             failed.append(recipe)
     if failed:
         required = ", ".join(f"~/ai-review-ci/justfiles/{name}" for name in project_profile.justfile_names)
@@ -384,7 +385,7 @@ def check_app_boot(target: Path, profile: str) -> None:
     check_profile(target, profile)
     justfile = _justfile_for(target)
     output = _dry_run_recipe(target, justfile, "app-boot")
-    if not delegates_to_global_qc(output, project_profile):
+    if not delegates_to_global_qc(output, project_profile, "app-boot"):
         _fail(f"{target} app-boot must delegate through ~/ai-review-ci/justfiles/{project_profile.justfile_names[0]} with -d .")
     if _DIRECT_PLAYWRIGHT.search(output):
         _fail(f"{target} app-boot must not invoke Playwright directly; delegate to ~/ai-review-ci/justfiles/bun.just")

@@ -88,6 +88,44 @@ def test_delegation_accepts_central_bun_python_composite_profile(tmp_path: pathl
     gates.check_delegation(project, "bun-python")
 
 
+def test_delegation_accepts_shared_lean_audit_at_push_and_ci_tiers(tmp_path: pathlib.Path) -> None:
+    project = tmp_path / "project"
+    project.mkdir()
+    (project / "package.json").write_text('{"scripts": {}}\n')
+    (project / "bun.lock").write_text("")
+    (project / "justfile").write_text(
+        "test-commit:\n"
+        "    @just -f ~/ai-review-ci/justfiles/bun.just -d . test-commit\n\n"
+        "test-push:\n"
+        "    @just -f ~/ai-review-ci/justfiles/bun.just -d . test-push\n"
+        "    @just -f ~/ai-review-ci/justfiles/lean.just -d . lean-axiom-audit\n\n"
+        "test-ci:\n"
+        "    @just -f ~/ai-review-ci/justfiles/bun.just -d . test-ci\n"
+        "    @just -f ~/ai-review-ci/justfiles/lean.just -d . lean-axiom-audit\n"
+    )
+
+    gates.check_delegation(project, "bun")
+
+
+def test_delegation_rejects_shared_lean_audit_at_commit_tier(tmp_path: pathlib.Path) -> None:
+    project = tmp_path / "project"
+    project.mkdir()
+    (project / "package.json").write_text('{"scripts": {}}\n')
+    (project / "bun.lock").write_text("")
+    (project / "justfile").write_text(
+        "test-commit:\n"
+        "    @just -f ~/ai-review-ci/justfiles/bun.just -d . test-commit\n"
+        "    @just -f ~/ai-review-ci/justfiles/lean.just -d . lean-axiom-audit\n\n"
+        "test-push:\n"
+        "    @just -f ~/ai-review-ci/justfiles/bun.just -d . test-push\n\n"
+        "test-ci:\n"
+        "    @just -f ~/ai-review-ci/justfiles/bun.just -d . test-ci\n"
+    )
+
+    with pytest.raises(SystemExit):
+        gates.check_delegation(project, "bun")
+
+
 def test_delegation_rejects_local_qc_override(tmp_path: pathlib.Path) -> None:
     project = tmp_path / "project"
     project.mkdir()
