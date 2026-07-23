@@ -107,14 +107,16 @@ _semgrep-autofix:
 		--exclude=codeql-db \
 		"${exclude_args[@]}" \
 		--scan-unknown-extensions \
+		--error \
 		--autofix; then
 		:
 	else
 		ec=$?
 		echo ""
 		echo "!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!"
-		echo "  ERROR: semgrep auto-fix failed to run."
-		echo "  Fix the QC tooling or Semgrep invocation before rerunning project checks."
+		echo "  ERROR: semgrep found policy violations in project code."
+		echo "  Review the Semgrep finding snippets above; they identify the target file, line, rule id, and offending source."
+		echo "  Route POLICY.RUNTIME_DEFAULT and other POLICY.* findings through the QC triage directive below; do not silence or locally weaken QC."
 		echo "!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!"
 		"{{artifacts}}/scripts/emit-triage-directive.sh"
 		exit $ec
