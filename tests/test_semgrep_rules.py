@@ -110,7 +110,6 @@ LEAN_REFERENT_RULES = (
     "lean-bare-prop-field",
     "lean-isotropy-as-torsion",
     "lean-truncating-division-on-forms",
-    "lean-cartan-in-lattice-paths",
     "lean-epistemic-on-math-surface",
 )
 

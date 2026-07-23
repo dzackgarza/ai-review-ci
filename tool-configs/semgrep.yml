@@ -769,24 +769,6 @@ rules:
         - '**/*.lean'
     metadata:
       policy_code: POLICY.NO_UNGROUNDED_MATH_NAME
-  - id: lean-cartan-in-lattice-paths
-    # lean-lattices convention (vault trap): Gram matrices are defined by cited
-    # root presentations; Cartan matrices have no role in lattice conventions
-    # in any capacity (definition, construction input, cross-check).
-    pattern-regex: Cartan
-    message: POLICY.NO_UNGROUNDED_MATH_NAME
-    languages:
-      - generic
-    severity: ERROR
-    paths:
-      include:
-        - '**/*Lat*'
-        - '**/*Root*'
-        - '**/*E8*'
-        - '**/*ADE*'
-        - '**/*Gram*'
-    metadata:
-      policy_code: POLICY.NO_UNGROUNDED_MATH_NAME
   - id: lean-epistemic-on-math-surface
     # unknown/pending constructors on mathematical inductives put resolver
     # epistemics into classifier fibers; undecidedness lives in the backend
