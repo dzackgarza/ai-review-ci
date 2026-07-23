@@ -100,3 +100,21 @@ def test_runtime_default_rules_flag_only_value_default_positions() -> None:
 
 def test_type_escape_rules_own_single_and_double_casts() -> None:
     _assert_rules_match_annotations(("ts-no-any-cast", "no-double-cast", "no-unproven-boundary-cast"), "no_double_cast.ts")
+
+
+LEAN_REFERENT_RULES = (
+    "lean-no-axiom",
+    "lean-shim-suffix-decl",
+    "lean-has-wrapper",
+    "lean-nonempty-field",
+    "lean-bare-prop-field",
+    "lean-isotropy-as-torsion",
+    "lean-truncating-division-on-forms",
+    "lean-cartan-in-lattice-paths",
+    "lean-epistemic-on-math-surface",
+)
+
+
+def test_lean_referent_rules_flag_shims_and_conventions() -> None:
+    """#309: engineering shims graduated to mathematical placement (lean-lattices referent audit)."""
+    _assert_rules_match_annotations(LEAN_REFERENT_RULES, "*.lean")

@@ -659,3 +659,148 @@ rules:
     pattern-regex: ^\s*from\s+typing\s+import.*?\b(Dict|List|Tuple|Set|Type|Optional|Union|Callable|Iterable|Mapping|Sequence)\b
     metadata:
       policy_code: POLICY.NO_LEGACY_SHIM
+
+  # --- Lean referent rules (lean-lattices referent audit, #309) ---------------
+  # Semgrep has no Lean parser; these are generic pattern-regex tripwires over
+  # *.lean scoped by path. They flag engineering shims graduated to mathematical
+  # placement; the reviewer demands the standard referent rather than a rename.
+  - id: lean-no-axiom
+    # Axioms in library roots assert what must be proved or quarantined;
+    # *.conjecture files are the sanctioned non-compiled home.
+    pattern-regex: (?m)^\s*(?:@\[[^\]]*\]\s*)?axiom\s
+    message: POLICY.NO_UNGROUNDED_MATH_NAME
+    languages:
+      - generic
+    severity: ERROR
+    paths:
+      include:
+        - '**/*.lean'
+      exclude:
+        - '**/*.conjecture*'
+        - '**/Conjectures/**'
+    metadata:
+      policy_code: POLICY.NO_UNGROUNDED_MATH_NAME
+  - id: lean-shim-suffix-decl
+    # Record nouns standing where a governing mathematical object belongs
+    # (DiscrepancyData, FundamentalDomainWitness, VinbergInput, ...). The fix
+    # names the object (divisor, chamber, compactification), never the record.
+    pattern-regex: (?m)^\s*(?:noncomputable\s+)?(?:structure|inductive|class|abbrev|def)\s+\w+(?:Data|Datum|Witness|Input|Spec|Model|Contract|Record|Info|Manager|Helper|Wrapper|Capability)\b
+    message: POLICY.NO_UNGROUNDED_MATH_NAME
+    languages:
+      - generic
+    severity: ERROR
+    paths:
+      include:
+        - '**/*.lean'
+      exclude:
+        - '**/Tools/**'
+        - '**/Registry/**'
+        - '**/*.conjecture*'
+    metadata:
+      policy_code: POLICY.NO_UNGROUNDED_MATH_NAME
+  - id: lean-has-wrapper
+    # Predicate wrappers around total constructions (HasSignature episode): a
+    # total invariant is a functor, not a Has*. Lean 4 Mathlib retired most
+    # Has* naming, so repo-local hits are high-signal.
+    pattern-regex: (?m)^\s*(?:structure|class|def|abbrev)\s+Has[A-Z]
+    message: POLICY.NO_UNGROUNDED_MATH_NAME
+    languages:
+      - generic
+    severity: ERROR
+    paths:
+      include:
+        - '**/*.lean'
+    metadata:
+      policy_code: POLICY.NO_UNGROUNDED_MATH_NAME
+  - id: lean-nonempty-field
+    # Nonempty (...) structure fields propositionally truncate chosen data
+    # (the Nonempty (CatCommSq ...) episode): comparison cells must be carried,
+    # and composition must compose them.
+    pattern-regex: (?m)^\s+\w+\s*:\s*Nonempty\s*\(
+    message: POLICY.NO_UNGROUNDED_MATH_NAME
+    languages:
+      - generic
+    severity: ERROR
+    paths:
+      include:
+        - '**/*.lean'
+    metadata:
+      policy_code: POLICY.NO_UNGROUNDED_MATH_NAME
+  - id: lean-bare-prop-field
+    # A structure field of type exactly Prop is an unconstrained proposition
+    # slot (KSBAModuliProperness.proper episode): state the real condition.
+    pattern-regex: (?m)^\s+\w+\s*:\s*Prop\s*$
+    message: POLICY.NO_UNGROUNDED_MATH_NAME
+    languages:
+      - generic
+    severity: ERROR
+    paths:
+      include:
+        - '**/*.lean'
+    metadata:
+      policy_code: POLICY.NO_UNGROUNDED_MATH_NAME
+  - id: lean-isotropy-as-torsion
+    # 2 • x = 0 is 2-torsion, not isotropy (b(x,x) = 0) — the NikulinGluing
+    # episode. Scoped to form/lattice paths.
+    pattern-regex: 2\s*[•·]\s*\w+\s*=\s*0
+    message: POLICY.NO_UNGROUNDED_MATH_NAME
+    languages:
+      - generic
+    severity: ERROR
+    paths:
+      include:
+        - '**/*Lat*'
+        - '**/*Form*'
+        - '**/*Gluing*'
+        - '**/*Isotrop*'
+    metadata:
+      policy_code: POLICY.NO_UNGROUNDED_MATH_NAME
+  - id: lean-truncating-division-on-forms
+    # Quadratic refinements require exact divisibility witnesses, never integer
+    # division (quadRefinement := form x x / 2 episode). Single-line defs only;
+    # the reviewer owns multi-line bodies.
+    pattern-regex: (?m)def\s+\w*(?:[qQ]uad|[eE]ven|[rR]efine)\w*[^\n]*\/\s*2
+    message: POLICY.NO_UNGROUNDED_MATH_NAME
+    languages:
+      - generic
+    severity: ERROR
+    paths:
+      include:
+        - '**/*.lean'
+    metadata:
+      policy_code: POLICY.NO_UNGROUNDED_MATH_NAME
+  - id: lean-cartan-in-lattice-paths
+    # lean-lattices convention (vault trap): Gram matrices are defined by cited
+    # root presentations; Cartan matrices have no role in lattice conventions
+    # in any capacity (definition, construction input, cross-check).
+    pattern-regex: Cartan
+    message: POLICY.NO_UNGROUNDED_MATH_NAME
+    languages:
+      - generic
+    severity: ERROR
+    paths:
+      include:
+        - '**/*Lat*'
+        - '**/*Root*'
+        - '**/*E8*'
+        - '**/*ADE*'
+        - '**/*Gram*'
+    metadata:
+      policy_code: POLICY.NO_UNGROUNDED_MATH_NAME
+  - id: lean-epistemic-on-math-surface
+    # unknown/pending constructors on mathematical inductives put resolver
+    # epistemics into classifier fibers; undecidedness lives in the backend
+    # realization index. Match-arm consumption (| unknown =>) is not flagged.
+    pattern-regex: (?m)^\s*\|\s*(?:unknown|pending|partial|failed)\b(?!\s*=>)
+    message: POLICY.NO_UNGROUNDED_MATH_NAME
+    languages:
+      - generic
+    severity: ERROR
+    paths:
+      include:
+        - '**/*.lean'
+      exclude:
+        - '**/Tools/**'
+        - '**/Registry/**'
+    metadata:
+      policy_code: POLICY.NO_UNGROUNDED_MATH_NAME

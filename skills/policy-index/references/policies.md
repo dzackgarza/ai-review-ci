@@ -295,6 +295,20 @@ Detection handles: `DEPENDENCY-AVERSION`, `BESPOKE-DEP`, `COMPLEXITY-SIGNAL`
 
 Related remediation: `REMEDIATE.USE_EXISTING_CAPABILITY`
 
+#### `POLICY.NO_UNGROUNDED_MATH_NAME` — Mathematical surfaces name standard referents
+
+Category: Architecture Ownership
+
+Rule: Every declaration on a mathematical surface names a standard mathematical object at its natural generality.
+Engineering shims graduated to mathematical placement are banned: predicate wrappers around total constructions, record nouns standing where a governing object, diagram, or fiber belongs, propositional truncation of mandatory coherence data, unconstrained `Prop` fields, epistemic states as fiber values, and convention-violating imports on mathematical surfaces.
+Fixing a shim means retiring the name and stating the real object — never reframing, rehoming, or deriving notation from it.
+
+Invalid local fixes: Renaming the wrapper while keeping its shape; reframing the shim as "derived notation" for the real object; moving the record to another module; tethering it to a standard declaration with an equivalence and keeping both; widening an engineering-path exclusion to cover it.
+
+Detection handles: `REFERENT-SHIM`, `HAS-WRAPPER`, `PROP-TRUNCATION`, `UNCONSTRAINED-PROP-FIELD`, `EPISTEMIC-FIBER`, `ISOTROPY-AS-TORSION`, `TRUNCATING-DIVISION`, `CONVENTION-IMPORT`
+
+Related remediation: `REMEDIATE.USE_EXISTING_CAPABILITY`
+
 #### `POLICY.NO_MYOPIC_PATCHING` — No token-local repair of architectural violations
 
 Category: Architecture Ownership
