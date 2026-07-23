@@ -186,6 +186,32 @@ def test_lean_push_gate_runs_target_axiom_audit_at_target_root(tmp_path: pathlib
     assert "target axiom audit passed" in output
 
 
+def test_lean_no_sorry_flags_sorry_in_tracked_sources(tmp_path: pathlib.Path) -> None:
+    project = tmp_path / "lean-project"
+    project.mkdir()
+    (project / "Broken.lean").write_text("theorem broken : True := by sorry\n")
+
+    result = run_just(ROOT / "justfiles" / "lean.just", project, "lean-no-sorry")
+
+    output = result.stdout + result.stderr
+    assert result.returncode != 0, output
+    assert "sorry" in output
+
+
+def test_lean_no_sorry_passes_clean_sources_and_excludes_quarantine(tmp_path: pathlib.Path) -> None:
+    """Conjecture-quarantine files are outside the library and outside the scan."""
+    project = tmp_path / "lean-project"
+    project.mkdir()
+    (project / "Clean.lean").write_text("theorem fine : True := trivial\n")
+    (project / "torelli.conjecture.lean").write_text("theorem later : True := by sorry\n")
+
+    result = run_just(ROOT / "justfiles" / "lean.just", project, "lean-no-sorry")
+
+    output = result.stdout + result.stderr
+    assert result.returncode == 0, output
+    assert "No sorry declarations" in output
+
+
 def test_no_bypass_ignores_preexisting_markers_when_staging_other_changes(
     tmp_path: pathlib.Path,
 ) -> None:
