@@ -25,7 +25,11 @@ lean-no-sorry:
 	#!/usr/bin/env bash
 	set -euo pipefail
 	echo "=== Running: Lean no-sorry scan ==="
-	matches="$(rg -n --glob '*.lean' --glob '!*.conjecture*' '\bsorry\b' . || true)"
+	# The shipped `answer(...)` elaborator (AiReviewCi/Answer.lean) legitimately
+	# manipulates the `sorry` syntax; it carries no unproved proof. Consumers get it
+	# under `.lake` (already unscanned); this glob also covers ai-review-ci's own tree
+	# and any in-tree vendoring.
+	matches="$(rg -n --glob '*.lean' --glob '!*.conjecture*' --glob '!**/AiReviewCi/Answer.lean' '\bsorry\b' . || true)"
 	if [ -n "$matches" ]; then
 		echo "$matches"
 		echo "ERROR: Lean source contains sorry declarations." >&2

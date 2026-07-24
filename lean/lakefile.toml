@@ -1,0 +1,5 @@
+name = "aiReviewCiLean"
+defaultTargets = ["AiReviewCi"]
+
+[[lean_lib]]
+name = "AiReviewCi"
