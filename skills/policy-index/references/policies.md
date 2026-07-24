@@ -305,7 +305,7 @@ Fixing a shim means retiring the name and stating the real object — never refr
 
 Invalid local fixes: Renaming the wrapper while keeping its shape; reframing the shim as "derived notation" for the real object; moving the record to another module; tethering it to a standard declaration with an equivalence and keeping both; widening an engineering-path exclusion to cover it.
 
-Detection handles: `REFERENT-SHIM`, `HAS-WRAPPER`, `PROP-TRUNCATION`, `UNCONSTRAINED-PROP-FIELD`, `EPISTEMIC-FIBER`, `ISOTROPY-AS-TORSION`, `TRUNCATING-DIVISION`, `CONVENTION-IMPORT`
+Detection handles: `REFERENT-SHIM`, `HAS-WRAPPER`, `PROP-TRUNCATION`, `UNCONSTRAINED-PROP-FIELD`, `EPISTEMIC-FIBER`, `ISOTROPY-AS-TORSION`, `TRUNCATING-DIVISION`, `CONVENTION-IMPORT`, `VACUOUS-EXISTS-IMPLICATION`
 
 Related remediation: `REMEDIATE.USE_EXISTING_CAPABILITY`
 
