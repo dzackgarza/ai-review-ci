@@ -51,12 +51,18 @@ _format-structured-text:
 	# paths (path="_includes/x" -> path="\_includes/x"), rewrites emphasis
 	# delimiters (*x* -> _x_), and reformats embedded code blocks. flowmark is
 	# the canonical markdown formatter.
+	# Markdown under a test directory is fixture/spec data (golden inputs and
+	# expected outputs), not authored prose. Reformatting it would rewrite the
+	# very bytes a test asserts on -- corrupting the suite -- so it is never
+	# normalized. This is by artifact kind and applies to every project; the test
+	# directory's own source (e.g. .py) is still linted/type-checked as normal.
 	md_files=()
 	while IFS= read -r -d '' file; do
 		md_files+=("$file")
 	done < <(
 		find . -type d \( "${prune_args[@]}" \) -prune -o \
 			-type f \( -name '*.md' -o -name '*.markdown' \) \
+			! -path '*/tests/*' ! -path '*/test/*' ! -path '*/__tests__/*' \
 			-print0
 	)
 	data_files=()
