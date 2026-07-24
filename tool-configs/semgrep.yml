@@ -739,6 +739,27 @@ rules:
         - '**/*.lean'
     metadata:
       policy_code: POLICY.NO_UNGROUNDED_MATH_NAME
+  - id: lean-exists-implication
+    # `∃ x, P x → Q` is a vacuous propositional truncation of the intended
+    # `∃ x, P x ∧ Q`: it is trivially satisfied by any x with ¬P x, so it states
+    # nothing (the ExistsImplication misformalisation). High precision — fires
+    # only when the antecedent is a bare relation/membership with no ∧/∨ before
+    # the arrow, so function-type binders (`∃ f : α → β,`) and honest conjunctions
+    # (`∃ x, P ∧ Q`) do not match. Elaboration-exact coverage (isProp antecedent)
+    # needs a Lean linter; this catches the common human-written shape.
+    pattern-regex: (?m)∃\s*[^,→\n]+,\s*[^,∧∨\n]*(?:<|≤|≥|>|∈|∣|≠)[^,∧∨→\n]*→
+    message: POLICY.NO_UNGROUNDED_MATH_NAME
+    languages:
+      - generic
+    severity: ERROR
+    paths:
+      include:
+        - '**/*.lean'
+      exclude:
+        - '**/*.conjecture*'
+        - '**/Conjectures/**'
+    metadata:
+      policy_code: POLICY.NO_UNGROUNDED_MATH_NAME
   - id: lean-isotropy-as-torsion
     # 2 • x = 0 is 2-torsion, not isotropy (b(x,x) = 0) — the NikulinGluing
     # episode. Scoped to form/lattice paths.
