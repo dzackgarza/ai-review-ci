@@ -15,7 +15,9 @@ Unless required by applicable law or agreed to in writing, software distributed 
 the License is distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF
 ANY KIND, either express or implied.
 -/
-import Lean
+module
+
+public meta import Lean.Elab.Command
 
 /-!
 # The `answer(...)` elaborator
@@ -32,6 +34,8 @@ a gate-legal way to record "answer not yet determined":
 * `answer(e)` for a concrete `e` elaborates `e` and tags it with the `answer`
   annotation so downstream tooling can locate supplied answers.
 -/
+
+public meta section
 
 namespace AiReviewCi.Answer
 
