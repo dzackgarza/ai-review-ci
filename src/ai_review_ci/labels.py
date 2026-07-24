@@ -22,7 +22,7 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
-LabelCategory = Literal["type", "scope", "status", "area"]
+LabelCategory = Literal["type", "scope", "status", "area", "complexity"]
 _HEX_COLOR = r"^[0-9a-fA-F]{6}$"
 
 
