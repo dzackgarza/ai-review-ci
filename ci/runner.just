@@ -40,11 +40,6 @@ setup-profile profile:
         cd "{{control_repo}}"
         bun install --frozen-lockfile
         ;;
-      yarn)
-        cd "{{control_repo}}"
-        corepack enable
-        yarn install --immutable
-        ;;
       bun-playwright)
         cd "{{control_repo}}"
         bun install --frozen-lockfile

@@ -186,7 +186,7 @@ def test_install_writes_trigger_workflows(tmp_path: pathlib.Path) -> None:
     assert "pull_request" in pr
 
 
-@pytest.mark.parametrize("profile", ["python", "bun", "yarn", "bun-playwright", "bun-python", "rust", "sage"])
+@pytest.mark.parametrize("profile", ["python", "bun", "bun-playwright", "bun-python", "rust", "sage"])
 def test_repo_and_packaged_scaffolds_are_identical(profile: str) -> None:
     repo_scaffold = (ROOT / "scaffolds" / profile / "justfile").read_text()
     packaged_scaffold = (ROOT / "src" / "ai_review_ci" / "scaffolds" / profile / "justfile").read_text()
