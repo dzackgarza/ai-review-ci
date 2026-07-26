@@ -749,6 +749,8 @@ def test_common_normalization_formats_structured_text(
 
     markdown.write_text("# Title\n\n-   item\n")
     json_file.write_text('{"b":2,"a":1}\n')
+    subprocess.run(["git", "init", "-q"], cwd=project, check=True)
+    subprocess.run(["git", "add", "README.md", "config.json"], cwd=project, check=True)
 
     result = subprocess.run(
         [
