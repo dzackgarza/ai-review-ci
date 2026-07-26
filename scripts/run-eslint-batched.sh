@@ -21,20 +21,43 @@ if [[ ${ESLINT_FIX:-0} == 1 ]]; then
   eslint_args+=(--fix)
 fi
 
-files=()
-while IFS= read -r -d '' file; do
-  files+=("$file")
-done < <(
-  find "$@" -type f \
-    \( -name '*.js' -o -name '*.jsx' -o -name '*.mjs' -o -name '*.cjs' \
-      -o -name '*.ts' -o -name '*.tsx' -o -name '*.mts' -o -name '*.cts' \
-      -o -name '*.vue' \) \
-    -print0
-)
+is_eslint_source() {
+  case "$1" in
+    *.js|*.jsx|*.mjs|*.cjs|*.ts|*.tsx|*.mts|*.cts|*.vue) return 0 ;;
+    *) return 1 ;;
+  esac
+}
 
-if (( ${#files[@]} == 0 )); then
-  echo "ERROR: eslint: no authored JavaScript, TypeScript, or Vue files found." >&2
-  exit 1
+files=()
+if [[ ${QC_TIER:-} != ambient && -n ${DIFF_COVER_BASE:-} ]]; then
+  if ! git rev-parse --verify "${DIFF_COVER_BASE}^{commit}" >/dev/null 2>&1; then
+    echo "ERROR: eslint: DIFF_COVER_BASE does not resolve: $DIFF_COVER_BASE" >&2
+    exit 2
+  fi
+  while IFS= read -r -d '' file; do
+    [[ -f $file ]] && is_eslint_source "$file" && files+=("$file")
+  done < <(
+    git diff --name-only --diff-filter=ACMR -z \
+      "${DIFF_COVER_BASE}...HEAD" -- "$@"
+  )
+  if (( ${#files[@]} == 0 )); then
+    echo "eslint: no changed authored JavaScript, TypeScript, or Vue files."
+    exit 0
+  fi
+else
+  while IFS= read -r -d '' file; do
+    files+=("$file")
+  done < <(
+    find "$@" -type f \
+      \( -name '*.js' -o -name '*.jsx' -o -name '*.mjs' -o -name '*.cjs' \
+        -o -name '*.ts' -o -name '*.tsx' -o -name '*.mts' -o -name '*.cts' \
+        -o -name '*.vue' \) \
+      -print0
+  )
+  if (( ${#files[@]} == 0 )); then
+    echo "ERROR: eslint: no authored JavaScript, TypeScript, or Vue files found." >&2
+    exit 1
+  fi
 fi
 
 failed=0
