@@ -1706,6 +1706,7 @@ def test_typescript_preflight_accepts_declared_yarn_project(tmp_path: pathlib.Pa
     )
     (project / "yarn.lock").write_text("")
     (project / "tests").mkdir()
+    (project / "tests" / "example.test.ts").write_text("export const value = 1\n")
 
     result = run_just(ROOT / "justfiles" / "yarn.just", project, "_check-ts-project")
 
