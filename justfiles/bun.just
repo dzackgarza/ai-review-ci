@@ -468,12 +468,17 @@ _normalize: _eslint-deps
 	echo "============================="
 	echo "=== Running: biome format, lint, and import sorting (auto-fix) ==="
 	echo "# Auto-applies safe and unsafe fixes, formatting, and import sorting"
-	dirs=()
-	for candidate in src source tests test; do
-		[ -d "$candidate" ] && dirs+=("$candidate")
-	done
-	[ ${#dirs[@]} -eq 0 ] && dirs=(.)
-	if bun x biome check --write --unsafe --config-path {{configs}}/biome.json "${dirs[@]}"; then
+	files=()
+	while IFS= read -r -d '' file; do
+		case "$file" in
+			*.js|*.jsx|*.mjs|*.cjs|*.ts|*.tsx|*.mts|*.cts|*.vue) files+=("$file") ;;
+		esac
+	done < <(git diff --cached --name-only --diff-filter=ACMR -z)
+	if [ ${#files[@]} -eq 0 ]; then
+		echo "No staged JavaScript, TypeScript, or Vue files found"
+		exit 0
+	fi
+	if bun x biome check --write --unsafe --config-path {{configs}}/biome.json "${files[@]}"; then
 		:
 	else
 		ec=$?
@@ -485,7 +490,7 @@ _normalize: _eslint-deps
 	if ESLINT_FIX=1 "{{infra}}/scripts/run-eslint-batched.sh" \
 		"{{configs}}/node_modules/.bin/eslint" \
 		"{{configs}}/eslint.config.js" \
-		"${dirs[@]}"; then
+		"${files[@]}"; then
 		:
 	else
 		ec=$?
