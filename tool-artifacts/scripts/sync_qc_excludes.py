@@ -59,6 +59,7 @@ configs: list[ToolConfig] = [
         "format": "json",
         "key": ["ignore"],
         "is_dir_fn": lambda d: f"**/{d}/**",
+        "omit_dirs": ["scripts"],
         "static": [
             "**/env.d.ts",
         ],
@@ -174,7 +175,10 @@ def _build_entries(cfg: ToolConfig, dirs: list[str]) -> list[str]:
     """Build the full exclude list for one tool: static + TOML-derived."""
     result = list(cfg["static"])
     fn = cfg["is_dir_fn"]
+    omitted = set(cfg.get("omit_dirs", []))
     for d in dirs:
+        if d in omitted:
+            continue
         produced = fn(d)
         result.extend(produced if isinstance(produced, list) else [produced])
     return result

@@ -569,6 +569,7 @@ def test_knip_config_does_not_blanket_ignore_owned_typescript(tmp_path: pathlib.
     assert "**/*.test.ts" not in shipped["ignore"]
     assert "**/*.spec.ts" not in shipped["ignore"]
     assert "**/__tests__/**" not in shipped["ignore"]
+    assert "**/scripts/**" not in shipped["ignore"]
 
     # The shipped config must be the deterministic output of the sync script
     # (no hand edits): regenerating in place yields no change.
