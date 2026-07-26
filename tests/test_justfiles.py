@@ -156,7 +156,7 @@ def test_lean_push_gate_propagates_target_axiom_audit_failure(tmp_path: pathlib.
         "_lean-axiom-audit:\n"
         "    #!/usr/bin/env bash\n"
         "    set -euo pipefail\n"
-        '    test "$(pwd -P)" = "$PWD"\n'
+        "    test \"$(pwd -P)\" = \"$PWD\"\n"
         "    echo target axiom audit rejected a nonstandard dependency >&2\n"
         "    exit 1\n"
     )
@@ -171,7 +171,13 @@ def test_lean_push_gate_propagates_target_axiom_audit_failure(tmp_path: pathlib.
 def test_lean_push_gate_runs_target_axiom_audit_at_target_root(tmp_path: pathlib.Path) -> None:
     project = tmp_path / "lean-project"
     project.mkdir()
-    (project / "justfile").write_text('_lean-axiom-audit:\n    #!/usr/bin/env bash\n    set -euo pipefail\n    test "$(pwd -P)" = "$PWD"\n    echo target axiom audit passed\n')
+    (project / "justfile").write_text(
+        "_lean-axiom-audit:\n"
+        "    #!/usr/bin/env bash\n"
+        "    set -euo pipefail\n"
+        "    test \"$(pwd -P)\" = \"$PWD\"\n"
+        "    echo target axiom audit passed\n"
+    )
 
     result = run_just(ROOT / "justfiles" / "lean.just", project, "lean-axiom-audit")
 
@@ -1991,7 +1997,7 @@ def test_bun_scaffold_delegates_qc_in_project_directory(
             "sage",
             {
                 "example.sage": "x = 1\n",
-                "pyproject.toml": '[project]\nname = "scaffold-sage-target"\nversion = "0.1.0"\n',
+                "pyproject.toml": "[project]\nname = \"scaffold-sage-target\"\nversion = \"0.1.0\"\n",
             },
             # Semantic key, not the copied diagnostic sentence
             # (POLICY.NO_EXACT_STRING_PROOF): the preflight must fail *about*
@@ -2133,7 +2139,6 @@ def test_language_qc_delegates_nested_global_recipes_in_project_directory(
     [
         ("python.just", "_pytest"),
         ("bun.just", "_bun-test"),
-        ("yarn.just", "_bun-test"),
         ("rust.just", "_cargo-test"),
         ("sage.just", "_sage-pytest"),
     ],
@@ -2162,7 +2167,6 @@ def test_public_gate_composition_separates_immediate_checks_from_full_suite(
         ROOT / "justfile",
         ROOT / "justfiles" / "python.just",
         ROOT / "justfiles" / "bun.just",
-        ROOT / "justfiles" / "yarn.just",
         ROOT / "justfiles" / "rust.just",
         ROOT / "justfiles" / "sage.just",
         ROOT / "justfiles" / "qc-tooling.just",
@@ -2198,29 +2202,6 @@ def test_tsc_removes_temp_output_on_success(tmp_path: pathlib.Path) -> None:
     assert result.returncode == 0, result.stdout + result.stderr
     assert sorted(tmpdir.iterdir()) == []
     assert sorted(ROOT.glob(".tsc-output.*")) == []
-
-
-def test_yarn_profile_runs_project_test_through_corepack_yarn(tmp_path: pathlib.Path) -> None:
-    project = tmp_path / "yarn-project"
-    project.mkdir()
-    bin_dir = tmp_path / "bin"
-    bin_dir.mkdir()
-    invocation = tmp_path / "corepack-invocation"
-    corepack = bin_dir / "corepack"
-    corepack.write_text(f"#!/bin/sh\nprintf '%s\\n' \"$*\" > {invocation}\n")
-    corepack.chmod(0o755)
-    (project / "package.json").write_text(json.dumps({"scripts": {"test": "project-test"}}) + "\n")
-    (project / "yarn.lock").write_text("")
-
-    result = run_just(
-        ROOT / "justfiles" / "yarn.just",
-        project,
-        "_bun-test",
-        env=os.environ | {"PATH": f"{bin_dir}:{os.environ['PATH']}"},
-    )
-
-    assert result.returncode == 0, result.stdout + result.stderr
-    assert invocation.read_text() == "yarn run test\n"
 
 
 def test_pytest_installs_dependency_group_requirements(
@@ -3249,7 +3230,6 @@ SCAFFOLD_DELEGATES = {
     "python": ("python.just",),
     "rust": ("rust.just",),
     "bun": ("bun.just",),
-    "yarn": ("yarn.just",),
     "bun-playwright": ("bun.just",),
     "bun-python": ("python.just", "bun.just"),
     "sage": ("sage.just",),

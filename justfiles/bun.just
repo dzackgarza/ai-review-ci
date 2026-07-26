@@ -54,35 +54,23 @@ _normalize-common:
 _bun-test:
 	#!/usr/bin/env bash
 	set -euo pipefail
-	run_project_script() {
-		if [ -f yarn.lock ]; then
-			corepack yarn run "$@"
-		else
-			bun run "$@"
-		fi
-	}
-	echo "================================="
-	echo "=== Running: project test suite (push tier — no coverage gate) ==="
+	echo "============================="
+	echo "=== Running: bun test (push tier — no coverage gate) ==="
 	echo "# Runs the project's own test suite; coverage is enforced in CI."
 	unset NODE_ENV
 	# A repo may declare a dedicated push-tier suite (e.g. units plus a browser
 	# smoke subset) as scripts["test:push"]; the full suite then runs in CI via
 	# scripts["test:ci"] (see _coverage).
 	if jq -e '.scripts["test:push"] // empty' package.json >/dev/null 2>&1; then
-		run_project_script test:push
+		bun run test:push
 		exit 0
 	fi
 	if jq -e '.scripts.test // empty' package.json >/dev/null 2>&1; then
-		run_project_script test
+		bun run test
 		exit 0
 	fi
 	if [ ! -d tests ] && [ ! -d __tests__ ]; then
 		echo "ERROR: no test script and no tests directory found."
-		"{{artifacts}}/scripts/emit-triage-directive.sh"
-		exit 1
-	fi
-	if [ -f yarn.lock ]; then
-		echo "ERROR: Yarn project has no test or test:push script."
 		"{{artifacts}}/scripts/emit-triage-directive.sh"
 		exit 1
 	fi
@@ -102,13 +90,6 @@ app-boot:
 _coverage:
 	#!/usr/bin/env bash
 	set -euo pipefail
-	run_project_script() {
-		if [ -f yarn.lock ]; then
-			corepack yarn run "$@"
-		else
-			bun run "$@"
-		fi
-	}
 	unset NODE_ENV
 	# Playwright (e2e-covered) projects prove coverage through the app-boot e2e run in
 	# test-ci, not a unit lcov. Unit-lcov diff-cover does not apply to them.
@@ -119,25 +100,20 @@ _coverage:
 	# A repo that split its suite into push/CI tiers runs the full suite here.
 	# The script owns its coverage flags and must leave lcov.info at the repo root.
 	if jq -e '.scripts["test:ci"] // empty' package.json >/dev/null 2>&1; then
-		run_project_script test:ci
+		bun run test:ci
 		exit 0
 	fi
 	if jq -e '(.devDependencies.vitest // .dependencies.vitest // empty)' package.json >/dev/null 2>&1; then
-		run_project_script test -- --coverage --coverage.reporter=lcov
+		bun run test -- --coverage --coverage.reporter=lcov
 		cp coverage/lcov.info lcov.info
 		exit 0
 	fi
 	if jq -e '.scripts.test // empty' package.json >/dev/null 2>&1; then
-		run_project_script test
+		bun run test
 		exit 0
 	fi
 	if [ ! -d tests ] && [ ! -d __tests__ ]; then
 		echo "ERROR: no test script and no tests directory found — 0% coverage"
-		"{{artifacts}}/scripts/emit-triage-directive.sh"
-		exit 1
-	fi
-	if [ -f yarn.lock ]; then
-		echo "ERROR: Yarn project has no test or test:ci script — 0% coverage"
 		"{{artifacts}}/scripts/emit-triage-directive.sh"
 		exit 1
 	fi
@@ -202,15 +178,8 @@ _eslint: _eslint-deps
 _tsc:
 	#!/usr/bin/env bash
 	set -euo pipefail
-	run_project_script() {
-		if [ -f yarn.lock ]; then
-			corepack yarn run "$@"
-		else
-			bun run "$@"
-		fi
-	}
 	if jq -e '.scripts.types // empty' package.json >/dev/null 2>&1; then
-		run_project_script types
+		bun run types
 	elif [ -f tsconfig.json ] \
 		&& jq -e '.compilerOptions.jsxImportSource == "ags/gtk4" or ((.compilerOptions.paths // {}) | has("gi://Astal?version=4.0"))' tsconfig.json >/dev/null; then
 		if ags types 'Astal*' --ignore Gtk3 --ignore Astal3 --update; then
@@ -224,7 +193,7 @@ _tsc:
 	if jq -e '.scripts.typecheck // empty' package.json >/dev/null 2>&1; then
 		output="$(mktemp -p "{{infra}}" .tsc-output.XXXXXX)"
 		trap 'if [ -e "$output" ]; then rm -f -- "$output"; fi' EXIT
-		if ! run_project_script typecheck >"$output" 2>&1; then
+		if ! bun run typecheck >"$output" 2>&1; then
 			if grep -vE '/usr/share/ags/js/|\.\./.*usr/share/ags/js/|gi://' "$output" | grep -q 'error TS'; then
 				cat "$output"
 				"{{artifacts}}/scripts/emit-triage-directive.sh"
