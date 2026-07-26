@@ -1409,7 +1409,11 @@ def test_aislop_blocks_on_error_severity_findings(tmp_path: pathlib.Path) -> Non
             "message": "Catch block only prints error without proper handling",
         },
     )
-    env = os.environ | {"PATH": f"{write_fake_npx_slop_scan(tmp_path, payload)}:{os.environ['PATH']}"}
+    env = os.environ | {
+        "DIFF_COVER_BASE": "",
+        "PATH": f"{write_fake_npx_slop_scan(tmp_path, payload)}:{os.environ['PATH']}",
+        "QC_TIER": "ambient",
+    }
 
     result = run_just(ROOT / "justfiles" / "shared.just", project, "_aislop", env=env)
 
@@ -1430,7 +1434,11 @@ def test_aislop_surfaces_warnings_without_blocking(tmp_path: pathlib.Path) -> No
             "message": "print() left in code",
         },
     )
-    env = os.environ | {"PATH": f"{write_fake_npx_slop_scan(tmp_path, payload)}:{os.environ['PATH']}"}
+    env = os.environ | {
+        "DIFF_COVER_BASE": "",
+        "PATH": f"{write_fake_npx_slop_scan(tmp_path, payload)}:{os.environ['PATH']}",
+        "QC_TIER": "ambient",
+    }
 
     result = run_just(ROOT / "justfiles" / "shared.just", project, "_aislop", env=env)
 
@@ -1447,7 +1455,11 @@ def test_aislop_fails_closed_on_unexpected_schema(tmp_path: pathlib.Path) -> Non
     project = tmp_path / "aislop-project"
     project.mkdir()
     payload = {"schemaVersion": "1", "score": 100, "note": "no summary or diagnostics"}
-    env = os.environ | {"PATH": f"{write_fake_npx_slop_scan(tmp_path, payload)}:{os.environ['PATH']}"}
+    env = os.environ | {
+        "DIFF_COVER_BASE": "",
+        "PATH": f"{write_fake_npx_slop_scan(tmp_path, payload)}:{os.environ['PATH']}",
+        "QC_TIER": "ambient",
+    }
 
     result = run_just(ROOT / "justfiles" / "shared.just", project, "_aislop", env=env)
 
@@ -1493,7 +1505,11 @@ def test_slop_scan_ignores_non_gating_structural_heuristics(
             },
         ],
     }
-    env = os.environ | {"PATH": f"{write_fake_npx_slop_scan(tmp_path, payload)}:{os.environ['PATH']}"}
+    env = os.environ | {
+        "DIFF_COVER_BASE": "",
+        "PATH": f"{write_fake_npx_slop_scan(tmp_path, payload)}:{os.environ['PATH']}",
+        "QC_TIER": "ambient",
+    }
 
     result = run_just(ROOT / "justfiles" / "bun.just", project, "_slop-scan", env=env)
 
@@ -1527,7 +1543,11 @@ def test_slop_scan_still_blocks_concrete_slop_findings(tmp_path: pathlib.Path) -
             },
         ],
     }
-    env = os.environ | {"PATH": f"{write_fake_npx_slop_scan(tmp_path, payload)}:{os.environ['PATH']}"}
+    env = os.environ | {
+        "DIFF_COVER_BASE": "",
+        "PATH": f"{write_fake_npx_slop_scan(tmp_path, payload)}:{os.environ['PATH']}",
+        "QC_TIER": "ambient",
+    }
 
     result = run_just(ROOT / "justfiles" / "bun.just", project, "_slop-scan", env=env)
 
@@ -1536,6 +1556,96 @@ def test_slop_scan_still_blocks_concrete_slop_findings(tmp_path: pathlib.Path) -
     assert "ignored 1 non-gating structural heuristic finding(s)" in output
     assert "errors.swallowed" in output
     assert "structure.pass-through-wrappers" not in output
+
+
+def test_slop_scan_enforces_only_changed_authored_files_in_ci(
+    tmp_path: pathlib.Path,
+) -> None:
+    project = tmp_path / "slop-project"
+    project.mkdir()
+    (project / "legacy.ts").write_text("export const legacy = 1;\n")
+    shutil.copy(
+        ROOT / "tool-configs" / "slop-scan.config.json",
+        project / "slop-scan.config.json",
+    )
+    run_git(project, "init")
+    run_git(project, "config", "user.email", "test@example.com")
+    run_git(project, "config", "user.name", "Test")
+    run_git(project, "add", ".")
+    base_commit = run_git(project, "-c", "core.hooksPath=/dev/null", "commit", "-m", "base")
+    assert base_commit.returncode == 0, base_commit.stdout + base_commit.stderr
+    base_result = run_git(project, "rev-parse", "HEAD")
+    assert base_result.returncode == 0, base_result.stdout + base_result.stderr
+    base = base_result.stdout.strip()
+    (project / "changed.ts").write_text("export const changed = 1;\n")
+    run_git(project, "add", ".")
+    change_commit = run_git(project, "-c", "core.hooksPath=/dev/null", "commit", "-m", "change")
+    assert change_commit.returncode == 0, change_commit.stdout + change_commit.stderr
+    payload = {
+        "summary": {"findingCount": 2},
+        "findings": [
+            {
+                "ruleId": "errors.swallowed",
+                "severity": "strong",
+                "path": "legacy.ts",
+                "location": {"line": 1},
+            },
+            {
+                "ruleId": "errors.swallowed",
+                "severity": "strong",
+                "path": "changed.ts",
+                "location": {"line": 1},
+            },
+        ],
+    }
+    env = os.environ | {
+        "DIFF_COVER_BASE": base,
+        "PATH": f"{write_fake_npx_slop_scan(tmp_path, payload)}:{os.environ['PATH']}",
+        "QC_TIER": "test-ci",
+    }
+
+    result = run_just(ROOT / "justfiles" / "bun.just", project, "_slop-scan", env=env)
+
+    output = result.stdout + result.stderr
+    assert result.returncode != 0, output
+    assert "changed.ts:1" in output
+    assert "legacy.ts" not in output
+
+
+def test_slop_scan_skips_clean_diff_without_invoking_scanner(
+    tmp_path: pathlib.Path,
+) -> None:
+    project = tmp_path / "slop-project"
+    fake_bin = tmp_path / "fake-bin"
+    fake_bin.mkdir()
+    project.mkdir()
+    (project / "legacy.ts").write_text("export const legacy = 1;\n")
+    shutil.copy(
+        ROOT / "tool-configs" / "slop-scan.config.json",
+        project / "slop-scan.config.json",
+    )
+    run_git(project, "init")
+    run_git(project, "config", "user.email", "test@example.com")
+    run_git(project, "config", "user.name", "Test")
+    run_git(project, "add", ".")
+    base_commit = run_git(project, "-c", "core.hooksPath=/dev/null", "commit", "-m", "base")
+    assert base_commit.returncode == 0, base_commit.stdout + base_commit.stderr
+    base_result = run_git(project, "rev-parse", "HEAD")
+    assert base_result.returncode == 0, base_result.stdout + base_result.stderr
+    base = base_result.stdout.strip()
+    (fake_bin / "npx").write_text("#!/usr/bin/env bash\nexit 9\n")
+    (fake_bin / "npx").chmod(0o755)
+    env = os.environ | {
+        "DIFF_COVER_BASE": base,
+        "PATH": f"{fake_bin}:{os.environ['PATH']}",
+        "QC_TIER": "test-ci",
+    }
+
+    result = run_just(ROOT / "justfiles" / "bun.just", project, "_slop-scan", env=env)
+
+    output = result.stdout + result.stderr
+    assert result.returncode == 0, output
+    assert "slop-scan: no changed authored JavaScript, TypeScript, or Vue files." in output
 
 
 def test_envrc_check_accepts_root_envrc_and_rejects_dotenv_files(
