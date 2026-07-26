@@ -65,4 +65,7 @@ directories = [
     # content must never be altered by formatters (dzackgarza/research#187 —
     # flowmark is not render-neutral on them).
     "notes",
+    ".webpack",
+    "out",
+    "release",
 ]

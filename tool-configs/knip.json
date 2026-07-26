@@ -61,7 +61,10 @@
     "**/src.bak/**",
     "**/scripts/**",
     "**/notebooks/**",
-    "**/notes/**"
+    "**/notes/**",
+    "**/.webpack/**",
+    "**/out/**",
+    "**/release/**"
   ],
   "ignoreDependencies": [
     "gi",

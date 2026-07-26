@@ -77,6 +77,12 @@ exclude = [
     "**/notebooks/**",
     "notes/*",
     "**/notes/**",
+    ".webpack/*",
+    "**/.webpack/**",
+    "out/*",
+    "**/out/**",
+    "release/*",
+    "**/release/**",
 ]
 
 [grain.python]

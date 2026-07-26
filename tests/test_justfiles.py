@@ -460,7 +460,9 @@ def test_tsc_requires_ags_when_tsconfig_declares_ags(tmp_path: pathlib.Path) -> 
     project.mkdir()
     (project / "package.json").write_text(json.dumps({"scripts": {}}) + "\n")
     (project / "tsconfig.json").write_text(json.dumps({"compilerOptions": {"jsxImportSource": "ags/gtk4"}}) + "\n")
-    env = os.environ | {"PATH": path_with_only(tmp_path, "bash", "cat", "jq", "just")}
+    env = os.environ | {
+        "PATH": path_with_only(tmp_path, "bash", "cat", "jq", "just", "rg")
+    }
 
     result = run_just(ROOT / "justfiles" / "bun.just", project, "_tsc", env=env)
 
@@ -745,10 +747,18 @@ def test_common_normalization_formats_structured_text(
     project = tmp_path / "project"
     project.mkdir()
     markdown = project / "README.md"
+    agent_instructions = project / "AGENTS.md"
     json_file = project / "config.json"
 
     markdown.write_text("# Title\n\n-   item\n")
+    agent_instructions.write_text("# Instructions\n\n-   preserve canonical bytes\n")
     json_file.write_text('{"b":2,"a":1}\n')
+    subprocess.run(["git", "init", "-q"], cwd=project, check=True)
+    subprocess.run(
+        ["git", "add", "AGENTS.md", "README.md", "config.json"],
+        cwd=project,
+        check=True,
+    )
 
     result = subprocess.run(
         [
@@ -768,6 +778,10 @@ def test_common_normalization_formats_structured_text(
     output = result.stdout + result.stderr
     assert result.returncode == 0, output
     assert markdown.read_text() == "# Title\n\n- item\n"
+    assert (
+        agent_instructions.read_text()
+        == "# Instructions\n\n-   preserve canonical bytes\n"
+    )
     assert json_file.read_text() == '{ "b": 2, "a": 1 }\n'
 
 
@@ -1672,6 +1686,235 @@ def test_eslint_flat_config_imports_with_declared_tool_config_deps(
     ignores = json.loads(config_import.stdout)
     assert "**/env.d.ts" in ignores
     assert "**/central-owned/**" in ignores
+
+
+def test_eslint_ignores_generated_typescript_but_reports_authored_violation(
+    tmp_path: pathlib.Path,
+) -> None:
+    tool_config = tmp_path / "tool-configs"
+    project = tmp_path / "downstream"
+    authored = project / "src"
+    generated = project / ".webpack" / "main"
+    tool_config.mkdir()
+    authored.mkdir(parents=True)
+    generated.mkdir(parents=True)
+    for file_name in ("package.json", "bun.lock", "eslint.config.js", "qc-excludes.toml"):
+        shutil.copy(ROOT / "tool-configs" / file_name, tool_config / file_name)
+    (project / "package.json").write_text('{"type":"module"}\n')
+    (project / "tsconfig.json").write_text(
+        json.dumps(
+            {
+                "compilerOptions": {
+                    "strict": True,
+                    "target": "ESNext",
+                    "module": "ESNext",
+                },
+                "include": ["src/**/*.ts"],
+            }
+        )
+        + "\n"
+    )
+    violation = "export const unsafe: any = 1\n"
+    (authored / "owned.ts").write_text(violation)
+    (generated / "generated.ts").write_text(violation)
+
+    install = subprocess.run(
+        ["bun", "install", "--frozen-lockfile"],
+        cwd=tool_config,
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+    assert install.returncode == 0, install.stdout + install.stderr
+    lint = subprocess.run(
+        [
+            str(tool_config / "node_modules" / ".bin" / "eslint"),
+            "--config",
+            str(tool_config / "eslint.config.js"),
+            ".",
+        ],
+        cwd=project,
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+
+    output = lint.stdout + lint.stderr
+    assert lint.returncode != 0, output
+    assert "src/owned.ts" in output
+    assert ".webpack/main/generated.ts" not in output
+    assert "@typescript-eslint/no-explicit-any" in output
+
+
+def test_eslint_centrally_owns_vue_parser_and_security_rules(
+    tmp_path: pathlib.Path,
+) -> None:
+    tool_config = tmp_path / "tool-configs"
+    project = tmp_path / "vue-downstream"
+    source = project / "src"
+    tool_config.mkdir()
+    source.mkdir(parents=True)
+    for file_name in ("package.json", "bun.lock", "eslint.config.js", "qc-excludes.toml"):
+        shutil.copy(ROOT / "tool-configs" / file_name, tool_config / file_name)
+    (project / "package.json").write_text('{"type":"module"}\n')
+    (project / "tsconfig.json").write_text(
+        json.dumps(
+            {
+                "compilerOptions": {
+                    "strict": True,
+                    "target": "ESNext",
+                    "module": "ESNext",
+                },
+                "include": ["src/**/*.vue"],
+            }
+        )
+        + "\n"
+    )
+    (source / "App.vue").write_text(
+        "\n".join(
+            [
+                "<script setup lang=\"ts\">",
+                "const unsafe: any = '<strong>unsafe</strong>'",
+                "</script>",
+                "<template>",
+                "  <div v-html=\"unsafe\" />",
+                "</template>",
+                "",
+            ]
+        )
+    )
+
+    install = subprocess.run(
+        ["bun", "install", "--frozen-lockfile"],
+        cwd=tool_config,
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+    assert install.returncode == 0, install.stdout + install.stderr
+    lint = subprocess.run(
+        [
+            str(tool_config / "node_modules" / ".bin" / "eslint"),
+            "--config",
+            str(tool_config / "eslint.config.js"),
+            "src/App.vue",
+        ],
+        cwd=project,
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+
+    output = lint.stdout + lint.stderr
+    assert lint.returncode != 0, output
+    assert "@typescript-eslint/no-explicit-any" in output
+    assert "vue/no-v-html" in output
+
+
+def test_eslint_applies_react_hook_rules_only_to_react_sources(
+    tmp_path: pathlib.Path,
+) -> None:
+    tool_config = tmp_path / "tool-configs"
+    project = tmp_path / "framework-downstream"
+    source = project / "src"
+    tool_config.mkdir()
+    source.mkdir(parents=True)
+    for file_name in ("package.json", "bun.lock", "eslint.config.js", "qc-excludes.toml"):
+        shutil.copy(ROOT / "tool-configs" / file_name, tool_config / file_name)
+    (project / "package.json").write_text('{"type":"module"}\n')
+    (project / "tsconfig.json").write_text(
+        json.dumps(
+            {
+                "compilerOptions": {
+                    "strict": True,
+                    "target": "ESNext",
+                    "module": "ESNext",
+                    "jsx": "preserve",
+                },
+                "include": ["src/**/*.ts", "src/**/*.tsx"],
+            }
+        )
+        + "\n"
+    )
+    composable_call = "\n".join(
+        [
+            "declare function useWorkspaceStore(): void",
+            "export function closeWorkspace(): void {",
+            "  useWorkspaceStore()",
+            "}",
+            "",
+        ]
+    )
+    (source / "vue-composable.ts").write_text(composable_call)
+    (source / "react-component.tsx").write_text(composable_call)
+
+    install = subprocess.run(
+        ["bun", "install", "--frozen-lockfile"],
+        cwd=tool_config,
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+    assert install.returncode == 0, install.stdout + install.stderr
+    lint = subprocess.run(
+        [
+            str(tool_config / "node_modules" / ".bin" / "eslint"),
+            "--config",
+            str(tool_config / "eslint.config.js"),
+            "src",
+        ],
+        cwd=project,
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+
+    output = lint.stdout + lint.stderr
+    assert lint.returncode != 0, output
+    assert "react-component.tsx" in output
+    assert "vue-composable.ts" not in output
+    assert "react-hooks/rules-of-hooks" in output
+
+
+def test_eslint_runner_batches_authored_files_to_bound_process_memory(
+    tmp_path: pathlib.Path,
+) -> None:
+    project = tmp_path / "downstream"
+    source = project / "source"
+    fake_bin = tmp_path / "fake-eslint"
+    calls = tmp_path / "calls"
+    source.mkdir(parents=True)
+    for index in range(105):
+        (source / f"file-{index:03}.ts").write_text("export const value = 1\n")
+    (project / ".webpack" / "main").mkdir(parents=True)
+    (project / ".webpack" / "main" / "generated.ts").write_text(
+        "export const generated = 1\n"
+    )
+    fake_bin.write_text(
+        "#!/usr/bin/env bash\n"
+        "printf '%s\\n' \"$*\" >> \"$ESLINT_CALLS\"\n"
+    )
+    fake_bin.chmod(0o755)
+
+    run = subprocess.run(
+        [
+            str(ROOT / "scripts" / "run-eslint-batched.sh"),
+            str(fake_bin),
+            str(ROOT / "tool-configs" / "eslint.config.js"),
+            "source",
+        ],
+        cwd=project,
+        env={**os.environ, "ESLINT_CALLS": str(calls), "ESLINT_BATCH_SIZE": "40"},
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+
+    assert run.returncode == 0, run.stdout + run.stderr
+    invocations = calls.read_text().splitlines()
+    assert len(invocations) == 3
+    assert all("--config" in invocation for invocation in invocations)
+    assert all(".webpack" not in invocation for invocation in invocations)
 
 
 def test_bun_scaffold_delegates_qc_in_project_directory(
