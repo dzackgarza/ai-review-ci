@@ -569,6 +569,7 @@ def test_knip_config_does_not_blanket_ignore_owned_typescript(tmp_path: pathlib.
     assert "**/*.test.ts" not in shipped["ignore"]
     assert "**/*.spec.ts" not in shipped["ignore"]
     assert "**/__tests__/**" not in shipped["ignore"]
+    assert "**/scripts/**" not in shipped["ignore"]
 
     # The shipped config must be the deterministic output of the sync script
     # (no hand edits): regenerating in place yields no change.
@@ -590,10 +591,12 @@ def test_knip_config_does_not_blanket_ignore_owned_typescript(tmp_path: pathlib.
 
 def test_knip_follows_dependency_imported_through_test_helper(tmp_path: pathlib.Path) -> None:
     project = tmp_path / "bun-project"
+    source_dir = project / "source"
     tests_dir = project / "tests"
     node_modules = project / "node_modules"
+    source_dir.mkdir(parents=True)
     tests_dir.mkdir(parents=True)
-    for dependency in ("browser-boundary", "unused-boundary"):
+    for dependency in ("browser-boundary", "source-boundary", "forge-boundary", "unused-boundary"):
         package_dir = node_modules / dependency
         package_dir.mkdir(parents=True)
         (package_dir / "package.json").write_text(json.dumps({"name": dependency, "version": "1.0.0", "type": "module"}) + "\n")
@@ -605,6 +608,8 @@ def test_knip_follows_dependency_imported_through_test_helper(tmp_path: pathlib.
                 "version": "1.0.0",
                 "devDependencies": {
                     "browser-boundary": "1.0.0",
+                    "forge-boundary": "1.0.0",
+                    "source-boundary": "1.0.0",
                     "unused-boundary": "1.0.0",
                 },
             }
@@ -613,6 +618,8 @@ def test_knip_follows_dependency_imported_through_test_helper(tmp_path: pathlib.
     )
     (tests_dir / "shared-browser-boundary.ts").write_text('import { boundary } from "browser-boundary";\nexport const observed = boundary;\n')
     (tests_dir / "reader.test.ts").write_text('import { observed } from "./shared-browser-boundary";\nvoid observed;\n')
+    (source_dir / "main.ts").write_text('import { boundary } from "source-boundary";\nvoid boundary;\n')
+    (project / "forge.config.js").write_text('import { boundary } from "forge-boundary";\nvoid boundary;\n')
 
     result = run_just(ROOT / "justfiles" / "bun.just", project, "_knip")
 
@@ -620,6 +627,8 @@ def test_knip_follows_dependency_imported_through_test_helper(tmp_path: pathlib.
     assert result.returncode != 0, output
     assert "unused-boundary" in output
     assert "browser-boundary" not in output
+    assert "source-boundary" not in output
+    assert "forge-boundary" not in output
 
 
 def test_knip_ignores_exact_assembled_pdfjs_module_only(tmp_path: pathlib.Path) -> None:
