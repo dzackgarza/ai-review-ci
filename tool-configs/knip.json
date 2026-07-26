@@ -95,7 +95,8 @@
     "node-loader",
     "style-loader",
     "ts-loader",
-    "tsx"
+    "tsx",
+    "unist"
   ],
   "ignoreBinaries": [
     "ags",
