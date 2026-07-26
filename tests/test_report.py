@@ -33,14 +33,14 @@ def test_report_metadata_emits_structured_findings(tmp_path: pathlib.Path, check
     ]
 
 
-def test_enforce_report_status_fails_only_for_tier1(tmp_path: pathlib.Path, checkout: pathlib.Path) -> None:
+def test_enforce_report_status_reports_tier1_without_blocking(tmp_path: pathlib.Path, checkout: pathlib.Path, capsys: pytest.CaptureFixture[str]) -> None:
     tier1 = tmp_path / "tier1.json"
     tier1.write_text(json.dumps(general_candidate(findings=[general_finding(tier="tier1")])))
     tier2 = tmp_path / "tier2.json"
     tier2.write_text(json.dumps(general_candidate(findings=[general_finding(tier="tier2", category="docs")])))
 
-    with pytest.raises(SystemExit):
-        enforce_report_status(tier1)
+    enforce_report_status(tier1)
+    assert "thread-resolution owns PR blocking" in capsys.readouterr().err
 
     enforce_report_status(tier2)
 
