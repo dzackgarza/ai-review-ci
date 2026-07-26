@@ -2425,6 +2425,33 @@ def test_pytest_with_coverage_generates_xml_without_total_threshold(
     assert "Coverage XML report:" in output
 
 
+def test_bun_coverage_consumes_declared_script_and_normalizes_lcov(
+    tmp_path: pathlib.Path,
+) -> None:
+    project = tmp_path / "bun-project"
+    project.mkdir()
+    (project / "package.json").write_text(
+        json.dumps(
+            {
+                "scripts": {
+                    "coverage": (
+                        "mkdir -p coverage && "
+                        "printf 'TN:\\nSF:source.ts\\nDA:1,1\\nend_of_record\\n' "
+                        "> coverage/lcov.info"
+                    )
+                }
+            }
+        )
+    )
+
+    result = run_just(ROOT / "justfiles" / "bun.just", project, "_coverage")
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert (project / "lcov.info").read_text() == (
+        "TN:\nSF:source.ts\nDA:1,1\nend_of_record\n"
+    )
+
+
 def write_import_linter_project(
     project: pathlib.Path,
     *,

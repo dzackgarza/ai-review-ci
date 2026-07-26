@@ -103,6 +103,13 @@ _coverage:
 		bun run test:ci
 		exit 0
 	fi
+	if jq -e '.scripts.coverage // empty' package.json >/dev/null 2>&1; then
+		bun run coverage
+		if [ -f coverage/lcov.info ]; then
+			cp coverage/lcov.info lcov.info
+		fi
+		exit 0
+	fi
 	if jq -e '(.devDependencies.vitest // .dependencies.vitest // empty)' package.json >/dev/null 2>&1; then
 		bun run test -- --coverage --coverage.reporter=lcov
 		cp coverage/lcov.info lcov.info
