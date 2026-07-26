@@ -745,12 +745,18 @@ def test_common_normalization_formats_structured_text(
     project = tmp_path / "project"
     project.mkdir()
     markdown = project / "README.md"
+    agent_instructions = project / "AGENTS.md"
     json_file = project / "config.json"
 
     markdown.write_text("# Title\n\n-   item\n")
+    agent_instructions.write_text("# Instructions\n\n-   preserve canonical bytes\n")
     json_file.write_text('{"b":2,"a":1}\n')
     subprocess.run(["git", "init", "-q"], cwd=project, check=True)
-    subprocess.run(["git", "add", "README.md", "config.json"], cwd=project, check=True)
+    subprocess.run(
+        ["git", "add", "AGENTS.md", "README.md", "config.json"],
+        cwd=project,
+        check=True,
+    )
 
     result = subprocess.run(
         [
@@ -770,6 +776,10 @@ def test_common_normalization_formats_structured_text(
     output = result.stdout + result.stderr
     assert result.returncode == 0, output
     assert markdown.read_text() == "# Title\n\n- item\n"
+    assert (
+        agent_instructions.read_text()
+        == "# Instructions\n\n-   preserve canonical bytes\n"
+    )
     assert json_file.read_text() == '{ "b": 2, "a": 1 }\n'
 
 
