@@ -416,16 +416,25 @@ _check-ts-project:
 	set -euo pipefail
 	echo "============================="
 	echo "=== Running: TypeScript project preflight check ==="
-	echo "# Validates project structure, Bun alignment, test presence, and QC config isolation"
+	echo "# Validates project structure, package-manager ownership, test presence, and QC config isolation"
 	failed=0
 	# 1. package.json must exist
 	if [ ! -f "package.json" ]; then
 		echo "ERROR: TypeScript project must have a package.json file."
 		failed=1
 	fi
-	# 2. Must use Bun
-	if [ ! -f "bun.lock" ] && [ ! -f "bun.lockb" ]; then
-		echo "ERROR: TypeScript project must use Bun — no bun.lock or bun.lockb found."
+	# 2. Must declare one supported package manager.
+	if [ -f "yarn.lock" ]; then
+		if ! jq -e '.packageManager | strings | startswith("yarn@")' package.json >/dev/null 2>&1; then
+			echo "ERROR: Yarn project package.json must declare packageManager: yarn@<version>."
+			failed=1
+		fi
+		if [ -f "bun.lock" ] || [ -f "bun.lockb" ]; then
+			echo "ERROR: Conflicting Yarn and Bun lockfiles found."
+			failed=1
+		fi
+	elif [ ! -f "bun.lock" ] && [ ! -f "bun.lockb" ]; then
+		echo "ERROR: TypeScript project must carry yarn.lock or bun.lock/bun.lockb."
 		failed=1
 	fi
 	# 3. Check for local QC tool config overrides.

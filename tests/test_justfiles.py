@@ -1694,16 +1694,14 @@ def test_bun_scaffold_delegates_qc_in_project_directory(
     output = result.stdout + result.stderr
     assert result.returncode != 0, output
     assert "TypeScript project must have a package.json file" not in output
-    assert "TypeScript project must use Bun" not in output
+    assert "TypeScript project must carry yarn.lock or bun.lock/bun.lockb" not in output
     assert "TypeScript project must have tests" in output
 
 
 def test_typescript_preflight_accepts_declared_yarn_project(tmp_path: pathlib.Path) -> None:
     project = tmp_path / "yarn-project"
     project.mkdir()
-    (project / "package.json").write_text(
-        json.dumps({"packageManager": "yarn@4.11.0", "scripts": {"test": "true"}}) + "\n"
-    )
+    (project / "package.json").write_text(json.dumps({"packageManager": "yarn@4.11.0", "scripts": {"test": "true"}}) + "\n")
     (project / "yarn.lock").write_text("")
     (project / "tests").mkdir()
     (project / "tests" / "example.test.ts").write_text("export const value = 1\n")
@@ -1711,7 +1709,7 @@ def test_typescript_preflight_accepts_declared_yarn_project(tmp_path: pathlib.Pa
     result = run_just(ROOT / "justfiles" / "yarn.just", project, "_check-ts-project")
 
     assert result.returncode == 0, result.stdout + result.stderr
-    assert "TypeScript project preflight passed" in result.stdout
+    assert "TypeScript project configuration OK" in result.stdout
 
 
 @pytest.mark.parametrize(
@@ -1726,7 +1724,7 @@ def test_typescript_preflight_accepts_declared_yarn_project(tmp_path: pathlib.Pa
             "TypeScript project must have tests",
             (
                 "TypeScript project must have a package.json file",
-                "TypeScript project must use Bun",
+                "TypeScript project must carry yarn.lock or bun.lock/bun.lockb",
             ),
         ),
         (
@@ -1739,7 +1737,7 @@ def test_typescript_preflight_accepts_declared_yarn_project(tmp_path: pathlib.Pa
             "TypeScript project must have tests",
             (
                 "TypeScript project must have a package.json file",
-                "TypeScript project must use Bun",
+                "TypeScript project must carry yarn.lock or bun.lock/bun.lockb",
             ),
         ),
         (
