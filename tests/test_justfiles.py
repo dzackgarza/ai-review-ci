@@ -2218,6 +2218,23 @@ def test_tsc_removes_temp_output_on_success(tmp_path: pathlib.Path) -> None:
     assert sorted(ROOT.glob(".tsc-output.*")) == []
 
 
+def test_tsc_fails_when_declared_typecheck_command_is_missing(
+    tmp_path: pathlib.Path,
+) -> None:
+    project = tmp_path / "bun-project"
+    project.mkdir()
+    (project / "package.json").write_text(
+        json.dumps({"scripts": {"typecheck": "missing-typecheck-command"}}) + "\n"
+    )
+
+    result = run_just(ROOT / "justfiles" / "bun.just", project, "_tsc")
+
+    output = result.stdout + result.stderr
+    assert result.returncode != 0, output
+    assert "missing-typecheck-command" in output
+    assert TRIAGE_MARKER in output
+
+
 def test_pytest_installs_dependency_group_requirements(
     tmp_path: pathlib.Path,
 ) -> None:

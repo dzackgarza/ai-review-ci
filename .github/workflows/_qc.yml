@@ -89,6 +89,11 @@ jobs:
         # configs through bun; node ships on the runner, bun does not.
         uses: oven-sh/setup-bun@v2
 
+      - name: Install project dependencies
+        run: |
+          profile="$(just --evaluate ai_review_ci_profile)"
+          just -f "$HOME/ai-review-ci/ci/runner.just" setup-profile "$profile"
+
       - name: Run QC tier
         # No GH_TOKEN here (#218): the tier runs every QC recipe and every
         # npx/uvx tool runner (semgrep, ai-slop, aislop), which must not execute

@@ -194,14 +194,16 @@ _tsc:
 		output="$(mktemp -p "{{infra}}" .tsc-output.XXXXXX)"
 		trap 'if [ -e "$output" ]; then rm -f -- "$output"; fi' EXIT
 		if ! bun run typecheck >"$output" 2>&1; then
-			if grep -vE '/usr/share/ags/js/|\.\./.*usr/share/ags/js/|gi://' "$output" | grep -q 'error TS'; then
+			if [ -f tsconfig.json ] \
+				&& rg -q '"jsxImportSource"\s*:\s*"ags/gtk4"|"gi://Astal\?version=4\.0"' tsconfig.json \
+				&& ! grep -vE '/usr/share/ags/js/|\.\./.*usr/share/ags/js/|gi://' "$output" | grep -q 'error TS'; then
 				cat "$output"
-				"{{artifacts}}/scripts/emit-triage-directive.sh"
-				exit 1
+				echo "Only system AGS/Gnim TypeScript diagnostics were reported; project-owned TypeScript passed."
+				exit 0
 			fi
 			cat "$output"
-			echo "Only system AGS/Gnim TypeScript diagnostics were reported; project-owned TypeScript passed."
-			exit 0
+			"{{artifacts}}/scripts/emit-triage-directive.sh"
+			exit 1
 		fi
 		cat "$output"
 	elif [ -f tsconfig.json ]; then

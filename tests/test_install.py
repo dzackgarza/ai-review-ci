@@ -683,6 +683,25 @@ def test_qc_workflow_installs_flowmark_runtime_dependencies() -> None:
     assert install["run"] == "sudo apt-get update && sudo apt-get install -y pandoc ripgrep"
 
 
+def test_qc_workflow_installs_project_profile_before_running_acceptance() -> None:
+    job = _workflow_jobs("_qc.yml")["qc"]
+    install_index = next(
+        index
+        for index, step in enumerate(job["steps"])
+        if isinstance(step, dict) and step.get("name") == "Install project dependencies"
+    )
+    run_index = next(
+        index
+        for index, step in enumerate(job["steps"])
+        if isinstance(step, dict) and step.get("name") == "Run QC tier"
+    )
+    install = job["steps"][install_index]["run"]
+
+    assert install_index < run_index
+    assert 'profile="$(just --evaluate ai_review_ci_profile)"' in install
+    assert 'setup-profile "$profile"' in install
+
+
 def test_qc_workflow_accepts_only_remote_acceptance_tiers() -> None:
     job = _workflow_jobs("_qc.yml")["qc"]
     validation = next(step for step in job["steps"] if isinstance(step, dict) and step.get("name") == "Validate inputs")
