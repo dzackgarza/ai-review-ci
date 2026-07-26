@@ -37,7 +37,6 @@
     "**/venv/**",
     "**/archives/**",
     "**/src.bak/**",
-    "**/scripts/**",
     "**/notebooks/**",
     "**/notes/**",
     "**/.webpack/**",
