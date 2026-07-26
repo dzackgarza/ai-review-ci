@@ -631,27 +631,64 @@ _aislop:
 		"{{artifacts}}/scripts/emit-triage-directive.sh"
 		exit 1
 	fi
-	errors=$(printf '%s' "$raw_output" | jq '.summary.errors')
-	warnings=$(printf '%s' "$raw_output" | jq '.summary.warnings')
-	if [ "$warnings" -gt 0 ]; then
-		echo "aislop: $warnings warning-tier finding(s) surfaced (advisory, not blocking):"
-		printf '%s' "$raw_output" | jq -r '.diagnostics[] | select(.severity=="warning") | "  \(.filePath):\(.line) [\(.rule)] \(.message)"'
+	head_aislop_json=$(mktemp)
+	base_aislop_json=""
+	base_worktree=""
+	cleanup_aislop() {
+		rm -f -- "$head_aislop_json"
+		if [ -n "$base_aislop_json" ]; then
+			rm -f -- "$base_aislop_json"
+		fi
+		if [ -n "$base_worktree" ]; then
+			git worktree remove --force "$base_worktree" >/dev/null 2>&1 || true
+		fi
+	}
+	trap cleanup_aislop EXIT
+	printf '%s\n' "$raw_output" > "$head_aislop_json"
+	base_args=()
+	if [ "${QC_TIER:-}" = "test-ci" ] && [ -n "${DIFF_COVER_BASE:-}" ] && git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+		base_worktree=$(mktemp -d)
+		rmdir "$base_worktree"
+		git worktree add --detach "$base_worktree" "$DIFF_COVER_BASE" >/dev/null
+		(
+			cd "$base_worktree"
+			base_exclude_patterns=()
+			while IFS= read -r dir; do
+				if [[ "$dir" == *,* ]]; then
+					echo "ERROR: aislop cannot represent an exclusion path containing a comma in base worktree: $dir"
+					exit 1
+				fi
+				base_exclude_patterns+=("**/$dir/**")
+			done < <(uv run {{artifacts}}/scripts/read_qc_excludes.py {{configs}}/qc-excludes.toml)
+			base_exclude_csv="$(IFS=,; printf '%s' "${base_exclude_patterns[*]}")"
+			if raw_base_output=$(npx -y aislop@latest scan --json --exclude "$base_exclude_csv" .); then
+				base_ec=0
+			else
+				base_ec=$?
+			fi
+			if ! printf '%s' "$raw_base_output" | jq -e . >/dev/null 2>&1; then
+				printf '%s\n' "$raw_base_output"
+				echo ""
+				echo "ERROR: base aislop failed to produce parseable JSON (exit $base_ec)."
+				exit "$base_ec"
+			fi
+			if ! printf '%s' "$raw_base_output" | jq -e '(.summary.errors | type == "number") and (.summary.warnings | type == "number") and (.diagnostics | type == "array")' >/dev/null 2>&1; then
+				printf '%s\n' "$raw_base_output"
+				echo ""
+				echo "ERROR: base aislop returned JSON without the expected schema."
+				exit 1
+			fi
+			printf '%s\n' "$raw_base_output"
+		) > "$base_worktree/aislop-base.json"
+		base_aislop_json=$(mktemp)
+		cp "$base_worktree/aislop-base.json" "$base_aislop_json"
+		base_args=(--base-json "$base_aislop_json" --base-root "$base_worktree")
 	fi
-	if [ "$errors" -gt 0 ]; then
-		printf '%s' "$raw_output" | jq -r '.diagnostics[] | select(.severity=="error") | "  \(.filePath):\(.line) [\(.rule)] \(.message)"'
+	if ! uv run {{artifacts}}/scripts/aislop_gate.py --head-json "$head_aislop_json" --head-root "$PWD" "${base_args[@]}"; then
 		echo ""
-		echo "!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!"
-		echo "  ERROR: aislop found $errors error-severity finding(s) in PROJECT CODE."
-		echo "  Fix the project code."
-		echo ""
-		echo "  PROBING GLOBAL QC IS REWARD-HACKING."
-		echo "  Do NOT weaken the aislop config, add .aislopignore entries, or edit"
-		echo "  QC tooling in ~/ai-review-ci/ to suppress these findings."
-		echo "!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!"
 		"{{artifacts}}/scripts/emit-triage-directive.sh"
 		exit 1
 	fi
-	echo "aislop: 0 error-severity findings — clean."
 
 # ── Config Sync ───────────────────────────────────────────────────
 # Sync qc-excludes.toml into every tool config (biome, eslint, knip,

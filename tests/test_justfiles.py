@@ -1408,22 +1408,22 @@ def test_vibecheck_pr_tier_allows_findings_unchanged_from_diff_base(tmp_path: pa
         "root=$(pwd)\n"
         "cat <<JSON\n"
         "{"
-        "\"version\":\"0.1.0\","
-        "\"passed\":false,"
-        "\"summary\":{\"rules_run\":49,\"critical\":0,\"high\":1,\"medium\":0,\"low\":0},"
-        "\"findings\":[{"
-        "\"rule_id\":\"G141\","
-        "\"name\":\"Research citations in code comments\","
-        "\"severity\":\"high\","
-        "\"category\":\"ai-slop\","
-        "\"file\":\"$root/src/app.ts\","
-        "\"line\":1,"
-        "\"content\":\"// (Source: imagined paper)\","
-        "\"notes\":\"citation\","
-        "\"two_pass\":false,"
-        "\"co_occurrence\":false"
+        '"version":"0.1.0",'
+        '"passed":false,'
+        '"summary":{"rules_run":49,"critical":0,"high":1,"medium":0,"low":0},'
+        '"findings":[{'
+        '"rule_id":"G141",'
+        '"name":"Research citations in code comments",'
+        '"severity":"high",'
+        '"category":"ai-slop",'
+        '"file":"$root/src/app.ts",'
+        '"line":1,'
+        '"content":"// (Source: imagined paper)",'
+        '"notes":"citation",'
+        '"two_pass":false,'
+        '"co_occurrence":false'
         "}],"
-        "\"errors\":[]"
+        '"errors":[]'
         "}\n"
         "JSON\n"
         "exit 1\n",
@@ -1521,6 +1521,54 @@ def test_aislop_blocks_on_error_severity_findings(tmp_path: pathlib.Path) -> Non
     output = result.stdout + result.stderr
     assert result.returncode != 0, output
     assert "ai-slop/swallowed-exception" in output
+
+
+def test_aislop_pr_tier_allows_errors_unchanged_from_diff_base(tmp_path: pathlib.Path) -> None:
+    project = tmp_path / "aislop-project"
+    project.mkdir()
+    init_git_repo(project)
+    source = project / "src" / "app.ts"
+    source.parent.mkdir()
+    source.write_text("try { risky() } catch {}\n")
+    assert run_git(project, "add", ".").returncode == 0
+    commit_without_hooks(project, "base")
+    base_ref = subprocess.check_output(["git", "-C", str(project), "rev-parse", "HEAD"], text=True).strip()
+    (project / "README.md").write_text("unrelated change\n")
+    assert run_git(project, "add", ".").returncode == 0
+    commit_without_hooks(project, "head")
+
+    fake_bin = tmp_path / "fake-bin"
+    fake_bin.mkdir()
+    npx = fake_bin / "npx"
+    npx.write_text(
+        "#!/usr/bin/env bash\n"
+        "root=$(pwd)\n"
+        "cat <<JSON\n"
+        "{"
+        '"schemaVersion":"1",'
+        '"score":80,'
+        '"summary":{"errors":1,"warnings":0,"fixable":0,"files":1},'
+        '"diagnostics":[{'
+        '"filePath":"$root/src/app.ts",'
+        '"line":1,'
+        '"rule":"ai-slop/swallowed-exception",'
+        '"severity":"error",'
+        '"message":"Empty catch block swallows errors silently"'
+        "}]} \n"
+        "JSON\n",
+    )
+    npx.chmod(0o755)
+    env = os.environ | {
+        "DIFF_COVER_BASE": base_ref,
+        "PATH": f"{fake_bin}:{os.environ['PATH']}",
+        "QC_TIER": "test-ci",
+    }
+
+    result = run_just(ROOT / "justfiles" / "shared.just", project, "_aislop", env=env)
+
+    output = result.stdout + result.stderr
+    assert result.returncode == 0, output
+    assert "aislop: error findings are unchanged relative to DIFF_COVER_BASE." in output
 
 
 def test_aislop_surfaces_warnings_without_blocking(tmp_path: pathlib.Path) -> None:
