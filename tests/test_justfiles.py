@@ -752,9 +752,17 @@ def test_common_normalization_formats_structured_text(
     project.mkdir()
     markdown = project / "README.md"
     json_file = project / "config.json"
+    excluded_markdown = [
+        project / "corpus" / "card.md",
+        project / "wiki" / "page.md",
+        project / "tests" / "fixtures" / "source.md",
+    ]
 
     markdown.write_text("# Title\n\n-   item\n")
     json_file.write_text('{"b":2,"a":1}\n')
+    for path in excluded_markdown:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text("# Preserved\n\n-   byte-exact item\n")
 
     result = subprocess.run(
         [
@@ -775,6 +783,8 @@ def test_common_normalization_formats_structured_text(
     assert result.returncode == 0, output
     assert markdown.read_text() == "# Title\n\n- item\n"
     assert json_file.read_text() == '{ "b": 2, "a": 1 }\n'
+    for path in excluded_markdown:
+        assert path.read_text() == "# Preserved\n\n-   byte-exact item\n"
 
 
 def load_lint_staged_config() -> dict[str, list[str]]:
