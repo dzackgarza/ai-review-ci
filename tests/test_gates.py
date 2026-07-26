@@ -61,9 +61,7 @@ def test_bypass_diff_rules_block_ts_expect_error_with_trailing_whitespace() -> N
 +// {marker}{trailing_spaces}
 """
 
-    assert gates.lexical_diff_findings(diff) == [
-        "src/app.ts:1: no-unjustified-ts-expect-error: POLICY.NO_QC_SILENCING"
-    ]
+    assert gates.lexical_diff_findings(diff) == ["src/app.ts:1: no-unjustified-ts-expect-error: POLICY.NO_QC_SILENCING"]
 
 
 def test_delegation_accepts_canonical_scaffold(tmp_path: pathlib.Path) -> None:
@@ -84,9 +82,7 @@ def test_yarn_profile_accepts_declared_yarn_repository_and_canonical_delegation(
     project.mkdir()
     (project / "package.json").write_text('{"packageManager": "yarn@4.11.0", "scripts": {"test": "true"}}\n')
     (project / "yarn.lock").write_text("")
-    (project / "justfile").write_text(
-        (pathlib.Path(__file__).parents[1] / "scaffolds" / "yarn" / "justfile").read_text()
-    )
+    (project / "justfile").write_text((pathlib.Path(__file__).parents[1] / "scaffolds" / "yarn" / "justfile").read_text())
 
     gates.check_profile(project, "yarn")
     gates.check_delegation(project, "yarn")
@@ -367,15 +363,9 @@ Audit anchor: abcdef123456
     assert gates._has_resolution_evidence(node(rejected))
     assert gates._has_resolution_evidence(node(duplicate))
     assert gates._has_resolution_evidence(node(outdated))
-    assert not gates._has_resolution_evidence(
-        node(accepted.replace("Commit: 123456789abc", "Commit: 123456789abc trailing junk"))
-    )
-    assert not gates._has_resolution_evidence(
-        node(accepted.replace("Pre-filter: Gate 1 correctness defect -> current-PR remediation", "Pre-filter: <gate>"))
-    )
-    assert not gates._has_resolution_evidence(
-        node(accepted.replace("Deleted artifact: None\n", ""))
-    )
+    assert not gates._has_resolution_evidence(node(accepted.replace("Commit: 123456789abc", "Commit: 123456789abc trailing junk")))
+    assert not gates._has_resolution_evidence(node(accepted.replace("Pre-filter: Gate 1 correctness defect -> current-PR remediation", "Pre-filter: <gate>")))
+    assert not gates._has_resolution_evidence(node(accepted.replace("Deleted artifact: None\n", "")))
     deleted = accepted.replace(
         "Deleted artifact: None",
         "Deleted artifact: tests/test_legacy.py\n"
@@ -490,7 +480,6 @@ def test_thread_resolution_does_not_auto_resolve_stale_ai_review_proof(
         gates.check_review_threads("owner/repo", 7)
 
 
-
 def test_thread_resolution_does_not_auto_resolve_reproducing_proof(
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
@@ -590,7 +579,6 @@ Deleted artifact: None
     error = capsys.readouterr().err
     assert "cited commit 123456789abc is not on this PR" in error
     assert "proof anchor tests/test_missing.py::test_evidence does not exist" in error
-
 
 
 def test_delegation_accepts_docs_and_configs_profile(tmp_path: pathlib.Path) -> None:

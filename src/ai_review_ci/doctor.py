@@ -31,8 +31,8 @@ JUSTFILE_CONTRACT_VARIABLES = {
     "default_branch": "ai_review_ci_default_branch",
 }
 
-ProfileName = Literal["python", "bun", "bun-playwright", "bun-python", "docs-and-configs", "rust", "sage"]
-ObservedProfile = Literal["python", "bun", "bun-playwright", "bun-python", "docs-and-configs", "rust", "sage", "unknown"]
+ProfileName = Literal["python", "bun", "yarn", "bun-playwright", "bun-python", "docs-and-configs", "rust", "sage"]
+ObservedProfile = Literal["python", "bun", "yarn", "bun-playwright", "bun-python", "docs-and-configs", "rust", "sage", "unknown"]
 InstallationState = Literal["compliant", "outdated", "noncompliant", "uninstalled", "unknown"]
 GlobalStatus = Literal["current", "stale", "misconfigured", "unverifiable"]
 FindingSeverity = Literal["error", "warning"]
@@ -202,7 +202,7 @@ def justfile_contract_variables_text(
     """Render the repo-owned QC justfile contract variables deterministically."""
     ProfileAdapter.validate_python(profile)
     lines = [
-        "ai_review_ci_schema_version := \"1\"",
+        'ai_review_ci_schema_version := "1"',
         f'ai_review_ci_profile := "{profile}"',
         f'ai_review_ci_ref := "{installed_ref}"',
         f'ai_review_ci_release_channel := "{release_channel}"',
@@ -389,6 +389,7 @@ def _profile_specificity(profile: ProjectProfile) -> int:
     return len(profile.required_paths) + sum(
         (
             profile.requires_bun_lock,
+            profile.requires_yarn_declaration,
             profile.requires_cargo_manifest,
             profile.requires_sage_file,
             profile.requires_app_boot,
@@ -399,11 +400,7 @@ def _profile_specificity(profile: ProjectProfile) -> int:
 def _effective_profile(target: Path, declared_profile: ObservedProfile) -> ObservedProfile:
     if declared_profile == "docs-and-configs":
         return declared_profile
-    matches = [
-        profile
-        for profile in SUPPORTED_PROFILES
-        if profile != "docs-and-configs" and not _profile_missing_paths(target, PROJECT_PROFILES[profile])
-    ]
+    matches = [profile for profile in SUPPORTED_PROFILES if profile != "docs-and-configs" and not _profile_missing_paths(target, PROJECT_PROFILES[profile])]
     if not matches:
         return UNKNOWN_PROFILE
     specificity = {profile: _profile_specificity(PROJECT_PROFILES[profile]) for profile in matches}
@@ -431,6 +428,17 @@ def _profile_missing_paths(target: Path, project_profile: ProjectProfile) -> tup
     missing = [path for path in project_profile.required_paths if not (target / path).exists()]
     if project_profile.requires_bun_lock and not ((target / "bun.lock").exists() or (target / "bun.lockb").exists()):
         missing.append("bun.lock or bun.lockb")
+    if project_profile.requires_yarn_declaration:
+        try:
+            package = jsonlib.loads((target / "package.json").read_text())
+        except FileNotFoundError, jsonlib.JSONDecodeError:
+            package = {}
+        package_manager = package.get("packageManager")
+        if not isinstance(package_manager, str) or not package_manager.startswith("yarn@"):
+            missing.append('package.json packageManager starting with "yarn@"')
+    conflicts = [path for path in project_profile.forbidden_paths if (target / path).exists()]
+    if conflicts:
+        missing.append(f"absence of conflicting package-manager files ({', '.join(conflicts)})")
     if project_profile.requires_cargo_manifest and not any(path.name == "Cargo.toml" and ".git" not in path.parts for path in target.rglob("Cargo.toml")):
         missing.append("at least one Cargo.toml file")
     if project_profile.requires_sage_file and not any(path.suffix == ".sage" and ".git" not in path.parts for path in target.rglob("*.sage")):

@@ -37,6 +37,8 @@ class ProjectProfile(BaseModel):
     justfile_names: tuple[str, ...]
     required_paths: tuple[str, ...]
     requires_bun_lock: bool = False
+    requires_yarn_declaration: bool = False
+    forbidden_paths: tuple[str, ...] = ()
     requires_cargo_manifest: bool = False
     requires_sage_file: bool = False
     requires_app_boot: bool = False
@@ -45,6 +47,13 @@ class ProjectProfile(BaseModel):
 PROJECT_PROFILES = {
     "python": ProjectProfile(name="python", justfile_names=("python.just",), required_paths=("pyproject.toml",)),
     "bun": ProjectProfile(name="bun", justfile_names=("bun.just",), required_paths=("package.json",), requires_bun_lock=True),
+    "yarn": ProjectProfile(
+        name="yarn",
+        justfile_names=("yarn.just",),
+        required_paths=("package.json", "yarn.lock"),
+        requires_yarn_declaration=True,
+        forbidden_paths=("bun.lock", "bun.lockb", "package-lock.json", "pnpm-lock.yaml"),
+    ),
     "bun-playwright": ProjectProfile(
         name="bun-playwright",
         justfile_names=("bun.just",),
@@ -249,6 +258,15 @@ def _has_sage_file(target: Path) -> bool:
     return any(path.suffix == ".sage" and ".git" not in path.parts for path in target.rglob("*.sage"))
 
 
+def _declares_yarn(target: Path) -> bool:
+    try:
+        package = json.loads((target / "package.json").read_text())
+    except FileNotFoundError, json.JSONDecodeError:
+        return False
+    package_manager = package.get("packageManager")
+    return isinstance(package_manager, str) and package_manager.startswith("yarn@")
+
+
 def check_profile(target: Path, profile: str) -> None:
     """Fail if the target repository does not match its curated project profile."""
     target = target.resolve()
@@ -256,10 +274,15 @@ def check_profile(target: Path, profile: str) -> None:
     missing = [path for path in project_profile.required_paths if not (target / path).exists()]
     if project_profile.requires_bun_lock and not ((target / "bun.lock").exists() or (target / "bun.lockb").exists()):
         missing.append("bun.lock or bun.lockb")
+    if project_profile.requires_yarn_declaration and not _declares_yarn(target):
+        missing.append('package.json packageManager starting with "yarn@"')
+    conflicts = [path for path in project_profile.forbidden_paths if (target / path).exists()]
     if project_profile.requires_sage_file and not _has_sage_file(target):
         missing.append("at least one .sage file")
     if missing:
         _fail(f"{target} does not satisfy {profile} profile; missing: {', '.join(missing)}")
+    if conflicts:
+        _fail(f"{target} does not satisfy {profile} profile; conflicting package-manager files: {', '.join(conflicts)}")
     print(f"Project profile {profile} passed for {target}.")
 
 
@@ -508,9 +531,7 @@ def _append_remaining_thread_comments(node: JsonDict) -> None:
             _graphql_object(thread, "review thread").get("comments"),
             "review-thread comments connection",
         )
-        comments.extend(
-            _graphql_nodes(connection.get("nodes"), "review-thread comments")
-        )
+        comments.extend(_graphql_nodes(connection.get("nodes"), "review-thread comments"))
         page_info = _graphql_object(
             connection.get("pageInfo"),
             "review-thread comment page info",
@@ -595,12 +616,7 @@ def _deletion_fields_are_valid(body: str) -> bool:
     if artifact.casefold() == "none":
         return True
     disposition = _field_value(body, "Burden disposition")
-    return bool(
-        _field_value(body, "Original burden")
-        and disposition
-        and _BURDEN_DISPOSITION.search(disposition)
-        and _field_value(body, "Verification")
-    )
+    return bool(_field_value(body, "Original burden") and disposition and _BURDEN_DISPOSITION.search(disposition) and _field_value(body, "Verification"))
 
 
 def _reply_has_resolution_evidence(body: str) -> bool:
@@ -620,12 +636,7 @@ def _reply_has_resolution_evidence(body: str) -> bool:
 
     disposition = disposition_match.group("disposition").lower()
     if disposition.startswith("accepted"):
-        return bool(
-            _field_value(body, "Remediation")
-            and _field_value(body, "Proof")
-            and _COMMIT_FIELD.search(body)
-            and _deletion_fields_are_valid(body)
-        )
+        return bool(_field_value(body, "Remediation") and _field_value(body, "Proof") and _COMMIT_FIELD.search(body) and _deletion_fields_are_valid(body))
     if disposition == "duplicate":
         return bool(_CANONICAL_THREAD_FIELD.search(body))
     if disposition == "outdated":
@@ -681,9 +692,7 @@ def _pr_commit_shas(repo: str, pr_number: int) -> set[str]:
         for node in _graphql_nodes(connection.get("nodes"), "pull-request commit nodes"):
             commit = _graphql_object(node.get("commit"), "pull-request commit")
             oid = commit.get("oid")
-            if not isinstance(oid, str) or not re.fullmatch(
-                r"[0-9a-f]{40}", oid, re.IGNORECASE
-            ):
+            if not isinstance(oid, str) or not re.fullmatch(r"[0-9a-f]{40}", oid, re.IGNORECASE):
                 _fail("GitHub returned an invalid pull-request commit SHA")
             commits.add(oid.lower())
         page_info = _graphql_object(connection.get("pageInfo"), "commit page info")
@@ -761,9 +770,7 @@ def check_review_threads(
             continue
         reply = _resolution_reply(node)
         if reply is None:
-            failures.append(
-                f"{path}: resolved review thread lacks a thread-local evidenced disposition"
-            )
+            failures.append(f"{path}: resolved review thread lacks a thread-local evidenced disposition")
             continue
         disposition_match = _DISPOSITION_FIELD.search(reply)
         assert disposition_match is not None
