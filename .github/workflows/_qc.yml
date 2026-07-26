@@ -17,6 +17,11 @@ on:
         description: 'Curated project profile used to install project dependencies'
         required: true
         type: string
+      setup_recipe:
+        description: 'Optional caller-owned just recipe that provisions domain-specific CI dependencies'
+        required: false
+        type: string
+        default: ''
       infra_ref:
         description: 'Git ref of ai-review-ci whose justfiles back the delegated recipes'
         required: false
@@ -40,6 +45,7 @@ jobs:
     env:
       QC_TIER: ${{ inputs.tier }}
       QC_PROFILE: ${{ inputs.profile }}
+      QC_SETUP_RECIPE: ${{ inputs.setup_recipe }}
       QC_INFRA_REF: ${{ inputs.infra_ref }}
       # _diff-cover compares changed lines against this ref. A CI checkout is a
       # detached merge ref with no local `main`, so point at the remote-tracking
@@ -60,6 +66,10 @@ jobs:
             python|bun|bun-python|bun-playwright|rust|sage) ;;
             *) echo "invalid profile: $QC_PROFILE" >&2; exit 1 ;;
           esac
+          if [[ -n "$QC_SETUP_RECIPE" && "$QC_SETUP_RECIPE" =~ [^A-Za-z0-9_-] ]]; then
+            echo "invalid setup_recipe: $QC_SETUP_RECIPE" >&2
+            exit 1
+          fi
           if [[ -z "$QC_INFRA_REF" || "$QC_INFRA_REF" =~ [^A-Za-z0-9._/-] ]]; then
             echo "invalid infra_ref: $QC_INFRA_REF" >&2
             exit 1
@@ -100,6 +110,10 @@ jobs:
 
       - name: Install project dependencies
         run: just -f "$HOME/ai-review-ci/ci/runner.just" setup-profile "$QC_PROFILE"
+
+      - name: Provision project CI environment
+        if: inputs.setup_recipe != ''
+        run: just "$QC_SETUP_RECIPE"
 
       - name: Run QC tier
         # No GH_TOKEN here (#218): the tier runs every QC recipe and every
