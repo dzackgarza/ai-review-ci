@@ -379,6 +379,25 @@ _slop-scan:
 	echo "============================="
 	echo "=== Running: slop-scan JS/TS anti-pattern detection ==="
 	echo "# Scans JS/TS files for AI-associated slop patterns (error-swallowing, duplicate signatures, generic casts, etc.)"
+	exclude_dirs_output="$(uv run {{artifacts}}/scripts/read_qc_excludes.py {{configs}}/qc-excludes.toml)"
+	exclude_dirs=()
+	if [ -n "$exclude_dirs_output" ]; then
+		mapfile -t exclude_dirs <<<"$exclude_dirs_output"
+	fi
+	is_slop_scan_source() {
+		case "$1" in
+			*.js|*.jsx|*.mjs|*.cjs|*.ts|*.tsx|*.mts|*.cts|*.vue) return 0 ;;
+			*) return 1 ;;
+		esac
+	}
+	is_excluded_qc_path() {
+		local file=$1
+		local dir
+		for dir in "${exclude_dirs[@]}"; do
+			[[ "$file" == "$dir"/* || "$file" == */"$dir"/* ]] && return 0
+		done
+		return 1
+	}
 	js_files_output="$(just --justfile {{justfile()}} -d . _js-qc-files)"
 	js_files=()
 	if [ -n "$js_files_output" ]; then
@@ -393,8 +412,18 @@ _slop-scan:
 	# Run with --json (stdout) and post-process to enforce findings as failures.
 	# Stderr from npx/slop-scan passes through to terminal.
 	# Place QC-owned slop-scan config in the scan root (tool auto-discovers it).
+	raw_output_file="$(mktemp)"
+	output_file="$(mktemp)"
+	copied_config=0
 	config_src="{{configs}}/slop-scan.config.json"
 	config_dst="./slop-scan.config.json"
+	cleanup_slop_scan() {
+		if [ "$copied_config" -eq 1 ] && [ -e "$config_dst" ]; then
+			gio trash "$config_dst"
+		fi
+		rm -f "$raw_output_file" "$output_file"
+	}
+	trap cleanup_slop_scan EXIT
 	if [ -f "$config_dst" ]; then
 		if cmp -s "$config_src" "$config_dst"; then
 			: # already has the QC config — leave it
@@ -407,32 +436,55 @@ _slop-scan:
 		fi
 	else
 		cp "$config_src" "$config_dst"
-		trap 'if [ -e "$config_dst" ]; then gio trash "$config_dst"; fi' EXIT
+		copied_config=1
 	fi
-	raw_output=$(npx -y slop-scan scan . --json)
-	ignored_count=$(echo "$raw_output" | jq -r '
+
+	changed_paths_json='null'
+	if [[ ${QC_TIER:-} != ambient && -n ${DIFF_COVER_BASE:-} ]]; then
+		if ! git rev-parse --verify "${DIFF_COVER_BASE}^{commit}" >/dev/null 2>&1; then
+			echo "ERROR: slop-scan: DIFF_COVER_BASE does not resolve: $DIFF_COVER_BASE" >&2
+			exit 2
+		fi
+		changed_files=()
+		while IFS= read -r -d '' file; do
+			[[ -f "$file" ]] || continue
+			is_slop_scan_source "$file" || continue
+			is_excluded_qc_path "$file" && continue
+			changed_files+=("$file")
+		done < <(git diff --name-only --diff-filter=ACMR -z "${DIFF_COVER_BASE}...HEAD" -- .)
+		if [ ${#changed_files[@]} -eq 0 ]; then
+			echo "slop-scan: no changed authored JavaScript, TypeScript, or Vue files."
+			exit 0
+		fi
+		changed_paths_json="$(printf '%s\0' "${changed_files[@]}" | python3 -c 'import json, sys; print(json.dumps([p for p in sys.stdin.buffer.read().decode().split("\0") if p]))')"
+	fi
+
+	npx -y slop-scan scan . --json > "$raw_output_file"
+	ignored_count=$(jq -r '
 		[.findings[]? | select((.ruleId // "") == "structure.pass-through-wrappers" or (.ruleId // "") == "structure.directory-fanout-hotspot")]
 		| length
-	')
-	output=$(echo "$raw_output" | jq '
+	' "$raw_output_file")
+	jq --argjson changed_paths "$changed_paths_json" '
 		.findings = [
 			.findings[]?
 			| select((.ruleId // "") != "structure.pass-through-wrappers")
 			| select((.ruleId // "") != "structure.directory-fanout-hotspot")
+			| (.path // "") as $finding_path
+			| select($changed_paths == null or ($changed_paths | index($finding_path)))
 		]
 		| .summary.findingCount = (.findings | length)
-	')
+	' "$raw_output_file" > "$output_file"
 	if [ "$ignored_count" -gt 0 ]; then
 		echo "slop-scan: ignored $ignored_count non-gating structural heuristic finding(s)."
 	fi
-	count=$(echo "$output" | jq -r '.summary.findingCount // 0')
+	count=$(jq -r '.summary.findingCount // 0' "$output_file")
 	if [ "$count" -gt 0 ]; then
-		echo "$output" | jq -r '
+		jq -r '
 			.findings[] | "  [" + (.severity // "?") + "] " +
 			(.ruleId // "?") + " — " +
 			(.path // "?") + ":" +
 			((.location.line // 0) | tostring)
-		'
+		' "$output_file"
 		echo ""
 		echo "!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!"
 		echo "  ERROR: slop-scan found $count finding(s)."
