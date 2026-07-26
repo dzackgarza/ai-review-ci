@@ -260,10 +260,46 @@ _jscpd-bun:
 _lizard-bun:
 	#!/usr/bin/env bash
 	set -euo pipefail
+	echo "============================="
+	echo "=== Running: lizard complexity analysis ==="
+	echo "# Finds excessive complexity in authored JS/TS/Vue files"
 	exclude_dirs_output="$(uv run {{artifacts}}/scripts/read_qc_excludes.py {{configs}}/qc-excludes.toml)"
 	exclude_dirs=()
 	if [ -n "$exclude_dirs_output" ]; then
 		mapfile -t exclude_dirs <<<"$exclude_dirs_output"
+	fi
+	is_lizard_source() {
+		case "$1" in
+			*.js|*.jsx|*.mjs|*.cjs|*.ts|*.tsx|*.mts|*.cts|*.vue) return 0 ;;
+			*) return 1 ;;
+		esac
+	}
+	is_excluded_qc_path() {
+		local file=$1
+		local dir
+		for dir in "${exclude_dirs[@]}"; do
+			[[ "$file" == "$dir"/* || "$file" == */"$dir"/* ]] && return 0
+		done
+		return 1
+	}
+	if [[ ${QC_TIER:-} != ambient && -n ${DIFF_COVER_BASE:-} ]]; then
+		if ! git rev-parse --verify "${DIFF_COVER_BASE}^{commit}" >/dev/null 2>&1; then
+			echo "ERROR: lizard: DIFF_COVER_BASE does not resolve: $DIFF_COVER_BASE" >&2
+			exit 2
+		fi
+		files=()
+		while IFS= read -r -d '' file; do
+			[[ -f "$file" ]] || continue
+			is_lizard_source "$file" || continue
+			is_excluded_qc_path "$file" && continue
+			files+=("$file")
+		done < <(git diff --name-only --diff-filter=ACMR -z "${DIFF_COVER_BASE}...HEAD" -- .)
+		if [ ${#files[@]} -eq 0 ]; then
+			echo "lizard: no changed authored JavaScript, TypeScript, or Vue files."
+			exit 0
+		fi
+		uvx lizard -l typescript -C 8 -L 200 -a 7 -i 0 "${files[@]}"
+		exit 0
 	fi
 	lizard_excludes=()
 	for dir in "${exclude_dirs[@]}"; do
