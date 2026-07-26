@@ -298,7 +298,42 @@ _lizard-bun:
 			echo "lizard: no changed authored JavaScript, TypeScript, or Vue files."
 			exit 0
 		fi
-		uvx lizard -l typescript -C 8 -L 200 -a 7 -i 0 "${files[@]}"
+		head_output="$(mktemp)"
+		base_output="$(mktemp)"
+		base_tree="$(mktemp -d)"
+		cleanup_lizard_diff() {
+			rm -f "$head_output" "$base_output"
+			git worktree remove --force "$base_tree" >/dev/null 2>&1 || rm -rf "$base_tree"
+		}
+		trap cleanup_lizard_diff EXIT
+		set +e
+		uvx lizard -l typescript -C 8 -L 200 -a 7 -i 0 "${files[@]}" | tee "$head_output"
+		head_status=${PIPESTATUS[0]}
+		set -e
+		if [ "$head_status" -eq 0 ]; then
+			exit 0
+		fi
+		if [ "$head_status" -ne 1 ]; then
+			exit "$head_status"
+		fi
+		git worktree add --detach "$base_tree" "$DIFF_COVER_BASE" >/dev/null
+		base_files=()
+		for file in "${files[@]}"; do
+			[ -f "$base_tree/$file" ] && base_files+=("$file")
+		done
+		if [ ${#base_files[@]} -gt 0 ]; then
+			(
+				cd "$base_tree"
+				set +e
+				uvx lizard -l typescript -C 8 -L 200 -a 7 -i 0 "${base_files[@]}" > "$base_output"
+				base_status=$?
+				set -e
+				if [ "$base_status" -ne 0 ] && [ "$base_status" -ne 1 ]; then
+					exit "$base_status"
+				fi
+			)
+		fi
+		uv run {{artifacts}}/scripts/lizard_diff_gate.py --base-output "$base_output" --head-output "$head_output"
 		exit 0
 	fi
 	lizard_excludes=()

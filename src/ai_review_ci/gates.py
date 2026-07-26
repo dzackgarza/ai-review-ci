@@ -508,9 +508,7 @@ def _append_remaining_thread_comments(node: JsonDict) -> None:
             _graphql_object(thread, "review thread").get("comments"),
             "review-thread comments connection",
         )
-        comments.extend(
-            _graphql_nodes(connection.get("nodes"), "review-thread comments")
-        )
+        comments.extend(_graphql_nodes(connection.get("nodes"), "review-thread comments"))
         page_info = _graphql_object(
             connection.get("pageInfo"),
             "review-thread comment page info",
@@ -595,12 +593,7 @@ def _deletion_fields_are_valid(body: str) -> bool:
     if artifact.casefold() == "none":
         return True
     disposition = _field_value(body, "Burden disposition")
-    return bool(
-        _field_value(body, "Original burden")
-        and disposition
-        and _BURDEN_DISPOSITION.search(disposition)
-        and _field_value(body, "Verification")
-    )
+    return bool(_field_value(body, "Original burden") and disposition and _BURDEN_DISPOSITION.search(disposition) and _field_value(body, "Verification"))
 
 
 def _reply_has_resolution_evidence(body: str) -> bool:
@@ -620,12 +613,7 @@ def _reply_has_resolution_evidence(body: str) -> bool:
 
     disposition = disposition_match.group("disposition").lower()
     if disposition.startswith("accepted"):
-        return bool(
-            _field_value(body, "Remediation")
-            and _field_value(body, "Proof")
-            and _COMMIT_FIELD.search(body)
-            and _deletion_fields_are_valid(body)
-        )
+        return bool(_field_value(body, "Remediation") and _field_value(body, "Proof") and _COMMIT_FIELD.search(body) and _deletion_fields_are_valid(body))
     if disposition == "duplicate":
         return bool(_CANONICAL_THREAD_FIELD.search(body))
     if disposition == "outdated":
@@ -681,9 +669,7 @@ def _pr_commit_shas(repo: str, pr_number: int) -> set[str]:
         for node in _graphql_nodes(connection.get("nodes"), "pull-request commit nodes"):
             commit = _graphql_object(node.get("commit"), "pull-request commit")
             oid = commit.get("oid")
-            if not isinstance(oid, str) or not re.fullmatch(
-                r"[0-9a-f]{40}", oid, re.IGNORECASE
-            ):
+            if not isinstance(oid, str) or not re.fullmatch(r"[0-9a-f]{40}", oid, re.IGNORECASE):
                 _fail("GitHub returned an invalid pull-request commit SHA")
             commits.add(oid.lower())
         page_info = _graphql_object(connection.get("pageInfo"), "commit page info")
@@ -761,9 +747,7 @@ def check_review_threads(
             continue
         reply = _resolution_reply(node)
         if reply is None:
-            failures.append(
-                f"{path}: resolved review thread lacks a thread-local evidenced disposition"
-            )
+            failures.append(f"{path}: resolved review thread lacks a thread-local evidenced disposition")
             continue
         disposition_match = _DISPOSITION_FIELD.search(reply)
         assert disposition_match is not None
