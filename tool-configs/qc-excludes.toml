@@ -21,12 +21,12 @@
 # Do NOT add tool-specific ignores here — add them in the tool's own config.
 
 directories = [
-    # Deliberately noncompliant detector-test fixtures (#41): adversarial data
-    # for tests/test_slop_torture.py, never owned product code.
-    "tests/fixtures/slop-torture",
-    # Deliberately noncompliant detector-test fixture (#219): adversarial data
-    # for tests/test_ast_grep_rules.py, never owned product code.
-    "tests/fixtures/ast-grep",
+    # Authored corpora, wikis, and fixtures are data inputs whose byte-level or
+    # adversarial form is part of their contract. Generic QC must not rewrite or
+    # diagnose them as owned implementation source (#317).
+    "corpus",
+    "wiki",
+    "tests/fixtures",
     "node_modules",
     ".venv",
     ".pytest_cache",
