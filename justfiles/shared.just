@@ -31,49 +31,22 @@ _format-structured-text:
 	echo "============================="
 	echo "=== Running: structured text formatting ==="
 	echo "# Formats Markdown (flowmark), JSON, and YAML (prettier) before agents spend time on whitespace"
-	exclude_dirs_output="$(uv run {{artifacts}}/scripts/read_qc_excludes.py {{configs}}/qc-excludes.toml)"
-	exclude_dirs=()
-	if [ -n "$exclude_dirs_output" ]; then
-		mapfile -t exclude_dirs <<<"$exclude_dirs_output"
-	fi
-	prune_args=()
-	for dir in "${exclude_dirs[@]}"; do
-		prune_args+=(-path "./$dir" -o -path "*/$dir" -o -path "*/$dir/*" -o)
-	done
-	if [ "${#prune_args[@]}" -eq 0 ]; then
-		echo "ERROR: qc-excludes.toml produced no exclusions for structured text formatting."
-		"{{artifacts}}/scripts/emit-triage-directive.sh"
-		exit 1
-	fi
-	unset 'prune_args[${#prune_args[@]}-1]'
 	# Markdown is formatted by flowmark, NOT prettier. Prettier's CommonMark
 	# formatter corrupts pandoc markdown: it escapes underscores in attribute
 	# paths (path="_includes/x" -> path="\_includes/x"), rewrites emphasis
 	# delimiters (*x* -> _x_), and reformats embedded code blocks. flowmark is
 	# the canonical markdown formatter.
 	md_files=()
-	while IFS= read -r -d '' file; do
-		md_files+=("$file")
-	done < <(
-		find . -type d \( "${prune_args[@]}" \) -prune -o \
-			-type f \( -name '*.md' -o -name '*.markdown' \) \
-			-print0
-	)
 	data_files=()
 	while IFS= read -r -d '' file; do
-		data_files+=("$file")
-	done < <(
-		find . -type d \( "${prune_args[@]}" \) -prune -o \
-			-type f \( \
-				-name '*.json' -o \
-				-name '*.jsonc' -o \
-				-name '*.yaml' -o \
-				-name '*.yml' \
-			\) \
-			-print0
-	)
+		case "$file" in
+			AGENTS.md|*/AGENTS.md) ;;
+			*.md|*.markdown) md_files+=("$file") ;;
+			*.json|*.jsonc|*.yaml|*.yml) data_files+=("$file") ;;
+		esac
+	done < <(git diff --cached --name-only --diff-filter=ACMR -z)
 	if [ "${#md_files[@]}" -eq 0 ] && [ "${#data_files[@]}" -eq 0 ]; then
-		echo "No Markdown, JSON, or YAML files found"
+		echo "No staged Markdown, JSON, or YAML files found"
 		exit 0
 	fi
 	if [ "${#md_files[@]}" -gt 0 ]; then
