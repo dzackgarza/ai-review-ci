@@ -189,13 +189,15 @@ _ast-grep:
 _eslint: _eslint-deps
 	#!/usr/bin/env bash
 	set -euo pipefail
-	# Invoke via absolute path to quality-control's local eslint binary.
-	# This keeps CWD = project dir (so files/**/*.ts matches project files)
-	# while Node.js resolves the flat config's ES module imports from the
-	# config file's directory (tool-configs/node_modules).
-	"{{configs}}/node_modules/.bin/eslint" \
-		--config {{configs}}/eslint.config.js \
-		. --max-warnings 0
+	dirs=()
+	for candidate in src source tests test; do
+		[ -d "$candidate" ] && dirs+=("$candidate")
+	done
+	[ ${#dirs[@]} -eq 0 ] && dirs=(.)
+	"{{infra}}/scripts/run-eslint-batched.sh" \
+		"{{configs}}/node_modules/.bin/eslint" \
+		"{{configs}}/eslint.config.js" \
+		"${dirs[@]}"
 
 _tsc:
 	#!/usr/bin/env bash
@@ -480,9 +482,9 @@ _normalize: _eslint-deps
 		exit $ec
 	fi
 	echo "=== Running: eslint auto-fix ==="
-	if "{{configs}}/node_modules/.bin/eslint" \
-		--config {{configs}}/eslint.config.js \
-		--fix \
+	if ESLINT_FIX=1 "{{infra}}/scripts/run-eslint-batched.sh" \
+		"{{configs}}/node_modules/.bin/eslint" \
+		"{{configs}}/eslint.config.js" \
 		"${dirs[@]}"; then
 		:
 	else
