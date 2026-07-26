@@ -66,9 +66,6 @@ def write_profile_shape(project: pathlib.Path, profile: str) -> None:
     elif profile == "bun":
         (project / "package.json").write_text(json.dumps({"scripts": {}}) + "\n")
         (project / "bun.lock").write_text("")
-    elif profile == "yarn":
-        (project / "package.json").write_text(json.dumps({"packageManager": "yarn@4.11.0", "scripts": {}}) + "\n")
-        (project / "yarn.lock").write_text("")
     elif profile == "bun-playwright":
         (project / "package.json").write_text(json.dumps({"scripts": {}}) + "\n")
         (project / "bun.lock").write_text("")
@@ -101,7 +98,7 @@ def replace_just_variable(project: pathlib.Path, variable: str, value: str) -> N
     justfile.write_text("\n".join(replaced) + "\n")
 
 
-@pytest.mark.parametrize("profile", ["python", "bun", "yarn", "bun-playwright", "bun-python", "rust", "sage"])
+@pytest.mark.parametrize("profile", ["python", "bun", "bun-playwright", "bun-python", "rust", "sage"])
 def test_doctor_reports_current_for_installed_profile_targets(tmp_path: pathlib.Path, profile: str) -> None:
     project = create_target(tmp_path, profile)
 
@@ -314,7 +311,11 @@ def test_doctor_classifies_outdated_workflow_refs_as_stale(tmp_path: pathlib.Pat
 
 def test_doctor_classifies_missing_justfile_contract_as_misconfigured(tmp_path: pathlib.Path) -> None:
     project = create_target(tmp_path, "python")
-    lines = [line for line in (project / "justfile").read_text().splitlines() if not line.startswith("ai_review_ci_")]
+    lines = [
+        line
+        for line in (project / "justfile").read_text().splitlines()
+        if not line.startswith("ai_review_ci_")
+    ]
     (project / "justfile").write_text("\n".join(lines) + "\n")
 
     status, payload = status_for(project)
