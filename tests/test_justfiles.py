@@ -1797,6 +1797,71 @@ def test_eslint_centrally_owns_vue_parser_and_security_rules(
     assert "vue/no-v-html" in output
 
 
+def test_eslint_applies_react_hook_rules_only_to_react_sources(
+    tmp_path: pathlib.Path,
+) -> None:
+    tool_config = tmp_path / "tool-configs"
+    project = tmp_path / "framework-downstream"
+    source = project / "src"
+    tool_config.mkdir()
+    source.mkdir(parents=True)
+    for file_name in ("package.json", "bun.lock", "eslint.config.js", "qc-excludes.toml"):
+        shutil.copy(ROOT / "tool-configs" / file_name, tool_config / file_name)
+    (project / "package.json").write_text('{"type":"module"}\n')
+    (project / "tsconfig.json").write_text(
+        json.dumps(
+            {
+                "compilerOptions": {
+                    "strict": True,
+                    "target": "ESNext",
+                    "module": "ESNext",
+                    "jsx": "preserve",
+                },
+                "include": ["src/**/*.ts", "src/**/*.tsx"],
+            }
+        )
+        + "\n"
+    )
+    composable_call = "\n".join(
+        [
+            "declare function useWorkspaceStore(): void",
+            "export function closeWorkspace(): void {",
+            "  useWorkspaceStore()",
+            "}",
+            "",
+        ]
+    )
+    (source / "vue-composable.ts").write_text(composable_call)
+    (source / "react-component.tsx").write_text(composable_call)
+
+    install = subprocess.run(
+        ["bun", "install", "--frozen-lockfile"],
+        cwd=tool_config,
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+    assert install.returncode == 0, install.stdout + install.stderr
+    lint = subprocess.run(
+        [
+            str(tool_config / "node_modules" / ".bin" / "eslint"),
+            "--config",
+            str(tool_config / "eslint.config.js"),
+            "src",
+        ],
+        cwd=project,
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+
+    output = lint.stdout + lint.stderr
+    assert lint.returncode != 0, output
+    assert "react-component.tsx" in output
+    assert "vue-composable.ts" not in output
+    assert "react-hooks/rules-of-hooks" in output
+
+
 def test_bun_scaffold_delegates_qc_in_project_directory(
     tmp_path: pathlib.Path,
 ) -> None:

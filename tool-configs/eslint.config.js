@@ -1,6 +1,6 @@
 // ESLint flat config for TypeScript QC
 
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import tsPlugin from "@typescript-eslint/eslint-plugin";
@@ -31,6 +31,58 @@ const centralIgnoreGlobs = centralExcludeDirs.map((directory, index) => {
   }
   return `**/${directory}/**`;
 });
+const targetTsconfigPath = join(process.cwd(), "tsconfig.json");
+const targetTsconfigText = existsSync(targetTsconfigPath)
+  ? readFileSync(targetTsconfigPath, "utf8")
+  : "";
+const isAgsProject =
+  targetTsconfigText.includes('"jsxImportSource": "ags/gtk4"')
+  || targetTsconfigText.includes('"gi://Astal?version=4.0"');
+const agsTsxOverrides = isAgsProject
+  ? [
+      {
+        // AGS/GJS files: Gtk runtime types cannot be statically resolved by TSC.
+        // This exception is activated only by the project's declared AGS
+        // tsconfig contract; ordinary React TSX retains typed linting.
+        files: ["**/*.tsx"],
+        languageOptions: {
+          parser: tsParser,
+          parserOptions: {
+            ecmaVersion: "latest",
+            sourceType: "module",
+            projectService: false,
+          },
+          globals: {
+            ...globals.node,
+          },
+        },
+        plugins: {
+          "@typescript-eslint": tsPlugin,
+          fp: fpPlugin,
+          "react-hooks": reactHooksPlugin,
+          "react-refresh": reactRefreshPlugin,
+        },
+        rules: {
+          "@typescript-eslint/no-unsafe-call": "off",
+          "@typescript-eslint/no-unsafe-member-access": "off",
+          "@typescript-eslint/no-unsafe-assignment": "off",
+          "@typescript-eslint/no-unsafe-return": "off",
+          "@typescript-eslint/no-unsafe-argument": "off",
+          "@typescript-eslint/no-floating-promises": "off",
+          "@typescript-eslint/no-misused-promises": "off",
+          "@typescript-eslint/await-thenable": "off",
+          "@typescript-eslint/no-unnecessary-type-assertion": "off",
+          "@typescript-eslint/prefer-nullish-coalescing": "off",
+          "@typescript-eslint/prefer-optional-chain": "off",
+          "fp/no-nil": "off",
+          "fp/no-this": "off",
+          "react-hooks/rules-of-hooks": "off",
+          "react-hooks/exhaustive-deps": "off",
+          "react-refresh/only-export-components": "off",
+        },
+      },
+    ]
+  : [];
 
 export default [
   // Global ignores: apply before any rule config
@@ -61,8 +113,6 @@ export default [
       "@typescript-eslint": tsPlugin,
       promise: promisePlugin,
       fp: fpPlugin,
-      "react-hooks": reactHooksPlugin,
-      "react-refresh": reactRefreshPlugin,
     },
     rules: {
       // @typescript-eslint full suite
@@ -114,11 +164,17 @@ export default [
       // fp/no-let: disabled because global QC permits local mutable bindings
       // when they make state transitions explicit.
 
-      // eslint-plugin-react-hooks (React)
+    },
+  },
+  {
+    files: ["**/*.tsx"],
+    plugins: {
+      "react-hooks": reactHooksPlugin,
+      "react-refresh": reactRefreshPlugin,
+    },
+    rules: {
       "react-hooks/rules-of-hooks": "error",
       "react-hooks/exhaustive-deps": "warn",
-
-      // eslint-plugin-react-refresh (component export enforcement)
       "react-refresh/only-export-components": ["warn", { allowConstantExport: true }],
     },
   },
@@ -203,40 +259,5 @@ export default [
       "no-undef": "off",
     },
   },
-  {
-    // AGS/GJS files: Gtk runtime types cannot be statically resolved by TSC.
-    // Parse without TypeScript project service (these files are excluded from
-    // tsconfig because AGS module types are unresolvable by tsc).
-    files: ["**/*.tsx"],
-    languageOptions: {
-      parser: tsParser,
-      parserOptions: {
-        ecmaVersion: "latest",
-        sourceType: "module",
-        projectService: false,
-      },
-      globals: {
-        ...globals.node,
-      },
-    },
-    plugins: {
-      "@typescript-eslint": tsPlugin,
-      fp: fpPlugin,
-    },
-    rules: {
-      // Disable all type-aware rules — .tsx files have no project service
-      "@typescript-eslint/no-unsafe-call": "off",
-      "@typescript-eslint/no-unsafe-member-access": "off",
-      "@typescript-eslint/no-unsafe-assignment": "off",
-      "@typescript-eslint/no-unsafe-return": "off",
-      "@typescript-eslint/no-floating-promises": "off",
-      "@typescript-eslint/no-misused-promises": "off",
-      "@typescript-eslint/await-thenable": "off",
-      "@typescript-eslint/no-unnecessary-type-assertion": "off",
-      "@typescript-eslint/prefer-nullish-coalescing": "off",
-      "@typescript-eslint/prefer-optional-chain": "off",
-      "fp/no-nil": "off",
-      "fp/no-this": "off",
-    },
-  },
+  ...agsTsxOverrides,
 ];

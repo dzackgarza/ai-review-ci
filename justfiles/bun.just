@@ -467,8 +467,9 @@ _normalize: _eslint-deps
 	echo "=== Running: biome format, lint, and import sorting (auto-fix) ==="
 	echo "# Auto-applies safe and unsafe fixes, formatting, and import sorting"
 	dirs=()
-	[ -d src ] && dirs+=(src)
-	[ -d tests ] && dirs+=(tests)
+	for candidate in src source tests test; do
+		[ -d "$candidate" ] && dirs+=("$candidate")
+	done
 	[ ${#dirs[@]} -eq 0 ] && dirs=(.)
 	if bun x biome check --write --unsafe --config-path {{configs}}/biome.json "${dirs[@]}"; then
 		:
@@ -482,7 +483,7 @@ _normalize: _eslint-deps
 	if "{{configs}}/node_modules/.bin/eslint" \
 		--config {{configs}}/eslint.config.js \
 		--fix \
-		.; then
+		"${dirs[@]}"; then
 		:
 	else
 		ec=$?
