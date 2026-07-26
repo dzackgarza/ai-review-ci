@@ -111,6 +111,7 @@ LEAN_REFERENT_RULES = (
     "lean-isotropy-as-torsion",
     "lean-truncating-division-on-forms",
     "lean-epistemic-on-math-surface",
+    "lean-exists-implication",
 )
 
 
