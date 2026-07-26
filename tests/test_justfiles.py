@@ -1862,6 +1862,47 @@ def test_eslint_applies_react_hook_rules_only_to_react_sources(
     assert "react-hooks/rules-of-hooks" in output
 
 
+def test_eslint_runner_batches_authored_files_to_bound_process_memory(
+    tmp_path: pathlib.Path,
+) -> None:
+    project = tmp_path / "downstream"
+    source = project / "source"
+    fake_bin = tmp_path / "fake-eslint"
+    calls = tmp_path / "calls"
+    source.mkdir(parents=True)
+    for index in range(105):
+        (source / f"file-{index:03}.ts").write_text("export const value = 1\n")
+    (project / ".webpack" / "main").mkdir(parents=True)
+    (project / ".webpack" / "main" / "generated.ts").write_text(
+        "export const generated = 1\n"
+    )
+    fake_bin.write_text(
+        "#!/usr/bin/env bash\n"
+        "printf '%s\\n' \"$*\" >> \"$ESLINT_CALLS\"\n"
+    )
+    fake_bin.chmod(0o755)
+
+    run = subprocess.run(
+        [
+            str(ROOT / "scripts" / "run-eslint-batched.sh"),
+            str(fake_bin),
+            str(ROOT / "tool-configs" / "eslint.config.js"),
+            "source",
+        ],
+        cwd=project,
+        env={**os.environ, "ESLINT_CALLS": str(calls), "ESLINT_BATCH_SIZE": "40"},
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+
+    assert run.returncode == 0, run.stdout + run.stderr
+    invocations = calls.read_text().splitlines()
+    assert len(invocations) == 3
+    assert all("--config" in invocation for invocation in invocations)
+    assert all(".webpack" not in invocation for invocation in invocations)
+
+
 def test_bun_scaffold_delegates_qc_in_project_directory(
     tmp_path: pathlib.Path,
 ) -> None:
