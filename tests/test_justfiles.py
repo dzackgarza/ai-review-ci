@@ -460,7 +460,9 @@ def test_tsc_requires_ags_when_tsconfig_declares_ags(tmp_path: pathlib.Path) -> 
     project.mkdir()
     (project / "package.json").write_text(json.dumps({"scripts": {}}) + "\n")
     (project / "tsconfig.json").write_text(json.dumps({"compilerOptions": {"jsxImportSource": "ags/gtk4"}}) + "\n")
-    env = os.environ | {"PATH": path_with_only(tmp_path, "bash", "cat", "jq", "just")}
+    env = os.environ | {
+        "PATH": path_with_only(tmp_path, "bash", "cat", "jq", "just", "rg")
+    }
 
     result = run_just(ROOT / "justfiles" / "bun.just", project, "_tsc", env=env)
 

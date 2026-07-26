@@ -212,7 +212,7 @@ _tsc:
 	if jq -e '.scripts.types // empty' package.json >/dev/null 2>&1; then
 		run_project_script types
 	elif [ -f tsconfig.json ] \
-		&& jq -e '.compilerOptions.jsxImportSource == "ags/gtk4" or ((.compilerOptions.paths // {}) | has("gi://Astal?version=4.0"))' tsconfig.json >/dev/null; then
+		&& rg -q '"jsxImportSource"\s*:\s*"ags/gtk4"|"gi://Astal\?version=4\.0"' tsconfig.json; then
 		if ags types 'Astal*' --ignore Gtk3 --ignore Astal3 --update; then
 			:
 		else
