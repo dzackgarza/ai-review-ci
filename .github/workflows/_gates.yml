@@ -7,7 +7,7 @@ on:
         required: true
         type: string
       profile:
-        description: 'Curated project profile: python, bun, bun-python, bun-playwright, rust, or sage'
+        description: 'Curated project profile: python, bun, yarn, bun-python, bun-playwright, rust, or sage'
         required: true
         type: string
       infra_ref:
@@ -26,28 +26,28 @@ jobs:
       REVIEW_PROFILE: ${{ inputs.profile }}
       REVIEW_BASE_REF: ${{ github.base_ref }}
     steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-      - name: Locate infrastructure clone path
-        run: echo "INFRA=$RUNNER_TEMP/ai-review-ci" >> "$GITHUB_ENV"
-      - name: Validate gate inputs
-        run: "if [[ \"$REVIEW_INFRA_REF\" =~ [^A-Za-z0-9._/-] ]]; then\n  echo \"invalid infra_ref: $REVIEW_INFRA_REF\" >&2\n  exit 1\nfi\nif [[ -z \"$REVIEW_BASE_REF\" || \"$REVIEW_BASE_REF\" =~ [^A-Za-z0-9._/-] ]]; then\n  echo \"invalid base_ref: $REVIEW_BASE_REF\" >&2\n  exit 1\nfi\ncase \"$REVIEW_PROFILE\" in\n  python|bun|bun-python|bun-playwright|rust|sage) ;;\n  *)\n    echo \"invalid profile: $REVIEW_PROFILE\" >&2\n    exit 1\n    ;;\nesac\n"
-      - name: Clone review infrastructure
-        run: git clone --depth 1 --branch "$REVIEW_INFRA_REF" https://github.com/dzackgarza/ai-review-ci.git "$INFRA"
-      - name: Setup Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.14'
-      - name: Install just
+    - uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+    - name: Locate infrastructure clone path
+      run: echo "INFRA=$RUNNER_TEMP/ai-review-ci" >> "$GITHUB_ENV"
+    - name: Validate gate inputs
+      run: "if [[ \"$REVIEW_INFRA_REF\" =~ [^A-Za-z0-9._/-] ]]; then\n  echo \"invalid infra_ref: $REVIEW_INFRA_REF\" >&2\n  exit 1\nfi\nif [[ -z \"$REVIEW_BASE_REF\" || \"$REVIEW_BASE_REF\" =~ [^A-Za-z0-9._/-] ]]; then\n  echo \"invalid base_ref: $REVIEW_BASE_REF\" >&2\n  exit 1\nfi\ncase \"$REVIEW_PROFILE\" in\n  python|bun|yarn|bun-python|bun-playwright|rust|sage) ;;\n  *)\n    echo \"invalid profile: $REVIEW_PROFILE\" >&2\n    exit 1\n    ;;\nesac\n"
+    - name: Clone review infrastructure
+      run: git clone --depth 1 --branch "$REVIEW_INFRA_REF" https://github.com/dzackgarza/ai-review-ci.git "$INFRA"
+    - name: Setup Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.14'
+    - name: Install just
         # Authenticated install via the maintained action. Mirrors _qc.yml.
-        uses: extractions/setup-just@v4
-        with:
-          github-token: ${{ github.token }}
-      - name: Install gate tools
-        run: just -f "$INFRA/ci/runner.just" install-gate-tools
-      - name: Check semantic diff
-        run: just -f "$INFRA/ci/runner.just" check-semantic-diff "$REVIEW_BASE_REF"
+      uses: extractions/setup-just@v4
+      with:
+        github-token: ${{ github.token }}
+    - name: Install gate tools
+      run: just -f "$INFRA/ci/runner.just" install-gate-tools
+    - name: Check semantic diff
+      run: just -f "$INFRA/ci/runner.just" check-semantic-diff "$REVIEW_BASE_REF"
   delegation-conformance:
     if: inputs.gate == 'delegation-conformance'
     runs-on: ubuntu-latest
@@ -57,28 +57,28 @@ jobs:
       REVIEW_INFRA_REF: ${{ inputs.infra_ref }}
       REVIEW_PROFILE: ${{ inputs.profile }}
     steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-      - name: Locate infrastructure clone path
-        run: echo "INFRA=$RUNNER_TEMP/ai-review-ci" >> "$GITHUB_ENV"
-      - name: Validate gate inputs
-        run: "if [[ \"$REVIEW_INFRA_REF\" =~ [^A-Za-z0-9._/-] ]]; then\n  echo \"invalid infra_ref: $REVIEW_INFRA_REF\" >&2\n  exit 1\nfi\ncase \"$REVIEW_PROFILE\" in\n  python|bun|bun-python|bun-playwright|rust|sage) ;;\n  *)\n    echo \"invalid profile: $REVIEW_PROFILE\" >&2\n    exit 1\n    ;;\nesac\n"
-      - name: Clone review infrastructure
-        run: git clone --depth 1 --branch "$REVIEW_INFRA_REF" https://github.com/dzackgarza/ai-review-ci.git "$INFRA"
-      - name: Setup Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.14'
-      - name: Install just
+    - uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+    - name: Locate infrastructure clone path
+      run: echo "INFRA=$RUNNER_TEMP/ai-review-ci" >> "$GITHUB_ENV"
+    - name: Validate gate inputs
+      run: "if [[ \"$REVIEW_INFRA_REF\" =~ [^A-Za-z0-9._/-] ]]; then\n  echo \"invalid infra_ref: $REVIEW_INFRA_REF\" >&2\n  exit 1\nfi\ncase \"$REVIEW_PROFILE\" in\n  python|bun|yarn|bun-python|bun-playwright|rust|sage) ;;\n  *)\n    echo \"invalid profile: $REVIEW_PROFILE\" >&2\n    exit 1\n    ;;\nesac\n"
+    - name: Clone review infrastructure
+      run: git clone --depth 1 --branch "$REVIEW_INFRA_REF" https://github.com/dzackgarza/ai-review-ci.git "$INFRA"
+    - name: Setup Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.14'
+    - name: Install just
         # Authenticated install via the maintained action. Mirrors _qc.yml.
-        uses: extractions/setup-just@v4
-        with:
-          github-token: ${{ github.token }}
-      - name: Install gate tools
-        run: just -f "$INFRA/ci/runner.just" install-gate-tools
-      - name: Check delegation conformance
-        run: just -f "$INFRA/ci/runner.just" check-delegation "$REVIEW_PROFILE"
+      uses: extractions/setup-just@v4
+      with:
+        github-token: ${{ github.token }}
+    - name: Install gate tools
+      run: just -f "$INFRA/ci/runner.just" install-gate-tools
+    - name: Check delegation conformance
+      run: just -f "$INFRA/ci/runner.just" check-delegation "$REVIEW_PROFILE"
   qc-doctor:
     if: inputs.gate == 'qc-doctor'
     runs-on: ubuntu-latest
@@ -92,36 +92,36 @@ jobs:
       REVIEW_INFRA_REF: ${{ inputs.infra_ref }}
       REVIEW_PROFILE: ${{ inputs.profile }}
     steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-      - name: Locate infrastructure clone path
-        run: echo "INFRA=$RUNNER_TEMP/ai-review-ci" >> "$GITHUB_ENV"
-      - name: Validate gate inputs
-        run: "if [[ \"$REVIEW_INFRA_REF\" =~ [^A-Za-z0-9._/-] ]]; then\n  echo \"invalid infra_ref: $REVIEW_INFRA_REF\" >&2\n  exit 1\nfi\ncase \"$REVIEW_PROFILE\" in\n  python|bun|bun-python|bun-playwright|rust|sage) ;;\n  *)\n    echo \"invalid profile: $REVIEW_PROFILE\" >&2\n    exit 1\n    ;;\nesac"
-      - name: Clone review infrastructure
-        run: git clone --depth 1 --branch "$REVIEW_INFRA_REF" https://github.com/dzackgarza/ai-review-ci.git "$INFRA"
-      - name: Setup Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.14'
-      - name: Install just
+    - uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+    - name: Locate infrastructure clone path
+      run: echo "INFRA=$RUNNER_TEMP/ai-review-ci" >> "$GITHUB_ENV"
+    - name: Validate gate inputs
+      run: "if [[ \"$REVIEW_INFRA_REF\" =~ [^A-Za-z0-9._/-] ]]; then\n  echo \"invalid infra_ref: $REVIEW_INFRA_REF\" >&2\n  exit 1\nfi\ncase \"$REVIEW_PROFILE\" in\n  python|bun|yarn|bun-python|bun-playwright|rust|sage) ;;\n  *)\n    echo \"invalid profile: $REVIEW_PROFILE\" >&2\n    exit 1\n    ;;\nesac"
+    - name: Clone review infrastructure
+      run: git clone --depth 1 --branch "$REVIEW_INFRA_REF" https://github.com/dzackgarza/ai-review-ci.git "$INFRA"
+    - name: Setup Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.14'
+    - name: Install just
         # Authenticated install via the maintained action. Mirrors _qc.yml.
-        uses: extractions/setup-just@v4
-        with:
-          github-token: ${{ github.token }}
-      - name: Install gate tools
-        run: just -f "$INFRA/ci/runner.just" install-gate-tools
-      - name: Check QC doctor
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: just -f "$INFRA/ci/runner.just" check-qc-doctor
-      - name: Upload QC doctor payload
-        uses: actions/upload-artifact@v4
-        with:
-          name: ai-review-ci-doctor
-          path: .ai-review-ci-doctor.json
-        if: ${{ always() }}
+      uses: extractions/setup-just@v4
+      with:
+        github-token: ${{ github.token }}
+    - name: Install gate tools
+      run: just -f "$INFRA/ci/runner.just" install-gate-tools
+    - name: Check QC doctor
+      env:
+        GH_TOKEN: ${{ github.token }}
+      run: just -f "$INFRA/ci/runner.just" check-qc-doctor
+    - name: Upload QC doctor payload
+      uses: actions/upload-artifact@v4
+      with:
+        name: ai-review-ci-doctor
+        path: .ai-review-ci-doctor.json
+      if: ${{ always() }}
   app-boot:
     if: inputs.gate == 'app-boot'
     runs-on: ubuntu-latest
@@ -131,32 +131,32 @@ jobs:
       REVIEW_INFRA_REF: ${{ inputs.infra_ref }}
       REVIEW_PROFILE: ${{ inputs.profile }}
     steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-      - name: Locate infrastructure clone path
-        run: echo "INFRA=$RUNNER_TEMP/ai-review-ci" >> "$GITHUB_ENV"
-      - name: Validate gate inputs
-        run: "if [[ \"$REVIEW_INFRA_REF\" =~ [^A-Za-z0-9._/-] ]]; then\n  echo \"invalid infra_ref: $REVIEW_INFRA_REF\" >&2\n  exit 1\nfi\ncase \"$REVIEW_PROFILE\" in\n  python|bun|bun-python|bun-playwright|rust|sage) ;;\n  *)\n    echo \"invalid profile: $REVIEW_PROFILE\" >&2\n    exit 1\n    ;;\nesac\n"
-      - name: Clone review infrastructure
-        run: git clone --depth 1 --branch "$REVIEW_INFRA_REF" https://github.com/dzackgarza/ai-review-ci.git "$INFRA"
-      - name: Setup Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.14'
-      - name: Install just
+    - uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+    - name: Locate infrastructure clone path
+      run: echo "INFRA=$RUNNER_TEMP/ai-review-ci" >> "$GITHUB_ENV"
+    - name: Validate gate inputs
+      run: "if [[ \"$REVIEW_INFRA_REF\" =~ [^A-Za-z0-9._/-] ]]; then\n  echo \"invalid infra_ref: $REVIEW_INFRA_REF\" >&2\n  exit 1\nfi\ncase \"$REVIEW_PROFILE\" in\n  python|bun|yarn|bun-python|bun-playwright|rust|sage) ;;\n  *)\n    echo \"invalid profile: $REVIEW_PROFILE\" >&2\n    exit 1\n    ;;\nesac\n"
+    - name: Clone review infrastructure
+      run: git clone --depth 1 --branch "$REVIEW_INFRA_REF" https://github.com/dzackgarza/ai-review-ci.git "$INFRA"
+    - name: Setup Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.14'
+    - name: Install just
         # Authenticated install via the maintained action. Mirrors _qc.yml.
-        uses: extractions/setup-just@v4
-        with:
-          github-token: ${{ github.token }}
-      - name: Setup Bun
-        uses: oven-sh/setup-bun@v2
-      - name: Install gate tools
-        run: just -f "$INFRA/ci/runner.just" install-gate-tools
-      - name: Setup project profile
-        run: just -f "$INFRA/ci/runner.just" setup-profile "$REVIEW_PROFILE"
-      - name: Check app boot
-        run: just -f "$INFRA/ci/runner.just" check-app-boot "$REVIEW_PROFILE"
+      uses: extractions/setup-just@v4
+      with:
+        github-token: ${{ github.token }}
+    - name: Setup Bun
+      uses: oven-sh/setup-bun@v2
+    - name: Install gate tools
+      run: just -f "$INFRA/ci/runner.just" install-gate-tools
+    - name: Setup project profile
+      run: just -f "$INFRA/ci/runner.just" setup-profile "$REVIEW_PROFILE"
+    - name: Check app boot
+      run: just -f "$INFRA/ci/runner.just" check-app-boot "$REVIEW_PROFILE"
   pr-description-checklist:
     if: inputs.gate == 'pr-description-checklist'
     runs-on: ubuntu-latest
@@ -168,30 +168,30 @@ jobs:
       REVIEW_PROFILE: ${{ inputs.profile }}
       REVIEW_PR_NUMBER: ${{ github.event.number || 0 }}
     steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-      - name: Locate infrastructure clone path
-        run: echo "INFRA=$RUNNER_TEMP/ai-review-ci" >> "$GITHUB_ENV"
-      - name: Validate gate inputs
-        run: "if [[ \"$REVIEW_INFRA_REF\" =~ [^A-Za-z0-9._/-] ]]; then\n  echo \"invalid infra_ref: $REVIEW_INFRA_REF\" >&2\n  exit 1\nfi\ncase \"$REVIEW_PROFILE\" in\n  python|bun|bun-python|bun-playwright|rust|sage) ;;\n  *)\n    echo \"invalid profile: $REVIEW_PROFILE\" >&2\n    exit 1\n    ;;\nesac\nif [[ ! \"$REVIEW_PR_NUMBER\" =~ ^[0-9]+$ || \"$REVIEW_PR_NUMBER\" == 0 ]]; then\n  echo \"invalid pull request number: $REVIEW_PR_NUMBER\" >&2\n  exit 1\nfi\n"
-      - name: Clone review infrastructure
-        run: git clone --depth 1 --branch "$REVIEW_INFRA_REF" https://github.com/dzackgarza/ai-review-ci.git "$INFRA"
-      - name: Setup Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.14'
-      - name: Install just
+    - uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+    - name: Locate infrastructure clone path
+      run: echo "INFRA=$RUNNER_TEMP/ai-review-ci" >> "$GITHUB_ENV"
+    - name: Validate gate inputs
+      run: "if [[ \"$REVIEW_INFRA_REF\" =~ [^A-Za-z0-9._/-] ]]; then\n  echo \"invalid infra_ref: $REVIEW_INFRA_REF\" >&2\n  exit 1\nfi\ncase \"$REVIEW_PROFILE\" in\n  python|bun|yarn|bun-python|bun-playwright|rust|sage) ;;\n  *)\n    echo \"invalid profile: $REVIEW_PROFILE\" >&2\n    exit 1\n    ;;\nesac\nif [[ ! \"$REVIEW_PR_NUMBER\" =~ ^[0-9]+$ || \"$REVIEW_PR_NUMBER\" == 0 ]]; then\n  echo \"invalid pull request number: $REVIEW_PR_NUMBER\" >&2\n  exit 1\nfi\n"
+    - name: Clone review infrastructure
+      run: git clone --depth 1 --branch "$REVIEW_INFRA_REF" https://github.com/dzackgarza/ai-review-ci.git "$INFRA"
+    - name: Setup Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.14'
+    - name: Install just
         # Authenticated install via the maintained action. Mirrors _qc.yml.
-        uses: extractions/setup-just@v4
-        with:
-          github-token: ${{ github.token }}
-      - name: Install gate tools
-        run: just -f "$INFRA/ci/runner.just" install-gate-tools
-      - name: Check PR description checklist
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: just -f "$INFRA/ci/runner.just" check-pr-description "$REVIEW_PR_NUMBER"
+      uses: extractions/setup-just@v4
+      with:
+        github-token: ${{ github.token }}
+    - name: Install gate tools
+      run: just -f "$INFRA/ci/runner.just" install-gate-tools
+    - name: Check PR description checklist
+      env:
+        GH_TOKEN: ${{ github.token }}
+      run: just -f "$INFRA/ci/runner.just" check-pr-description "$REVIEW_PR_NUMBER"
   thread-resolution:
     if: inputs.gate == 'thread-resolution'
     runs-on: ubuntu-latest
@@ -203,24 +203,24 @@ jobs:
       REVIEW_PROFILE: ${{ inputs.profile }}
       REVIEW_PR_NUMBER: ${{ github.event.number }}
     steps:
-      - name: Locate infrastructure clone path
-        run: echo "INFRA=$RUNNER_TEMP/ai-review-ci" >> "$GITHUB_ENV"
-      - name: Validate gate inputs
-        run: "if [[ \"$REVIEW_INFRA_REF\" =~ [^A-Za-z0-9._/-] ]]; then\n  echo \"invalid infra_ref: $REVIEW_INFRA_REF\" >&2\n  exit 1\nfi\nif [[ ! \"$REVIEW_PR_NUMBER\" =~ ^[0-9]+$ ]]; then\n  echo \"invalid pull request number: $REVIEW_PR_NUMBER\" >&2\n  exit 1\nfi\ncase \"$REVIEW_PROFILE\" in\n  python|bun|bun-python|bun-playwright|rust|sage) ;;\n  *)\n    echo \"invalid profile: $REVIEW_PROFILE\" >&2\n    exit 1\n    ;;\nesac\n"
-      - name: Clone review infrastructure
-        run: git clone --depth 1 --branch "$REVIEW_INFRA_REF" https://github.com/dzackgarza/ai-review-ci.git "$INFRA"
-      - name: Setup Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.14'
-      - name: Install just
+    - name: Locate infrastructure clone path
+      run: echo "INFRA=$RUNNER_TEMP/ai-review-ci" >> "$GITHUB_ENV"
+    - name: Validate gate inputs
+      run: "if [[ \"$REVIEW_INFRA_REF\" =~ [^A-Za-z0-9._/-] ]]; then\n  echo \"invalid infra_ref: $REVIEW_INFRA_REF\" >&2\n  exit 1\nfi\nif [[ ! \"$REVIEW_PR_NUMBER\" =~ ^[0-9]+$ ]]; then\n  echo \"invalid pull request number: $REVIEW_PR_NUMBER\" >&2\n  exit 1\nfi\ncase \"$REVIEW_PROFILE\" in\n  python|bun|yarn|bun-python|bun-playwright|rust|sage) ;;\n  *)\n    echo \"invalid profile: $REVIEW_PROFILE\" >&2\n    exit 1\n    ;;\nesac\n"
+    - name: Clone review infrastructure
+      run: git clone --depth 1 --branch "$REVIEW_INFRA_REF" https://github.com/dzackgarza/ai-review-ci.git "$INFRA"
+    - name: Setup Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.14'
+    - name: Install just
         # Authenticated install via the maintained action. Mirrors _qc.yml.
-        uses: extractions/setup-just@v4
-        with:
-          github-token: ${{ github.token }}
-      - name: Install gate tools
-        run: just -f "$INFRA/ci/runner.just" install-gate-tools
-      - name: Check review thread resolution
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: just -f "$INFRA/ci/runner.just" check-review-threads "$REVIEW_PR_NUMBER"
+      uses: extractions/setup-just@v4
+      with:
+        github-token: ${{ github.token }}
+    - name: Install gate tools
+      run: just -f "$INFRA/ci/runner.just" install-gate-tools
+    - name: Check review thread resolution
+      env:
+        GH_TOKEN: ${{ github.token }}
+      run: just -f "$INFRA/ci/runner.just" check-review-threads "$REVIEW_PR_NUMBER"
