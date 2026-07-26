@@ -93,3 +93,6 @@ ignore:
 - '**/scripts/**'
 - '**/notebooks/**'
 - '**/notes/**'
+- '**/.webpack/**'
+- '**/out/**'
+- '**/release/**'

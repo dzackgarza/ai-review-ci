@@ -9,8 +9,10 @@ import fpPlugin from "eslint-plugin-fp";
 import promisePlugin from "eslint-plugin-promise";
 import reactHooksPlugin from "eslint-plugin-react-hooks";
 import reactRefreshPlugin from "eslint-plugin-react-refresh";
+import vuePlugin from "eslint-plugin-vue";
 import globals from "globals";
 import { parse as parseToml } from "smol-toml";
+import vueParser from "vue-eslint-parser";
 
 const configDir = dirname(fileURLToPath(import.meta.url));
 const qcExcludeConfig = parseToml(
@@ -38,6 +40,7 @@ export default [
       ...centralIgnoreGlobs,
     ],
   },
+  ...vuePlugin.configs["flat/recommended"],
   {
     files: ["**/*.ts", "**/*.tsx"],
     languageOptions: {
@@ -67,14 +70,25 @@ export default [
       "@typescript-eslint/no-unsafe-call": "error",
       "@typescript-eslint/no-unsafe-member-access": "error",
       "@typescript-eslint/no-unsafe-return": "error",
+      "@typescript-eslint/no-unsafe-argument": "error",
       "@typescript-eslint/no-explicit-any": "error",
       "@typescript-eslint/no-floating-promises": "error",
       "@typescript-eslint/no-misused-promises": "error",
       "@typescript-eslint/await-thenable": "error",
       "@typescript-eslint/no-unnecessary-type-assertion": "error",
+      "@typescript-eslint/no-unnecessary-boolean-literal-compare": "error",
+      "@typescript-eslint/consistent-type-imports": [
+        "error",
+        { prefer: "type-imports", fixStyle: "separate-type-imports" },
+      ],
+      "@typescript-eslint/no-base-to-string": "error",
+      "@typescript-eslint/no-dynamic-delete": "error",
+      "@typescript-eslint/no-unused-expressions": "error",
+      "@typescript-eslint/strict-boolean-expressions": "error",
       "@typescript-eslint/prefer-nullish-coalescing": "off",
       "@typescript-eslint/prefer-optional-chain": "off",
       "@typescript-eslint/no-unused-vars": ["error", { argsIgnorePattern: "^_" }],
+      curly: ["error", "all"],
 
       // eslint-plugin-promise
       "promise/always-return": "off",
@@ -106,6 +120,68 @@ export default [
 
       // eslint-plugin-react-refresh (component export enforcement)
       "react-refresh/only-export-components": ["warn", { allowConstantExport: true }],
+    },
+  },
+  {
+    files: ["**/*.vue"],
+    languageOptions: {
+      parser: vueParser,
+      parserOptions: {
+        parser: tsParser,
+        ecmaVersion: "latest",
+        sourceType: "module",
+        projectService: true,
+        extraFileExtensions: [".vue"],
+        tsconfigRootDir: process.cwd(),
+      },
+      globals: {
+        ...globals.browser,
+        ...globals.node,
+      },
+    },
+    plugins: {
+      "@typescript-eslint": tsPlugin,
+      promise: promisePlugin,
+      fp: fpPlugin,
+      vue: vuePlugin,
+    },
+    rules: {
+      "@typescript-eslint/no-unsafe-assignment": "error",
+      "@typescript-eslint/no-unsafe-call": "error",
+      "@typescript-eslint/no-unsafe-member-access": "error",
+      "@typescript-eslint/no-unsafe-return": "error",
+      "@typescript-eslint/no-unsafe-argument": "error",
+      "@typescript-eslint/no-explicit-any": "error",
+      "@typescript-eslint/no-floating-promises": "error",
+      "@typescript-eslint/no-misused-promises": "error",
+      "@typescript-eslint/await-thenable": "error",
+      "@typescript-eslint/no-unnecessary-type-assertion": "error",
+      "@typescript-eslint/no-unnecessary-boolean-literal-compare": "error",
+      "@typescript-eslint/consistent-type-imports": [
+        "error",
+        { prefer: "type-imports", fixStyle: "separate-type-imports" },
+      ],
+      "@typescript-eslint/no-base-to-string": "error",
+      "@typescript-eslint/no-dynamic-delete": "error",
+      "@typescript-eslint/no-unused-expressions": "error",
+      "@typescript-eslint/strict-boolean-expressions": "error",
+      "@typescript-eslint/prefer-nullish-coalescing": "off",
+      "@typescript-eslint/prefer-optional-chain": "off",
+      "@typescript-eslint/no-unused-vars": ["error", { argsIgnorePattern: "^_" }],
+      "promise/always-return": "off",
+      "promise/no-return-wrap": "error",
+      "promise/param-names": "error",
+      "promise/catch-or-return": "off",
+      "promise/no-native": "off",
+      "promise/no-nesting": "off",
+      "promise/no-promise-in-callback": "off",
+      "promise/no-callback-in-promise": "off",
+      "fp/no-nil": "off",
+      "fp/no-this": "off",
+      "fp/no-mutating-assign": "error",
+      "fp/no-mutating-methods": "off",
+      "vue/no-v-html": "error",
+      curly: ["error", "all"],
     },
   },
   {
