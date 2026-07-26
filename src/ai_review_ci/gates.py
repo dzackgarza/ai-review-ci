@@ -803,8 +803,7 @@ def branch_protection_payload(profile: str) -> JsonDict:
     return {
         "required_status_checks": {
             "strict": True,
-            "contexts": [],
-            "checks": [{"context": context, "app_id": -1} for context in contexts],
+            "checks": [{"context": context} for context in contexts],
         },
         "enforce_admins": True,
         "required_pull_request_reviews": None,

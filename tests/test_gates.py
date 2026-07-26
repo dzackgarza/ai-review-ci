@@ -290,23 +290,23 @@ def test_pr_description_lenient_when_no_template_installed(monkeypatch: pytest.M
 def test_branch_protection_payload_uses_profile_check_contexts() -> None:
     payload = gates.branch_protection_payload("bun")
 
-    assert payload["required_status_checks"]["contexts"] == []
+    assert "contexts" not in payload["required_status_checks"]
     assert payload["required_status_checks"]["checks"] == [
-        {"context": "qc-ci / qc", "app_id": -1},
-        {"context": "deterministic-diff / deterministic-diff", "app_id": -1},
-        {"context": "delegation-conformance / delegation-conformance", "app_id": -1},
-        {"context": "qc-doctor / qc-doctor", "app_id": -1},
-        {"context": "pr-description-checklist / pr-description-checklist", "app_id": -1},
-        {"context": "general / review", "app_id": -1},
-        {"context": "slop / review", "app_id": -1},
-        {"context": "thread-resolution / thread-resolution", "app_id": -1},
+        {"context": "qc-ci / qc"},
+        {"context": "deterministic-diff / deterministic-diff"},
+        {"context": "delegation-conformance / delegation-conformance"},
+        {"context": "qc-doctor / qc-doctor"},
+        {"context": "pr-description-checklist / pr-description-checklist"},
+        {"context": "general / review"},
+        {"context": "slop / review"},
+        {"context": "thread-resolution / thread-resolution"},
     ]
 
 
 def test_branch_protection_payload_requires_app_boot_for_bun_playwright() -> None:
     checks = gates.branch_protection_payload("bun-playwright")["required_status_checks"]["checks"]
 
-    assert {"context": "app-boot / app-boot", "app_id": -1} in checks
+    assert {"context": "app-boot / app-boot"} in checks
 
 
 def test_thread_resolution_evidence_requires_a_thread_local_disposition() -> None:
