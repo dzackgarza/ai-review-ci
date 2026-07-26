@@ -1919,7 +1919,13 @@ def test_eslint_runner_batches_authored_files_to_bound_process_memory(
             "source",
         ],
         cwd=project,
-        env={**os.environ, "ESLINT_CALLS": str(calls), "ESLINT_BATCH_SIZE": "40"},
+        env={
+            **os.environ,
+            "DIFF_COVER_BASE": "",
+            "ESLINT_CALLS": str(calls),
+            "ESLINT_BATCH_SIZE": "40",
+            "QC_TIER": "",
+        },
         text=True,
         capture_output=True,
         check=False,
@@ -1930,6 +1936,63 @@ def test_eslint_runner_batches_authored_files_to_bound_process_memory(
     assert len(invocations) == 3
     assert all("--config" in invocation for invocation in invocations)
     assert all(".webpack" not in invocation for invocation in invocations)
+
+
+def test_eslint_runner_enforces_rules_only_on_changed_authored_files_in_ci(
+    tmp_path: pathlib.Path,
+) -> None:
+    project = tmp_path / "downstream"
+    source = project / "source"
+    fake_bin = tmp_path / "fake-eslint"
+    calls = tmp_path / "calls"
+    source.mkdir(parents=True)
+    (source / "legacy.ts").write_text("export const legacy: any = 1\n")
+    run_git(project, "init")
+    run_git(project, "config", "user.email", "test@example.com")
+    run_git(project, "config", "user.name", "Test")
+    run_git(project, "add", ".")
+    base_commit = run_git(
+        project, "-c", "core.hooksPath=/dev/null", "commit", "-m", "base"
+    )
+    assert base_commit.returncode == 0, base_commit.stdout + base_commit.stderr
+    base_result = run_git(project, "rev-parse", "HEAD")
+    assert base_result.returncode == 0, base_result.stdout + base_result.stderr
+    base = base_result.stdout.strip()
+    (source / "changed.ts").write_text("export const changed: any = 1\n")
+    run_git(project, "add", ".")
+    change_commit = run_git(
+        project, "-c", "core.hooksPath=/dev/null", "commit", "-m", "change"
+    )
+    assert change_commit.returncode == 0, change_commit.stdout + change_commit.stderr
+    fake_bin.write_text(
+        "#!/usr/bin/env bash\n"
+        "printf '%s\\n' \"$*\" >> \"$ESLINT_CALLS\"\n"
+    )
+    fake_bin.chmod(0o755)
+
+    run = subprocess.run(
+        [
+            str(ROOT / "scripts" / "run-eslint-batched.sh"),
+            str(fake_bin),
+            str(ROOT / "tool-configs" / "eslint.config.js"),
+            "source",
+        ],
+        cwd=project,
+        env={
+            **os.environ,
+            "DIFF_COVER_BASE": base,
+            "ESLINT_CALLS": str(calls),
+            "QC_TIER": "test-ci",
+        },
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+
+    assert run.returncode == 0, run.stdout + run.stderr
+    invocation = calls.read_text()
+    assert "source/changed.ts" in invocation
+    assert "source/legacy.ts" not in invocation
 
 
 def test_bun_scaffold_delegates_qc_in_project_directory(
