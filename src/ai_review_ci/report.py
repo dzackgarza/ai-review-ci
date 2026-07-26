@@ -122,7 +122,7 @@ def report_metadata(path: Path) -> None:
 
 
 def enforce_report_status(path: Path) -> None:
-    """Fail when a validated report contains actionable tier1 findings.
+    """Report validated tier1 finding counts without blocking review jobs.
 
     Args:
         path: Path to the validated artifact JSON file.
@@ -134,8 +134,9 @@ def enforce_report_status(path: Path) -> None:
         sys.exit(1)
     if tier1_count:
         print(
-            f"Review report contains {tier1_count} actionable tier1 finding(s).",
+            f"Review report contains {tier1_count} actionable tier1 finding(s); "
+            "thread-resolution owns PR blocking.",
             file=sys.stderr,
         )
-        sys.exit(1)
+        return
     print("Review report contains no actionable tier1 findings.")
