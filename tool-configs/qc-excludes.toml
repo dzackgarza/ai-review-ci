@@ -56,11 +56,12 @@ directories = [
     # Archived source trees are preserved reference material, not active code.
     "archives",
     "src.bak",
-    # Research scripts and notebooks are user-authored exploratory artifacts,
-    # not QC-owned product code. Generic checkers must not rewrite or diagnose
-    # them; research-specific tooling owns their validation.
+    # Research scripts, notebooks, and preambles are user-authored exploratory
+    # artifacts, not QC-owned product code. Generic checkers must not rewrite or
+    # diagnose them; research-specific tooling owns their validation.
     "scripts",
     "notebooks",
+    "preamble",
     # Authored research notes and extraction dumps: prose whose rendered
     # content must never be altered by formatters (dzackgarza/research#187 —
     # flowmark is not render-neutral on them).

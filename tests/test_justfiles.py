@@ -373,10 +373,30 @@ def test_sage_vulture_files_ignore_scripts_and_global_notebooks_directories(
 @pytest.mark.parametrize(
     ("justfile_name", "recipe", "suffix", "expected_active"),
     [
-        ("python.just", "_python-qc-files", ".py", "src/active.py"),
-        ("sage.just", "_sage-qc-files", ".sage", "src/active.sage"),
-        ("bun.just", "_js-qc-files", ".ts", "src/active.ts"),
-        ("rust.just", "_rust-qc-files", ".rs", "./src/active.rs"),
+        (
+            "python.just",
+            "_python-qc-files",
+            ".py",
+            ("src/active.py", "src/preamble_helper.py"),
+        ),
+        (
+            "sage.just",
+            "_sage-qc-files",
+            ".sage",
+            ("src/active.sage", "src/preamble_helper.sage"),
+        ),
+        (
+            "bun.just",
+            "_js-qc-files",
+            ".ts",
+            ("src/active.ts", "src/preamble_helper.ts"),
+        ),
+        (
+            "rust.just",
+            "_rust-qc-files",
+            ".rs",
+            ("./src/active.rs", "./src/preamble_helper.rs"),
+        ),
     ],
 )
 def test_qc_file_selection_excludes_user_authored_scripts_and_notebooks(
@@ -384,15 +404,18 @@ def test_qc_file_selection_excludes_user_authored_scripts_and_notebooks(
     justfile_name: str,
     recipe: str,
     suffix: str,
-    expected_active: str,
+    expected_active: tuple[str, ...],
 ) -> None:
     project = tmp_path / "project"
     for relative in (
         f"src/active{suffix}",
+        f"src/preamble_helper{suffix}",
         f"scripts/derivation{suffix}",
         f"research/scripts/nested_derivation{suffix}",
         f"notebooks/exploration{suffix}",
         f"research/notebooks/nested_exploration{suffix}",
+        f"preamble/setup{suffix}",
+        f"research/preamble/nested_setup{suffix}",
     ):
         path = project / relative
         path.parent.mkdir(parents=True, exist_ok=True)
@@ -402,7 +425,7 @@ def test_qc_file_selection_excludes_user_authored_scripts_and_notebooks(
 
     output = result.stdout + result.stderr
     assert result.returncode == 0, output
-    assert result.stdout.splitlines() == [expected_active]
+    assert set(result.stdout.splitlines()) == set(expected_active)
 
 
 @pytest.mark.parametrize(
