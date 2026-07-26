@@ -288,6 +288,80 @@ _semgrep:
 	trap restore_semgrepignore EXIT
 	uv run {{artifacts}}/scripts/read_qc_excludes.py {{configs}}/qc-excludes.toml > "$ignore_file"
 	printf '%s\n' '*.html' '**/*.html' >> "$ignore_file"
+	if [[ ${QC_TIER:-} != ambient && -n ${DIFF_COVER_BASE:-} ]] && git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+		if ! git rev-parse --verify "${DIFF_COVER_BASE}^{commit}" >/dev/null 2>&1; then
+			echo "ERROR: semgrep: DIFF_COVER_BASE does not resolve: $DIFF_COVER_BASE" >&2
+			exit 2
+		fi
+		exclude_dirs_output="$(uv run {{artifacts}}/scripts/read_qc_excludes.py {{configs}}/qc-excludes.toml)"
+		is_excluded_qc_path() {
+			local file="$1"
+			local exclude_dir
+			while IFS= read -r exclude_dir; do
+				[ -n "$exclude_dir" ] || continue
+				exclude_dir="${exclude_dir%/}"
+				[[ "$file" == "$exclude_dir" || "$file" == "$exclude_dir"/* ]] && return 0
+			done <<< "$exclude_dirs_output"
+			return 1
+		}
+		is_semgrep_pr_target() {
+			local file="$1"
+			case "$file" in
+				justfile|Justfile|*.just)
+					return 1
+					;;
+			esac
+			return 0
+		}
+		changed_files=()
+		while IFS= read -r -d '' file; do
+			[[ -f "$file" ]] || continue
+			is_excluded_qc_path "$file" && continue
+			is_semgrep_pr_target "$file" || continue
+			changed_files+=("$file")
+		done < <(git diff --name-only --diff-filter=ACMR -z "${DIFF_COVER_BASE}...HEAD" -- .)
+		if [ ${#changed_files[@]} -eq 0 ]; then
+			echo "semgrep: no changed authored files."
+			exit 0
+		fi
+		head_json="$(mktemp)"
+		base_json="$(mktemp)"
+		base_tree="$(mktemp -d)"
+		cleanup_semgrep_diff() {
+			rm -f "$head_json" "$base_json"
+			git worktree remove --force "$base_tree" >/dev/null 2>&1 || rm -rf "$base_tree"
+			restore_semgrepignore
+		}
+		trap cleanup_semgrep_diff EXIT
+		uvx --from semgrep semgrep scan \
+			--json \
+			--config={{configs}}/semgrep.yml \
+			--config=p/ci \
+			--exclude=codeql-db \
+			--scan-unknown-extensions \
+			"${changed_files[@]}" > "$head_json"
+		git worktree add --detach "$base_tree" "$DIFF_COVER_BASE" >/dev/null
+		base_files=()
+		for file in "${changed_files[@]}"; do
+			[ -f "$base_tree/$file" ] && base_files+=("$file")
+		done
+		if [ ${#base_files[@]} -gt 0 ]; then
+			(
+				cd "$base_tree"
+				uvx --from semgrep semgrep scan \
+					--json \
+					--config={{configs}}/semgrep.yml \
+					--config=p/ci \
+					--exclude=codeql-db \
+					--scan-unknown-extensions \
+					"${base_files[@]}" > "$base_json"
+			)
+		else
+			printf '{"results":[]}\n' > "$base_json"
+		fi
+		uv run {{artifacts}}/scripts/semgrep_diff_gate.py --base-json "$base_json" --head-json "$head_json"
+		exit 0
+	fi
 	if uvx --from semgrep semgrep scan \
 		--config={{configs}}/semgrep.yml \
 		--config=p/ci \

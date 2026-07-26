@@ -1073,6 +1073,51 @@ def test_semgrep_blocks_typescript_value_defaults(tmp_path: pathlib.Path) -> Non
     assert "Route POLICY.RUNTIME_DEFAULT and other POLICY.* findings" in output
 
 
+def test_semgrep_scans_only_changed_files_in_ci(
+    tmp_path: pathlib.Path,
+) -> None:
+    project = tmp_path / "downstream"
+    source = project / "source"
+    fake_bin = tmp_path / "bin"
+    calls = tmp_path / "semgrep-calls"
+    source.mkdir(parents=True)
+    fake_bin.mkdir()
+    (source / "legacy.ts").write_text("export const legacy = 'ambient'\n")
+    run_git(project, "init")
+    run_git(project, "config", "user.email", "test@example.com")
+    run_git(project, "config", "user.name", "Test")
+    run_git(project, "add", ".")
+    base_commit = run_git(project, "-c", "core.hooksPath=/dev/null", "commit", "-m", "base")
+    assert base_commit.returncode == 0, base_commit.stdout + base_commit.stderr
+    base_result = run_git(project, "rev-parse", "HEAD")
+    assert base_result.returncode == 0, base_result.stdout + base_result.stderr
+    base = base_result.stdout.strip()
+    (source / "changed.ts").write_text("export const changed = 'new'\n")
+    run_git(project, "add", ".")
+    change_commit = run_git(project, "-c", "core.hooksPath=/dev/null", "commit", "-m", "change")
+    assert change_commit.returncode == 0, change_commit.stdout + change_commit.stderr
+    (fake_bin / "uvx").write_text('#!/usr/bin/env bash\nprintf \'%s\\n\' "$*" >> "$SEMGREP_CALLS"\nprintf \'{"results":[]}\\n\'\n')
+    (fake_bin / "uvx").chmod(0o755)
+
+    result = run_just(
+        ROOT / "justfiles" / "shared.just",
+        project,
+        "_semgrep",
+        env={
+            **os.environ,
+            "DIFF_COVER_BASE": base,
+            "PATH": f"{fake_bin}:{os.environ['PATH']}",
+            "QC_TIER": "test-ci",
+            "SEMGREP_CALLS": str(calls),
+        },
+    )
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    invocation = calls.read_text()
+    assert "source/changed.ts" in invocation
+    assert "source/legacy.ts" not in invocation
+
+
 def test_semgrep_allows_fail_loud_typescript_guards(tmp_path: pathlib.Path) -> None:
     project = tmp_path / "semgrep-guard-project"
     project.mkdir()
