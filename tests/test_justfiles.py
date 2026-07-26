@@ -156,7 +156,7 @@ def test_lean_push_gate_propagates_target_axiom_audit_failure(tmp_path: pathlib.
         "_lean-axiom-audit:\n"
         "    #!/usr/bin/env bash\n"
         "    set -euo pipefail\n"
-        "    test \"$(pwd -P)\" = \"$PWD\"\n"
+        '    test "$(pwd -P)" = "$PWD"\n'
         "    echo target axiom audit rejected a nonstandard dependency >&2\n"
         "    exit 1\n"
     )
@@ -171,13 +171,7 @@ def test_lean_push_gate_propagates_target_axiom_audit_failure(tmp_path: pathlib.
 def test_lean_push_gate_runs_target_axiom_audit_at_target_root(tmp_path: pathlib.Path) -> None:
     project = tmp_path / "lean-project"
     project.mkdir()
-    (project / "justfile").write_text(
-        "_lean-axiom-audit:\n"
-        "    #!/usr/bin/env bash\n"
-        "    set -euo pipefail\n"
-        "    test \"$(pwd -P)\" = \"$PWD\"\n"
-        "    echo target axiom audit passed\n"
-    )
+    (project / "justfile").write_text('_lean-axiom-audit:\n    #!/usr/bin/env bash\n    set -euo pipefail\n    test "$(pwd -P)" = "$PWD"\n    echo target axiom audit passed\n')
 
     result = run_just(ROOT / "justfiles" / "lean.just", project, "lean-axiom-audit")
 
@@ -466,9 +460,7 @@ def test_tsc_requires_ags_when_tsconfig_declares_ags(tmp_path: pathlib.Path) -> 
     project.mkdir()
     (project / "package.json").write_text(json.dumps({"scripts": {}}) + "\n")
     (project / "tsconfig.json").write_text(json.dumps({"compilerOptions": {"jsxImportSource": "ags/gtk4"}}) + "\n")
-    env = os.environ | {
-        "PATH": path_with_only(tmp_path, "bash", "cat", "jq", "just", "rg")
-    }
+    env = os.environ | {"PATH": path_with_only(tmp_path, "bash", "cat", "jq", "just", "rg")}
 
     result = run_just(ROOT / "justfiles" / "bun.just", project, "_tsc", env=env)
 
@@ -793,10 +785,7 @@ def test_common_normalization_formats_structured_text(
     output = result.stdout + result.stderr
     assert result.returncode == 0, output
     assert markdown.read_text() == "# Title\n\n- item\n"
-    assert (
-        agent_instructions.read_text()
-        == "# Instructions\n\n-   preserve canonical bytes\n"
-    )
+    assert agent_instructions.read_text() == "# Instructions\n\n-   preserve canonical bytes\n"
     assert json_file.read_text() == '{ "b": 2, "a": 1 }\n'
 
 
@@ -1788,11 +1777,11 @@ def test_eslint_centrally_owns_vue_parser_and_security_rules(
     (source / "App.vue").write_text(
         "\n".join(
             [
-                "<script setup lang=\"ts\">",
+                '<script setup lang="ts">',
                 "const unsafe: any = '<strong>unsafe</strong>'",
                 "</script>",
                 "<template>",
-                "  <div v-html=\"unsafe\" />",
+                '  <div v-html="unsafe" />',
                 "</template>",
                 "",
             ]
@@ -1902,13 +1891,8 @@ def test_eslint_runner_batches_authored_files_to_bound_process_memory(
     for index in range(105):
         (source / f"file-{index:03}.ts").write_text("export const value = 1\n")
     (project / ".webpack" / "main").mkdir(parents=True)
-    (project / ".webpack" / "main" / "generated.ts").write_text(
-        "export const generated = 1\n"
-    )
-    fake_bin.write_text(
-        "#!/usr/bin/env bash\n"
-        "printf '%s\\n' \"$*\" >> \"$ESLINT_CALLS\"\n"
-    )
+    (project / ".webpack" / "main" / "generated.ts").write_text("export const generated = 1\n")
+    fake_bin.write_text('#!/usr/bin/env bash\nprintf \'%s\\n\' "$*" >> "$ESLINT_CALLS"\n')
     fake_bin.chmod(0o755)
 
     run = subprocess.run(
@@ -1951,23 +1935,16 @@ def test_eslint_runner_enforces_rules_only_on_changed_authored_files_in_ci(
     run_git(project, "config", "user.email", "test@example.com")
     run_git(project, "config", "user.name", "Test")
     run_git(project, "add", ".")
-    base_commit = run_git(
-        project, "-c", "core.hooksPath=/dev/null", "commit", "-m", "base"
-    )
+    base_commit = run_git(project, "-c", "core.hooksPath=/dev/null", "commit", "-m", "base")
     assert base_commit.returncode == 0, base_commit.stdout + base_commit.stderr
     base_result = run_git(project, "rev-parse", "HEAD")
     assert base_result.returncode == 0, base_result.stdout + base_result.stderr
     base = base_result.stdout.strip()
     (source / "changed.ts").write_text("export const changed: any = 1\n")
     run_git(project, "add", ".")
-    change_commit = run_git(
-        project, "-c", "core.hooksPath=/dev/null", "commit", "-m", "change"
-    )
+    change_commit = run_git(project, "-c", "core.hooksPath=/dev/null", "commit", "-m", "change")
     assert change_commit.returncode == 0, change_commit.stdout + change_commit.stderr
-    fake_bin.write_text(
-        "#!/usr/bin/env bash\n"
-        "printf '%s\\n' \"$*\" >> \"$ESLINT_CALLS\"\n"
-    )
+    fake_bin.write_text('#!/usr/bin/env bash\nprintf \'%s\\n\' "$*" >> "$ESLINT_CALLS"\n')
     fake_bin.chmod(0o755)
 
     run = subprocess.run(
@@ -2009,24 +1986,71 @@ def test_bun_lizard_scans_only_changed_authored_files_in_ci(
     run_git(project, "config", "user.email", "test@example.com")
     run_git(project, "config", "user.name", "Test")
     run_git(project, "add", ".")
-    base_commit = run_git(
-        project, "-c", "core.hooksPath=/dev/null", "commit", "-m", "base"
-    )
+    base_commit = run_git(project, "-c", "core.hooksPath=/dev/null", "commit", "-m", "base")
     assert base_commit.returncode == 0, base_commit.stdout + base_commit.stderr
     base_result = run_git(project, "rev-parse", "HEAD")
     assert base_result.returncode == 0, base_result.stdout + base_result.stderr
     base = base_result.stdout.strip()
     (source / "changed.ts").write_text("export const changed = 1\n")
     run_git(project, "add", ".")
-    change_commit = run_git(
-        project, "-c", "core.hooksPath=/dev/null", "commit", "-m", "change"
+    change_commit = run_git(project, "-c", "core.hooksPath=/dev/null", "commit", "-m", "change")
+    assert change_commit.returncode == 0, change_commit.stdout + change_commit.stderr
+    (fake_bin / "uvx").write_text('#!/usr/bin/env bash\nprintf \'%s\\n\' "$*" >> "$LIZARD_CALLS"\nexit 0\n')
+    (fake_bin / "uvx").chmod(0o755)
+
+    run = run_just(
+        ROOT / "justfiles" / "bun.just",
+        project,
+        "_lizard-bun",
+        env={
+            **os.environ,
+            "DIFF_COVER_BASE": base,
+            "LIZARD_CALLS": str(calls),
+            "PATH": f"{fake_bin}:{os.environ['PATH']}",
+            "QC_TIER": "test-ci",
+        },
     )
+
+    assert run.returncode == 0, run.stdout + run.stderr
+    invocation = calls.read_text()
+    assert "source/changed.ts" in invocation
+    assert "source/legacy.ts" not in invocation
+
+
+def test_bun_lizard_allows_unchanged_complexity_warnings_in_changed_files(
+    tmp_path: pathlib.Path,
+) -> None:
+    project = tmp_path / "downstream"
+    source = project / "source"
+    fake_bin = tmp_path / "bin"
+    calls = tmp_path / "lizard-calls"
+    source.mkdir(parents=True)
+    fake_bin.mkdir()
+    (source / "changed.ts").write_text("export function existing() { return 1 }\n")
+    run_git(project, "init")
+    run_git(project, "config", "user.email", "test@example.com")
+    run_git(project, "config", "user.name", "Test")
+    run_git(project, "add", ".")
+    base_commit = run_git(project, "-c", "core.hooksPath=/dev/null", "commit", "-m", "base")
+    assert base_commit.returncode == 0, base_commit.stdout + base_commit.stderr
+    base_result = run_git(project, "rev-parse", "HEAD")
+    assert base_result.returncode == 0, base_result.stdout + base_result.stderr
+    base = base_result.stdout.strip()
+    (source / "changed.ts").write_text("export function existing() { return 2 }\n")
+    run_git(project, "add", ".")
+    change_commit = run_git(project, "-c", "core.hooksPath=/dev/null", "commit", "-m", "change")
     assert change_commit.returncode == 0, change_commit.stdout + change_commit.stderr
     (fake_bin / "uvx").write_text(
         "#!/usr/bin/env bash\n"
-        "printf '%s\\n' \"$*\" >> \"$LIZARD_CALLS\"\n"
-        "[[ \"$*\" == *source/changed.ts* ]] && exit 7\n"
-        "exit 0\n"
+        'printf \'%s\\n\' "$PWD $*" >> "$LIZARD_CALLS"\n'
+        "cat <<'EOF'\n"
+        "!!!! Warnings (cyclomatic_complexity > 8 or length > 200 or nloc > 1000000 or parameter_count > 7) !!!!\n"
+        "================================================\n"
+        "  NLOC    CCN   token  PARAM  length  location\n"
+        "------------------------------------------------\n"
+        "      20      9    100      0      20 existing@1-20@source/changed.ts\n"
+        "EOF\n"
+        "exit 1\n"
     )
     (fake_bin / "uvx").chmod(0o755)
 
@@ -2043,10 +2067,10 @@ def test_bun_lizard_scans_only_changed_authored_files_in_ci(
         },
     )
 
-    assert run.returncode == 7, run.stdout + run.stderr
-    invocation = calls.read_text()
-    assert "source/changed.ts" in invocation
-    assert "source/legacy.ts" not in invocation
+    assert run.returncode == 0, run.stdout + run.stderr
+    assert "lizard: warnings are unchanged relative to DIFF_COVER_BASE." in run.stdout
+    invocations = calls.read_text()
+    assert invocations.count("source/changed.ts") == 2
 
 
 def test_bun_lizard_skips_clean_diff_without_invoking_lizard(
@@ -2063,18 +2087,12 @@ def test_bun_lizard_skips_clean_diff_without_invoking_lizard(
     run_git(project, "config", "user.email", "test@example.com")
     run_git(project, "config", "user.name", "Test")
     run_git(project, "add", ".")
-    base_commit = run_git(
-        project, "-c", "core.hooksPath=/dev/null", "commit", "-m", "base"
-    )
+    base_commit = run_git(project, "-c", "core.hooksPath=/dev/null", "commit", "-m", "base")
     assert base_commit.returncode == 0, base_commit.stdout + base_commit.stderr
     base_result = run_git(project, "rev-parse", "HEAD")
     assert base_result.returncode == 0, base_result.stdout + base_result.stderr
     base = base_result.stdout.strip()
-    (fake_bin / "uvx").write_text(
-        "#!/usr/bin/env bash\n"
-        "printf '%s\\n' \"$*\" >> \"$LIZARD_CALLS\"\n"
-        "exit 9\n"
-    )
+    (fake_bin / "uvx").write_text('#!/usr/bin/env bash\nprintf \'%s\\n\' "$*" >> "$LIZARD_CALLS"\nexit 9\n')
     (fake_bin / "uvx").chmod(0o755)
 
     run = run_just(
@@ -2183,7 +2201,7 @@ def test_bun_scaffold_delegates_qc_in_project_directory(
             "sage",
             {
                 "example.sage": "x = 1\n",
-                "pyproject.toml": "[project]\nname = \"scaffold-sage-target\"\nversion = \"0.1.0\"\n",
+                "pyproject.toml": '[project]\nname = "scaffold-sage-target"\nversion = "0.1.0"\n',
             },
             # Semantic key, not the copied diagnostic sentence
             # (POLICY.NO_EXACT_STRING_PROOF): the preflight must fail *about*
@@ -2395,9 +2413,7 @@ def test_tsc_fails_when_declared_typecheck_command_is_missing(
 ) -> None:
     project = tmp_path / "bun-project"
     project.mkdir()
-    (project / "package.json").write_text(
-        json.dumps({"scripts": {"typecheck": "missing-typecheck-command"}}) + "\n"
-    )
+    (project / "package.json").write_text(json.dumps({"scripts": {"typecheck": "missing-typecheck-command"}}) + "\n")
 
     result = run_just(ROOT / "justfiles" / "bun.just", project, "_tsc")
 
@@ -2603,25 +2619,13 @@ def test_bun_coverage_consumes_declared_script_and_normalizes_lcov(
     project = tmp_path / "bun-project"
     project.mkdir()
     (project / "package.json").write_text(
-        json.dumps(
-            {
-                "scripts": {
-                    "coverage": (
-                        "mkdir -p coverage && "
-                        "printf 'TN:\\nSF:source.ts\\nDA:1,1\\nend_of_record\\n' "
-                        "> coverage/lcov.info"
-                    )
-                }
-            }
-        )
+        json.dumps({"scripts": {"coverage": ("mkdir -p coverage && printf 'TN:\\nSF:source.ts\\nDA:1,1\\nend_of_record\\n' > coverage/lcov.info")}})
     )
 
     result = run_just(ROOT / "justfiles" / "bun.just", project, "_coverage")
 
     assert result.returncode == 0, result.stdout + result.stderr
-    assert (project / "lcov.info").read_text() == (
-        "TN:\nSF:source.ts\nDA:1,1\nend_of_record\n"
-    )
+    assert (project / "lcov.info").read_text() == ("TN:\nSF:source.ts\nDA:1,1\nend_of_record\n")
 
 
 def write_import_linter_project(

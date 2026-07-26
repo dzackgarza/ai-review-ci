@@ -685,23 +685,12 @@ def test_qc_workflow_installs_flowmark_runtime_dependencies() -> None:
 
 def test_qc_workflow_installs_project_profile_before_running_acceptance() -> None:
     job = _workflow_jobs("_qc.yml")["qc"]
-    install_index = next(
-        index
-        for index, step in enumerate(job["steps"])
-        if isinstance(step, dict) and step.get("name") == "Install project dependencies"
-    )
-    run_index = next(
-        index
-        for index, step in enumerate(job["steps"])
-        if isinstance(step, dict) and step.get("name") == "Run QC tier"
-    )
+    install_index = next(index for index, step in enumerate(job["steps"]) if isinstance(step, dict) and step.get("name") == "Install project dependencies")
+    run_index = next(index for index, step in enumerate(job["steps"]) if isinstance(step, dict) and step.get("name") == "Run QC tier")
     install = job["steps"][install_index]["run"]
 
     assert install_index < run_index
-    assert install == (
-        'just -f "$HOME/ai-review-ci/ci/runner.just" '
-        'setup-profile "$QC_PROFILE"'
-    )
+    assert install == ('just -f "$HOME/ai-review-ci/ci/runner.just" setup-profile "$QC_PROFILE"')
 
 
 def test_qc_workflow_runs_validated_project_setup_before_acceptance() -> None:
@@ -720,7 +709,7 @@ def test_qc_workflow_runs_validated_project_setup_before_acceptance() -> None:
         "type": "string",
         "default": "",
     }
-    assert '[^A-Za-z0-9_-]' in validation["run"]
+    assert "[^A-Za-z0-9_-]" in validation["run"]
     assert setup_index < run_index
     assert setup["if"] == "inputs.setup_recipe != ''"
     assert setup["run"] == 'just "$QC_SETUP_RECIPE"'
