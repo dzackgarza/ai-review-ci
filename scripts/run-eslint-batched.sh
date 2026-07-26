@@ -16,7 +16,7 @@ if [[ ! $batch_size =~ ^[1-9][0-9]*$ ]]; then
   exit 2
 fi
 
-eslint_args=(--config "$eslint_config" --max-warnings 0)
+eslint_args=(--config "$eslint_config" --max-warnings 0 --no-warn-ignored)
 if [[ ${ESLINT_FIX:-0} == 1 ]]; then
   eslint_args+=(--fix)
 fi
