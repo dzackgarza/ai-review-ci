@@ -480,122 +480,53 @@ _vibecheck:
 		"{{artifacts}}/scripts/emit-triage-directive.sh"
 		exit "$ec"
 	fi
-	filter_input=$(mktemp)
+	head_vibecheck_json=$(mktemp)
+	base_vibecheck_json=""
+	base_worktree=""
 	cleanup_vibecheck() {
-		rm -f -- "$filter_input"
+		rm -f -- "$head_vibecheck_json"
+		if [ -n "$base_vibecheck_json" ]; then
+			rm -f -- "$base_vibecheck_json"
+		fi
+		if [ -n "$base_worktree" ]; then
+			git worktree remove --force "$base_worktree" >/dev/null 2>&1 || true
+		fi
 		restore_ignore
 	}
 	trap cleanup_vibecheck EXIT
-	printf '%s\n' "$raw_output" > "$filter_input"
-	filter_result=$(python3 - "$filter_input" <<-'PY'
-	import json
-	import pathlib
-	import sys
-	
-	
-	def is_comment_line(content):
-	    trimmed = (content or "").strip()
-	    return trimmed.startswith(("//", "#", "/*", "*", "<!--"))
-	
-	
-	def has_non_empty_except_handler(finding):
-	    if finding.get("rule_id") != "G22":
-	        return False
-	    path_value = finding.get("file")
-	    line_value = finding.get("line")
-	    if not path_value or not isinstance(line_value, int):
-	        return False
-	    path = pathlib.Path(path_value)
-	    try:
-	        lines = path.read_text().splitlines()
-	    except OSError:
-	        return False
-	    if line_value < 1 or line_value > len(lines):
-	        return False
-	    except_line = lines[line_value - 1]
-	    except_indent = len(except_line) - len(except_line.lstrip())
-	    for candidate in lines[line_value:]:
-	        stripped = candidate.strip()
-	        if not stripped:
-	            continue
-	        indent = len(candidate) - len(candidate.lstrip())
-	        if indent <= except_indent:
-	            return False
-	        if stripped.startswith("#"):
-	            continue
-	        return stripped not in {"pass", "..."}
-	    return False
-	
-	
-	def is_python_prose_arrow(finding):
-	    # G118 flags Unicode arrows as pseudocode operators. In a .py file that
-	    # the syntax tier already requires to compile, an arrow used as an
-	    # operator is a SyntaxError — so any G118 hit in compiled Python is by
-	    # construction inside a string, comment, or docstring (mathematical
-	    # notation such as ring maps ``R → S``), never executable pseudocode.
-	    if finding.get("rule_id") != "G118":
-	        return False
-	    path_value = finding.get("file") or ""
-	    return path_value.endswith(".py")
-	
-	
-	payload = json.loads(pathlib.Path(sys.argv[1]).read_text())
-	filtered = []
-	ignored = {"G141": 0, "G22": 0, "G118": 0, "G20": 0}
-	for finding in payload.get("findings", []):
-	    if finding.get("rule_id") == "G20":
-	        ignored["G20"] += 1
-	        continue
-	    if finding.get("rule_id") == "G141" and not is_comment_line(finding.get("content")):
-	        ignored["G141"] += 1
-	        continue
-	    if has_non_empty_except_handler(finding):
-	        ignored["G22"] += 1
-	        continue
-	    if is_python_prose_arrow(finding):
-	        ignored["G118"] += 1
-	        continue
-	    filtered.append(finding)
-	
-	payload["findings"] = filtered
-	summary = payload.setdefault("summary", {})
-	for severity in ("critical", "high", "medium", "low"):
-	    summary[severity] = sum(1 for finding in filtered if finding.get("severity") == severity)
-	payload["passed"] = summary.get("critical", 0) + summary.get("high", 0) == 0
-	print(json.dumps({"filtered": payload, "ignored": ignored}))
-	PY
-	)
-	ignored_g141_count=$(echo "$filter_result" | jq -r '.ignored.G141')
-	ignored_g22_count=$(echo "$filter_result" | jq -r '.ignored.G22')
-	filtered_output=$(echo "$filter_result" | jq '.filtered')
-	if [ "$ignored_g141_count" -gt 0 ]; then
-		echo "vibecheck: ignored $ignored_g141_count G141 non-comment false-positive finding(s)."
+	printf '%s\n' "$raw_output" > "$head_vibecheck_json"
+	base_args=()
+	if [ "${QC_TIER:-}" = "test-ci" ] && [ -n "${DIFF_COVER_BASE:-}" ] && git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+		base_worktree=$(mktemp -d)
+		rmdir "$base_worktree"
+		git worktree add --detach "$base_worktree" "$DIFF_COVER_BASE" >/dev/null
+		(
+			cd "$base_worktree"
+			if [ -L ".ignore" ]; then
+				echo "ERROR: cannot temporarily install QC exclusions in base worktree: .ignore is a symlink."
+				exit 1
+			fi
+			printf '\n' >> ".ignore"
+			uv run {{artifacts}}/scripts/read_qc_excludes.py {{configs}}/qc-excludes.toml >> ".ignore"
+			if raw_base_output=$(uvx --from git+https://github.com/qinnovates/vibecheck-slop-stopper vibecheck . --severity high --json); then
+				base_ec=0
+			else
+				base_ec=$?
+			fi
+			if ! echo "$raw_base_output" | jq -e . >/dev/null; then
+				echo "$raw_base_output"
+				echo ""
+				echo "ERROR: base vibecheck failed to produce parseable JSON (exit $base_ec)."
+				exit "$base_ec"
+			fi
+			printf '%s\n' "$raw_base_output"
+		) > "$base_worktree/vibecheck-base.json"
+		base_vibecheck_json=$(mktemp)
+		cp "$base_worktree/vibecheck-base.json" "$base_vibecheck_json"
+		base_args=(--base-json "$base_vibecheck_json" --base-root "$base_worktree")
 	fi
-	if [ "$ignored_g22_count" -gt 0 ]; then
-		echo "vibecheck: ignored $ignored_g22_count G22 non-empty except-handler false-positive finding(s)."
-	fi
-	ignored_g118_count=$(echo "$filter_result" | jq -r '.ignored.G118')
-	if [ "$ignored_g118_count" -gt 0 ]; then
-		echo "vibecheck: ignored $ignored_g118_count G118 prose-arrow finding(s) in compiled Python (notation, not pseudocode)."
-	fi
-	ignored_g20_count=$(echo "$filter_result" | jq -r '.ignored.G20')
-	if [ "$ignored_g20_count" -gt 0 ]; then
-		echo "vibecheck: ignored $ignored_g20_count G20 prompt-context false-positive finding(s)."
-	fi
-	remaining_count=$(echo "$filtered_output" | jq -r '.summary.critical + .summary.high')
-	if [ "$remaining_count" -eq 0 ]; then
-		echo "vibecheck: 0 findings — clean."
-	else
-		echo "$filtered_output" | jq .
+	if ! uv run {{artifacts}}/scripts/vibecheck_gate.py --head-json "$head_vibecheck_json" --head-root "$PWD" "${base_args[@]}"; then
 		echo ""
-		echo "!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!"
-		echo "  ERROR: vibecheck found anti-slop pattern violations."
-		echo "  Findings are in PROJECT CODE — fix the project code."
-		echo ""
-		echo "  PROBING GLOBAL QC IS REWARD-HACKING."
-		echo "  Do NOT modify QC configs or tooling in ~/ai-review-ci/"
-		echo "  to suppress these findings."
-		echo "!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!"
 		"{{artifacts}}/scripts/emit-triage-directive.sh"
 		exit 1
 	fi
