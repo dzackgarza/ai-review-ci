@@ -77,6 +77,46 @@ def test_delegation_accepts_canonical_scaffold(tmp_path: pathlib.Path) -> None:
     gates.check_delegation(project, "bun")
 
 
+def test_yarn_profile_accepts_declared_yarn_repository_and_canonical_delegation(
+    tmp_path: pathlib.Path,
+) -> None:
+    project = tmp_path / "project"
+    project.mkdir()
+    (project / "package.json").write_text('{"packageManager": "yarn@4.11.0", "scripts": {"test": "true"}}\n')
+    (project / "yarn.lock").write_text("")
+    (project / "justfile").write_text(
+        (pathlib.Path(__file__).parents[1] / "scaffolds" / "yarn" / "justfile").read_text()
+    )
+
+    gates.check_profile(project, "yarn")
+    gates.check_delegation(project, "yarn")
+
+
+@pytest.mark.parametrize("conflicting_lock", ["bun.lock", "bun.lockb", "package-lock.json", "pnpm-lock.yaml"])
+def test_yarn_profile_rejects_conflicting_package_manager_lock(
+    tmp_path: pathlib.Path,
+    conflicting_lock: str,
+) -> None:
+    project = tmp_path / "project"
+    project.mkdir()
+    (project / "package.json").write_text('{"packageManager": "yarn@4.11.0"}\n')
+    (project / "yarn.lock").write_text("")
+    (project / conflicting_lock).write_text("")
+
+    with pytest.raises(SystemExit):
+        gates.check_profile(project, "yarn")
+
+
+def test_yarn_profile_rejects_non_yarn_package_manager_declaration(tmp_path: pathlib.Path) -> None:
+    project = tmp_path / "project"
+    project.mkdir()
+    (project / "package.json").write_text('{"packageManager": "bun@1.2.0"}\n')
+    (project / "yarn.lock").write_text("")
+
+    with pytest.raises(SystemExit):
+        gates.check_profile(project, "yarn")
+
+
 def test_delegation_accepts_central_bun_python_composite_profile(tmp_path: pathlib.Path) -> None:
     project = tmp_path / "project"
     project.mkdir()
