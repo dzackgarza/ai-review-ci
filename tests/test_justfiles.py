@@ -1698,6 +1698,21 @@ def test_bun_scaffold_delegates_qc_in_project_directory(
     assert "TypeScript project must have tests" in output
 
 
+def test_typescript_preflight_accepts_declared_yarn_project(tmp_path: pathlib.Path) -> None:
+    project = tmp_path / "yarn-project"
+    project.mkdir()
+    (project / "package.json").write_text(
+        json.dumps({"packageManager": "yarn@4.11.0", "scripts": {"test": "true"}}) + "\n"
+    )
+    (project / "yarn.lock").write_text("")
+    (project / "tests").mkdir()
+
+    result = run_just(ROOT / "justfiles" / "yarn.just", project, "_check-ts-project")
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert "TypeScript project preflight passed" in result.stdout
+
+
 @pytest.mark.parametrize(
     ("language", "project_files", "expected_error", "wrong_root_errors"),
     [
