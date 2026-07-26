@@ -698,8 +698,10 @@ def test_qc_workflow_installs_project_profile_before_running_acceptance() -> Non
     install = job["steps"][install_index]["run"]
 
     assert install_index < run_index
-    assert 'profile="$(just --evaluate ai_review_ci_profile)"' in install
-    assert 'setup-profile "$profile"' in install
+    assert install == (
+        'just -f "$HOME/ai-review-ci/ci/runner.just" '
+        'setup-profile "$QC_PROFILE"'
+    )
 
 
 def test_qc_workflow_accepts_only_remote_acceptance_tiers() -> None:

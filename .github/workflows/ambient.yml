@@ -21,3 +21,4 @@ jobs:
       issues: read
     with:
       tier: ambient
+      profile: python

@@ -40,6 +40,11 @@ setup-profile profile:
         cd "{{control_repo}}"
         bun install --frozen-lockfile
         ;;
+      bun-python)
+        uv sync --project "{{control_repo}}"
+        cd "{{control_repo}}"
+        bun install --frozen-lockfile
+        ;;
       bun-playwright)
         cd "{{control_repo}}"
         bun install --frozen-lockfile
