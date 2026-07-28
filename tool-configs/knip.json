@@ -10,6 +10,7 @@
     "src/**/*.tsx",
     "source/**/*.{js,ts,tsx,vue}",
     "test/**/*.{js,ts,tsx}",
+    "e2e/**/*.spec.{js,ts,tsx}",
     "scripts/**/*.{js,cjs,mjs,ts,tsx}",
     "forge.config.{js,cjs,mjs,ts}",
     "webpack*.{js,cjs,mjs,ts}",
@@ -24,6 +25,7 @@
     "src/**/*.tsx",
     "source/**/*.{js,ts,tsx,vue}",
     "test/**/*.{js,ts,tsx}",
+    "e2e/**/*.{js,ts,tsx}",
     "scripts/**/*.{js,cjs,mjs,ts,tsx}",
     "forge.config.{js,cjs,mjs,ts}",
     "webpack*.{js,cjs,mjs,ts}",
@@ -107,7 +109,8 @@
     "direnv",
     "gsettings",
     "pandoc",
-    "pgrep"
+    "pgrep",
+    "just"
   ],
   "ignoreExportsUsedInFile": true,
   "ignoreUnresolved": [
