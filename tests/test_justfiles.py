@@ -623,6 +623,42 @@ def test_knip_follows_dependency_imported_through_test_helper(tmp_path: pathlib.
     assert "forge-boundary" not in output
 
 
+def test_knip_tracks_e2e_dependencies_and_system_just_binary(tmp_path: pathlib.Path) -> None:
+    project = tmp_path / "bun-project"
+    e2e_dir = project / "e2e"
+    node_modules = project / "node_modules"
+    e2e_dir.mkdir(parents=True)
+    for dependency in ("e2e-boundary", "unused-boundary"):
+        package_dir = node_modules / dependency
+        package_dir.mkdir(parents=True)
+        (package_dir / "package.json").write_text(json.dumps({"name": dependency, "version": "1.0.0", "type": "module"}) + "\n")
+        (package_dir / "index.js").write_text("export const boundary = true;\n")
+    (project / "package.json").write_text(
+        json.dumps(
+            {
+                "name": "knip-e2e-graph-fixture",
+                "version": "1.0.0",
+                "scripts": {"test": "just test-e2e"},
+                "devDependencies": {
+                    "e2e-boundary": "1.0.0",
+                    "unused-boundary": "1.0.0",
+                },
+            }
+        )
+        + "\n"
+    )
+    (e2e_dir / "document-open.spec.ts").write_text('import { boundary } from "e2e-boundary";\nvoid boundary;\n')
+
+    result = run_just(ROOT / "justfiles" / "bun.just", project, "_knip")
+
+    output = result.stdout + result.stderr
+    assert result.returncode != 0, output
+    assert "unused-boundary" in output
+    assert "e2e-boundary" not in output
+    assert "Unlisted binaries" not in output
+    assert "just" not in output
+
+
 def test_knip_ignores_exact_assembled_pdfjs_module_only(tmp_path: pathlib.Path) -> None:
     project = tmp_path / "bun-project"
     reader_dir = project / "extension" / "reader"
