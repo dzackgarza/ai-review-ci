@@ -16,6 +16,7 @@
       "!**/build/**",
       "!**/coverage/**",
       "!**/_ci-support/**",
+      "!**/devtools/**",
       "!**/codeql-db/**",
       "!**/tool-artifacts/models/**",
       "!**/@girs/**",
@@ -28,6 +29,8 @@
       "!**/.lake/**",
       "!**/.worktrees/**",
       "!**/.claude/worktrees/**",
+      "!**/.agents/**",
+      "!**/.hermes/**",
       "!**/vendor/**",
       "!**/third_party/**",
       "!**/venv/**",
@@ -38,9 +41,7 @@
       "!**/notes/**",
       "!**/.webpack/**",
       "!**/out/**",
-      "!**/release/**",
-      "!**/.agents/**",
-      "!**/.hermes/**"
+      "!**/release/**"
     ]
   },
   "assist": {
