@@ -5,7 +5,6 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import tsPlugin from "@typescript-eslint/eslint-plugin";
 import tsParser from "@typescript-eslint/parser";
-import diffPlugin from "eslint-plugin-diff";
 import fpPlugin from "eslint-plugin-fp";
 import promisePlugin from "eslint-plugin-promise";
 import reactHooksPlugin from "eslint-plugin-react-hooks";
@@ -33,7 +32,10 @@ const centralIgnoreGlobs = centralExcludeDirs.map((directory, index) => {
   return `**/${directory}/**`;
 });
 const diffBase = process.env.ESLINT_PLUGIN_DIFF_COMMIT;
-const diffConfigs = diffBase === undefined
+const diffPlugin = diffBase === undefined
+  ? undefined
+  : (await import("eslint-plugin-diff")).default;
+const diffConfigs = diffPlugin === undefined
   ? []
   : diffPlugin.configs["flat/diff"].map((config) => ({
       ...config,
@@ -193,7 +195,7 @@ export default [
   },
   {
     files: ["**/*.vue"],
-    processor: diffBase === undefined
+    processor: diffPlugin === undefined
       ? vueProcessor
       : diffPlugin.composeProcessor(vueProcessor, "diff"),
     languageOptions: {
