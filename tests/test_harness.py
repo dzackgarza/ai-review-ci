@@ -342,6 +342,14 @@ def test_check_pr_description_reads_target_checkout_not_infra() -> None:
     assert '--repo-root "{{control_repo}}"' in recipe
 
 
+def test_check_review_threads_reads_target_checkout_not_infra() -> None:
+    runner = Path("ci/runner.just").read_text()
+
+    assert 'control_repo := env_var("GITHUB_WORKSPACE")' in runner
+    recipe = runner.split("check-review-threads pr_number:", 1)[1].split("\n\n", 1)[0]
+    assert '--repo-root "{{control_repo}}"' in recipe
+
+
 def test_qc_doctor_runner_emits_fenced_payload_and_preserves_failure(tmp_path: Path) -> None:
     target = tmp_path / "target"
     target.mkdir()
