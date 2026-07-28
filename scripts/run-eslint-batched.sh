@@ -44,6 +44,7 @@ if [[ ${QC_TIER:-} != ambient && -n ${DIFF_COVER_BASE:-} ]]; then
     echo "eslint: no changed authored JavaScript, TypeScript, or Vue files."
     exit 0
   fi
+  export ESLINT_PLUGIN_DIFF_COMMIT=$DIFF_COVER_BASE
 else
   while IFS= read -r -d '' file; do
     files+=("$file")

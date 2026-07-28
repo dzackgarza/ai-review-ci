@@ -5,6 +5,7 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import tsPlugin from "@typescript-eslint/eslint-plugin";
 import tsParser from "@typescript-eslint/parser";
+import diffPlugin from "eslint-plugin-diff";
 import fpPlugin from "eslint-plugin-fp";
 import promisePlugin from "eslint-plugin-promise";
 import reactHooksPlugin from "eslint-plugin-react-hooks";
@@ -31,6 +32,17 @@ const centralIgnoreGlobs = centralExcludeDirs.map((directory, index) => {
   }
   return `**/${directory}/**`;
 });
+const diffBase = process.env.ESLINT_PLUGIN_DIFF_COMMIT;
+const diffConfigs = diffBase === undefined
+  ? []
+  : diffPlugin.configs["flat/diff"].map((config) => ({
+      ...config,
+      ignores: [...(config.ignores ?? []), "**/*.vue"],
+    }));
+const vueProcessor = vuePlugin.processors.vue ?? vuePlugin.processors[".vue"];
+if (vueProcessor === undefined) {
+  throw new Error("eslint-plugin-vue does not expose a Vue processor");
+}
 const targetTsconfigPath = join(process.cwd(), "tsconfig.json");
 const targetTsconfigText = existsSync(targetTsconfigPath)
   ? readFileSync(targetTsconfigPath, "utf8")
@@ -93,6 +105,7 @@ export default [
     ],
   },
   ...vuePlugin.configs["flat/recommended"],
+  ...diffConfigs,
   {
     files: ["**/*.ts", "**/*.tsx"],
     languageOptions: {
@@ -180,6 +193,9 @@ export default [
   },
   {
     files: ["**/*.vue"],
+    processor: diffBase === undefined
+      ? vueProcessor
+      : diffPlugin.composeProcessor(vueProcessor, "diff"),
     languageOptions: {
       parser: vueParser,
       parserOptions: {
