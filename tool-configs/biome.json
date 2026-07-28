@@ -35,7 +35,9 @@
       "!**/src.bak/**",
       "!**/scripts/**",
       "!**/notebooks/**",
-      "!**/notes/**"
+      "!**/notes/**",
+      "!**/.agents/**",
+      "!**/.hermes/**"
     ]
   },
   "assist": {

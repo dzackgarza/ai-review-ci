@@ -53,6 +53,10 @@ directories = [
     # Agent-harness worktree checkouts: sibling branches live here and carry
     # their own QC runs; this repo must never lint another branch's worktree.
     ".claude/worktrees",
+    # Agent-memory vault symlinks: point outside the project into the central
+    # memory vault and must not be scanned by generic QC.
+    ".agents",
+    ".hermes",
     "vendor",
     "third_party",
     "venv",
