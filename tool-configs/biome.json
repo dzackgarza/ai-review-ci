@@ -36,6 +36,9 @@
       "!**/scripts/**",
       "!**/notebooks/**",
       "!**/notes/**",
+      "!**/.webpack/**",
+      "!**/out/**",
+      "!**/release/**",
       "!**/.agents/**",
       "!**/.hermes/**"
     ]

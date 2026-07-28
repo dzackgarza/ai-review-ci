@@ -61,9 +61,7 @@ def test_bypass_diff_rules_block_ts_expect_error_with_trailing_whitespace() -> N
 +// {marker}{trailing_spaces}
 """
 
-    assert gates.lexical_diff_findings(diff) == [
-        "src/app.ts:1: no-unjustified-ts-expect-error: POLICY.NO_QC_SILENCING"
-    ]
+    assert gates.lexical_diff_findings(diff) == ["src/app.ts:1: no-unjustified-ts-expect-error: POLICY.NO_QC_SILENCING"]
 
 
 def test_delegation_accepts_canonical_scaffold(tmp_path: pathlib.Path) -> None:
@@ -86,6 +84,44 @@ def test_delegation_accepts_central_bun_python_composite_profile(tmp_path: pathl
     (project / "justfile").write_text((pathlib.Path(__file__).parents[1] / "scaffolds" / "bun-python" / "justfile").read_text())
 
     gates.check_delegation(project, "bun-python")
+
+
+def test_delegation_accepts_shared_lean_audit_at_push_and_ci_tiers(tmp_path: pathlib.Path) -> None:
+    project = tmp_path / "project"
+    project.mkdir()
+    (project / "package.json").write_text('{"scripts": {}}\n')
+    (project / "bun.lock").write_text("")
+    (project / "justfile").write_text(
+        "test-commit:\n"
+        "    @just -f ~/ai-review-ci/justfiles/bun.just -d . test-commit\n\n"
+        "test-push:\n"
+        "    @just -f ~/ai-review-ci/justfiles/bun.just -d . test-push\n"
+        "    @just -f ~/ai-review-ci/justfiles/lean.just -d . lean-axiom-audit\n\n"
+        "test-ci:\n"
+        "    @just -f ~/ai-review-ci/justfiles/bun.just -d . test-ci\n"
+        "    @just -f ~/ai-review-ci/justfiles/lean.just -d . lean-axiom-audit\n"
+    )
+
+    gates.check_delegation(project, "bun")
+
+
+def test_delegation_rejects_shared_lean_audit_at_commit_tier(tmp_path: pathlib.Path) -> None:
+    project = tmp_path / "project"
+    project.mkdir()
+    (project / "package.json").write_text('{"scripts": {}}\n')
+    (project / "bun.lock").write_text("")
+    (project / "justfile").write_text(
+        "test-commit:\n"
+        "    @just -f ~/ai-review-ci/justfiles/bun.just -d . test-commit\n"
+        "    @just -f ~/ai-review-ci/justfiles/lean.just -d . lean-axiom-audit\n\n"
+        "test-push:\n"
+        "    @just -f ~/ai-review-ci/justfiles/bun.just -d . test-push\n\n"
+        "test-ci:\n"
+        "    @just -f ~/ai-review-ci/justfiles/bun.just -d . test-ci\n"
+    )
+
+    with pytest.raises(SystemExit):
+        gates.check_delegation(project, "bun")
 
 
 def test_delegation_rejects_local_qc_override(tmp_path: pathlib.Path) -> None:
@@ -216,23 +252,23 @@ def test_pr_description_lenient_when_no_template_installed(monkeypatch: pytest.M
 def test_branch_protection_payload_uses_profile_check_contexts() -> None:
     payload = gates.branch_protection_payload("bun")
 
-    assert payload["required_status_checks"]["contexts"] == []
+    assert "contexts" not in payload["required_status_checks"]
     assert payload["required_status_checks"]["checks"] == [
-        {"context": "qc-ci / qc", "app_id": -1},
-        {"context": "deterministic-diff / deterministic-diff", "app_id": -1},
-        {"context": "delegation-conformance / delegation-conformance", "app_id": -1},
-        {"context": "qc-doctor / qc-doctor", "app_id": -1},
-        {"context": "pr-description-checklist / pr-description-checklist", "app_id": -1},
-        {"context": "general / review", "app_id": -1},
-        {"context": "slop / review", "app_id": -1},
-        {"context": "thread-resolution / thread-resolution", "app_id": -1},
+        {"context": "qc-ci / qc"},
+        {"context": "deterministic-diff / deterministic-diff"},
+        {"context": "delegation-conformance / delegation-conformance"},
+        {"context": "qc-doctor / qc-doctor"},
+        {"context": "pr-description-checklist / pr-description-checklist"},
+        {"context": "general / review"},
+        {"context": "slop / review"},
+        {"context": "thread-resolution / thread-resolution"},
     ]
 
 
 def test_branch_protection_payload_requires_app_boot_for_bun_playwright() -> None:
     checks = gates.branch_protection_payload("bun-playwright")["required_status_checks"]["checks"]
 
-    assert {"context": "app-boot / app-boot", "app_id": -1} in checks
+    assert {"context": "app-boot / app-boot"} in checks
 
 
 def test_thread_resolution_evidence_requires_a_thread_local_disposition() -> None:
@@ -289,15 +325,9 @@ Audit anchor: abcdef123456
     assert gates._has_resolution_evidence(node(rejected))
     assert gates._has_resolution_evidence(node(duplicate))
     assert gates._has_resolution_evidence(node(outdated))
-    assert not gates._has_resolution_evidence(
-        node(accepted.replace("Commit: 123456789abc", "Commit: 123456789abc trailing junk"))
-    )
-    assert not gates._has_resolution_evidence(
-        node(accepted.replace("Pre-filter: Gate 1 correctness defect -> current-PR remediation", "Pre-filter: <gate>"))
-    )
-    assert not gates._has_resolution_evidence(
-        node(accepted.replace("Deleted artifact: None\n", ""))
-    )
+    assert not gates._has_resolution_evidence(node(accepted.replace("Commit: 123456789abc", "Commit: 123456789abc trailing junk")))
+    assert not gates._has_resolution_evidence(node(accepted.replace("Pre-filter: Gate 1 correctness defect -> current-PR remediation", "Pre-filter: <gate>")))
+    assert not gates._has_resolution_evidence(node(accepted.replace("Deleted artifact: None\n", "")))
     deleted = accepted.replace(
         "Deleted artifact: None",
         "Deleted artifact: tests/test_legacy.py\n"
@@ -412,7 +442,6 @@ def test_thread_resolution_does_not_auto_resolve_stale_ai_review_proof(
         gates.check_review_threads("owner/repo", 7)
 
 
-
 def test_thread_resolution_does_not_auto_resolve_reproducing_proof(
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
@@ -512,7 +541,6 @@ Deleted artifact: None
     error = capsys.readouterr().err
     assert "cited commit 123456789abc is not on this PR" in error
     assert "proof anchor tests/test_missing.py::test_evidence does not exist" in error
-
 
 
 def test_delegation_accepts_docs_and_configs_profile(tmp_path: pathlib.Path) -> None:

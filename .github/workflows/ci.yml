@@ -20,3 +20,4 @@ jobs:
       issues: read
     with:
       tier: test-ci
+      profile: python

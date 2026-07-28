@@ -27,6 +27,10 @@
     { "name": "area:backend", "color": "1d76db", "description": "Backend / API concerns", "category": "area" },
     { "name": "area:ci", "color": "1d76db", "description": "CI, QC gates, and automation", "category": "area" },
     { "name": "area:deps", "color": "1d76db", "description": "Dependencies and provisioning", "category": "area" },
-    { "name": "area:docs", "color": "1d76db", "description": "Documentation surfaces", "category": "area" }
+    { "name": "area:docs", "color": "1d76db", "description": "Documentation surfaces", "category": "area" },
+
+    { "name": "complexity:low", "color": "2da44e", "description": "Low drift risk: concrete, checkable, composes existing work; mistakes fail fast. Not about size.", "category": "complexity" },
+    { "name": "complexity:medium", "color": "d4a72c", "description": "Moderate drift risk: real modeling/theorem judgment, partial support, some weak-QC-guarded spots.", "category": "complexity" },
+    { "name": "complexity:high", "color": "cf222e", "description": "High drift risk: establishes downstream work, weakly QC-guarded, high reinvention. Not about size.", "category": "complexity" }
   ]
 }

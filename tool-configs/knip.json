@@ -8,6 +8,11 @@
     "app.css",
     "index.css",
     "src/**/*.tsx",
+    "source/**/*.{js,ts,tsx,vue}",
+    "test/**/*.{js,ts,tsx}",
+    "scripts/**/*.{js,cjs,mjs,ts,tsx}",
+    "forge.config.{js,cjs,mjs,ts}",
+    "webpack*.{js,cjs,mjs,ts}",
     "extension/**/*.{js,ts,tsx}",
     "extension/**/*.css",
     "tests/**/*.test.{js,ts,tsx}",
@@ -17,6 +22,11 @@
   "project": [
     "src/**/*.ts",
     "src/**/*.tsx",
+    "source/**/*.{js,ts,tsx,vue}",
+    "test/**/*.{js,ts,tsx}",
+    "scripts/**/*.{js,cjs,mjs,ts,tsx}",
+    "forge.config.{js,cjs,mjs,ts}",
+    "webpack*.{js,cjs,mjs,ts}",
     "lib/**/*.ts",
     "lib/**/*.tsx",
     "widget/**/*.tsx",
@@ -59,9 +69,11 @@
     "**/venv/**",
     "**/archives/**",
     "**/src.bak/**",
-    "**/scripts/**",
     "**/notebooks/**",
-    "**/notes/**"
+    "**/notes/**",
+    "**/.webpack/**",
+    "**/out/**",
+    "**/release/**"
   ],
   "ignoreDependencies": [
     "gi",
@@ -72,12 +84,27 @@
     "@tailwindcss/cli",
     "@tailwindcss/typography",
     "tailwindcss",
-    "tw-animate-css"
+    "tw-animate-css",
+    "@electron-forge/maker-deb",
+    "@electron-forge/maker-rpm",
+    "@electron-forge/maker-zip",
+    "@electron-forge/plugin-webpack",
+    "@vercel/webpack-asset-relocator-loader",
+    "css-loader",
+    "less-loader",
+    "node-loader",
+    "style-loader",
+    "ts-loader",
+    "tsx",
+    "unist"
   ],
   "ignoreBinaries": [
     "ags",
     "xdg-open",
-    "direnv"
+    "direnv",
+    "gsettings",
+    "pandoc",
+    "pgrep"
   ],
   "ignoreExportsUsedInFile": true,
   "ignoreUnresolved": [

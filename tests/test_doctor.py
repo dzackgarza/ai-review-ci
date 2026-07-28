@@ -311,11 +311,7 @@ def test_doctor_classifies_outdated_workflow_refs_as_stale(tmp_path: pathlib.Pat
 
 def test_doctor_classifies_missing_justfile_contract_as_misconfigured(tmp_path: pathlib.Path) -> None:
     project = create_target(tmp_path, "python")
-    lines = [
-        line
-        for line in (project / "justfile").read_text().splitlines()
-        if not line.startswith("ai_review_ci_")
-    ]
+    lines = [line for line in (project / "justfile").read_text().splitlines() if not line.startswith("ai_review_ci_")]
     (project / "justfile").write_text("\n".join(lines) + "\n")
 
     status, payload = status_for(project)

@@ -683,6 +683,38 @@ def test_qc_workflow_installs_flowmark_runtime_dependencies() -> None:
     assert install["run"] == "sudo apt-get update && sudo apt-get install -y pandoc ripgrep"
 
 
+def test_qc_workflow_installs_project_profile_before_running_acceptance() -> None:
+    job = _workflow_jobs("_qc.yml")["qc"]
+    install_index = next(index for index, step in enumerate(job["steps"]) if isinstance(step, dict) and step.get("name") == "Install project dependencies")
+    run_index = next(index for index, step in enumerate(job["steps"]) if isinstance(step, dict) and step.get("name") == "Run QC tier")
+    install = job["steps"][install_index]["run"]
+
+    assert install_index < run_index
+    assert install == ('just -f "$HOME/ai-review-ci/ci/runner.just" setup-profile "$QC_PROFILE"')
+
+
+def test_qc_workflow_runs_validated_project_setup_before_acceptance() -> None:
+    data = yaml.safe_load((_WORKFLOWS_DIR / "_qc.yml").read_text())
+    on_block = data.get("on", data.get(True)) or {}
+    setup_input = on_block["workflow_call"]["inputs"]["setup_recipe"]
+    job = data["jobs"]["qc"]
+    validation = next(step for step in job["steps"] if step.get("name") == "Validate inputs")
+    setup_index = next(index for index, step in enumerate(job["steps"]) if step.get("name") == "Provision project CI environment")
+    run_index = next(index for index, step in enumerate(job["steps"]) if step.get("name") == "Run QC tier")
+    setup = job["steps"][setup_index]
+
+    assert setup_input == {
+        "description": "Optional caller-owned just recipe that provisions domain-specific CI dependencies",
+        "required": False,
+        "type": "string",
+        "default": "",
+    }
+    assert "[^A-Za-z0-9_-]" in validation["run"]
+    assert setup_index < run_index
+    assert setup["if"] == "inputs.setup_recipe != ''"
+    assert setup["run"] == 'just "$QC_SETUP_RECIPE"'
+
+
 def test_qc_workflow_accepts_only_remote_acceptance_tiers() -> None:
     job = _workflow_jobs("_qc.yml")["qc"]
     validation = next(step for step in job["steps"] if isinstance(step, dict) and step.get("name") == "Validate inputs")

@@ -64,12 +64,15 @@ directories = [
     "archives",
     "src.bak",
     # Research scripts and notebooks are user-authored exploratory artifacts,
-    # not QC-owned product code. Generic checkers must not rewrite or diagnose
-    # them; research-specific tooling owns their validation.
+    # not QC-owned product code. Knip alone keeps project scripts visible
+    # because JS build and task scripts own dependency edges.
     "scripts",
     "notebooks",
     # Authored research notes and extraction dumps: prose whose rendered
     # content must never be altered by formatters (dzackgarza/research#187 —
     # flowmark is not render-neutral on them).
     "notes",
+    ".webpack",
+    "out",
+    "release",
 ]

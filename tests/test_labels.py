@@ -32,7 +32,7 @@ from ai_review_ci.labels import (
     load_taxonomy,
 )
 
-REQUIRED_CATEGORIES = {"type", "scope", "status", "area"}
+REQUIRED_CATEGORIES = {"type", "scope", "status", "area", "complexity"}
 
 
 # --- pure: taxonomy + planner + command mapping (real artifact, real data) ---

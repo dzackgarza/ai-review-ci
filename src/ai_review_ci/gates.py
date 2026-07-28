@@ -347,14 +347,15 @@ def _dry_run_recipe(target: Path, justfile: Path, recipe: str) -> str:
     return result.stdout + result.stderr
 
 
-def delegates_to_global_qc(output: str, project_profile: ProjectProfile) -> bool:
-    """Require exactly the centrally declared delegation set for a profile."""
+def delegates_to_global_qc(output: str, project_profile: ProjectProfile, recipe: str) -> bool:
+    """Require the declared profile delegation, plus Lean auditing only at push/CI tiers."""
     observed = set(re.findall(r"ai-review-ci/justfiles/([a-z-]+\.just)", output))
     expected = set(project_profile.justfile_names)
+    allowed = expected | ({"lean.just"} if recipe in {"test-push", "test-ci"} else set())
     command_lines = output.splitlines()
-    return observed == expected and all(
+    return expected <= observed <= allowed and all(
         any(f"ai-review-ci/justfiles/{justfile_name}" in line and re.search(r"(?:-d|--working-directory)\s+\.", line) is not None for line in command_lines)
-        for justfile_name in project_profile.justfile_names
+        for justfile_name in observed
     )
 
 
@@ -367,7 +368,7 @@ def check_delegation(target: Path, profile: str) -> None:
     failed: list[str] = []
     for recipe in ("test-commit", "test-push", "test-ci"):
         output = _dry_run_recipe(target, justfile, recipe)
-        if not delegates_to_global_qc(output, project_profile):
+        if not delegates_to_global_qc(output, project_profile, recipe):
             failed.append(recipe)
     if failed:
         required = ", ".join(f"~/ai-review-ci/justfiles/{name}" for name in project_profile.justfile_names)
@@ -384,7 +385,7 @@ def check_app_boot(target: Path, profile: str) -> None:
     check_profile(target, profile)
     justfile = _justfile_for(target)
     output = _dry_run_recipe(target, justfile, "app-boot")
-    if not delegates_to_global_qc(output, project_profile):
+    if not delegates_to_global_qc(output, project_profile, "app-boot"):
         _fail(f"{target} app-boot must delegate through ~/ai-review-ci/justfiles/{project_profile.justfile_names[0]} with -d .")
     if _DIRECT_PLAYWRIGHT.search(output):
         _fail(f"{target} app-boot must not invoke Playwright directly; delegate to ~/ai-review-ci/justfiles/bun.just")
@@ -507,9 +508,7 @@ def _append_remaining_thread_comments(node: JsonDict) -> None:
             _graphql_object(thread, "review thread").get("comments"),
             "review-thread comments connection",
         )
-        comments.extend(
-            _graphql_nodes(connection.get("nodes"), "review-thread comments")
-        )
+        comments.extend(_graphql_nodes(connection.get("nodes"), "review-thread comments"))
         page_info = _graphql_object(
             connection.get("pageInfo"),
             "review-thread comment page info",
@@ -594,12 +593,7 @@ def _deletion_fields_are_valid(body: str) -> bool:
     if artifact.casefold() == "none":
         return True
     disposition = _field_value(body, "Burden disposition")
-    return bool(
-        _field_value(body, "Original burden")
-        and disposition
-        and _BURDEN_DISPOSITION.search(disposition)
-        and _field_value(body, "Verification")
-    )
+    return bool(_field_value(body, "Original burden") and disposition and _BURDEN_DISPOSITION.search(disposition) and _field_value(body, "Verification"))
 
 
 def _reply_has_resolution_evidence(body: str) -> bool:
@@ -619,12 +613,7 @@ def _reply_has_resolution_evidence(body: str) -> bool:
 
     disposition = disposition_match.group("disposition").lower()
     if disposition.startswith("accepted"):
-        return bool(
-            _field_value(body, "Remediation")
-            and _field_value(body, "Proof")
-            and _COMMIT_FIELD.search(body)
-            and _deletion_fields_are_valid(body)
-        )
+        return bool(_field_value(body, "Remediation") and _field_value(body, "Proof") and _COMMIT_FIELD.search(body) and _deletion_fields_are_valid(body))
     if disposition == "duplicate":
         return bool(_CANONICAL_THREAD_FIELD.search(body))
     if disposition == "outdated":
@@ -680,9 +669,7 @@ def _pr_commit_shas(repo: str, pr_number: int) -> set[str]:
         for node in _graphql_nodes(connection.get("nodes"), "pull-request commit nodes"):
             commit = _graphql_object(node.get("commit"), "pull-request commit")
             oid = commit.get("oid")
-            if not isinstance(oid, str) or not re.fullmatch(
-                r"[0-9a-f]{40}", oid, re.IGNORECASE
-            ):
+            if not isinstance(oid, str) or not re.fullmatch(r"[0-9a-f]{40}", oid, re.IGNORECASE):
                 _fail("GitHub returned an invalid pull-request commit SHA")
             commits.add(oid.lower())
         page_info = _graphql_object(connection.get("pageInfo"), "commit page info")
@@ -760,9 +747,7 @@ def check_review_threads(
             continue
         reply = _resolution_reply(node)
         if reply is None:
-            failures.append(
-                f"{path}: resolved review thread lacks a thread-local evidenced disposition"
-            )
+            failures.append(f"{path}: resolved review thread lacks a thread-local evidenced disposition")
             continue
         disposition_match = _DISPOSITION_FIELD.search(reply)
         assert disposition_match is not None
@@ -795,8 +780,7 @@ def branch_protection_payload(profile: str) -> JsonDict:
     return {
         "required_status_checks": {
             "strict": True,
-            "contexts": [],
-            "checks": [{"context": context, "app_id": -1} for context in contexts],
+            "checks": [{"context": context} for context in contexts],
         },
         "enforce_admins": True,
         "required_pull_request_reviews": None,

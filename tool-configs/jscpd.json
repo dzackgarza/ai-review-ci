@@ -39,7 +39,10 @@
     "**/src.bak/**",
     "**/scripts/**",
     "**/notebooks/**",
-    "**/notes/**"
+    "**/notes/**",
+    "**/.webpack/**",
+    "**/out/**",
+    "**/release/**"
   ],
   "absolute": true,
   "gitignore": true
