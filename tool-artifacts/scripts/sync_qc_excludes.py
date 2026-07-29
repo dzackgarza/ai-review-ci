@@ -26,6 +26,7 @@ from typing import Never
 
 import tomlkit
 from ruamel.yaml import YAML
+from ruamel.yaml.comments import CommentedMap
 
 # ── Tool config descriptors ──────────────────────────────────────────────────
 # Each entry describes how to update one config file.
@@ -58,6 +59,7 @@ configs: list[ToolConfig] = [
         "format": "json",
         "key": ["ignore"],
         "is_dir_fn": lambda d: f"**/{d}/**",
+        "omit_dirs": ["scripts"],
         "static": [
             "**/env.d.ts",
         ],
@@ -173,7 +175,10 @@ def _build_entries(cfg: ToolConfig, dirs: list[str]) -> list[str]:
     """Build the full exclude list for one tool: static + TOML-derived."""
     result = list(cfg["static"])
     fn = cfg["is_dir_fn"]
+    omitted = set(cfg.get("omit_dirs", []))
     for d in dirs:
+        if d in omitted:
+            continue
         produced = fn(d)
         result.extend(produced if isinstance(produced, list) else [produced])
     return result
@@ -231,7 +236,7 @@ def write_yaml_config(qc_root: Path, cfg: ToolConfig, dirs: list[str]) -> None:
     yaml.preserve_quotes = True
     with path.open() as f:
         data = yaml.load(f)
-    if not isinstance(data, dict):
+    if not isinstance(data, CommentedMap):
         print(f"ERROR: {path} must contain a YAML mapping", file=sys.stderr)
         sys.exit(1)
 
@@ -239,7 +244,7 @@ def write_yaml_config(qc_root: Path, cfg: ToolConfig, dirs: list[str]) -> None:
     parent = data
     for key in cfg["key"][:-1]:
         candidate = parent.get(key)
-        if not isinstance(candidate, dict):
+        if not isinstance(candidate, CommentedMap):
             print(f"ERROR: {path} must define mapping key {key}", file=sys.stderr)
             sys.exit(1)
         parent = candidate

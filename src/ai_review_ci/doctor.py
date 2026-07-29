@@ -202,7 +202,7 @@ def justfile_contract_variables_text(
     """Render the repo-owned QC justfile contract variables deterministically."""
     ProfileAdapter.validate_python(profile)
     lines = [
-        "ai_review_ci_schema_version := \"1\"",
+        'ai_review_ci_schema_version := "1"',
         f'ai_review_ci_profile := "{profile}"',
         f'ai_review_ci_ref := "{installed_ref}"',
         f'ai_review_ci_release_channel := "{release_channel}"',
@@ -399,11 +399,7 @@ def _profile_specificity(profile: ProjectProfile) -> int:
 def _effective_profile(target: Path, declared_profile: ObservedProfile) -> ObservedProfile:
     if declared_profile == "docs-and-configs":
         return declared_profile
-    matches = [
-        profile
-        for profile in SUPPORTED_PROFILES
-        if profile != "docs-and-configs" and not _profile_missing_paths(target, PROJECT_PROFILES[profile])
-    ]
+    matches = [profile for profile in SUPPORTED_PROFILES if profile != "docs-and-configs" and not _profile_missing_paths(target, PROJECT_PROFILES[profile])]
     if not matches:
         return UNKNOWN_PROFILE
     specificity = {profile: _profile_specificity(PROJECT_PROFILES[profile]) for profile in matches}

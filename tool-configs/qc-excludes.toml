@@ -35,6 +35,9 @@ directories = [
     "build",
     "coverage",
     "_ci-support",
+    # Developer-only tooling (lint/benchmark scripts), never shipped in the wheel
+    # and free to depend on untyped helper libs; not held to product QC.
+    "devtools",
     "codeql-db",
     "tool-artifacts/models",
     "@girs",
@@ -49,6 +52,10 @@ directories = [
     # Agent-harness worktree checkouts: sibling branches live here and carry
     # their own QC runs; this repo must never lint another branch's worktree.
     ".claude/worktrees",
+    # Agent-memory vault symlinks: point outside the project into the central
+    # memory vault and must not be scanned by generic QC.
+    ".agents",
+    ".hermes",
     "vendor",
     "third_party",
     "venv",
@@ -56,8 +63,8 @@ directories = [
     "archives",
     "src.bak",
     # Research scripts, notebooks, and preambles are user-authored exploratory
-    # artifacts, not QC-owned product code. Generic checkers must not rewrite or
-    # diagnose them; research-specific tooling owns their validation.
+    # artifacts, not QC-owned product code. Knip alone keeps project scripts
+    # visible because JS build and task scripts own dependency edges.
     "scripts",
     "notebooks",
     "preamble",
@@ -65,4 +72,7 @@ directories = [
     # content must never be altered by formatters (dzackgarza/research#187 —
     # flowmark is not render-neutral on them).
     "notes",
+    ".webpack",
+    "out",
+    "release",
 ]

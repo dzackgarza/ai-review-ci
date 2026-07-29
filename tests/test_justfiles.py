@@ -156,7 +156,7 @@ def test_lean_push_gate_propagates_target_axiom_audit_failure(tmp_path: pathlib.
         "_lean-axiom-audit:\n"
         "    #!/usr/bin/env bash\n"
         "    set -euo pipefail\n"
-        "    test \"$(pwd -P)\" = \"$PWD\"\n"
+        '    test "$(pwd -P)" = "$PWD"\n'
         "    echo target axiom audit rejected a nonstandard dependency >&2\n"
         "    exit 1\n"
     )
@@ -171,13 +171,7 @@ def test_lean_push_gate_propagates_target_axiom_audit_failure(tmp_path: pathlib.
 def test_lean_push_gate_runs_target_axiom_audit_at_target_root(tmp_path: pathlib.Path) -> None:
     project = tmp_path / "lean-project"
     project.mkdir()
-    (project / "justfile").write_text(
-        "_lean-axiom-audit:\n"
-        "    #!/usr/bin/env bash\n"
-        "    set -euo pipefail\n"
-        "    test \"$(pwd -P)\" = \"$PWD\"\n"
-        "    echo target axiom audit passed\n"
-    )
+    (project / "justfile").write_text('_lean-axiom-audit:\n    #!/usr/bin/env bash\n    set -euo pipefail\n    test "$(pwd -P)" = "$PWD"\n    echo target axiom audit passed\n')
 
     result = run_just(ROOT / "justfiles" / "lean.just", project, "lean-axiom-audit")
 
@@ -373,30 +367,10 @@ def test_sage_vulture_files_ignore_scripts_and_global_notebooks_directories(
 @pytest.mark.parametrize(
     ("justfile_name", "recipe", "suffix", "expected_active"),
     [
-        (
-            "python.just",
-            "_python-qc-files",
-            ".py",
-            ("src/active.py", "src/preamble_helper.py"),
-        ),
-        (
-            "sage.just",
-            "_sage-qc-files",
-            ".sage",
-            ("src/active.sage", "src/preamble_helper.sage"),
-        ),
-        (
-            "bun.just",
-            "_js-qc-files",
-            ".ts",
-            ("src/active.ts", "src/preamble_helper.ts"),
-        ),
-        (
-            "rust.just",
-            "_rust-qc-files",
-            ".rs",
-            ("./src/active.rs", "./src/preamble_helper.rs"),
-        ),
+        ("python.just", "_python-qc-files", ".py", "src/active.py"),
+        ("sage.just", "_sage-qc-files", ".sage", "src/active.sage"),
+        ("bun.just", "_js-qc-files", ".ts", "src/active.ts"),
+        ("rust.just", "_rust-qc-files", ".rs", "./src/active.rs"),
     ],
 )
 def test_qc_file_selection_excludes_user_authored_scripts_and_notebooks(
@@ -404,18 +378,15 @@ def test_qc_file_selection_excludes_user_authored_scripts_and_notebooks(
     justfile_name: str,
     recipe: str,
     suffix: str,
-    expected_active: tuple[str, ...],
+    expected_active: str,
 ) -> None:
     project = tmp_path / "project"
     for relative in (
         f"src/active{suffix}",
-        f"src/preamble_helper{suffix}",
         f"scripts/derivation{suffix}",
         f"research/scripts/nested_derivation{suffix}",
         f"notebooks/exploration{suffix}",
         f"research/notebooks/nested_exploration{suffix}",
-        f"preamble/setup{suffix}",
-        f"research/preamble/nested_setup{suffix}",
     ):
         path = project / relative
         path.parent.mkdir(parents=True, exist_ok=True)
@@ -425,7 +396,7 @@ def test_qc_file_selection_excludes_user_authored_scripts_and_notebooks(
 
     output = result.stdout + result.stderr
     assert result.returncode == 0, output
-    assert set(result.stdout.splitlines()) == set(expected_active)
+    assert result.stdout.splitlines() == [expected_active]
 
 
 @pytest.mark.parametrize(
@@ -489,7 +460,7 @@ def test_tsc_requires_ags_when_tsconfig_declares_ags(tmp_path: pathlib.Path) -> 
     project.mkdir()
     (project / "package.json").write_text(json.dumps({"scripts": {}}) + "\n")
     (project / "tsconfig.json").write_text(json.dumps({"compilerOptions": {"jsxImportSource": "ags/gtk4"}}) + "\n")
-    env = os.environ | {"PATH": path_with_only(tmp_path, "bash", "cat", "grep", "jq", "just", "mktemp", "rg", "rm")}
+    env = os.environ | {"PATH": path_with_only(tmp_path, "bash", "cat", "jq", "just", "rg")}
 
     result = run_just(ROOT / "justfiles" / "bun.just", project, "_tsc", env=env)
 
@@ -590,6 +561,7 @@ def test_knip_config_does_not_blanket_ignore_owned_typescript(tmp_path: pathlib.
     assert "**/*.test.ts" not in shipped["ignore"]
     assert "**/*.spec.ts" not in shipped["ignore"]
     assert "**/__tests__/**" not in shipped["ignore"]
+    assert "**/scripts/**" not in shipped["ignore"]
 
     # The shipped config must be the deterministic output of the sync script
     # (no hand edits): regenerating in place yields no change.
@@ -611,10 +583,12 @@ def test_knip_config_does_not_blanket_ignore_owned_typescript(tmp_path: pathlib.
 
 def test_knip_follows_dependency_imported_through_test_helper(tmp_path: pathlib.Path) -> None:
     project = tmp_path / "bun-project"
+    source_dir = project / "source"
     tests_dir = project / "tests"
     node_modules = project / "node_modules"
+    source_dir.mkdir(parents=True)
     tests_dir.mkdir(parents=True)
-    for dependency in ("browser-boundary", "unused-boundary"):
+    for dependency in ("browser-boundary", "source-boundary", "forge-boundary", "unused-boundary"):
         package_dir = node_modules / dependency
         package_dir.mkdir(parents=True)
         (package_dir / "package.json").write_text(json.dumps({"name": dependency, "version": "1.0.0", "type": "module"}) + "\n")
@@ -626,6 +600,8 @@ def test_knip_follows_dependency_imported_through_test_helper(tmp_path: pathlib.
                 "version": "1.0.0",
                 "devDependencies": {
                     "browser-boundary": "1.0.0",
+                    "forge-boundary": "1.0.0",
+                    "source-boundary": "1.0.0",
                     "unused-boundary": "1.0.0",
                 },
             }
@@ -634,6 +610,8 @@ def test_knip_follows_dependency_imported_through_test_helper(tmp_path: pathlib.
     )
     (tests_dir / "shared-browser-boundary.ts").write_text('import { boundary } from "browser-boundary";\nexport const observed = boundary;\n')
     (tests_dir / "reader.test.ts").write_text('import { observed } from "./shared-browser-boundary";\nvoid observed;\n')
+    (source_dir / "main.ts").write_text('import { boundary } from "source-boundary";\nvoid boundary;\n')
+    (project / "forge.config.js").write_text('import { boundary } from "forge-boundary";\nvoid boundary;\n')
 
     result = run_just(ROOT / "justfiles" / "bun.just", project, "_knip")
 
@@ -641,6 +619,44 @@ def test_knip_follows_dependency_imported_through_test_helper(tmp_path: pathlib.
     assert result.returncode != 0, output
     assert "unused-boundary" in output
     assert "browser-boundary" not in output
+    assert "source-boundary" not in output
+    assert "forge-boundary" not in output
+
+
+def test_knip_tracks_e2e_dependencies_and_system_just_binary(tmp_path: pathlib.Path) -> None:
+    project = tmp_path / "bun-project"
+    e2e_dir = project / "e2e"
+    node_modules = project / "node_modules"
+    e2e_dir.mkdir(parents=True)
+    for dependency in ("e2e-boundary", "unused-boundary"):
+        package_dir = node_modules / dependency
+        package_dir.mkdir(parents=True)
+        (package_dir / "package.json").write_text(json.dumps({"name": dependency, "version": "1.0.0", "type": "module"}) + "\n")
+        (package_dir / "index.js").write_text("export const boundary = true;\n")
+    (project / "package.json").write_text(
+        json.dumps(
+            {
+                "name": "knip-e2e-graph-fixture",
+                "version": "1.0.0",
+                "scripts": {"test": "just test-e2e"},
+                "devDependencies": {
+                    "e2e-boundary": "1.0.0",
+                    "unused-boundary": "1.0.0",
+                },
+            }
+        )
+        + "\n"
+    )
+    (e2e_dir / "document-open.spec.ts").write_text('import { boundary } from "e2e-boundary";\nvoid boundary;\n')
+
+    result = run_just(ROOT / "justfiles" / "bun.just", project, "_knip")
+
+    output = result.stdout + result.stderr
+    assert result.returncode != 0, output
+    assert "unused-boundary" in output
+    assert "e2e-boundary" not in output
+    assert "Unlisted binaries" not in output
+    assert "just" not in output
 
 
 def test_knip_ignores_exact_assembled_pdfjs_module_only(tmp_path: pathlib.Path) -> None:
@@ -774,18 +790,18 @@ def test_common_normalization_formats_structured_text(
     project = tmp_path / "project"
     project.mkdir()
     markdown = project / "README.md"
+    agent_instructions = project / "AGENTS.md"
     json_file = project / "config.json"
-    excluded_markdown = [project / "tests" / "fixtures" / "source.md"]
-    normalized_markdown = [project / "corpus" / "card.md", project / "wiki" / "page.md"]
 
     markdown.write_text("# Title\n\n-   item\n")
+    agent_instructions.write_text("# Instructions\n\n-   preserve canonical bytes\n")
     json_file.write_text('{"b":2,"a":1}\n')
-    for path in excluded_markdown:
-        path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text("# Preserved\n\n-   byte-exact item\n")
-    for path in normalized_markdown:
-        path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text("# Authored\n\n-   authored item\n")
+    subprocess.run(["git", "init", "-q"], cwd=project, check=True)
+    subprocess.run(
+        ["git", "add", "AGENTS.md", "README.md", "config.json"],
+        cwd=project,
+        check=True,
+    )
 
     result = subprocess.run(
         [
@@ -805,11 +821,8 @@ def test_common_normalization_formats_structured_text(
     output = result.stdout + result.stderr
     assert result.returncode == 0, output
     assert markdown.read_text() == "# Title\n\n- item\n"
+    assert agent_instructions.read_text() == "# Instructions\n\n-   preserve canonical bytes\n"
     assert json_file.read_text() == '{ "b": 2, "a": 1 }\n'
-    for path in excluded_markdown:
-        assert path.read_text() == "# Preserved\n\n-   byte-exact item\n"
-    for path in normalized_markdown:
-        assert path.read_text() == "# Authored\n\n- authored item\n"
 
 
 def load_lint_staged_config() -> dict[str, list[str]]:
@@ -1096,6 +1109,51 @@ def test_semgrep_blocks_typescript_value_defaults(tmp_path: pathlib.Path) -> Non
     assert "Route POLICY.RUNTIME_DEFAULT and other POLICY.* findings" in output
 
 
+def test_semgrep_scans_only_changed_files_in_ci(
+    tmp_path: pathlib.Path,
+) -> None:
+    project = tmp_path / "downstream"
+    source = project / "source"
+    fake_bin = tmp_path / "bin"
+    calls = tmp_path / "semgrep-calls"
+    source.mkdir(parents=True)
+    fake_bin.mkdir()
+    (source / "legacy.ts").write_text("export const legacy = 'ambient'\n")
+    run_git(project, "init")
+    run_git(project, "config", "user.email", "test@example.com")
+    run_git(project, "config", "user.name", "Test")
+    run_git(project, "add", ".")
+    base_commit = run_git(project, "-c", "core.hooksPath=/dev/null", "commit", "-m", "base")
+    assert base_commit.returncode == 0, base_commit.stdout + base_commit.stderr
+    base_result = run_git(project, "rev-parse", "HEAD")
+    assert base_result.returncode == 0, base_result.stdout + base_result.stderr
+    base = base_result.stdout.strip()
+    (source / "changed.ts").write_text("export const changed = 'new'\n")
+    run_git(project, "add", ".")
+    change_commit = run_git(project, "-c", "core.hooksPath=/dev/null", "commit", "-m", "change")
+    assert change_commit.returncode == 0, change_commit.stdout + change_commit.stderr
+    (fake_bin / "uvx").write_text('#!/usr/bin/env bash\nprintf \'%s\\n\' "$*" >> "$SEMGREP_CALLS"\nprintf \'{"results":[]}\\n\'\n')
+    (fake_bin / "uvx").chmod(0o755)
+
+    result = run_just(
+        ROOT / "justfiles" / "shared.just",
+        project,
+        "_semgrep",
+        env={
+            **os.environ,
+            "DIFF_COVER_BASE": base,
+            "PATH": f"{fake_bin}:{os.environ['PATH']}",
+            "QC_TIER": "test-ci",
+            "SEMGREP_CALLS": str(calls),
+        },
+    )
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    invocation = calls.read_text()
+    assert "source/changed.ts" in invocation
+    assert "source/legacy.ts" not in invocation
+
+
 def test_semgrep_allows_fail_loud_typescript_guards(tmp_path: pathlib.Path) -> None:
     project = tmp_path / "semgrep-guard-project"
     project.mkdir()
@@ -1364,6 +1422,62 @@ def test_vibecheck_still_blocks_g141_comment_matches(tmp_path: pathlib.Path) -> 
     assert TRIAGE_MARKER in output
 
 
+def test_vibecheck_pr_tier_allows_findings_unchanged_from_diff_base(tmp_path: pathlib.Path) -> None:
+    project = tmp_path / "vibe-project"
+    project.mkdir()
+    init_git_repo(project)
+    source = project / "src" / "app.ts"
+    source.parent.mkdir()
+    source.write_text("// (Source: imagined paper)\n")
+    assert run_git(project, "add", ".").returncode == 0
+    commit_without_hooks(project, "base")
+    base_ref = subprocess.check_output(["git", "-C", str(project), "rev-parse", "HEAD"], text=True).strip()
+    (project / "README.md").write_text("unrelated change\n")
+    assert run_git(project, "add", ".").returncode == 0
+    commit_without_hooks(project, "head")
+
+    fake_bin = tmp_path / "fake-bin"
+    fake_bin.mkdir()
+    uvx = fake_bin / "uvx"
+    uvx.write_text(
+        "#!/usr/bin/env bash\n"
+        "root=$(pwd)\n"
+        "cat <<JSON\n"
+        "{"
+        '"version":"0.1.0",'
+        '"passed":false,'
+        '"summary":{"rules_run":49,"critical":0,"high":1,"medium":0,"low":0},'
+        '"findings":[{'
+        '"rule_id":"G141",'
+        '"name":"Research citations in code comments",'
+        '"severity":"high",'
+        '"category":"ai-slop",'
+        '"file":"$root/src/app.ts",'
+        '"line":1,'
+        '"content":"// (Source: imagined paper)",'
+        '"notes":"citation",'
+        '"two_pass":false,'
+        '"co_occurrence":false'
+        "}],"
+        '"errors":[]'
+        "}\n"
+        "JSON\n"
+        "exit 1\n",
+    )
+    uvx.chmod(0o755)
+    env = os.environ | {
+        "PATH": f"{fake_bin}:{os.environ['PATH']}",
+        "QC_TIER": "test-ci",
+        "DIFF_COVER_BASE": base_ref,
+    }
+
+    result = run_just(ROOT / "justfiles" / "shared.just", project, "_vibecheck", env=env)
+
+    output = result.stdout + result.stderr
+    assert result.returncode == 0, output
+    assert "vibecheck: findings are unchanged relative to DIFF_COVER_BASE." in output
+
+
 def aislop_payload(*diagnostics: dict[str, Any]) -> dict[str, Any]:
     return {
         "schemaVersion": "1",
@@ -1432,13 +1546,65 @@ def test_aislop_blocks_on_error_severity_findings(tmp_path: pathlib.Path) -> Non
             "message": "Catch block only prints error without proper handling",
         },
     )
-    env = os.environ | {"PATH": f"{write_fake_npx_slop_scan(tmp_path, payload)}:{os.environ['PATH']}"}
+    env = os.environ | {
+        "DIFF_COVER_BASE": "",
+        "PATH": f"{write_fake_npx_slop_scan(tmp_path, payload)}:{os.environ['PATH']}",
+        "QC_TIER": "ambient",
+    }
 
     result = run_just(ROOT / "justfiles" / "shared.just", project, "_aislop", env=env)
 
     output = result.stdout + result.stderr
     assert result.returncode != 0, output
     assert "ai-slop/swallowed-exception" in output
+
+
+def test_aislop_pr_tier_allows_errors_unchanged_from_diff_base(tmp_path: pathlib.Path) -> None:
+    project = tmp_path / "aislop-project"
+    project.mkdir()
+    init_git_repo(project)
+    source = project / "src" / "app.ts"
+    source.parent.mkdir()
+    source.write_text("try { risky() } catch {}\n")
+    assert run_git(project, "add", ".").returncode == 0
+    commit_without_hooks(project, "base")
+    base_ref = subprocess.check_output(["git", "-C", str(project), "rev-parse", "HEAD"], text=True).strip()
+    (project / "README.md").write_text("unrelated change\n")
+    assert run_git(project, "add", ".").returncode == 0
+    commit_without_hooks(project, "head")
+
+    fake_bin = tmp_path / "fake-bin"
+    fake_bin.mkdir()
+    npx = fake_bin / "npx"
+    npx.write_text(
+        "#!/usr/bin/env bash\n"
+        "root=$(pwd)\n"
+        "cat <<JSON\n"
+        "{"
+        '"schemaVersion":"1",'
+        '"score":80,'
+        '"summary":{"errors":1,"warnings":0,"fixable":0,"files":1},'
+        '"diagnostics":[{'
+        '"filePath":"$root/src/app.ts",'
+        '"line":1,'
+        '"rule":"ai-slop/swallowed-exception",'
+        '"severity":"error",'
+        '"message":"Empty catch block swallows errors silently"'
+        "}]} \n"
+        "JSON\n",
+    )
+    npx.chmod(0o755)
+    env = os.environ | {
+        "DIFF_COVER_BASE": base_ref,
+        "PATH": f"{fake_bin}:{os.environ['PATH']}",
+        "QC_TIER": "test-ci",
+    }
+
+    result = run_just(ROOT / "justfiles" / "shared.just", project, "_aislop", env=env)
+
+    output = result.stdout + result.stderr
+    assert result.returncode == 0, output
+    assert "aislop: error findings are unchanged relative to DIFF_COVER_BASE." in output
 
 
 def test_aislop_surfaces_warnings_without_blocking(tmp_path: pathlib.Path) -> None:
@@ -1453,7 +1619,11 @@ def test_aislop_surfaces_warnings_without_blocking(tmp_path: pathlib.Path) -> No
             "message": "print() left in code",
         },
     )
-    env = os.environ | {"PATH": f"{write_fake_npx_slop_scan(tmp_path, payload)}:{os.environ['PATH']}"}
+    env = os.environ | {
+        "DIFF_COVER_BASE": "",
+        "PATH": f"{write_fake_npx_slop_scan(tmp_path, payload)}:{os.environ['PATH']}",
+        "QC_TIER": "ambient",
+    }
 
     result = run_just(ROOT / "justfiles" / "shared.just", project, "_aislop", env=env)
 
@@ -1470,7 +1640,11 @@ def test_aislop_fails_closed_on_unexpected_schema(tmp_path: pathlib.Path) -> Non
     project = tmp_path / "aislop-project"
     project.mkdir()
     payload = {"schemaVersion": "1", "score": 100, "note": "no summary or diagnostics"}
-    env = os.environ | {"PATH": f"{write_fake_npx_slop_scan(tmp_path, payload)}:{os.environ['PATH']}"}
+    env = os.environ | {
+        "DIFF_COVER_BASE": "",
+        "PATH": f"{write_fake_npx_slop_scan(tmp_path, payload)}:{os.environ['PATH']}",
+        "QC_TIER": "ambient",
+    }
 
     result = run_just(ROOT / "justfiles" / "shared.just", project, "_aislop", env=env)
 
@@ -1516,7 +1690,11 @@ def test_slop_scan_ignores_non_gating_structural_heuristics(
             },
         ],
     }
-    env = os.environ | {"PATH": f"{write_fake_npx_slop_scan(tmp_path, payload)}:{os.environ['PATH']}"}
+    env = os.environ | {
+        "DIFF_COVER_BASE": "",
+        "PATH": f"{write_fake_npx_slop_scan(tmp_path, payload)}:{os.environ['PATH']}",
+        "QC_TIER": "ambient",
+    }
 
     result = run_just(ROOT / "justfiles" / "bun.just", project, "_slop-scan", env=env)
 
@@ -1550,7 +1728,11 @@ def test_slop_scan_still_blocks_concrete_slop_findings(tmp_path: pathlib.Path) -
             },
         ],
     }
-    env = os.environ | {"PATH": f"{write_fake_npx_slop_scan(tmp_path, payload)}:{os.environ['PATH']}"}
+    env = os.environ | {
+        "DIFF_COVER_BASE": "",
+        "PATH": f"{write_fake_npx_slop_scan(tmp_path, payload)}:{os.environ['PATH']}",
+        "QC_TIER": "ambient",
+    }
 
     result = run_just(ROOT / "justfiles" / "bun.just", project, "_slop-scan", env=env)
 
@@ -1559,6 +1741,96 @@ def test_slop_scan_still_blocks_concrete_slop_findings(tmp_path: pathlib.Path) -
     assert "ignored 1 non-gating structural heuristic finding(s)" in output
     assert "errors.swallowed" in output
     assert "structure.pass-through-wrappers" not in output
+
+
+def test_slop_scan_enforces_only_changed_authored_files_in_ci(
+    tmp_path: pathlib.Path,
+) -> None:
+    project = tmp_path / "slop-project"
+    project.mkdir()
+    (project / "legacy.ts").write_text("export const legacy = 1;\n")
+    shutil.copy(
+        ROOT / "tool-configs" / "slop-scan.config.json",
+        project / "slop-scan.config.json",
+    )
+    run_git(project, "init")
+    run_git(project, "config", "user.email", "test@example.com")
+    run_git(project, "config", "user.name", "Test")
+    run_git(project, "add", ".")
+    base_commit = run_git(project, "-c", "core.hooksPath=/dev/null", "commit", "-m", "base")
+    assert base_commit.returncode == 0, base_commit.stdout + base_commit.stderr
+    base_result = run_git(project, "rev-parse", "HEAD")
+    assert base_result.returncode == 0, base_result.stdout + base_result.stderr
+    base = base_result.stdout.strip()
+    (project / "changed.ts").write_text("export const changed = 1;\n")
+    run_git(project, "add", ".")
+    change_commit = run_git(project, "-c", "core.hooksPath=/dev/null", "commit", "-m", "change")
+    assert change_commit.returncode == 0, change_commit.stdout + change_commit.stderr
+    payload = {
+        "summary": {"findingCount": 2},
+        "findings": [
+            {
+                "ruleId": "errors.swallowed",
+                "severity": "strong",
+                "path": "legacy.ts",
+                "location": {"line": 1},
+            },
+            {
+                "ruleId": "errors.swallowed",
+                "severity": "strong",
+                "path": "changed.ts",
+                "location": {"line": 1},
+            },
+        ],
+    }
+    env = os.environ | {
+        "DIFF_COVER_BASE": base,
+        "PATH": f"{write_fake_npx_slop_scan(tmp_path, payload)}:{os.environ['PATH']}",
+        "QC_TIER": "test-ci",
+    }
+
+    result = run_just(ROOT / "justfiles" / "bun.just", project, "_slop-scan", env=env)
+
+    output = result.stdout + result.stderr
+    assert result.returncode != 0, output
+    assert "changed.ts:1" in output
+    assert "legacy.ts" not in output
+
+
+def test_slop_scan_skips_clean_diff_without_invoking_scanner(
+    tmp_path: pathlib.Path,
+) -> None:
+    project = tmp_path / "slop-project"
+    fake_bin = tmp_path / "fake-bin"
+    fake_bin.mkdir()
+    project.mkdir()
+    (project / "legacy.ts").write_text("export const legacy = 1;\n")
+    shutil.copy(
+        ROOT / "tool-configs" / "slop-scan.config.json",
+        project / "slop-scan.config.json",
+    )
+    run_git(project, "init")
+    run_git(project, "config", "user.email", "test@example.com")
+    run_git(project, "config", "user.name", "Test")
+    run_git(project, "add", ".")
+    base_commit = run_git(project, "-c", "core.hooksPath=/dev/null", "commit", "-m", "base")
+    assert base_commit.returncode == 0, base_commit.stdout + base_commit.stderr
+    base_result = run_git(project, "rev-parse", "HEAD")
+    assert base_result.returncode == 0, base_result.stdout + base_result.stderr
+    base = base_result.stdout.strip()
+    (fake_bin / "npx").write_text("#!/usr/bin/env bash\nexit 9\n")
+    (fake_bin / "npx").chmod(0o755)
+    env = os.environ | {
+        "DIFF_COVER_BASE": base,
+        "PATH": f"{fake_bin}:{os.environ['PATH']}",
+        "QC_TIER": "test-ci",
+    }
+
+    result = run_just(ROOT / "justfiles" / "bun.just", project, "_slop-scan", env=env)
+
+    output = result.stdout + result.stderr
+    assert result.returncode == 0, output
+    assert "slop-scan: no changed authored JavaScript, TypeScript, or Vue files." in output
 
 
 def test_envrc_check_accepts_root_envrc_and_rejects_dotenv_files(
@@ -1715,6 +1987,556 @@ def test_eslint_flat_config_imports_with_declared_tool_config_deps(
     assert "**/central-owned/**" in ignores
 
 
+def test_eslint_ignores_generated_typescript_but_reports_authored_violation(
+    tmp_path: pathlib.Path,
+) -> None:
+    tool_config = tmp_path / "tool-configs"
+    project = tmp_path / "downstream"
+    authored = project / "src"
+    generated = project / ".webpack" / "main"
+    tool_config.mkdir()
+    authored.mkdir(parents=True)
+    generated.mkdir(parents=True)
+    for file_name in ("package.json", "bun.lock", "eslint.config.js", "qc-excludes.toml"):
+        shutil.copy(ROOT / "tool-configs" / file_name, tool_config / file_name)
+    (project / "package.json").write_text('{"type":"module"}\n')
+    (project / "tsconfig.json").write_text(
+        json.dumps(
+            {
+                "compilerOptions": {
+                    "strict": True,
+                    "target": "ESNext",
+                    "module": "ESNext",
+                },
+                "include": ["src/**/*.ts"],
+            }
+        )
+        + "\n"
+    )
+    violation = "export const unsafe: any = 1\n"
+    (authored / "owned.ts").write_text(violation)
+    (generated / "generated.ts").write_text(violation)
+
+    install = subprocess.run(
+        ["bun", "install", "--frozen-lockfile"],
+        cwd=tool_config,
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+    assert install.returncode == 0, install.stdout + install.stderr
+    lint = subprocess.run(
+        [
+            str(tool_config / "node_modules" / ".bin" / "eslint"),
+            "--config",
+            str(tool_config / "eslint.config.js"),
+            ".",
+        ],
+        cwd=project,
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+
+    output = lint.stdout + lint.stderr
+    assert lint.returncode != 0, output
+    assert "src/owned.ts" in output
+    assert ".webpack/main/generated.ts" not in output
+    assert "@typescript-eslint/no-explicit-any" in output
+
+
+def test_eslint_centrally_owns_vue_parser_and_security_rules(
+    tmp_path: pathlib.Path,
+) -> None:
+    tool_config = tmp_path / "tool-configs"
+    project = tmp_path / "vue-downstream"
+    source = project / "src"
+    tool_config.mkdir()
+    source.mkdir(parents=True)
+    for file_name in ("package.json", "bun.lock", "eslint.config.js", "qc-excludes.toml"):
+        shutil.copy(ROOT / "tool-configs" / file_name, tool_config / file_name)
+    (project / "package.json").write_text('{"type":"module"}\n')
+    (project / "tsconfig.json").write_text(
+        json.dumps(
+            {
+                "compilerOptions": {
+                    "strict": True,
+                    "target": "ESNext",
+                    "module": "ESNext",
+                },
+                "include": ["src/**/*.vue"],
+            }
+        )
+        + "\n"
+    )
+    (source / "App.vue").write_text(
+        "\n".join(
+            [
+                '<script setup lang="ts">',
+                "const unsafe: any = '<strong>unsafe</strong>'",
+                "</script>",
+                "<template>",
+                '  <div v-html="unsafe" />',
+                "</template>",
+                "",
+            ]
+        )
+    )
+
+    install = subprocess.run(
+        ["bun", "install", "--frozen-lockfile"],
+        cwd=tool_config,
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+    assert install.returncode == 0, install.stdout + install.stderr
+    lint = subprocess.run(
+        [
+            str(tool_config / "node_modules" / ".bin" / "eslint"),
+            "--config",
+            str(tool_config / "eslint.config.js"),
+            "src/App.vue",
+        ],
+        cwd=project,
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+
+    output = lint.stdout + lint.stderr
+    assert lint.returncode != 0, output
+    assert "@typescript-eslint/no-explicit-any" in output
+    assert "vue/no-v-html" in output
+
+
+def test_eslint_applies_react_hook_rules_only_to_react_sources(
+    tmp_path: pathlib.Path,
+) -> None:
+    tool_config = tmp_path / "tool-configs"
+    project = tmp_path / "framework-downstream"
+    source = project / "src"
+    tool_config.mkdir()
+    source.mkdir(parents=True)
+    for file_name in ("package.json", "bun.lock", "eslint.config.js", "qc-excludes.toml"):
+        shutil.copy(ROOT / "tool-configs" / file_name, tool_config / file_name)
+    (project / "package.json").write_text('{"type":"module"}\n')
+    (project / "tsconfig.json").write_text(
+        json.dumps(
+            {
+                "compilerOptions": {
+                    "strict": True,
+                    "target": "ESNext",
+                    "module": "ESNext",
+                    "jsx": "preserve",
+                },
+                "include": ["src/**/*.ts", "src/**/*.tsx"],
+            }
+        )
+        + "\n"
+    )
+    composable_call = "\n".join(
+        [
+            "declare function useWorkspaceStore(): void",
+            "export function closeWorkspace(): void {",
+            "  useWorkspaceStore()",
+            "}",
+            "",
+        ]
+    )
+    (source / "vue-composable.ts").write_text(composable_call)
+    (source / "react-component.tsx").write_text(composable_call)
+
+    install = subprocess.run(
+        ["bun", "install", "--frozen-lockfile"],
+        cwd=tool_config,
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+    assert install.returncode == 0, install.stdout + install.stderr
+    lint = subprocess.run(
+        [
+            str(tool_config / "node_modules" / ".bin" / "eslint"),
+            "--config",
+            str(tool_config / "eslint.config.js"),
+            "src",
+        ],
+        cwd=project,
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+
+    output = lint.stdout + lint.stderr
+    assert lint.returncode != 0, output
+    assert "react-component.tsx" in output
+    assert "vue-composable.ts" not in output
+    assert "react-hooks/rules-of-hooks" in output
+
+
+def test_eslint_runner_batches_authored_files_to_bound_process_memory(
+    tmp_path: pathlib.Path,
+) -> None:
+    project = tmp_path / "downstream"
+    source = project / "source"
+    fake_bin = tmp_path / "fake-eslint"
+    calls = tmp_path / "calls"
+    source.mkdir(parents=True)
+    for index in range(105):
+        (source / f"file-{index:03}.ts").write_text("export const value = 1\n")
+    (project / ".webpack" / "main").mkdir(parents=True)
+    (project / ".webpack" / "main" / "generated.ts").write_text("export const generated = 1\n")
+    fake_bin.write_text('#!/usr/bin/env bash\nprintf \'%s\\n\' "$*" >> "$ESLINT_CALLS"\n')
+    fake_bin.chmod(0o755)
+
+    run = subprocess.run(
+        [
+            str(ROOT / "scripts" / "run-eslint-batched.sh"),
+            str(fake_bin),
+            str(ROOT / "tool-configs" / "eslint.config.js"),
+            "source",
+        ],
+        cwd=project,
+        env={
+            **os.environ,
+            "DIFF_COVER_BASE": "",
+            "ESLINT_CALLS": str(calls),
+            "ESLINT_BATCH_SIZE": "40",
+            "QC_TIER": "",
+        },
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+
+    assert run.returncode == 0, run.stdout + run.stderr
+    invocations = calls.read_text().splitlines()
+    assert len(invocations) == 3
+    assert all("--config" in invocation for invocation in invocations)
+    assert all(".webpack" not in invocation for invocation in invocations)
+
+
+def test_eslint_runner_enforces_rules_only_on_changed_authored_files_in_ci(
+    tmp_path: pathlib.Path,
+) -> None:
+    project = tmp_path / "downstream"
+    source = project / "source"
+    fake_bin = tmp_path / "fake-eslint"
+    calls = tmp_path / "calls"
+    source.mkdir(parents=True)
+    (source / "legacy.ts").write_text("export const legacy: any = 1\n")
+    run_git(project, "init")
+    run_git(project, "config", "user.email", "test@example.com")
+    run_git(project, "config", "user.name", "Test")
+    run_git(project, "add", ".")
+    base_commit = run_git(project, "-c", "core.hooksPath=/dev/null", "commit", "-m", "base")
+    assert base_commit.returncode == 0, base_commit.stdout + base_commit.stderr
+    base_result = run_git(project, "rev-parse", "HEAD")
+    assert base_result.returncode == 0, base_result.stdout + base_result.stderr
+    base = base_result.stdout.strip()
+    (source / "changed.ts").write_text("export const changed: any = 1\n")
+    run_git(project, "add", ".")
+    change_commit = run_git(project, "-c", "core.hooksPath=/dev/null", "commit", "-m", "change")
+    assert change_commit.returncode == 0, change_commit.stdout + change_commit.stderr
+    fake_bin.write_text('#!/usr/bin/env bash\nprintf \'%s\\n\' "$*" >> "$ESLINT_CALLS"\n')
+    fake_bin.chmod(0o755)
+
+    run = subprocess.run(
+        [
+            str(ROOT / "scripts" / "run-eslint-batched.sh"),
+            str(fake_bin),
+            str(ROOT / "tool-configs" / "eslint.config.js"),
+            "source",
+        ],
+        cwd=project,
+        env={
+            **os.environ,
+            "DIFF_COVER_BASE": base,
+            "ESLINT_CALLS": str(calls),
+            "QC_TIER": "test-ci",
+        },
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+
+    assert run.returncode == 0, run.stdout + run.stderr
+    invocation = calls.read_text()
+    assert "source/changed.ts" in invocation
+    assert "source/legacy.ts" not in invocation
+
+
+def test_eslint_runner_enforces_only_changed_vue_lines_in_ci(
+    tmp_path: pathlib.Path,
+) -> None:
+    tool_config = tmp_path / "tool-configs"
+    project = tmp_path / "downstream"
+    source = project / "source"
+    tool_config.mkdir()
+    source.mkdir(parents=True)
+    for file_name in ("package.json", "bun.lock", "eslint.config.js", "qc-excludes.toml"):
+        shutil.copy(ROOT / "tool-configs" / file_name, tool_config / file_name)
+    (project / "package.json").write_text('{"type":"module"}\n')
+    (project / "tsconfig.json").write_text(
+        json.dumps(
+            {
+                "compilerOptions": {
+                    "strict": True,
+                    "target": "ES2024",
+                    "module": "commonjs",
+                },
+                "include": ["source/**/*"],
+            }
+        )
+        + "\n"
+    )
+    component = source / "App.vue"
+    component.write_text(
+        "\n".join(
+            [
+                '<script setup lang="ts">',
+                "const legacy: any = 1",
+                "const marker: string = 'base'",
+                "</script>",
+                "<template><div>{{ marker }}</div></template>",
+                "",
+            ]
+        )
+    )
+    run_git(project, "init")
+    run_git(project, "config", "user.email", "test@example.com")
+    run_git(project, "config", "user.name", "Test")
+    run_git(project, "add", ".")
+    base_commit = run_git(
+        project,
+        "-c",
+        "core.hooksPath=/dev/null",
+        "commit",
+        "-m",
+        "base",
+    )
+    assert base_commit.returncode == 0, base_commit.stdout + base_commit.stderr
+    base_result = run_git(project, "rev-parse", "HEAD")
+    assert base_result.returncode == 0, base_result.stdout + base_result.stderr
+    base = base_result.stdout.strip()
+    component.write_text(component.read_text().replace("'base'", "'safe'"))
+    run_git(project, "add", ".")
+    change_commit = run_git(
+        project,
+        "-c",
+        "core.hooksPath=/dev/null",
+        "commit",
+        "-m",
+        "safe change",
+    )
+    assert change_commit.returncode == 0, change_commit.stdout + change_commit.stderr
+    install = subprocess.run(
+        ["bun", "install", "--frozen-lockfile"],
+        cwd=tool_config,
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+    assert install.returncode == 0, install.stdout + install.stderr
+
+    lint = subprocess.run(
+        [
+            str(ROOT / "scripts" / "run-eslint-batched.sh"),
+            str(tool_config / "node_modules" / ".bin" / "eslint"),
+            str(tool_config / "eslint.config.js"),
+            "source",
+        ],
+        cwd=project,
+        env={
+            **os.environ,
+            "DIFF_COVER_BASE": base,
+            "QC_TIER": "test-ci",
+        },
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+
+    output = lint.stdout + lint.stderr
+    assert lint.returncode == 0, output
+    assert "no-explicit-any" not in output
+
+    component.write_text(component.read_text().replace("marker: string", "marker: any"))
+    run_git(project, "add", ".")
+    unsafe_commit = run_git(
+        project,
+        "-c",
+        "core.hooksPath=/dev/null",
+        "commit",
+        "-m",
+        "unsafe change",
+    )
+    assert unsafe_commit.returncode == 0, unsafe_commit.stdout + unsafe_commit.stderr
+    lint = subprocess.run(
+        [
+            str(ROOT / "scripts" / "run-eslint-batched.sh"),
+            str(tool_config / "node_modules" / ".bin" / "eslint"),
+            str(tool_config / "eslint.config.js"),
+            "source",
+        ],
+        cwd=project,
+        env={
+            **os.environ,
+            "DIFF_COVER_BASE": base,
+            "QC_TIER": "test-ci",
+        },
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+
+    output = lint.stdout + lint.stderr
+    assert lint.returncode != 0, output
+    assert "no-explicit-any" in output
+
+
+def test_bun_lizard_scans_only_changed_authored_files_in_ci(
+    tmp_path: pathlib.Path,
+) -> None:
+    project = tmp_path / "downstream"
+    source = project / "source"
+    fake_bin = tmp_path / "bin"
+    calls = tmp_path / "lizard-calls"
+    source.mkdir(parents=True)
+    fake_bin.mkdir()
+    (source / "legacy.ts").write_text("export const legacy = 1\n")
+    run_git(project, "init")
+    run_git(project, "config", "user.email", "test@example.com")
+    run_git(project, "config", "user.name", "Test")
+    run_git(project, "add", ".")
+    base_commit = run_git(project, "-c", "core.hooksPath=/dev/null", "commit", "-m", "base")
+    assert base_commit.returncode == 0, base_commit.stdout + base_commit.stderr
+    base_result = run_git(project, "rev-parse", "HEAD")
+    assert base_result.returncode == 0, base_result.stdout + base_result.stderr
+    base = base_result.stdout.strip()
+    (source / "changed.ts").write_text("export const changed = 1\n")
+    run_git(project, "add", ".")
+    change_commit = run_git(project, "-c", "core.hooksPath=/dev/null", "commit", "-m", "change")
+    assert change_commit.returncode == 0, change_commit.stdout + change_commit.stderr
+    (fake_bin / "uvx").write_text('#!/usr/bin/env bash\nprintf \'%s\\n\' "$*" >> "$LIZARD_CALLS"\nexit 0\n')
+    (fake_bin / "uvx").chmod(0o755)
+
+    run = run_just(
+        ROOT / "justfiles" / "bun.just",
+        project,
+        "_lizard-bun",
+        env={
+            **os.environ,
+            "DIFF_COVER_BASE": base,
+            "LIZARD_CALLS": str(calls),
+            "PATH": f"{fake_bin}:{os.environ['PATH']}",
+            "QC_TIER": "test-ci",
+        },
+    )
+
+    assert run.returncode == 0, run.stdout + run.stderr
+    invocation = calls.read_text()
+    assert "source/changed.ts" in invocation
+    assert "source/legacy.ts" not in invocation
+
+
+def test_bun_lizard_allows_unchanged_complexity_warnings_in_changed_files(
+    tmp_path: pathlib.Path,
+) -> None:
+    project = tmp_path / "downstream"
+    source = project / "source"
+    fake_bin = tmp_path / "bin"
+    calls = tmp_path / "lizard-calls"
+    source.mkdir(parents=True)
+    fake_bin.mkdir()
+    (source / "changed.ts").write_text("export function existing() { return 1 }\n")
+    run_git(project, "init")
+    run_git(project, "config", "user.email", "test@example.com")
+    run_git(project, "config", "user.name", "Test")
+    run_git(project, "add", ".")
+    base_commit = run_git(project, "-c", "core.hooksPath=/dev/null", "commit", "-m", "base")
+    assert base_commit.returncode == 0, base_commit.stdout + base_commit.stderr
+    base_result = run_git(project, "rev-parse", "HEAD")
+    assert base_result.returncode == 0, base_result.stdout + base_result.stderr
+    base = base_result.stdout.strip()
+    (source / "changed.ts").write_text("export function existing() { return 2 }\n")
+    run_git(project, "add", ".")
+    change_commit = run_git(project, "-c", "core.hooksPath=/dev/null", "commit", "-m", "change")
+    assert change_commit.returncode == 0, change_commit.stdout + change_commit.stderr
+    (fake_bin / "uvx").write_text(
+        "#!/usr/bin/env bash\n"
+        'printf \'%s\\n\' "$PWD $*" >> "$LIZARD_CALLS"\n'
+        "cat <<'EOF'\n"
+        "!!!! Warnings (cyclomatic_complexity > 8 or length > 200 or nloc > 1000000 or parameter_count > 7) !!!!\n"
+        "================================================\n"
+        "  NLOC    CCN   token  PARAM  length  location\n"
+        "------------------------------------------------\n"
+        "      20      9    100      0      20 existing@1-20@source/changed.ts\n"
+        "EOF\n"
+        "exit 1\n"
+    )
+    (fake_bin / "uvx").chmod(0o755)
+
+    run = run_just(
+        ROOT / "justfiles" / "bun.just",
+        project,
+        "_lizard-bun",
+        env={
+            **os.environ,
+            "DIFF_COVER_BASE": base,
+            "LIZARD_CALLS": str(calls),
+            "PATH": f"{fake_bin}:{os.environ['PATH']}",
+            "QC_TIER": "test-ci",
+        },
+    )
+
+    assert run.returncode == 0, run.stdout + run.stderr
+    assert "lizard: warnings are unchanged relative to DIFF_COVER_BASE." in run.stdout
+    invocations = calls.read_text()
+    assert invocations.count("source/changed.ts") == 2
+
+
+def test_bun_lizard_skips_clean_diff_without_invoking_lizard(
+    tmp_path: pathlib.Path,
+) -> None:
+    project = tmp_path / "downstream"
+    source = project / "source"
+    fake_bin = tmp_path / "bin"
+    calls = tmp_path / "lizard-calls"
+    source.mkdir(parents=True)
+    fake_bin.mkdir()
+    (source / "legacy.ts").write_text("export const legacy = 1\n")
+    run_git(project, "init")
+    run_git(project, "config", "user.email", "test@example.com")
+    run_git(project, "config", "user.name", "Test")
+    run_git(project, "add", ".")
+    base_commit = run_git(project, "-c", "core.hooksPath=/dev/null", "commit", "-m", "base")
+    assert base_commit.returncode == 0, base_commit.stdout + base_commit.stderr
+    base_result = run_git(project, "rev-parse", "HEAD")
+    assert base_result.returncode == 0, base_result.stdout + base_result.stderr
+    base = base_result.stdout.strip()
+    (fake_bin / "uvx").write_text('#!/usr/bin/env bash\nprintf \'%s\\n\' "$*" >> "$LIZARD_CALLS"\nexit 9\n')
+    (fake_bin / "uvx").chmod(0o755)
+
+    run = run_just(
+        ROOT / "justfiles" / "bun.just",
+        project,
+        "_lizard-bun",
+        env={
+            **os.environ,
+            "DIFF_COVER_BASE": base,
+            "LIZARD_CALLS": str(calls),
+            "PATH": f"{fake_bin}:{os.environ['PATH']}",
+            "QC_TIER": "test-ci",
+        },
+    )
+
+    assert run.returncode == 0, run.stdout + run.stderr
+    assert "lizard: no changed authored JavaScript, TypeScript, or Vue files." in run.stdout
+    assert not calls.exists()
+
+
 def test_bun_scaffold_delegates_qc_in_project_directory(
     tmp_path: pathlib.Path,
 ) -> None:
@@ -1803,7 +2625,7 @@ def test_bun_scaffold_delegates_qc_in_project_directory(
             "sage",
             {
                 "example.sage": "x = 1\n",
-                "pyproject.toml": "[project]\nname = \"scaffold-sage-target\"\nversion = \"0.1.0\"\n",
+                "pyproject.toml": '[project]\nname = "scaffold-sage-target"\nversion = "0.1.0"\n',
             },
             # Semantic key, not the copied diagnostic sentence
             # (POLICY.NO_EXACT_STRING_PROOF): the preflight must fail *about*
@@ -2010,6 +2832,21 @@ def test_tsc_removes_temp_output_on_success(tmp_path: pathlib.Path) -> None:
     assert sorted(ROOT.glob(".tsc-output.*")) == []
 
 
+def test_tsc_fails_when_declared_typecheck_command_is_missing(
+    tmp_path: pathlib.Path,
+) -> None:
+    project = tmp_path / "bun-project"
+    project.mkdir()
+    (project / "package.json").write_text(json.dumps({"scripts": {"typecheck": "missing-typecheck-command"}}) + "\n")
+
+    result = run_just(ROOT / "justfiles" / "bun.just", project, "_tsc")
+
+    output = result.stdout + result.stderr
+    assert result.returncode != 0, output
+    assert "missing-typecheck-command" in output
+    assert TRIAGE_MARKER in output
+
+
 def test_pytest_installs_dependency_group_requirements(
     tmp_path: pathlib.Path,
 ) -> None:
@@ -2198,6 +3035,21 @@ def test_pytest_with_coverage_generates_xml_without_total_threshold(
     assert result.returncode == 0, output
     assert coverage_xml.exists()
     assert "Coverage XML report:" in output
+
+
+def test_bun_coverage_consumes_declared_script_and_normalizes_lcov(
+    tmp_path: pathlib.Path,
+) -> None:
+    project = tmp_path / "bun-project"
+    project.mkdir()
+    (project / "package.json").write_text(
+        json.dumps({"scripts": {"coverage": ("mkdir -p coverage && printf 'TN:\\nSF:source.ts\\nDA:1,1\\nend_of_record\\n' > coverage/lcov.info")}})
+    )
+
+    result = run_just(ROOT / "justfiles" / "bun.just", project, "_coverage")
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert (project / "lcov.info").read_text() == ("TN:\nSF:source.ts\nDA:1,1\nend_of_record\n")
 
 
 def write_import_linter_project(

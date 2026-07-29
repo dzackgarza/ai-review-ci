@@ -13,7 +13,10 @@ _check-links:
         exit 1
     fi
 
-    mapfile -d '' -t doc_files < <(git ls-files -z -- '*.md' '*.html' '*.htm')
+    # Markdown/HTML under a test directory is fixture/spec data (intentional
+    # broken links and adversarial inputs live there), not authored docs, so it is
+    # not link-scanned. By artifact kind, uniform across projects.
+    mapfile -d '' -t doc_files < <(git ls-files -z -- '*.md' '*.html' '*.htm' ':(glob,exclude)**/tests/**' ':(glob,exclude)**/test/**' ':(glob,exclude)**/__tests__/**')
     if [ "${#doc_files[@]}" -eq 0 ]; then
         exit 0
     fi

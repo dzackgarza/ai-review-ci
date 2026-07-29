@@ -40,6 +40,11 @@ setup-profile profile:
         cd "{{control_repo}}"
         bun install --frozen-lockfile
         ;;
+      bun-python)
+        uv sync --project "{{control_repo}}"
+        cd "{{control_repo}}"
+        bun install --frozen-lockfile
+        ;;
       bun-playwright)
         cd "{{control_repo}}"
         bun install --frozen-lockfile
@@ -194,7 +199,8 @@ check-app-boot profile:
 check-review-threads pr_number:
     uv run --project {{infra}} ai-review-ci check-review-threads \
       --repo "${GITHUB_REPOSITORY}" \
-      --pr-number "{{pr_number}}"
+      --pr-number "{{pr_number}}" \
+      --repo-root "{{control_repo}}"
 
 run-review report_type scope:
     sudo -u reviewer -H env \

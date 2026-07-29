@@ -103,6 +103,13 @@ _coverage:
 		bun run test:ci
 		exit 0
 	fi
+	if jq -e '.scripts.coverage // empty' package.json >/dev/null 2>&1; then
+		bun run coverage
+		if [ -f coverage/lcov.info ]; then
+			cp coverage/lcov.info lcov.info
+		fi
+		exit 0
+	fi
 	if jq -e '(.devDependencies.vitest // .dependencies.vitest // empty)' package.json >/dev/null 2>&1; then
 		bun run test -- --coverage --coverage.reporter=lcov
 		cp coverage/lcov.info lcov.info
@@ -194,14 +201,16 @@ _tsc:
 		output="$(mktemp -p "{{infra}}" .tsc-output.XXXXXX)"
 		trap 'if [ -e "$output" ]; then rm -f -- "$output"; fi' EXIT
 		if ! bun run typecheck >"$output" 2>&1; then
-			if grep -vE '/usr/share/ags/js/|\.\./.*usr/share/ags/js/|gi://' "$output" | grep -q 'error TS'; then
+			if [ -f tsconfig.json ] \
+				&& rg -q '"jsxImportSource"\s*:\s*"ags/gtk4"|"gi://Astal\?version=4\.0"' tsconfig.json \
+				&& ! grep -vE '/usr/share/ags/js/|\.\./.*usr/share/ags/js/|gi://' "$output" | grep -q 'error TS'; then
 				cat "$output"
-				"{{artifacts}}/scripts/emit-triage-directive.sh"
-				exit 1
+				echo "Only system AGS/Gnim TypeScript diagnostics were reported; project-owned TypeScript passed."
+				exit 0
 			fi
 			cat "$output"
-			echo "Only system AGS/Gnim TypeScript diagnostics were reported; project-owned TypeScript passed."
-			exit 0
+			"{{artifacts}}/scripts/emit-triage-directive.sh"
+			exit 1
 		fi
 		cat "$output"
 	elif [ -f tsconfig.json ]; then
@@ -251,10 +260,81 @@ _jscpd-bun:
 _lizard-bun:
 	#!/usr/bin/env bash
 	set -euo pipefail
+	echo "============================="
+	echo "=== Running: lizard complexity analysis ==="
+	echo "# Finds excessive complexity in authored JS/TS/Vue files"
 	exclude_dirs_output="$(uv run {{artifacts}}/scripts/read_qc_excludes.py {{configs}}/qc-excludes.toml)"
 	exclude_dirs=()
 	if [ -n "$exclude_dirs_output" ]; then
 		mapfile -t exclude_dirs <<<"$exclude_dirs_output"
+	fi
+	is_lizard_source() {
+		case "$1" in
+			*.js|*.jsx|*.mjs|*.cjs|*.ts|*.tsx|*.mts|*.cts|*.vue) return 0 ;;
+			*) return 1 ;;
+		esac
+	}
+	is_excluded_qc_path() {
+		local file=$1
+		local dir
+		for dir in "${exclude_dirs[@]}"; do
+			[[ "$file" == "$dir"/* || "$file" == */"$dir"/* ]] && return 0
+		done
+		return 1
+	}
+	if [[ ${QC_TIER:-} != ambient && -n ${DIFF_COVER_BASE:-} ]]; then
+		if ! git rev-parse --verify "${DIFF_COVER_BASE}^{commit}" >/dev/null 2>&1; then
+			echo "ERROR: lizard: DIFF_COVER_BASE does not resolve: $DIFF_COVER_BASE" >&2
+			exit 2
+		fi
+		files=()
+		while IFS= read -r -d '' file; do
+			[[ -f "$file" ]] || continue
+			is_lizard_source "$file" || continue
+			is_excluded_qc_path "$file" && continue
+			files+=("$file")
+		done < <(git diff --name-only --diff-filter=ACMR -z "${DIFF_COVER_BASE}...HEAD" -- .)
+		if [ ${#files[@]} -eq 0 ]; then
+			echo "lizard: no changed authored JavaScript, TypeScript, or Vue files."
+			exit 0
+		fi
+		head_output="$(mktemp)"
+		base_output="$(mktemp)"
+		base_tree="$(mktemp -d)"
+		cleanup_lizard_diff() {
+			rm -f "$head_output" "$base_output"
+			git worktree remove --force "$base_tree" >/dev/null 2>&1 || rm -rf "$base_tree"
+		}
+		trap cleanup_lizard_diff EXIT
+		set +e
+		uvx lizard -l typescript -C 8 -L 200 -a 7 -i 0 "${files[@]}" | tee "$head_output"
+		head_status=${PIPESTATUS[0]}
+		set -e
+		if [ "$head_status" -eq 0 ]; then
+			exit 0
+		fi
+		if [ "$head_status" -ne 1 ]; then
+			exit "$head_status"
+		fi
+		git worktree add --detach "$base_tree" "$DIFF_COVER_BASE" >/dev/null
+		base_files=()
+		for file in "${files[@]}"; do
+			[ -f "$base_tree/$file" ] && base_files+=("$file")
+		done
+		if [ ${#base_files[@]} -gt 0 ]; then
+			(
+				cd "$base_tree"
+				set +e
+				uvx lizard -l typescript -C 8 -L 200 -a 7 -i 0 "${base_files[@]}" > "$base_output"
+				base_status=$?
+				set -e
+				if [ "$base_status" -ne 0 ] && [ "$base_status" -ne 1 ]; then
+					exit "$base_status"
+				fi
+			)
+		fi
+		uv run {{artifacts}}/scripts/lizard_diff_gate.py --base-output "$base_output" --head-output "$head_output"
+		exit 0
 	fi
 	lizard_excludes=()
 	for dir in "${exclude_dirs[@]}"; do
@@ -299,6 +379,25 @@ _slop-scan:
 	echo "============================="
 	echo "=== Running: slop-scan JS/TS anti-pattern detection ==="
 	echo "# Scans JS/TS files for AI-associated slop patterns (error-swallowing, duplicate signatures, generic casts, etc.)"
+	exclude_dirs_output="$(uv run {{artifacts}}/scripts/read_qc_excludes.py {{configs}}/qc-excludes.toml)"
+	exclude_dirs=()
+	if [ -n "$exclude_dirs_output" ]; then
+		mapfile -t exclude_dirs <<<"$exclude_dirs_output"
+	fi
+	is_slop_scan_source() {
+		case "$1" in
+			*.js|*.jsx|*.mjs|*.cjs|*.ts|*.tsx|*.mts|*.cts|*.vue) return 0 ;;
+			*) return 1 ;;
+		esac
+	}
+	is_excluded_qc_path() {
+		local file=$1
+		local dir
+		for dir in "${exclude_dirs[@]}"; do
+			[[ "$file" == "$dir"/* || "$file" == */"$dir"/* ]] && return 0
+		done
+		return 1
+	}
 	js_files_output="$(just --justfile {{justfile()}} -d . _js-qc-files)"
 	js_files=()
 	if [ -n "$js_files_output" ]; then
@@ -313,8 +412,18 @@ _slop-scan:
 	# Run with --json (stdout) and post-process to enforce findings as failures.
 	# Stderr from npx/slop-scan passes through to terminal.
 	# Place QC-owned slop-scan config in the scan root (tool auto-discovers it).
+	raw_output_file="$(mktemp)"
+	output_file="$(mktemp)"
+	copied_config=0
 	config_src="{{configs}}/slop-scan.config.json"
 	config_dst="./slop-scan.config.json"
+	cleanup_slop_scan() {
+		if [ "$copied_config" -eq 1 ] && [ -e "$config_dst" ]; then
+			gio trash "$config_dst"
+		fi
+		rm -f "$raw_output_file" "$output_file"
+	}
+	trap cleanup_slop_scan EXIT
 	if [ -f "$config_dst" ]; then
 		if cmp -s "$config_src" "$config_dst"; then
 			: # already has the QC config — leave it
@@ -327,32 +436,55 @@ _slop-scan:
 		fi
 	else
 		cp "$config_src" "$config_dst"
-		trap 'if [ -e "$config_dst" ]; then gio trash "$config_dst"; fi' EXIT
+		copied_config=1
 	fi
-	raw_output=$(npx -y slop-scan scan . --json)
-	ignored_count=$(echo "$raw_output" | jq -r '
+
+	changed_paths_json='null'
+	if [[ ${QC_TIER:-} != ambient && -n ${DIFF_COVER_BASE:-} ]]; then
+		if ! git rev-parse --verify "${DIFF_COVER_BASE}^{commit}" >/dev/null 2>&1; then
+			echo "ERROR: slop-scan: DIFF_COVER_BASE does not resolve: $DIFF_COVER_BASE" >&2
+			exit 2
+		fi
+		changed_files=()
+		while IFS= read -r -d '' file; do
+			[[ -f "$file" ]] || continue
+			is_slop_scan_source "$file" || continue
+			is_excluded_qc_path "$file" && continue
+			changed_files+=("$file")
+		done < <(git diff --name-only --diff-filter=ACMR -z "${DIFF_COVER_BASE}...HEAD" -- .)
+		if [ ${#changed_files[@]} -eq 0 ]; then
+			echo "slop-scan: no changed authored JavaScript, TypeScript, or Vue files."
+			exit 0
+		fi
+		changed_paths_json="$(printf '%s\0' "${changed_files[@]}" | python3 -c 'import json, sys; print(json.dumps([p for p in sys.stdin.buffer.read().decode().split("\0") if p]))')"
+	fi
+
+	npx -y slop-scan scan . --json > "$raw_output_file"
+	ignored_count=$(jq -r '
 		[.findings[]? | select((.ruleId // "") == "structure.pass-through-wrappers" or (.ruleId // "") == "structure.directory-fanout-hotspot")]
 		| length
-	')
-	output=$(echo "$raw_output" | jq '
+	' "$raw_output_file")
+	jq --argjson changed_paths "$changed_paths_json" '
 		.findings = [
 			.findings[]?
 			| select((.ruleId // "") != "structure.pass-through-wrappers")
 			| select((.ruleId // "") != "structure.directory-fanout-hotspot")
+			| (.path // "") as $finding_path
+			| select($changed_paths == null or ($changed_paths | index($finding_path)))
 		]
 		| .summary.findingCount = (.findings | length)
-	')
+	' "$raw_output_file" > "$output_file"
 	if [ "$ignored_count" -gt 0 ]; then
 		echo "slop-scan: ignored $ignored_count non-gating structural heuristic finding(s)."
 	fi
-	count=$(echo "$output" | jq -r '.summary.findingCount // 0')
+	count=$(jq -r '.summary.findingCount // 0' "$output_file")
 	if [ "$count" -gt 0 ]; then
-		echo "$output" | jq -r '
+		jq -r '
 			.findings[] | "  [" + (.severity // "?") + "] " +
 			(.ruleId // "?") + " — " +
 			(.path // "?") + ":" +
 			((.location.line // 0) | tostring)
-		'
+		' "$output_file"
 		echo ""
 		echo "!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!"
 		echo "  ERROR: slop-scan found $count finding(s)."
@@ -437,12 +569,17 @@ _normalize: _eslint-deps
 	echo "============================="
 	echo "=== Running: biome format, lint, and import sorting (auto-fix) ==="
 	echo "# Auto-applies safe and unsafe fixes, formatting, and import sorting"
-	dirs=()
-	for candidate in src source tests test; do
-		[ -d "$candidate" ] && dirs+=("$candidate")
-	done
-	[ ${#dirs[@]} -eq 0 ] && dirs=(.)
-	if bun x biome check --write --unsafe --config-path {{configs}}/biome.json "${dirs[@]}"; then
+	files=()
+	while IFS= read -r -d '' file; do
+		case "$file" in
+			*.js|*.jsx|*.mjs|*.cjs|*.ts|*.tsx|*.mts|*.cts|*.vue) files+=("$file") ;;
+		esac
+	done < <(git diff --cached --name-only --diff-filter=ACMR -z)
+	if [ ${#files[@]} -eq 0 ]; then
+		echo "No staged JavaScript, TypeScript, or Vue files found"
+		exit 0
+	fi
+	if bun x biome check --write --unsafe --config-path {{configs}}/biome.json "${files[@]}"; then
 		:
 	else
 		ec=$?
@@ -454,7 +591,7 @@ _normalize: _eslint-deps
 	if ESLINT_FIX=1 "{{infra}}/scripts/run-eslint-batched.sh" \
 		"{{configs}}/node_modules/.bin/eslint" \
 		"{{configs}}/eslint.config.js" \
-		"${dirs[@]}"; then
+		"${files[@]}"; then
 		:
 	else
 		ec=$?

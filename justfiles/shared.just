@@ -31,49 +31,27 @@ _format-structured-text:
 	echo "============================="
 	echo "=== Running: structured text formatting ==="
 	echo "# Formats Markdown (flowmark), JSON, and YAML (prettier) before agents spend time on whitespace"
-	exclude_dirs_output="$(uv run {{artifacts}}/scripts/read_qc_excludes.py {{configs}}/qc-excludes.toml)"
-	exclude_dirs=()
-	if [ -n "$exclude_dirs_output" ]; then
-		mapfile -t exclude_dirs <<<"$exclude_dirs_output"
-	fi
-	prune_args=()
-	for dir in "${exclude_dirs[@]}"; do
-		prune_args+=(-path "./$dir" -o -path "*/$dir" -o -path "*/$dir/*" -o)
-	done
-	if [ "${#prune_args[@]}" -eq 0 ]; then
-		echo "ERROR: qc-excludes.toml produced no exclusions for structured text formatting."
-		"{{artifacts}}/scripts/emit-triage-directive.sh"
-		exit 1
-	fi
-	unset 'prune_args[${#prune_args[@]}-1]'
 	# Markdown is formatted by flowmark, NOT prettier. Prettier's CommonMark
 	# formatter corrupts pandoc markdown: it escapes underscores in attribute
 	# paths (path="_includes/x" -> path="\_includes/x"), rewrites emphasis
 	# delimiters (*x* -> _x_), and reformats embedded code blocks. flowmark is
 	# the canonical markdown formatter.
+	# Markdown under a test directory is fixture/spec data (golden inputs and
+	# expected outputs), not authored prose. Reformatting it would rewrite the
+	# very bytes a test asserts on -- corrupting the suite -- so it is never
+	# normalized. This is by artifact kind and applies to every project; the test
+	# directory's own source (e.g. .py) is still linted/type-checked as normal.
 	md_files=()
-	while IFS= read -r -d '' file; do
-		md_files+=("$file")
-	done < <(
-		find . -type d \( "${prune_args[@]}" \) -prune -o \
-			-type f \( -name '*.md' -o -name '*.markdown' \) \
-			-print0
-	)
 	data_files=()
 	while IFS= read -r -d '' file; do
-		data_files+=("$file")
-	done < <(
-		find . -type d \( "${prune_args[@]}" \) -prune -o \
-			-type f \( \
-				-name '*.json' -o \
-				-name '*.jsonc' -o \
-				-name '*.yaml' -o \
-				-name '*.yml' \
-			\) \
-			-print0
-	)
+		case "$file" in
+			AGENTS.md|*/AGENTS.md) ;;
+			*.md|*.markdown) md_files+=("$file") ;;
+			*.json|*.jsonc|*.yaml|*.yml) data_files+=("$file") ;;
+		esac
+	done < <(git diff --cached --name-only --diff-filter=ACMR -z)
 	if [ "${#md_files[@]}" -eq 0 ] && [ "${#data_files[@]}" -eq 0 ]; then
-		echo "No Markdown, JSON, or YAML files found"
+		echo "No staged Markdown, JSON, or YAML files found"
 		exit 0
 	fi
 	if [ "${#md_files[@]}" -gt 0 ]; then
@@ -315,6 +293,80 @@ _semgrep:
 	trap restore_semgrepignore EXIT
 	uv run {{artifacts}}/scripts/read_qc_excludes.py {{configs}}/qc-excludes.toml > "$ignore_file"
 	printf '%s\n' '*.html' '**/*.html' >> "$ignore_file"
+	if [[ ${QC_TIER:-} != ambient && -n ${DIFF_COVER_BASE:-} ]] && git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+		if ! git rev-parse --verify "${DIFF_COVER_BASE}^{commit}" >/dev/null 2>&1; then
+			echo "ERROR: semgrep: DIFF_COVER_BASE does not resolve: $DIFF_COVER_BASE" >&2
+			exit 2
+		fi
+		exclude_dirs_output="$(uv run {{artifacts}}/scripts/read_qc_excludes.py {{configs}}/qc-excludes.toml)"
+		is_excluded_qc_path() {
+			local file="$1"
+			local exclude_dir
+			while IFS= read -r exclude_dir; do
+				[ -n "$exclude_dir" ] || continue
+				exclude_dir="${exclude_dir%/}"
+				[[ "$file" == "$exclude_dir" || "$file" == "$exclude_dir"/* ]] && return 0
+			done <<< "$exclude_dirs_output"
+			return 1
+		}
+		is_semgrep_pr_target() {
+			local file="$1"
+			case "$file" in
+				justfile|Justfile|*.just)
+					return 1
+					;;
+			esac
+			return 0
+		}
+		changed_files=()
+		while IFS= read -r -d '' file; do
+			[[ -f "$file" ]] || continue
+			is_excluded_qc_path "$file" && continue
+			is_semgrep_pr_target "$file" || continue
+			changed_files+=("$file")
+		done < <(git diff --name-only --diff-filter=ACMR -z "${DIFF_COVER_BASE}...HEAD" -- .)
+		if [ ${#changed_files[@]} -eq 0 ]; then
+			echo "semgrep: no changed authored files."
+			exit 0
+		fi
+		head_json="$(mktemp)"
+		base_json="$(mktemp)"
+		base_tree="$(mktemp -d)"
+		cleanup_semgrep_diff() {
+			rm -f "$head_json" "$base_json"
+			git worktree remove --force "$base_tree" >/dev/null 2>&1 || rm -rf "$base_tree"
+			restore_semgrepignore
+		}
+		trap cleanup_semgrep_diff EXIT
+		uvx --from semgrep semgrep scan \
+			--json \
+			--config={{configs}}/semgrep.yml \
+			--config=p/ci \
+			--exclude=codeql-db \
+			--scan-unknown-extensions \
+			"${changed_files[@]}" > "$head_json"
+		git worktree add --detach "$base_tree" "$DIFF_COVER_BASE" >/dev/null
+		base_files=()
+		for file in "${changed_files[@]}"; do
+			[ -f "$base_tree/$file" ] && base_files+=("$file")
+		done
+		if [ ${#base_files[@]} -gt 0 ]; then
+			(
+				cd "$base_tree"
+				uvx --from semgrep semgrep scan \
+					--json \
+					--config={{configs}}/semgrep.yml \
+					--config=p/ci \
+					--exclude=codeql-db \
+					--scan-unknown-extensions \
+					"${base_files[@]}" > "$base_json"
+			)
+		else
+			printf '{"results":[]}\n' > "$base_json"
+		fi
+		uv run {{artifacts}}/scripts/semgrep_diff_gate.py --base-json "$base_json" --head-json "$head_json"
+		exit 0
+	fi
 	if uvx --from semgrep semgrep scan \
 		--config={{configs}}/semgrep.yml \
 		--config=p/ci \
@@ -433,122 +485,53 @@ _vibecheck:
 		"{{artifacts}}/scripts/emit-triage-directive.sh"
 		exit "$ec"
 	fi
-	filter_input=$(mktemp)
+	head_vibecheck_json=$(mktemp)
+	base_vibecheck_json=""
+	base_worktree=""
 	cleanup_vibecheck() {
-		rm -f -- "$filter_input"
+		rm -f -- "$head_vibecheck_json"
+		if [ -n "$base_vibecheck_json" ]; then
+			rm -f -- "$base_vibecheck_json"
+		fi
+		if [ -n "$base_worktree" ]; then
+			git worktree remove --force "$base_worktree" >/dev/null 2>&1 || true
+		fi
 		restore_ignore
 	}
 	trap cleanup_vibecheck EXIT
-	printf '%s\n' "$raw_output" > "$filter_input"
-	filter_result=$(python3 - "$filter_input" <<-'PY'
-	import json
-	import pathlib
-	import sys
-	
-	
-	def is_comment_line(content):
-	    trimmed = (content or "").strip()
-	    return trimmed.startswith(("//", "#", "/*", "*", "<!--"))
-	
-	
-	def has_non_empty_except_handler(finding):
-	    if finding.get("rule_id") != "G22":
-	        return False
-	    path_value = finding.get("file")
-	    line_value = finding.get("line")
-	    if not path_value or not isinstance(line_value, int):
-	        return False
-	    path = pathlib.Path(path_value)
-	    try:
-	        lines = path.read_text().splitlines()
-	    except OSError:
-	        return False
-	    if line_value < 1 or line_value > len(lines):
-	        return False
-	    except_line = lines[line_value - 1]
-	    except_indent = len(except_line) - len(except_line.lstrip())
-	    for candidate in lines[line_value:]:
-	        stripped = candidate.strip()
-	        if not stripped:
-	            continue
-	        indent = len(candidate) - len(candidate.lstrip())
-	        if indent <= except_indent:
-	            return False
-	        if stripped.startswith("#"):
-	            continue
-	        return stripped not in {"pass", "..."}
-	    return False
-	
-	
-	def is_python_prose_arrow(finding):
-	    # G118 flags Unicode arrows as pseudocode operators. In a .py file that
-	    # the syntax tier already requires to compile, an arrow used as an
-	    # operator is a SyntaxError — so any G118 hit in compiled Python is by
-	    # construction inside a string, comment, or docstring (mathematical
-	    # notation such as ring maps ``R → S``), never executable pseudocode.
-	    if finding.get("rule_id") != "G118":
-	        return False
-	    path_value = finding.get("file") or ""
-	    return path_value.endswith(".py")
-	
-	
-	payload = json.loads(pathlib.Path(sys.argv[1]).read_text())
-	filtered = []
-	ignored = {"G141": 0, "G22": 0, "G118": 0, "G20": 0}
-	for finding in payload.get("findings", []):
-	    if finding.get("rule_id") == "G20":
-	        ignored["G20"] += 1
-	        continue
-	    if finding.get("rule_id") == "G141" and not is_comment_line(finding.get("content")):
-	        ignored["G141"] += 1
-	        continue
-	    if has_non_empty_except_handler(finding):
-	        ignored["G22"] += 1
-	        continue
-	    if is_python_prose_arrow(finding):
-	        ignored["G118"] += 1
-	        continue
-	    filtered.append(finding)
-	
-	payload["findings"] = filtered
-	summary = payload.setdefault("summary", {})
-	for severity in ("critical", "high", "medium", "low"):
-	    summary[severity] = sum(1 for finding in filtered if finding.get("severity") == severity)
-	payload["passed"] = summary.get("critical", 0) + summary.get("high", 0) == 0
-	print(json.dumps({"filtered": payload, "ignored": ignored}))
-	PY
-	)
-	ignored_g141_count=$(echo "$filter_result" | jq -r '.ignored.G141')
-	ignored_g22_count=$(echo "$filter_result" | jq -r '.ignored.G22')
-	filtered_output=$(echo "$filter_result" | jq '.filtered')
-	if [ "$ignored_g141_count" -gt 0 ]; then
-		echo "vibecheck: ignored $ignored_g141_count G141 non-comment false-positive finding(s)."
+	printf '%s\n' "$raw_output" > "$head_vibecheck_json"
+	base_args=()
+	if [ "${QC_TIER:-}" = "test-ci" ] && [ -n "${DIFF_COVER_BASE:-}" ] && git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+		base_worktree=$(mktemp -d)
+		rmdir "$base_worktree"
+		git worktree add --detach "$base_worktree" "$DIFF_COVER_BASE" >/dev/null
+		(
+			cd "$base_worktree"
+			if [ -L ".ignore" ]; then
+				echo "ERROR: cannot temporarily install QC exclusions in base worktree: .ignore is a symlink."
+				exit 1
+			fi
+			printf '\n' >> ".ignore"
+			uv run {{artifacts}}/scripts/read_qc_excludes.py {{configs}}/qc-excludes.toml >> ".ignore"
+			if raw_base_output=$(uvx --from git+https://github.com/qinnovates/vibecheck-slop-stopper vibecheck . --severity high --json); then
+				base_ec=0
+			else
+				base_ec=$?
+			fi
+			if ! echo "$raw_base_output" | jq -e . >/dev/null; then
+				echo "$raw_base_output"
+				echo ""
+				echo "ERROR: base vibecheck failed to produce parseable JSON (exit $base_ec)."
+				exit "$base_ec"
+			fi
+			printf '%s\n' "$raw_base_output"
+		) > "$base_worktree/vibecheck-base.json"
+		base_vibecheck_json=$(mktemp)
+		cp "$base_worktree/vibecheck-base.json" "$base_vibecheck_json"
+		base_args=(--base-json "$base_vibecheck_json" --base-root "$base_worktree")
 	fi
-	if [ "$ignored_g22_count" -gt 0 ]; then
-		echo "vibecheck: ignored $ignored_g22_count G22 non-empty except-handler false-positive finding(s)."
-	fi
-	ignored_g118_count=$(echo "$filter_result" | jq -r '.ignored.G118')
-	if [ "$ignored_g118_count" -gt 0 ]; then
-		echo "vibecheck: ignored $ignored_g118_count G118 prose-arrow finding(s) in compiled Python (notation, not pseudocode)."
-	fi
-	ignored_g20_count=$(echo "$filter_result" | jq -r '.ignored.G20')
-	if [ "$ignored_g20_count" -gt 0 ]; then
-		echo "vibecheck: ignored $ignored_g20_count G20 prompt-context false-positive finding(s)."
-	fi
-	remaining_count=$(echo "$filtered_output" | jq -r '.summary.critical + .summary.high')
-	if [ "$remaining_count" -eq 0 ]; then
-		echo "vibecheck: 0 findings — clean."
-	else
-		echo "$filtered_output" | jq .
+	if ! uv run {{artifacts}}/scripts/vibecheck_gate.py --head-json "$head_vibecheck_json" --head-root "$PWD" "${base_args[@]}"; then
 		echo ""
-		echo "!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!"
-		echo "  ERROR: vibecheck found anti-slop pattern violations."
-		echo "  Findings are in PROJECT CODE — fix the project code."
-		echo ""
-		echo "  PROBING GLOBAL QC IS REWARD-HACKING."
-		echo "  Do NOT modify QC configs or tooling in ~/ai-review-ci/"
-		echo "  to suppress these findings."
-		echo "!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!"
 		"{{artifacts}}/scripts/emit-triage-directive.sh"
 		exit 1
 	fi
@@ -653,27 +636,64 @@ _aislop:
 		"{{artifacts}}/scripts/emit-triage-directive.sh"
 		exit 1
 	fi
-	errors=$(printf '%s' "$raw_output" | jq '.summary.errors')
-	warnings=$(printf '%s' "$raw_output" | jq '.summary.warnings')
-	if [ "$warnings" -gt 0 ]; then
-		echo "aislop: $warnings warning-tier finding(s) surfaced (advisory, not blocking):"
-		printf '%s' "$raw_output" | jq -r '.diagnostics[] | select(.severity=="warning") | "  \(.filePath):\(.line) [\(.rule)] \(.message)"'
+	head_aislop_json=$(mktemp)
+	base_aislop_json=""
+	base_worktree=""
+	cleanup_aislop() {
+		rm -f -- "$head_aislop_json"
+		if [ -n "$base_aislop_json" ]; then
+			rm -f -- "$base_aislop_json"
+		fi
+		if [ -n "$base_worktree" ]; then
+			git worktree remove --force "$base_worktree" >/dev/null 2>&1 || true
+		fi
+	}
+	trap cleanup_aislop EXIT
+	printf '%s\n' "$raw_output" > "$head_aislop_json"
+	base_args=()
+	if [ "${QC_TIER:-}" = "test-ci" ] && [ -n "${DIFF_COVER_BASE:-}" ] && git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+		base_worktree=$(mktemp -d)
+		rmdir "$base_worktree"
+		git worktree add --detach "$base_worktree" "$DIFF_COVER_BASE" >/dev/null
+		(
+			cd "$base_worktree"
+			base_exclude_patterns=()
+			while IFS= read -r dir; do
+				if [[ "$dir" == *,* ]]; then
+					echo "ERROR: aislop cannot represent an exclusion path containing a comma in base worktree: $dir"
+					exit 1
+				fi
+				base_exclude_patterns+=("**/$dir/**")
+			done < <(uv run {{artifacts}}/scripts/read_qc_excludes.py {{configs}}/qc-excludes.toml)
+			base_exclude_csv="$(IFS=,; printf '%s' "${base_exclude_patterns[*]}")"
+			if raw_base_output=$(npx -y aislop@latest scan --json --exclude "$base_exclude_csv" .); then
+				base_ec=0
+			else
+				base_ec=$?
+			fi
+			if ! printf '%s' "$raw_base_output" | jq -e . >/dev/null 2>&1; then
+				printf '%s\n' "$raw_base_output"
+				echo ""
+				echo "ERROR: base aislop failed to produce parseable JSON (exit $base_ec)."
+				exit "$base_ec"
+			fi
+			if ! printf '%s' "$raw_base_output" | jq -e '(.summary.errors | type == "number") and (.summary.warnings | type == "number") and (.diagnostics | type == "array")' >/dev/null 2>&1; then
+				printf '%s\n' "$raw_base_output"
+				echo ""
+				echo "ERROR: base aislop returned JSON without the expected schema."
+				exit 1
+			fi
+			printf '%s\n' "$raw_base_output"
+		) > "$base_worktree/aislop-base.json"
+		base_aislop_json=$(mktemp)
+		cp "$base_worktree/aislop-base.json" "$base_aislop_json"
+		base_args=(--base-json "$base_aislop_json" --base-root "$base_worktree")
 	fi
-	if [ "$errors" -gt 0 ]; then
-		printf '%s' "$raw_output" | jq -r '.diagnostics[] | select(.severity=="error") | "  \(.filePath):\(.line) [\(.rule)] \(.message)"'
+	if ! uv run {{artifacts}}/scripts/aislop_gate.py --head-json "$head_aislop_json" --head-root "$PWD" "${base_args[@]}"; then
 		echo ""
-		echo "!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!"
-		echo "  ERROR: aislop found $errors error-severity finding(s) in PROJECT CODE."
-		echo "  Fix the project code."
-		echo ""
-		echo "  PROBING GLOBAL QC IS REWARD-HACKING."
-		echo "  Do NOT weaken the aislop config, add .aislopignore entries, or edit"
-		echo "  QC tooling in ~/ai-review-ci/ to suppress these findings."
-		echo "!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!"
 		"{{artifacts}}/scripts/emit-triage-directive.sh"
 		exit 1
 	fi
-	echo "aislop: 0 error-severity findings — clean."
 
 # ── Config Sync ───────────────────────────────────────────────────
 # Sync qc-excludes.toml into every tool config (biome, eslint, knip,
