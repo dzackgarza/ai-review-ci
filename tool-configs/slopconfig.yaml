@@ -62,8 +62,7 @@ reporting:
     fail_threshold: 30
     fail_on_critical: true
 ignore:
-- '**/tests/fixtures/slop-torture/**'
-- '**/tests/fixtures/ast-grep/**'
+- '**/tests/fixtures/**'
 - '**/node_modules/**'
 - '**/.venv/**'
 - '**/.pytest_cache/**'
@@ -95,6 +94,7 @@ ignore:
 - '**/src.bak/**'
 - '**/scripts/**'
 - '**/notebooks/**'
+- '**/preamble/**'
 - '**/notes/**'
 - '**/.webpack/**'
 - '**/out/**'

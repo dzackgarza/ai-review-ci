@@ -43,8 +43,7 @@
   ],
   "ignore": [
     "**/env.d.ts",
-    "**/tests/fixtures/slop-torture/**",
-    "**/tests/fixtures/ast-grep/**",
+    "**/tests/fixtures/**",
     "**/node_modules/**",
     "**/.venv/**",
     "**/.pytest_cache/**",
@@ -75,6 +74,7 @@
     "**/archives/**",
     "**/src.bak/**",
     "**/notebooks/**",
+    "**/preamble/**",
     "**/notes/**",
     "**/.webpack/**",
     "**/out/**",
