@@ -21,11 +21,10 @@
 # Do NOT add tool-specific ignores here — add them in the tool's own config.
 
 directories = [
-    # Authored corpora, wikis, and fixtures are data inputs whose byte-level or
-    # adversarial form is part of their contract. Generic QC must not rewrite or
-    # diagnose them as owned implementation source (#317).
-    "corpus",
-    "wiki",
+    # Test-consumed data only. Fixtures are inputs whose byte-level or adversarial
+    # form is part of their contract, and nothing outside the test suite reads
+    # them, so normalizing them buys nothing and can invalidate the tests they
+    # feed (#41 slop-torture, #219 ast-grep).
     "tests/fixtures",
     "node_modules",
     ".venv",

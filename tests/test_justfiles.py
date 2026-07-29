@@ -489,7 +489,7 @@ def test_tsc_requires_ags_when_tsconfig_declares_ags(tmp_path: pathlib.Path) -> 
     project.mkdir()
     (project / "package.json").write_text(json.dumps({"scripts": {}}) + "\n")
     (project / "tsconfig.json").write_text(json.dumps({"compilerOptions": {"jsxImportSource": "ags/gtk4"}}) + "\n")
-    env = os.environ | {"PATH": path_with_only(tmp_path, "bash", "cat", "jq", "just")}
+    env = os.environ | {"PATH": path_with_only(tmp_path, "bash", "cat", "grep", "jq", "just", "mktemp", "rg", "rm")}
 
     result = run_just(ROOT / "justfiles" / "bun.just", project, "_tsc", env=env)
 
@@ -775,17 +775,17 @@ def test_common_normalization_formats_structured_text(
     project.mkdir()
     markdown = project / "README.md"
     json_file = project / "config.json"
-    excluded_markdown = [
-        project / "corpus" / "card.md",
-        project / "wiki" / "page.md",
-        project / "tests" / "fixtures" / "source.md",
-    ]
+    excluded_markdown = [project / "tests" / "fixtures" / "source.md"]
+    normalized_markdown = [project / "corpus" / "card.md", project / "wiki" / "page.md"]
 
     markdown.write_text("# Title\n\n-   item\n")
     json_file.write_text('{"b":2,"a":1}\n')
     for path in excluded_markdown:
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text("# Preserved\n\n-   byte-exact item\n")
+    for path in normalized_markdown:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text("# Authored\n\n-   authored item\n")
 
     result = subprocess.run(
         [
@@ -808,6 +808,8 @@ def test_common_normalization_formats_structured_text(
     assert json_file.read_text() == '{ "b": 2, "a": 1 }\n'
     for path in excluded_markdown:
         assert path.read_text() == "# Preserved\n\n-   byte-exact item\n"
+    for path in normalized_markdown:
+        assert path.read_text() == "# Authored\n\n- authored item\n"
 
 
 def load_lint_staged_config() -> dict[str, list[str]]:

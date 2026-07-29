@@ -165,13 +165,15 @@ _ast-grep:
 _eslint: _eslint-deps
 	#!/usr/bin/env bash
 	set -euo pipefail
-	# Invoke via absolute path to quality-control's local eslint binary.
-	# This keeps CWD = project dir (so files/**/*.ts matches project files)
-	# while Node.js resolves the flat config's ES module imports from the
-	# config file's directory (tool-configs/node_modules).
-	"{{configs}}/node_modules/.bin/eslint" \
-		--config {{configs}}/eslint.config.js \
-		. --max-warnings 0
+	dirs=()
+	for candidate in src source tests test; do
+		[ -d "$candidate" ] && dirs+=("$candidate")
+	done
+	[ ${#dirs[@]} -eq 0 ] && dirs=(.)
+	"{{infra}}/scripts/run-eslint-batched.sh" \
+		"{{configs}}/node_modules/.bin/eslint" \
+		"{{configs}}/eslint.config.js" \
+		"${dirs[@]}"
 
 _tsc:
 	#!/usr/bin/env bash
@@ -179,7 +181,7 @@ _tsc:
 	if jq -e '.scripts.types // empty' package.json >/dev/null 2>&1; then
 		bun run types
 	elif [ -f tsconfig.json ] \
-		&& jq -e '.compilerOptions.jsxImportSource == "ags/gtk4" or ((.compilerOptions.paths // {}) | has("gi://Astal?version=4.0"))' tsconfig.json >/dev/null; then
+		&& rg -q '"jsxImportSource"\s*:\s*"ags/gtk4"|"gi://Astal\?version=4\.0"' tsconfig.json; then
 		if ags types 'Astal*' --ignore Gtk3 --ignore Astal3 --update; then
 			:
 		else
@@ -436,8 +438,9 @@ _normalize: _eslint-deps
 	echo "=== Running: biome format, lint, and import sorting (auto-fix) ==="
 	echo "# Auto-applies safe and unsafe fixes, formatting, and import sorting"
 	dirs=()
-	[ -d src ] && dirs+=(src)
-	[ -d tests ] && dirs+=(tests)
+	for candidate in src source tests test; do
+		[ -d "$candidate" ] && dirs+=("$candidate")
+	done
 	[ ${#dirs[@]} -eq 0 ] && dirs=(.)
 	if bun x biome check --write --unsafe --config-path {{configs}}/biome.json "${dirs[@]}"; then
 		:
@@ -448,10 +451,10 @@ _normalize: _eslint-deps
 		exit $ec
 	fi
 	echo "=== Running: eslint auto-fix ==="
-	if "{{configs}}/node_modules/.bin/eslint" \
-		--config {{configs}}/eslint.config.js \
-		--fix \
-		.; then
+	if ESLINT_FIX=1 "{{infra}}/scripts/run-eslint-batched.sh" \
+		"{{configs}}/node_modules/.bin/eslint" \
+		"{{configs}}/eslint.config.js" \
+		"${dirs[@]}"; then
 		:
 	else
 		ec=$?
