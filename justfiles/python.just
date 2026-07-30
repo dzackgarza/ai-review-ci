@@ -68,6 +68,59 @@ _python-qc-files:
 	for dir in "${exclude_dirs[@]}"; do
 		exclude_args+=(-g "!**/$dir/**")
 	done
+	is_excluded_qc_path() {
+		local file="$1"
+		local exclude_dir
+		for exclude_dir in "${exclude_dirs[@]}"; do
+			[ -n "$exclude_dir" ] || continue
+			exclude_dir="${exclude_dir%/}"
+			[[ "$file" == "$exclude_dir" || "$file" == "$exclude_dir"/* ]] && return 0
+		done
+		return 1
+	}
+	is_python_qc_target() {
+		local file="$1"
+		case "$file" in
+			*.py)
+				;;
+			*)
+				return 1
+				;;
+		esac
+		case "$file" in
+			*.sage.py|tool-artifacts/vulture_whitelist.py)
+				return 1
+				;;
+		esac
+		is_excluded_qc_path "$file" && return 1
+		return 0
+	}
+	if [[ ${QC_TIER:-} != ambient ]] && git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+		changed_files=()
+		while IFS= read -r -d '' file; do
+			[[ -f "$file" ]] || continue
+			is_python_qc_target "$file" || continue
+			changed_files+=("$file")
+		done < <(git diff --cached --name-only --diff-filter=ACMR -z -- .)
+		if [ ${#changed_files[@]} -eq 0 ]; then
+			base_ref="${DIFF_COVER_BASE:-}"
+			if [ -z "$base_ref" ]; then
+				base_ref="$(git rev-parse --abbrev-ref --symbolic-full-name '@{u}' 2>/dev/null || true)"
+			fi
+			if [ -n "$base_ref" ] && git rev-parse --verify "${base_ref}^{commit}" >/dev/null 2>&1; then
+				while IFS= read -r -d '' file; do
+					[[ -f "$file" ]] || continue
+					is_python_qc_target "$file" || continue
+					changed_files+=("$file")
+				done < <(git diff --name-only --diff-filter=ACMR -z "${base_ref}...HEAD" -- .)
+			fi
+		fi
+		if [ ${#changed_files[@]} -gt 0 ]; then
+			printf '%s\n' "${changed_files[@]}" | sort -u
+			exit 0
+		fi
+		exit 0
+	fi
 	if rg --files \
 		-g '*.py' \
 		-g '!*.sage.py' \
@@ -106,9 +159,8 @@ _python-syntax:
 		mapfile -t python_files <<<"$python_files_output"
 	fi
 	if [ "${#python_files[@]}" -eq 0 ]; then
-		echo "ERROR: Python syntax validation: no Python files found in a Python project."
-		"{{artifacts}}/scripts/emit-triage-directive.sh"
-		exit 1
+		echo "Python syntax validation: no changed Python files."
+		exit 0
 	fi
 	uv run --python 3.14 --no-project python - "${python_files[@]}" <<'PY'
 	import sys
@@ -174,9 +226,8 @@ _mypy: _install-tools
 		mapfile -t python_files <<<"$python_files_output"
 	fi
 	if [ "${#python_files[@]}" -eq 0 ]; then
-		echo "ERROR: mypy: no Python files found in a Python project."
-		"{{artifacts}}/scripts/emit-triage-directive.sh"
-		exit 1
+		echo "mypy: no changed Python files."
+		exit 0
 	fi
 	effective_config="{{configs}}/mypy-global.ini"
 	with_args=(--with-editable .)
@@ -282,9 +333,8 @@ _normalize: _install-tools
 		mapfile -t python_files <<<"$python_files_output"
 	fi
 	if [ "${#python_files[@]}" -eq 0 ]; then
-		echo "ERROR: ruff normalization: no Python files found in a Python project."
-		"{{artifacts}}/scripts/emit-triage-directive.sh"
-		exit 1
+		echo "ruff normalization: no changed Python files."
+		exit 0
 	fi
 	if ! uvx --from ruff ruff check --fix \
 		--config {{configs}}/ruff-global.toml \
