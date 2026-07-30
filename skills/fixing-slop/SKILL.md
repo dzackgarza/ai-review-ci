@@ -177,6 +177,12 @@ Some slop is not a localized defect inside an otherwise sound artifact — the a
 This is common in agent-generated prose artifacts: READMEs, architecture docs, roadmaps, schemas, and prompts that have accreted private ontology, correction history, invented institutions, or governance machinery disproportionate to the work.
 See `llm-failure-modes/documentation-failures.md` and the `L10`/`C9`/`T8` codes in `llm-failure-modes/references/agent-distortion-index.md`.
 
+**Gate: this protocol is for durable artifacts whose contamination accreted across sessions or contexts.**
+An in-flight draft in the authoring session — a plan, PR body, or document whose correction cycle is still live — is not a contaminated artifact; it is an unconverged one.
+Rewrite it directly from the real requirements: one writer, one pass.
+Escalating a draft rewrite into extraction/rebuild/review pipelines converts a prose edit into a coordination project and manufactures the concurrent-writer failures the pipeline exists to prevent.
+Remediation machinery scales with the artifact's durability and blast radius, not with the severity of the critique.
+
 **An agent holding the contaminated artifact and its correction history in context cannot cleanly repair it.** It reads the existing material as gospel (treats generated residue as a requirement), and every correction it receives gets written *into* the artifact rather than fixing the process that produced it.
 In-place editing reseeds the same slop in cleaner prose.
 Agents do reliable greenfield work and unreliable brownfield work, so the only safe repair is to **force the brownfield job to look like a greenfield job**:
