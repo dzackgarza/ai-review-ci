@@ -104,6 +104,17 @@ A 2026 frontier model can read an entire issue tree, understand the app, and del
 Smaller agents can do the same when the issue already self-describes the root-cause cluster.
 These repos are small bespoke tools; "simple subsystem rewrite with regression tests" is a normal, one-shot-able unit of work here, not a special project requiring staging.
 
+Measured single-session work units, observed in this system (frontier models, mid-2026):
+
+- **Greenfield multi-language product, empty directory to tagged v1 release, in one working day**: a process-separated worker (framed wire protocol, snapshot state, cancellation), a kernel adapter in a second language, the domain language itself, a frontend extension in a third language, seven test suites, CI, documentation, and live deployment — roughly 4,700 hand-authored net lines across four languages, 22 commits, **direct to main with no PR at all**.
+- **Greenfield DSL over that stack in ~5 active hours**: 15 modules, an external-CAS backend, a 19-test end-to-end suite, and an executed pedagogical notebook — ~10,000 insertions, 94% of them product code.
+- **Cross-process root-cause fix in a large Electron app as one PR**: typed API boundary, the fix at the shared writer, an end-to-end suite proving it against the assembled app, and CI wiring — ~2,000 net lines, 29 files, one review loop.
+- **Infrastructure repair arc as one PR**: a ~200-net-line causal chain from crash to re-enabled QC gate, where the unit is the chain, not the line count.
+
+That is the scale "one PR" is calibrated to: a coherent multi-thousand-line, multi-subsystem arc with tests and docs, or a complete causal repair chain.
+What pre-2026 practice sliced into five to nine PRs is one session's continuous output here — and greenfield spikes owned end-to-end by one session are a direct-to-main commit series with a release at the end, not a PR sequence.
+A proposed review-loop PR an order of magnitude below this scale that is not a genuinely atomic repair is a slice.
+
 So when a scope feels "too big," check which is actually true:
 
 - **It fits your window.** Then the feeling is the miscalibrated prior — the trained reflex toward the minimum defensible diff.
