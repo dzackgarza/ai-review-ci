@@ -3370,6 +3370,83 @@ def test_mypy_recipe_fails_when_mypy_reports_type_errors(
     assert result.returncode != 0, result.stdout + result.stderr
 
 
+def test_mypy_recipe_uses_upstream_diff_in_git_repo(
+    tmp_path: pathlib.Path,
+) -> None:
+    project = tmp_path / "diff-scoped-python-project"
+    package_dir = project / "src" / "diff_scoped_python_project"
+    package_dir.mkdir(parents=True)
+    (project / "pyproject.toml").write_text(
+        "\n".join(
+            [
+                "[project]",
+                'name = "diff-scoped-python-project"',
+                'version = "0.1.0"',
+                'requires-python = ">=3.14"',
+                "dependencies = []",
+                "",
+                "[build-system]",
+                'requires = ["setuptools"]',
+                'build-backend = "setuptools.build_meta"',
+                "",
+                "[tool.setuptools.packages.find]",
+                'where = ["src"]',
+                "",
+            ]
+        )
+    )
+    (package_dir / "__init__.py").write_text("VALUE: int = 1\n")
+    (package_dir / "legacy.py").write_text('VALUE: int = "not an int"\n')
+
+    subprocess.run(["git", "init", "-b", "main"], cwd=project, check=True, capture_output=True)
+    subprocess.run(
+        ["git", "config", "core.hooksPath", "/dev/null"],
+        cwd=project,
+        check=True,
+        capture_output=True,
+    )
+    subprocess.run(["git", "add", "."], cwd=project, check=True, capture_output=True)
+    subprocess.run(
+        ["git", "commit", "-m", "Initial commit"],
+        cwd=project,
+        check=True,
+        text=True,
+        capture_output=True,
+    )
+    subprocess.run(["git", "clone", "--bare", str(project), str(tmp_path / "remote.git")], check=True, capture_output=True)
+    subprocess.run(["git", "remote", "add", "origin", str(tmp_path / "remote.git")], cwd=project, check=True, capture_output=True)
+    subprocess.run(["git", "push", "-u", "origin", "main"], cwd=project, check=True, capture_output=True)
+
+    (project / "README.md").write_text("metadata only\n")
+    subprocess.run(["git", "add", "README.md"], cwd=project, check=True, capture_output=True)
+    subprocess.run(
+        ["git", "commit", "-m", "Change docs"],
+        cwd=project,
+        check=True,
+        text=True,
+        capture_output=True,
+    )
+
+    result = subprocess.run(
+        [
+            "just",
+            "--justfile",
+            str(ROOT / "justfiles" / "python.just"),
+            "-d",
+            str(project),
+            "_mypy",
+        ],
+        cwd=project,
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+
+    output = result.stdout + result.stderr
+    assert result.returncode == 0, output
+    assert "mypy: no changed Python files." in output
+
+
 def test_commit_gate_stops_at_doctor_preflight_before_typechecking(
     tmp_path: pathlib.Path,
 ) -> None:
