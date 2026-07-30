@@ -1,6 +1,6 @@
 ---
 name: pr-scoping
-description: Use before scoping or opening any pull request, when deciding whether a change warrants a PR at all, and when triaging a backlog into units of work. Forces every non-organizational issue to be a significant PR-sized work unit, routes small urgent repairs direct to main, and bans the trivial single-nudge PRs agents default to.
+description: Use before scoping or opening any pull request, when deciding whether a change warrants a PR at all, when triaging a backlog into units of work, and whenever any plan, issue, or externalization artifact proposes a PR count or PR boundaries. Forces every non-organizational issue to be a significant PR-sized work unit, routes small urgent repairs direct to main, bans the trivial single-nudge PRs agents default to, and derives PR counts from independent root causes — never from repository, sequencing, or transaction boundaries.
 ---
 
 # PR Scoping: Significant Work Units, Not Nudges
@@ -39,6 +39,28 @@ The review loop is an expensive mechanism for validating substantial changes, no
 A small fix routed through the PR pipeline burns a review budget sized for architecture on a traceback tweak.
 A crash-fix-only PR is invalid unless the owner explicitly asks for one.
 Small urgent repairs go to main; large coherent repairs go through review; small timid PRs do not exist.
+
+## Scoping inputs that carry no authority
+
+The route and the PR count are derived fresh from this skill's rules every time work is scoped.
+The following facts feel like scoping decisions but are not — none of them can put a change on the review-loop path or add a PR:
+
+- **Issue prose describing PR shape.** An issue that says "this will be a focused PR" is describing, not deciding — usually an earlier agent's guess frozen into text.
+  Re-derive the route: if the change is a pin update, config nudge, or consumer-side bump, it goes direct to main regardless of what the issue text promises.
+- **Repository boundaries.** A programme spanning repos is not one PR per repo.
+  The substantive cluster gets one review-loop PR in the repo that owns the root cause; the changes in consumer repos are almost always direct-to-main nudges.
+- **Sequencing constraints.** "A must land before B" orders the landings; it does not make A and B separate PRs.
+  Sequence commits within one branch, or sequence a direct-to-main nudge before/after the one PR.
+- **Dependency transactions.** Version pins, lockfile bumps, and config updates are the canonical direct-to-main path even when they belong to a governed programme.
+  A transaction count is never a PR count.
+- **Plan structure.** Planning and externalization machinery records the scoping decision; it never makes one.
+  One plan node, phase, or milestone per transaction does not translate to one PR each.
+  A plan that outputs "minimum N PRs" derived N from the wrong variable — recompute it from root causes.
+
+**The review-loop PR count defaults to one (or zero).**
+Each PR beyond the first requires its own independent root cause that passes the significance floor by itself.
+A shared theme, programme, epic, or release is evidence the count is one — not license for several.
+Calibration anchor: a hardening or finishing pass on a subsystem that itself landed as roughly one PR's worth of work is at most one PR, and often a direct-to-main series.
 
 ## Calibrate ambition to actual capability, not to fear
 
@@ -184,3 +206,6 @@ Answer these; if any answer is wrong, re-scope:
    (Yes = scope the work to the epic's coherent cluster instead.)
 5. If you opened five PRs of this size this week, would the backlog be meaningfully smaller?
    (No = you are burning review cycles, not working.)
+6. How many review-loop PRs does the plan propose, and does each one name its own independent root cause passing the floor?
+   (More PRs than root causes = collapse them into one.
+   A count justified by repository, sequencing, or transaction boundaries — or by "minimum N PRs" plan language — was derived from the wrong variable; recompute from root causes.)
