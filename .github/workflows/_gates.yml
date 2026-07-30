@@ -203,6 +203,9 @@ jobs:
       REVIEW_PROFILE: ${{ inputs.profile }}
       REVIEW_PR_NUMBER: ${{ github.event.number }}
     steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - name: Locate infrastructure clone path
         run: echo "INFRA=$RUNNER_TEMP/ai-review-ci" >> "$GITHUB_ENV"
       - name: Validate gate inputs

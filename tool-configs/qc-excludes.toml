@@ -21,12 +21,11 @@
 # Do NOT add tool-specific ignores here — add them in the tool's own config.
 
 directories = [
-    # Deliberately noncompliant detector-test fixtures (#41): adversarial data
-    # for tests/test_slop_torture.py, never owned product code.
-    "tests/fixtures/slop-torture",
-    # Deliberately noncompliant detector-test fixture (#219): adversarial data
-    # for tests/test_ast_grep_rules.py, never owned product code.
-    "tests/fixtures/ast-grep",
+    # Test-consumed data only. Fixtures are inputs whose byte-level or adversarial
+    # form is part of their contract, and nothing outside the test suite reads
+    # them, so normalizing them buys nothing and can invalidate the tests they
+    # feed (#41 slop-torture, #219 ast-grep).
+    "tests/fixtures",
     "node_modules",
     ".venv",
     ".pytest_cache",
@@ -63,11 +62,12 @@ directories = [
     # Archived source trees are preserved reference material, not active code.
     "archives",
     "src.bak",
-    # Research scripts and notebooks are user-authored exploratory artifacts,
-    # not QC-owned product code. Knip alone keeps project scripts visible
-    # because JS build and task scripts own dependency edges.
+    # Research scripts, notebooks, and preambles are user-authored exploratory
+    # artifacts, not QC-owned product code. Knip alone keeps project scripts
+    # visible because JS build and task scripts own dependency edges.
     "scripts",
     "notebooks",
+    "preamble",
     # Authored research notes and extraction dumps: prose whose rendered
     # content must never be altered by formatters (dzackgarza/research#187 —
     # flowmark is not render-neutral on them).

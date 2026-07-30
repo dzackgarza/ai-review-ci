@@ -404,6 +404,17 @@ def test_reusable_workflows_use_maintained_just_installer(workflow_file: str) ->
     assert "VERSION=$(curl -sL" not in text
 
 
+def test_thread_resolution_checks_out_target_repository() -> None:
+    job = _workflow_jobs("_gates.yml")["thread-resolution"]
+    steps = job.get("steps")
+
+    assert isinstance(steps, list)
+    assert any(
+        isinstance(step, dict) and step.get("uses") == "actions/checkout@v4"
+        for step in steps
+    )
+
+
 @pytest.mark.parametrize(
     "workflow_file,job_name",
     [(wf, job) for wf in ("_qc.yml", "_review.yml", "_gates.yml") for job in _workflow_jobs(wf)],

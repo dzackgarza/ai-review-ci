@@ -6,6 +6,7 @@
     "@typescript-eslint/eslint-plugin": "^8.57.2",
     "@typescript-eslint/parser": "^8.57.2",
     "eslint": "^10.1.0",
+    "eslint-plugin-diff": "^2.1.7",
     "eslint-plugin-fp": "^2.3.0",
     "eslint-plugin-promise": "^7.2.1",
     "eslint-plugin-react-hooks": "^5.2.0",

@@ -623,6 +623,42 @@ def test_knip_follows_dependency_imported_through_test_helper(tmp_path: pathlib.
     assert "forge-boundary" not in output
 
 
+def test_knip_tracks_e2e_dependencies_and_system_just_binary(tmp_path: pathlib.Path) -> None:
+    project = tmp_path / "bun-project"
+    e2e_dir = project / "e2e"
+    node_modules = project / "node_modules"
+    e2e_dir.mkdir(parents=True)
+    for dependency in ("e2e-boundary", "unused-boundary"):
+        package_dir = node_modules / dependency
+        package_dir.mkdir(parents=True)
+        (package_dir / "package.json").write_text(json.dumps({"name": dependency, "version": "1.0.0", "type": "module"}) + "\n")
+        (package_dir / "index.js").write_text("export const boundary = true;\n")
+    (project / "package.json").write_text(
+        json.dumps(
+            {
+                "name": "knip-e2e-graph-fixture",
+                "version": "1.0.0",
+                "scripts": {"test": "just test-e2e"},
+                "devDependencies": {
+                    "e2e-boundary": "1.0.0",
+                    "unused-boundary": "1.0.0",
+                },
+            }
+        )
+        + "\n"
+    )
+    (e2e_dir / "document-open.spec.ts").write_text('import { boundary } from "e2e-boundary";\nvoid boundary;\n')
+
+    result = run_just(ROOT / "justfiles" / "bun.just", project, "_knip")
+
+    output = result.stdout + result.stderr
+    assert result.returncode != 0, output
+    assert "unused-boundary" in output
+    assert "e2e-boundary" not in output
+    assert "Unlisted binaries" not in output
+    assert "just" not in output
+
+
 def test_knip_ignores_exact_assembled_pdfjs_module_only(tmp_path: pathlib.Path) -> None:
     project = tmp_path / "bun-project"
     reader_dir = project / "extension" / "reader"
@@ -2229,6 +2265,135 @@ def test_eslint_runner_enforces_rules_only_on_changed_authored_files_in_ci(
     invocation = calls.read_text()
     assert "source/changed.ts" in invocation
     assert "source/legacy.ts" not in invocation
+
+
+def test_eslint_runner_enforces_only_changed_vue_lines_in_ci(
+    tmp_path: pathlib.Path,
+) -> None:
+    tool_config = tmp_path / "tool-configs"
+    project = tmp_path / "downstream"
+    source = project / "source"
+    tool_config.mkdir()
+    source.mkdir(parents=True)
+    for file_name in ("package.json", "bun.lock", "eslint.config.js", "qc-excludes.toml"):
+        shutil.copy(ROOT / "tool-configs" / file_name, tool_config / file_name)
+    (project / "package.json").write_text('{"type":"module"}\n')
+    (project / "tsconfig.json").write_text(
+        json.dumps(
+            {
+                "compilerOptions": {
+                    "strict": True,
+                    "target": "ES2024",
+                    "module": "commonjs",
+                },
+                "include": ["source/**/*"],
+            }
+        )
+        + "\n"
+    )
+    component = source / "App.vue"
+    component.write_text(
+        "\n".join(
+            [
+                '<script setup lang="ts">',
+                "const legacy: any = 1",
+                "const marker: string = 'base'",
+                "</script>",
+                "<template><div>{{ marker }}</div></template>",
+                "",
+            ]
+        )
+    )
+    run_git(project, "init")
+    run_git(project, "config", "user.email", "test@example.com")
+    run_git(project, "config", "user.name", "Test")
+    run_git(project, "add", ".")
+    base_commit = run_git(
+        project,
+        "-c",
+        "core.hooksPath=/dev/null",
+        "commit",
+        "-m",
+        "base",
+    )
+    assert base_commit.returncode == 0, base_commit.stdout + base_commit.stderr
+    base_result = run_git(project, "rev-parse", "HEAD")
+    assert base_result.returncode == 0, base_result.stdout + base_result.stderr
+    base = base_result.stdout.strip()
+    component.write_text(component.read_text().replace("'base'", "'safe'"))
+    run_git(project, "add", ".")
+    change_commit = run_git(
+        project,
+        "-c",
+        "core.hooksPath=/dev/null",
+        "commit",
+        "-m",
+        "safe change",
+    )
+    assert change_commit.returncode == 0, change_commit.stdout + change_commit.stderr
+    install = subprocess.run(
+        ["bun", "install", "--frozen-lockfile"],
+        cwd=tool_config,
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+    assert install.returncode == 0, install.stdout + install.stderr
+
+    lint = subprocess.run(
+        [
+            str(ROOT / "scripts" / "run-eslint-batched.sh"),
+            str(tool_config / "node_modules" / ".bin" / "eslint"),
+            str(tool_config / "eslint.config.js"),
+            "source",
+        ],
+        cwd=project,
+        env={
+            **os.environ,
+            "DIFF_COVER_BASE": base,
+            "QC_TIER": "test-ci",
+        },
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+
+    output = lint.stdout + lint.stderr
+    assert lint.returncode == 0, output
+    assert "no-explicit-any" not in output
+
+    component.write_text(component.read_text().replace("marker: string", "marker: any"))
+    run_git(project, "add", ".")
+    unsafe_commit = run_git(
+        project,
+        "-c",
+        "core.hooksPath=/dev/null",
+        "commit",
+        "-m",
+        "unsafe change",
+    )
+    assert unsafe_commit.returncode == 0, unsafe_commit.stdout + unsafe_commit.stderr
+    lint = subprocess.run(
+        [
+            str(ROOT / "scripts" / "run-eslint-batched.sh"),
+            str(tool_config / "node_modules" / ".bin" / "eslint"),
+            str(tool_config / "eslint.config.js"),
+            "source",
+        ],
+        cwd=project,
+        env={
+            **os.environ,
+            "DIFF_COVER_BASE": base,
+            "QC_TIER": "test-ci",
+        },
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+
+    output = lint.stdout + lint.stderr
+    assert lint.returncode != 0, output
+    assert "no-explicit-any" in output
 
 
 def test_bun_lizard_scans_only_changed_authored_files_in_ci(

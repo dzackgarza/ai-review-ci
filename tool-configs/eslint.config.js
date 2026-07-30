@@ -31,6 +31,20 @@ const centralIgnoreGlobs = centralExcludeDirs.map((directory, index) => {
   }
   return `**/${directory}/**`;
 });
+const diffBase = process.env.ESLINT_PLUGIN_DIFF_COMMIT;
+const diffPlugin = diffBase === undefined
+  ? undefined
+  : (await import("eslint-plugin-diff")).default;
+const diffConfigs = diffPlugin === undefined
+  ? []
+  : diffPlugin.configs["flat/diff"].map((config) => ({
+      ...config,
+      ignores: [...(config.ignores ?? []), "**/*.vue"],
+    }));
+const vueProcessor = vuePlugin.processors.vue ?? vuePlugin.processors[".vue"];
+if (vueProcessor === undefined) {
+  throw new Error("eslint-plugin-vue does not expose a Vue processor");
+}
 const targetTsconfigPath = join(process.cwd(), "tsconfig.json");
 const targetTsconfigText = existsSync(targetTsconfigPath)
   ? readFileSync(targetTsconfigPath, "utf8")
@@ -93,6 +107,7 @@ export default [
     ],
   },
   ...vuePlugin.configs["flat/recommended"],
+  ...diffConfigs,
   {
     files: ["**/*.ts", "**/*.tsx"],
     languageOptions: {
@@ -180,6 +195,9 @@ export default [
   },
   {
     files: ["**/*.vue"],
+    processor: diffPlugin === undefined
+      ? vueProcessor
+      : diffPlugin.composeProcessor(vueProcessor, "diff"),
     languageOptions: {
       parser: vueParser,
       parserOptions: {
