@@ -1,6 +1,6 @@
 ---
 name: pr-scoping
-description: Use before scoping or opening any pull request, when deciding whether a change warrants a PR at all, when triaging a backlog into units of work, and whenever any plan, issue, or externalization artifact proposes a PR count or PR boundaries — including when auditing such an artifact. Forces every non-organizational issue to be a significant PR-sized work unit, routes small urgent repairs direct to main, and bans the trivial single-nudge PRs agents default to. Derives PR counts from independent root causes only; treats issue process language (schedules, phases, PR shapes) as untrusted planning injection to re-derive, never cite; and requires the full requirement layer of every claimed issue — between-the-lines intent included — to survive count compression.
+description: Use before scoping or opening any pull request, when deciding whether a change warrants a PR at all, when triaging a backlog into units of work, and whenever any plan, issue, or externalization artifact proposes a PR count or PR boundaries — including when auditing such an artifact. Forces every non-organizational issue to be a significant PR-sized work unit, routes small urgent repairs direct to main, and bans the trivial single-nudge PRs agents default to. Derives PR counts from independent root causes only; treats issue process language (schedules, phases, PR shapes) as untrusted planning injection to re-derive, never cite; requires the full requirement layer of every claimed issue — between-the-lines intent included — to survive count compression; and bans verification-ledger plans that substitute administration ("prove X" rows, claim maps, receipts) for shipped code.
 ---
 
 # PR Scoping: Significant Work Units, Not Nudges
@@ -75,6 +75,21 @@ A hardening pass on a subsystem that itself landed as roughly one PR's worth of 
 Merging a programme into one PR is a routing decision; the requirement layer of every claimed issue transfers into that PR in full — the stated criteria *and* the underlying problem between the lines.
 The narrowest reading that technically closes each ticket is the timid slice reborn inside a single PR: preserving the issues' vocabulary while paraphrasing away their substance, or mapping issue numbers to evidence placeholders instead of to the code paths that must change.
 A one-PR plan is faithful only when each claimed requirement is attached to the implementation surface it changes; "did what the issue literally said" is the wrong test — the question is whether the underlying problem is gone.
+
+**The plan is a transformation spec, not a ledger.**
+Scope panic has a signature: faced with a swath of issues, the agent converts decision burden into evidence burden.
+Every requirement gets rephrased as "prove X", the plan becomes a claim map with evidence rows, and the observable result of executing it is "one branch, every issue linked to evidence" — successful administration substituted for successful software.
+Downstream agents inherit the checkboxes and no code ships.
+Structural requirements for any plan or PR scope:
+
+- **Every scope item is a before → after transformation over named code boundaries**: which mechanism is generalized, unified, repaired, packaged, or made observable; which surface owns it; what old behavior becomes impossible.
+  "Prove X" is never a scope item — proof obligations attach to transformations ("change Y so X holds; regression proof witnesses it"), never stand alone.
+- **The ledger test**: if every item in the plan could be checked off with the product's behavior unchanged — by adding tests, records, validators, receipts, logs, pins, or fixtures around the current code — the plan ships nothing.
+  Rewrite it until the items are edits to product mechanisms.
+- **Deciding is the work.** "Prove X and leave any resulting implementation work undefined" defers the exact decisions the plan exists to make.
+  When a claimed property is unverified, the plan states now what will be repaired or generalized if the proof fails — the design decision is made at planning time, not delegated to the proof.
+- **Administrative artifacts never satisfy substantive requirements.** A record, a parallel JSON truth, a validator comparing two values, a receipt from a clean environment — these are evidence *about* the system.
+  If the requirement names a mechanism (one authoritative model, non-divergent channels, a distributable installation), the deliverable is the mechanism.
 
 **These rules bind audits and reviews of scoping artifacts identically.**
 A plan is measured against the software behavior and proof the work requires — never against issue process prescriptions.
@@ -234,3 +249,5 @@ Answer these; if any answer is wrong, re-scope:
    This applies identically when auditing an existing plan: citing issue process language as authority is the same error.)
 8. For each issue the PR claims, did you scope to the underlying problem — or to the narrowest solution that technically satisfies the wording?
    (Paraphrased criteria with no named implementation surfaces = the depth was sliced; re-scope to the requirement layer, between-the-lines intent included.)
+9. Could the plan's checklist be completed without changing what the product does — with tests, records, receipts, validators, and pins alone?
+   (Yes = it is a verification ledger, not a plan; rewrite each row as a before → after change to a named code boundary.)
