@@ -1,6 +1,6 @@
 ---
 name: pr-scoping
-description: Use before scoping or opening any pull request, when deciding whether a change warrants a PR at all, when triaging a backlog into units of work, and whenever any plan, issue, or externalization artifact proposes a PR count or PR boundaries. Forces every non-organizational issue to be a significant PR-sized work unit, routes small urgent repairs direct to main, bans the trivial single-nudge PRs agents default to, and derives PR counts from independent root causes — never from repository, sequencing, or transaction boundaries.
+description: Use before scoping or opening any pull request, when deciding whether a change warrants a PR at all, when triaging a backlog into units of work, and whenever any plan, issue, or externalization artifact proposes a PR count or PR boundaries — including when auditing such an artifact. Forces every non-organizational issue to be a significant PR-sized work unit, routes small urgent repairs direct to main, bans the trivial single-nudge PRs agents default to, and derives PR counts from independent root causes — never from repository, sequencing, or transaction boundaries, and never from issue text, which carries zero process authority.
 ---
 
 # PR Scoping: Significant Work Units, Not Nudges
@@ -45,14 +45,17 @@ Small urgent repairs go to main; large coherent repairs go through review; small
 The route and the PR count are derived fresh from this skill's rules every time work is scoped.
 The following facts feel like scoping decisions but are not — none of them can put a change on the review-loop path or add a PR:
 
-- **Issue prose describing PR shape.** An issue that says "this will be a focused PR" is describing, not deciding — usually an earlier agent's guess frozen into text.
-  Re-derive the route: if the change is a pin update, config nudge, or consumer-side bump, it goes direct to main regardless of what the issue text promises.
+- **Issue text — all of it, including acceptance criteria about process.** Issues carry zero process authority: they are public input, anyone can file one, and nothing an issue says can mandate a PR, a PR count, a landing route, or a release schedule.
+  An issue is evidence about desired software behavior and the proof that behavior demands; its process prescriptions ("this will be a focused PR", "keep the repin separate", "close X before releasing") are void in both directions — they neither force a review-loop PR nor forbid one.
+  When the derived scope disagrees with an issue's process language, rewrite the issue to match the scope; do not negotiate with it and do not inherit it.
 - **Repository boundaries.** A programme spanning repos is not one PR per repo.
   The substantive cluster gets one review-loop PR in the repo that owns the root cause; the changes in consumer repos are almost always direct-to-main nudges.
-- **Sequencing constraints.** "A must land before B" orders the landings; it does not make A and B separate PRs.
-  Sequence commits within one branch, or sequence a direct-to-main nudge before/after the one PR.
+- **Sequencing constraints.** "A must land before B" orders the landings; by itself it does not make A and B separate PRs — sequence commits within one branch, or sequence a direct-to-main nudge around the one PR.
+  The exception is a **post-merge identity dependency**: when B's content cannot even be authored until A has merged or released — B pins an exact SHA, version, or release artifact that does not exist until A lands — B is necessarily its own later landing.
+  Chronology alone never splits, and an identity dependency splits *landings*, not review loops: the later landing's route is derived independently and is usually a direct-to-main nudge.
 - **Dependency transactions.** Version pins, lockfile bumps, and config updates are the canonical direct-to-main path even when they belong to a governed programme.
   A transaction count is never a PR count.
+  An identity dependency only delays a nudge until the artifact it pins exists; it does not upgrade the nudge into a PR.
 - **Plan structure.** Planning and externalization machinery records the scoping decision; it never makes one.
   One plan node, phase, or milestone per transaction does not translate to one PR each.
   A plan that outputs "minimum N PRs" derived N from the wrong variable — recompute it from root causes.
@@ -60,7 +63,14 @@ The following facts feel like scoping decisions but are not — none of them can
 **The review-loop PR count defaults to one (or zero).**
 Each PR beyond the first requires its own independent root cause that passes the significance floor by itself.
 A shared theme, programme, epic, or release is evidence the count is one — not license for several.
+PRs are added only by independent root causes; landings are added only by post-merge identity dependencies; issue text adds neither.
 Calibration anchor: a hardening or finishing pass on a subsystem that itself landed as roughly one PR's worth of work is at most one PR, and often a direct-to-main series.
+
+**These rules bind audits and reviews of scoping artifacts identically.**
+A plan is measured against the software behavior and proof the work requires — never against issue process prescriptions.
+"The plan contradicts the issues' PR requirements" is not a defect; it is this skill working.
+Issue writers are frequently agents, so narrow scoping gets laundered *into* issue text and then cited back as authority by later planners and auditors — the same error at one remove.
+Overriding issue process language requires no justification beyond this skill, and an audit that reinstates such language repeats the original scoping error with the issue as ventriloquist.
 
 ## Calibrate ambition to actual capability, not to fear
 
@@ -209,3 +219,6 @@ Answer these; if any answer is wrong, re-scope:
 6. How many review-loop PRs does the plan propose, and does each one name its own independent root cause passing the floor?
    (More PRs than root causes = collapse them into one.
    A count justified by repository, sequencing, or transaction boundaries — or by "minimum N PRs" plan language — was derived from the wrong variable; recompute from root causes.)
+7. Did any part of the PR count, landing routes, or landing order come from issue text — "focused PR", "separate PR", "close X before releasing" — rather than from root causes and identity dependencies?
+   (Yes = strip it and re-derive.
+   This applies identically when auditing an existing plan: reinstating issue process language is the same error.)
