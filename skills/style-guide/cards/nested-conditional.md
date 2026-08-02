@@ -18,12 +18,14 @@ elif event.type == "blur":
 ## Preferred construction: Use a match/case (Python 3.10+, TypeScript, Rust, etc.) or an explicit dispatch table that enumerates all expected cases and fails hard on unexpected input.
 
 ```python
-# Remediation (match/case): explicit, exhaustive, fails on unexpected
+# Remediation (match/case): explicit, exhaustive, the catch-all is assert_never
+from typing import assert_never
+
 match event.type:
     case "click": handle_click(event)
     case "focus": handle_focus(event)
     case "blur":  handle_blur(event)
-    case _:       raise ValueError(f"unexpected event type: {event.type}")
+    case _:       assert_never(event.type)
 
 # Remediation (dispatch table): equally explicit
 _HANDLERS = {

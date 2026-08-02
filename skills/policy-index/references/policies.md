@@ -467,3 +467,32 @@ Invalid local fixes: Partially adopting the suggested rename; adding an alias or
 Detection handles: `STALE-CONVENTION-SUGGESTION`, `REVIEWER-PRIOR-RENAME`, `UNSOURCED-CONVENTION-CLAIM`, `DEPRECATED-NAMESPACE-SUGGESTION`, `CONVENTION-ALIGNMENT-JUSTIFICATION`
 
 Related remediation: `REMEDIATE.VERIFY_CONVENTION_CLAIM`
+
+#### `POLICY.NO_COMPLIANCE_MAXIMALISM` — No governance machinery disproportionate to the project
+
+Category: Anti-Speculation
+
+Rule: No new compliance, provenance, governance, certification, release-identity, or evidence-chain mechanism may be introduced unless it is the minimal response to a named current failure or an explicit requirement, and it may not create a new programme-level completion condition.
+"Pin the dependency", "test the release candidate", "track the work", and "prove the behavior" are engineering requirements, not seeds of an indefinitely refinable system of synchronized identities, invariants, provenance, hashes, tag-readbacks, workflow-permission proofs, ledgers, milestone subtrees, or proof-remediation registries.
+Every substantial addition must answer, before it is built: (1) what concrete observed failure does this prevent; (2) why is a simpler local mechanism insufficient; (3) why is the maintenance burden proportionate to this project's users, threat model, and release model.
+Calibrate all release, security, and provenance work to a single-maintainer personal research tool unless the user explicitly specifies a larger operational model.
+Tests terminate in product behavior, not in another evidence artifact.
+This is the Anti-Speculation form of compliance maximalism — the doing-time rule that prevents the failure mode catalogued in [[llm-failure-modes/coding-failures|llm-failure-modes #25]].
+
+Invalid local fixes: Adding a binary hash, release provenance manifest, generated projection across packages, GitHub Release asset checksum, or exact workflow/tag/readback ceremony without a named current failure it prevents; introducing a programme-completion ledger, milestone subtree, or proof-remediation registry as a new completion condition; reclassifying an observed defect as an expected result instead of fixing the defect; refining what counts as proof to evade a failing test; building a more discriminating certification boundary to invalidate real evidence.
+
+Detection handles: `COMPLIANCE-MAXIMALISM`, `PROVENANCE-INFLATION`, `EVIDENCE-AS-TARGET`, `ADMIN-CLOSURE-SUBSTITUTION`, `PROGRAMME-COMPLETION`, `SCALE-MISCALIBRATION`, `RELEASE-IDENTITY-CEREMONY`, `CORRECTION-OVERCOMPENSATION`
+
+Related remediation: `REMEDIATE.MINIMAL_MECHANISM`
+
+#### `POLICY.NO_IF_ELSE` — No if/else constructions; use exhaustive match/case
+
+Category: Type and Interface Integrity
+
+Rule: `if`/`else`/`elif` chains are banned in owned code. Branching is on cases, not on conditions. Exhaustiveness is the proof obligation: non-coverage must fail, not fall through. The `case _` / `default` arm is always written and is always `assert_never` (or language equivalent) — never a fallback return, never a generic re-raise, never omitted on the grounds that the compiler enforces coverage. A default arm that re-routes to a fallback or re-raises is a laundered `else` and is banned. A branch that is actually an invariant is not a case — assert it; do not smuggle it through `if`.
+
+Invalid local fixes: Renaming `else` to `case _:`; adding a catch-all arm that returns a default/empty/falsy value; omitting the `case _` / `default` arm because the compiler enforces exhaustiveness; keeping `if/elif/else` and adding a `match` alongside it; converting one branch to `match` while leaving the rest as `if`; using `if` "just for one check" and `match` elsewhere in the same function; replacing an `if` on an invariant with `match` instead of an assertion.
+
+Detection handles: `IF-ELSE-CHAIN`, `ELIF-LADDER`, `MATCH-WITH-DEFAULT-FALLBACK`, `CATCH-ALL-RETURN-DEFAULT`, `MIXED-IF-AND-MATCH`, `IF-FOR-INVARIANT-SHOULD-BE-ASSERT`
+
+Related remediation: `REMEDIATE.EXHAUSTIVE_DISPATCH`

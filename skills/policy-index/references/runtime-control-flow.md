@@ -152,6 +152,9 @@ Any of these must trigger a red-flag finding:
 - `if condition only checks truthiness -> proceed`
 - `if nested optional chain -> eventually default`
 - `if result is Err -> .ok() / discard / continue`
+- `if/elif/else` chain over a single discriminator (use exhaustive `match`; see `POLICY.NO_IF_ELSE`)
+- `case _:` / `default:` arm returning a default, empty, or falsy value (laundered `else`; must be `assert_never`)
+- `match` with a fallback catch-all alongside `if`/`elif`/`else` in the same function (mixed dispatch; see `MIXED-IF-AND-MATCH`)
 
 * * *
 
@@ -960,6 +963,9 @@ esac
 | nested `if` over optional state | banned; use total state or enum |
 | `if` followed by assertion in branch | usually replace with direct assertion |
 | `if` whose only purpose is to raise | replace with direct assertion/invariant call |
+| `if`/`elif`/`else` over a single discriminator | banned under `POLICY.NO_IF_ELSE`; use exhaustive `match` with `assert_never` catch-all |
+| `case _:` / `default:` returning a default/empty/falsy value | banned; laundered `else`; must be `assert_never` |
+| `match` alongside `if`/`elif`/`else` in the same function | banned; mixed dispatch (`MIXED-IF-AND-MATCH`) |
 
 * * *
 

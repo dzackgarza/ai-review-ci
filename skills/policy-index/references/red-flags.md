@@ -47,6 +47,12 @@ When one appears, ask:
 | **[INLINE-STRINGS-DATA] Inline large strings / prompts as data** | Embedding agent prompts, user-facing messages, or any non-code text (>5 lines or containing structured instructions) directly in source files conflates code with data. Strings are not reviewable as separate artifacts, cannot be independently versioned, and encourage ad-hoc editing that bypasses normal review. |
 | **[CODE-IN-CODE] Code within code / embedded cross-language programs** | Python that assembles and runs bash strings, shell scripts that inline Python/Perl, or any program that generates another program inline. Destroys syntax checking, breaks static analysis, and hides the real intent inside string concatenation. The embedded language cannot be reviewed, linted, or debugged independently. |
 | **[ADMIN-COMPLETION] Administrative completion** | Issues/comments/docs replace implementation or proof. |
+| **[IF-ELSE-CHAIN] `if`/`else`/`elif` chains** | Branches on a condition instead of a case; non-coverage is invisible and falls through silently. Routes to `POLICY.NO_IF_ELSE`. |
+| **[ELIF-LADDER] `elif` ladders** | Multi-arm `if`/`elif` over a single discriminator; a missing case lands in `else` or drops off the end unnoticed. Routes to `POLICY.NO_IF_ELSE`. |
+| **[MATCH-WITH-DEFAULT-FALLBACK] `match` with a fallback `case _`** | A catch-all arm that returns a default, empty, or falsy value is a laundered `else`; exhaustiveness proof is replaced by fail-open. Routes to `POLICY.NO_IF_ELSE`. |
+| **[CATCH-ALL-RETURN-DEFAULT] Catch-all returns a default** | `case _:`/`default:` returns `None`/`[]`/`""`/`0`/`false`/`Ok(empty)` instead of `assert_never`; new variants silently produce fail-open behavior. Routes to `POLICY.NO_IF_ELSE`. |
+| **[MIXED-IF-AND-MATCH] Mixed `if` and `match` in one function** | One branch converted to `match` while the rest remain `if`/`elif`/`else`; the policy is partially satisfied and the unhandled-case risk remains. Routes to `POLICY.NO_IF_ELSE`. |
+| **[IF-FOR-INVARIANT-SHOULD-BE-ASSERT] `if` on an invariant** | A branch checking a required condition is encoded as `if`/`else` or `match` instead of an assertion; proof is replaced by a branch. Routes to `POLICY.NO_IF_ELSE` and `POLICY.PREFER_ASSERTION`. |
 
 If a construct would let an agent preserve the appearance of correctness while weakening the obligation, treat it as a red flag even if the code currently works.
 

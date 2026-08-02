@@ -40,6 +40,8 @@ This index defines only the construction named by that code; it does not repeat 
 | `REMEDIATE.VERIFY_CONVENTION_CLAIM` | Verify an external convention claim once against the pinned checkout or live source. If falsified, reject the suggestion wholesale and record the source file and line in the review disposition. |
 | `REMEDIATE.BURDEN_DISPOSITION` | Reconstruct the original obligation, then mark it solved, invalidated, transferred to a real proof surface, or recorded unresolved. Do not treat labels, docs, deletion, or comments as resolution. |
 | `REMEDIATE.BLAST_RADIUS_REPAIR` | Inspect the owning boundary, adjacent call sites, tests, config surface, and history for the same failure process. Fix the full damaged obligation, not only the matched token. |
+| `REMEDIATE.MINIMAL_MECHANISM` | Before adding any compliance, provenance, governance, certification, or release-identity machinery, answer the three questions: what named current failure does it prevent, why is a simpler local mechanism insufficient, why is the maintenance burden proportionate to a single-maintainer personal research tool. If any answer is absent, do not add the mechanism. Resolve the named defect directly with the smallest mechanism (pin the consumer commit, clean CI checkout, real restart test, small compatibility table, whole-cell transaction) rather than building a synchronized identity/provenance/evidence system around it. Tests terminate in product behavior, not in another evidence artifact. |
+| `REMEDIATE.EXHAUSTIVE_DISPATCH` | Replace `if`/`else`/`elif` chains with an exhaustive `match`/`case` over an enum or tagged union whose variants the type checker proves covered. The `case _` / `default` arm is always written and is always `assert_never` (or language equivalent: `assertNever` in TypeScript, `unreachable!()` in Rust) — never a fallback return, never omitted on the grounds that the compiler enforces coverage. If a branch is an invariant, assert it — do not dispatch on it. In languages without a typed exhaustive dispatch primitive, model the cases as variants and dispatch via a total function whose non-coverage is a compile error or a fail-loud runtime assertion naming the missing variant. See `EXHAUSTIVE-DISPATCH`. |
 
 ## Selection Rule
 
@@ -80,3 +82,4 @@ Do not pick the smallest local edit.
 - [`SOURCE-POLICING`](../cards/source-policing.md) — Source Policing in Tests
 - [`DELETION-LAUNDERING`](../cards/deletion-laundering.md) — Deletion Laundering / Proof-Burden Erasure
 - [`BESPOKE-DEP`](../cards/bespoke-dep.md) — Bespoke Dependency Reinvention
+- [`EXHAUSTIVE-DISPATCH`](../cards/exhaustive-dispatch.md) — `if`/`else`/`elif` Where Exhaustive Match Belongs
