@@ -528,14 +528,58 @@ _sage-diff-cover: _sage-pytest-coverage
 		exit $ec
 	fi
 
+_sage-mypy: _sage-qc-files
+	#!/usr/bin/env bash
+	set -euo pipefail
+	echo "============================="
+	echo "=== Running: mypy static type analysis (Sage-aware) ==="
+	echo "# Type checks Python and preparsed Sage files"
+	python_files_output="$(just -f {{justfiles}}/python.just -d . _python-qc-files 2>/dev/null || true)"
+	python_files=()
+	if [ -n "$python_files_output" ]; then
+		mapfile -t python_files <<<"$python_files_output"
+	fi
+	sage_files_output="$(just --justfile {{justfile()}} -d . _sage-qc-files 2>/dev/null || true)"
+	sage_files=()
+	if [ -n "$sage_files_output" ]; then
+		mapfile -t sage_files <<<"$sage_files_output"
+	fi
+	mypy_targets=()
+	for pf in "${python_files[@]}"; do
+		[ -n "$pf" ] && mypy_targets+=("$pf")
+	done
+	if [ "${#sage_files[@]}" -gt 0 ]; then
+		sage_bin="$(just --justfile {{justfile()}} -d . _sage-bin)"
+		sage_preparse_dir="$(mktemp -d "${TMPDIR:-/tmp}/qc-mypy-sage.XXXXXX")"
+		trap 'if [ -e "$sage_preparse_dir" ]; then gio trash "$sage_preparse_dir"; fi' EXIT
+		echo "# Preparsing ${#sage_files[@]} Sage file(s) for mypy"
+		copied_sage_files=()
+		for sage_file in "${sage_files[@]}"; do
+			target="$sage_preparse_dir/$sage_file"
+			mkdir -p "$(dirname "$target")"
+			cp "$sage_file" "$target"
+			copied_sage_files+=("$sage_file")
+			mypy_targets+=("$target.py")
+		done
+		(
+			cd "$sage_preparse_dir"
+			"$SAGE_BIN" --preparse "${copied_sage_files[@]}" >/dev/null
+		)
+	fi
+	if [ "${#mypy_targets[@]}" -gt 0 ]; then
+		uv run --project {{infra}} mypy \
+			--config-file {{configs}}/mypy-global.ini \
+			"${mypy_targets[@]}"
+	fi
+
 # public: COMMIT gate — immediate, directly repairable feedback
 test-commit:
 	#!/usr/bin/env bash
 	set -euo pipefail
 	export AI_REVIEW_CI_FAILURE_MODE=direct
-	just --justfile {{justfile()}} -d . _doctor-preflight _sage-preflight _normalize-common _sage-syntax
+	just --justfile {{justfile()}} -d . _doctor-preflight _sage-preflight _normalize-common _sage-syntax _sage-mypy
 	python_qc_repo="{{justfiles}}/python.just"
-	python_qc_recipes=(_normalize _python-syntax _mypy)
+	python_qc_recipes=(_normalize _python-syntax)
 	just -f "$python_qc_repo" -d . "${python_qc_recipes[@]}"
 	just -f {{justfiles}}/shared.just -d . _no-bypass
 	echo "Sage commit quality checks completed"
