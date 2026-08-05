@@ -26,6 +26,13 @@ directories = [
     # them, so normalizing them buys nothing and can invalidate the tests they
     # feed (#41 slop-torture, #219 ast-grep).
     "tests/fixtures",
+    # Tree-sitter grammar fixtures: highlight/tags assertion files and
+    # example corpora are parser inputs whose byte-level form (including
+    # deliberately non-current-Python syntax) is the contract; the grammar's
+    # own test harness owns them, generic Python QC must never touch them.
+    "test/highlight",
+    "test/tags",
+    "examples",
     "node_modules",
     ".venv",
     ".pytest_cache",
