@@ -553,8 +553,11 @@ _deptry: _install-tools
 	# DEP001 sage/fpylll: provided by the Sage interpreter environment, not pip
 	# dependency definitions (sage.just wiring contract runs projects under
 	# SAGE_BIN; fpylll ships inside the Sage distribution — extend on first use).
+	# tree_sitter_sage: first-party inside the tree-sitter-sage repo itself
+	# (the binding module lives in the QC-excluded generated bindings/ tree);
+	# consumers declaring tree-sitter-sage resolve it via the module map.
 	# Harmless for pure-Python repos, which do not import them.
-	deptry_args=(. --package-module-name-map "$package_module_name_map" --ignore DEP002 --per-rule-ignores "DEP001=sage|fpylll")
+	deptry_args=(. --package-module-name-map "$package_module_name_map" --ignore DEP002 --per-rule-ignores "DEP001=sage|fpylll|tree_sitter_sage")
 	# qc-excludes.toml is the single source of truth for never-scanned
 	# directories; deptry takes path regexes, so literal dots are escaped
 	# and glob stars widen to `.*`.
