@@ -577,7 +577,10 @@ _deptry: _install-tools
 			deptry_args+=(--known-first-party "$first_party_module")
 		done
 	fi
-	pep723_scripts_output="$(uv run --no-project python "{{artifacts}}/scripts/python_qc_metadata.py" pep723-scripts "${python_files[@]}")"
+	pep723_scripts_output=""
+	if [ "${#python_files[@]}" -gt 0 ]; then
+		pep723_scripts_output="$(uv run --no-project python "{{artifacts}}/scripts/python_qc_metadata.py" pep723-scripts "${python_files[@]}")"
+	fi
 	if [ -n "$pep723_scripts_output" ]; then
 		mapfile -t pep723_scripts <<<"$pep723_scripts_output"
 		for script in "${pep723_scripts[@]}"; do
