@@ -33,6 +33,10 @@ directories = [
     "test/highlight",
     "test/tags",
     "examples",
+    # Tree-sitter CLI-generated FFI bindings (node/python/rust/swift/go):
+    # regenerated wholesale by `tree-sitter init --update`; hand-edits
+    # diverge from the generator and are overwritten.
+    "bindings",
     "node_modules",
     ".venv",
     ".pytest_cache",
