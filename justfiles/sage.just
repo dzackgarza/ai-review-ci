@@ -113,16 +113,31 @@ _sage-test-files:
 _sage-python-test-files:
 	#!/usr/bin/env bash
 	set -euo pipefail
-	python_files_output="$(just -f {{justfiles}}/python.just -d . _python-qc-files)"
-	python_files=()
-	if [ -n "$python_files_output" ]; then
-		mapfile -t python_files <<<"$python_files_output"
+	# Repo-wide, like _sage-test-files beside it.  This read _python-qc-files,
+	# which is diff-scoped by design — right for batching mypy over changed
+	# files, wrong for deciding which tests exist.  On a clean tree it returned
+	# nothing, so _sage-pytest saw no tests: a Sage project whose suite is all
+	# .py ran pytest only when a test file happened to be in the diff, and
+	# reported success when it ran nothing at all.
+	exclude_dirs_output="$(uv run {{artifacts}}/scripts/read_qc_excludes.py {{configs}}/qc-excludes.toml)"
+	exclude_dirs=()
+	if [ -n "$exclude_dirs_output" ]; then
+		mapfile -t exclude_dirs <<<"$exclude_dirs_output"
 	fi
-	for python_file in "${python_files[@]}"; do
-		case "$python_file" in
-			tests/test_*.py|tests/*_test.py|tests/*/test_*.py|tests/*/*_test.py) printf '%s\n' "$python_file" ;;
-		esac
+	exclude_args=()
+	for dir in "${exclude_dirs[@]}"; do
+		exclude_args+=(-g "!**/$dir/**")
 	done
+	if rg --files \
+		-g 'tests/**/test_*.py' \
+		-g 'tests/**/*_test.py' \
+		-g '!*.sage.py' \
+		"${exclude_args[@]}"; then
+		:
+	else
+		status=$?
+		[ "$status" -eq 1 ] || exit "$status"
+	fi
 
 # Wiring preflight: every failure prints the exact remediation so a
 # misconfigured repo converges to correct QC wiring instead of guessing.
@@ -408,7 +423,15 @@ _sage-pytest:
 		[ -n "$py_file" ] && pytest_args+=("$py_file")
 	done
 
-	if "$sage_bin" -python -m pytest "${pytest_args[@]}"; then
+	# `sage -python` is the Python that has `sage` importable, not a Sage
+	# session: `sage.all` is absent from sys.modules there, while `sage -c`
+	# has it. Every way a person runs Sage code goes through that startup
+	# import, so a suite run without it is testing an environment no user
+	# has -- and cannot exercise anything that depends on startup wiring.
+	#
+	# `sage -c` cannot carry the arguments (it reads trailing words as more
+	# code), so do explicitly what a session does on startup.
+	if "$sage_bin" -python -c "import sage.all, sys, pytest; sys.exit(pytest.main(sys.argv[1:]))" "${pytest_args[@]}"; then
 		:
 	else
 		ec=$?
@@ -487,7 +510,21 @@ _sage-pytest-coverage:
 	mkdir -p "$coverage_root"
 	export COVERAGE_FILE="$coverage_root/.coverage"
 	export COVERAGE_RCFILE="{{configs}}/coverage-sage.ini"
-	if "$sage_bin" -python -m coverage run -m pytest "${pytest_args[@]}"; then
+	# The tests need sage.all, for the reason spelled out in _sage-pytest.
+	# Importing it before `coverage run` would leave every module Sage's
+	# startup touches -- the installed preparser among them -- already
+	# imported when measurement begins, and reported as uncovered. So
+	# coverage starts first and a driver does the startup import inside it.
+	coverage_driver="$coverage_root/run-under-sage.py"
+	cat >"$coverage_driver" <<'DRIVER'
+	import sys
+
+	import sage.all  # noqa: F401  (Sage's startup wiring; see _sage-pytest)
+	import pytest
+
+	sys.exit(pytest.main(sys.argv[1:]))
+	DRIVER
+	if "$sage_bin" -python -m coverage run "$coverage_driver" "${pytest_args[@]}"; then
 		:
 	else
 		ec=$?
