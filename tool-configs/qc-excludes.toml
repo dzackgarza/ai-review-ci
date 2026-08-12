@@ -73,12 +73,13 @@ directories = [
     # Archived source trees are preserved reference material, not active code.
     "archives",
     "src.bak",
-    # Research scripts, notebooks, and preambles are user-authored exploratory
-    # artifacts, not QC-owned product code. Knip alone keeps project scripts
-    # visible because JS build and task scripts own dependency edges.
+    # Research scripts and notebooks are user-authored exploratory artifacts,
+    # not QC-owned product code. Knip alone keeps project scripts visible
+    # because JS build and task scripts own dependency edges. (The research
+    # preamble was once listed here; it is now the main codebase and is
+    # QC-owned like any other package source.)
     "scripts",
     "notebooks",
-    "preamble",
     # Authored research notes and extraction dumps: prose whose rendered
     # content must never be altered by formatters (dzackgarza/research#187 —
     # flowmark is not render-neutral on them).

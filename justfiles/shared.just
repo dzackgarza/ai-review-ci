@@ -305,7 +305,7 @@ _semgrep:
 			while IFS= read -r exclude_dir; do
 				[ -n "$exclude_dir" ] || continue
 				exclude_dir="${exclude_dir%/}"
-				[[ "$file" == "$exclude_dir" || "$file" == "$exclude_dir"/* ]] && return 0
+				[[ "$file" == "$exclude_dir" || "$file" == "$exclude_dir"/* || "$file" == *"/$exclude_dir/"* ]] && return 0
 			done <<< "$exclude_dirs_output"
 			return 1
 		}

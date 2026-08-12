@@ -74,7 +74,7 @@ _python-qc-files:
 		for exclude_dir in "${exclude_dirs[@]}"; do
 			[ -n "$exclude_dir" ] || continue
 			exclude_dir="${exclude_dir%/}"
-			[[ "$file" == "$exclude_dir" || "$file" == "$exclude_dir"/* ]] && return 0
+			[[ "$file" == "$exclude_dir" || "$file" == "$exclude_dir"/* || "$file" == *"/$exclude_dir/"* ]] && return 0
 		done
 		return 1
 	}
