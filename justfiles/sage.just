@@ -604,9 +604,27 @@ _sage-mypy: _sage-qc-files
 		)
 	fi
 	if [ "${#mypy_targets[@]}" -gt 0 ]; then
-		uv run --project {{infra}} mypy \
-			--config-file {{configs}}/mypy-global.ini \
-			"${mypy_targets[@]}"
+		effective_config="{{configs}}/mypy-global.ini"
+		with_args=(--with-editable .)
+		dependency_requirements_output="$(uv run --no-project python "{{artifacts}}/scripts/python_qc_metadata.py" dependency-group-requirements . 2>/dev/null || true)"
+		if [ -n "$dependency_requirements_output" ]; then
+			mapfile -t dependency_requirements <<<"$dependency_requirements_output"
+			for requirement in "${dependency_requirements[@]}"; do
+				with_args+=(--with "$requirement")
+			done
+		fi
+		if uvx --python 3.14 --from mypy \
+			"${with_args[@]}" \
+			mypy \
+			--config-file "$effective_config" \
+			"${mypy_targets[@]}"; then
+			:
+		else
+			ec=$?
+			echo "ERROR: mypy found type errors in project code."
+			"{{artifacts}}/scripts/emit-triage-directive.sh"
+			exit $ec
+		fi
 	fi
 
 # public: COMMIT gate — immediate, directly repairable feedback
