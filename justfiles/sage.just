@@ -590,22 +590,32 @@ _sage-mypy: _sage-qc-files
 		sage_preparse_dir="$(mktemp -d "${TMPDIR:-/tmp}/qc-mypy-sage.XXXXXX")"
 		trap 'if [ -e "$sage_preparse_dir" ]; then gio trash "$sage_preparse_dir"; fi' EXIT
 		echo "# Preparsing ${#sage_files[@]} Sage file(s) for mypy"
+		# The preparsed modules import each other and the package's plain .py
+		# modules, and mypy resolves those imports statically: the tempdir must
+		# be one coherent snapshot. Copy every tracked Python source and stub
+		# (this also carries a repo's typings/ tree, keeping the config's
+		# relative mypy_path resolvable), and rename each preparsed X.sage.py
+		# to X.py -- the stem X.sage can never satisfy an import of pkg.X.
+		git ls-files -z -- '*.py' '*.pyi' | xargs -0 --no-run-if-empty cp --parents -t "$sage_preparse_dir"
 		copied_sage_files=()
 		for sage_file in "${sage_files[@]}"; do
 			target="$sage_preparse_dir/$sage_file"
 			mkdir -p "$(dirname "$target")"
 			cp "$sage_file" "$target"
 			copied_sage_files+=("$sage_file")
-			mypy_targets+=("$target.py")
 		done
 		(
 			cd "$sage_preparse_dir"
 			"$SAGE_BIN" --preparse "${copied_sage_files[@]}" >/dev/null
 		)
+		for sage_file in "${copied_sage_files[@]}"; do
+			mv "$sage_preparse_dir/$sage_file.py" "$sage_preparse_dir/${sage_file%.sage}.py"
+			mypy_targets+=("${sage_file%.sage}.py")
+		done
 	fi
 	if [ "${#mypy_targets[@]}" -gt 0 ]; then
 		effective_config="{{configs}}/mypy-global.ini"
-		with_args=(--with-editable .)
+		with_args=(--with-editable "$PWD")
 		dependency_requirements_output="$(uv run --no-project python "{{artifacts}}/scripts/python_qc_metadata.py" dependency-group-requirements . 2>/dev/null || true)"
 		if [ -n "$dependency_requirements_output" ]; then
 			mapfile -t dependency_requirements <<<"$dependency_requirements_output"
@@ -613,11 +623,24 @@ _sage-mypy: _sage-qc-files
 				with_args+=(--with "$requirement")
 			done
 		fi
-		if uvx --python 3.14 --from mypy \
+		mypy_run_dir="."
+		mypy_flags=()
+		if [ -n "${sage_preparse_dir:-}" ]; then
+			# Run from the snapshot so targets and every intra-package import
+			# resolve inside it, ahead of the site-packages editable install.
+			# The packages are namespace packages, so bases must be explicit.
+			mypy_run_dir="$sage_preparse_dir"
+			mypy_flags+=(--explicit-package-bases)
+			if [ -d "$sage_preparse_dir/src" ]; then
+				export MYPYPATH="$sage_preparse_dir/src${MYPYPATH:+:$MYPYPATH}"
+			fi
+		fi
+		if (cd "$mypy_run_dir" && uvx --python 3.14 --from mypy \
 			"${with_args[@]}" \
 			mypy \
 			--config-file "$effective_config" \
-			"${mypy_targets[@]}"; then
+			"${mypy_flags[@]}" \
+			"${mypy_targets[@]}"); then
 			:
 		else
 			ec=$?
