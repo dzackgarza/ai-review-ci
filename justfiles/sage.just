@@ -45,17 +45,20 @@ setup:
 	@echo "     version = \"0.0.1\""
 	@echo "     requires-python = \">=3.14\""
 	@echo ""
-	@echo "4. Write tests as .sage files (test_*.sage / *_test.sage) so the"
+	@echo "4. Install the owned Sage package compiler into Sage's Python:"
+	@echo "     \"\$SAGE_BIN\" -pip install 'tree-sitter-sage @ git+https://github.com/dzackgarza/tree-sitter-sage@40c126bcf759446863860dfaf9f48971ac6681a7'"
+	@echo ""
+	@echo "5. Write tests as .sage files (test_*.sage / *_test.sage) so the"
 	@echo "   preparser converts integer literals to Sage Integer/Rational."
 	@echo "   NEVER commit generated *.sage.py preparse artifacts; add"
 	@echo "   '*.sage.py' to .gitignore. QC preparses into a tempdir itself."
 	@echo ""
-	@echo "5. Tests run under the Sage interpreter's own Python. It needs pytest:"
+	@echo "6. Tests run under the Sage interpreter's own Python. It needs pytest:"
 	@echo "     \"\$SAGE_BIN\" -pip install pytest"
 	@echo "   The package must be importable there (PYTHONPATH via .envrc, or"
 	@echo "   installed into Sage's python)."
 	@echo ""
-	@echo "6. Gates: pre-commit runs 'just test-commit' (syntax and mypy);"
+	@echo "7. Gates: pre-commit runs 'just test-commit' (syntax and mypy);"
 	@echo "   pre-push runs 'just test-push' (adds Sage tests); CI runs 'just test-ci'."
 	@echo "   Commit/push failures are direct repair; CI policy findings are triaged."
 
@@ -146,7 +149,7 @@ _sage-preflight:
 	set -euo pipefail
 	echo "============================="
 	echo "=== Running: Sage QC wiring preflight ==="
-	echo "# Validates SAGE_BIN, pyproject.toml, and absence of committed preparse artifacts"
+	echo "# Validates Sage, sageparse.build, pyproject.toml, and generated-artifact hygiene"
 	failed=0
 	if [ "${SAGE_BIN+x}" != x ] || [ ! -x "${SAGE_BIN:-}" ]; then
 		echo "ERROR: SAGE_BIN is unset or not executable (current: '${SAGE_BIN:-<unset>}')."
@@ -162,6 +165,12 @@ _sage-preflight:
 		echo "         name = \"<project-name>\""
 		echo "         version = \"0.0.1\""
 		echo "         requires-python = \">=3.14\""
+		failed=1
+	fi
+	if [ "${SAGE_BIN+x}" = x ] && [ -x "$SAGE_BIN" ] && ! "$SAGE_BIN" -python "{{artifacts}}/scripts/lower_sage_sources.py" --check; then
+		echo "ERROR: Sage's Python cannot import the sageparse.build module."
+		echo "       FIX: install the owned package compiler into Sage's Python:"
+		echo "         \"\$SAGE_BIN\" -pip install 'tree-sitter-sage @ git+https://github.com/dzackgarza/tree-sitter-sage@40c126bcf759446863860dfaf9f48971ac6681a7'"
 		failed=1
 	fi
 	tracked_generated="$(git ls-files -- '*.sage.py' 2>/dev/null || true)"
@@ -581,21 +590,33 @@ _sage-mypy: _sage-qc-files
 	if [ -n "$sage_files_output" ]; then
 		mapfile -t sage_files <<<"$sage_files_output"
 	fi
+	effective_config="{{configs}}/mypy-global.ini"
+	with_args=(--with-editable "$PWD")
+	dependency_requirements_output="$(uv run --no-project python "{{artifacts}}/scripts/python_qc_metadata.py" dependency-group-requirements .)"
+	if [ -n "$dependency_requirements_output" ]; then
+		mapfile -t dependency_requirements <<<"$dependency_requirements_output"
+		for requirement in "${dependency_requirements[@]}"; do
+			with_args+=(--with "$requirement")
+		done
+	fi
+	package_roots_output="$(uv run --no-project python "{{artifacts}}/scripts/python_qc_metadata.py" package-source-roots .)"
+	mapfile -t package_roots <<<"$package_roots_output"
+	project_package_roots=()
+	for package_root in "${package_roots[@]}"; do
+		project_package_roots+=("$PWD/$package_root")
+	done
+	project_package_path="$(IFS=:; echo "${project_package_roots[*]}")"
 	mypy_targets=()
 	for pf in "${python_files[@]}"; do
 		[ -n "$pf" ] && mypy_targets+=("$pf")
 	done
 	if [ "${#sage_files[@]}" -gt 0 ]; then
-		sage_bin="$(just --justfile {{justfile()}} -d . _sage-bin)"
 		sage_preparse_dir="$(mktemp -d "${TMPDIR:-/tmp}/qc-mypy-sage.XXXXXX")"
 		trap 'if [ -e "$sage_preparse_dir" ]; then gio trash "$sage_preparse_dir"; fi' EXIT
-		echo "# Preparsing ${#sage_files[@]} Sage file(s) for mypy"
-		# The preparsed modules import each other and the package's plain .py
-		# modules, and mypy resolves those imports statically: the tempdir must
-		# be one coherent snapshot. Copy every tracked Python source and stub
-		# (this also carries a repo's typings/ tree, keeping the config's
-		# relative mypy_path resolvable), and rename each preparsed X.sage.py
-		# to X.py -- the stem X.sage can never satisfy an import of pkg.X.
+		echo "# Lowering ${#sage_files[@]} Sage file(s) for mypy"
+		# Static analysis uses one coherent repository snapshot. sageparse owns
+		# conversion from .sage library source to importable Python; this recipe
+		# owns only source selection, staging, and the mypy invocation.
 		git ls-files -z -- '*.py' '*.pyi' | xargs -0 --no-run-if-empty cp --parents -t "$sage_preparse_dir"
 		copied_sage_files=()
 		for sage_file in "${sage_files[@]}"; do
@@ -604,25 +625,14 @@ _sage-mypy: _sage-qc-files
 			cp "$sage_file" "$target"
 			copied_sage_files+=("$sage_file")
 		done
-		(
-			cd "$sage_preparse_dir"
-			"$SAGE_BIN" --preparse "${copied_sage_files[@]}" >/dev/null
-		)
+		PYTHONPATH="$project_package_path${PYTHONPATH:+:$PYTHONPATH}" \
+			"$SAGE_BIN" -python "{{artifacts}}/scripts/lower_sage_sources.py" \
+			"$sage_preparse_dir" "${copied_sage_files[@]}"
 		for sage_file in "${copied_sage_files[@]}"; do
-			mv "$sage_preparse_dir/$sage_file.py" "$sage_preparse_dir/${sage_file%.sage}.py"
 			mypy_targets+=("${sage_file%.sage}.py")
 		done
 	fi
 	if [ "${#mypy_targets[@]}" -gt 0 ]; then
-		effective_config="{{configs}}/mypy-global.ini"
-		with_args=(--with-editable "$PWD")
-		dependency_requirements_output="$(uv run --no-project python "{{artifacts}}/scripts/python_qc_metadata.py" dependency-group-requirements . 2>/dev/null || true)"
-		if [ -n "$dependency_requirements_output" ]; then
-			mapfile -t dependency_requirements <<<"$dependency_requirements_output"
-			for requirement in "${dependency_requirements[@]}"; do
-				with_args+=(--with "$requirement")
-			done
-		fi
 		mypy_run_dir="."
 		mypy_flags=()
 		if [ -n "${sage_preparse_dir:-}" ]; then
@@ -631,9 +641,12 @@ _sage-mypy: _sage-qc-files
 			# The packages are namespace packages, so bases must be explicit.
 			mypy_run_dir="$sage_preparse_dir"
 			mypy_flags+=(--explicit-package-bases)
-			if [ -d "$sage_preparse_dir/src" ]; then
-				export MYPYPATH="$sage_preparse_dir/src${MYPYPATH:+:$MYPYPATH}"
-			fi
+			staged_package_roots=()
+			for package_root in "${package_roots[@]}"; do
+				staged_package_roots+=("$sage_preparse_dir/$package_root")
+			done
+			package_path="$(IFS=:; echo "${staged_package_roots[*]}")"
+			export MYPYPATH="$package_path${MYPYPATH:+:$MYPYPATH}"
 		fi
 		if (cd "$mypy_run_dir" && uvx --python 3.14 --from mypy \
 			"${with_args[@]}" \

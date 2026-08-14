@@ -179,21 +179,20 @@ def test_sage_mypy_resolves_imports_between_declared_package_roots(
     (alpha / "__init__.sage").write_text("")
     (alpha / "names.sage").write_text('def package_name() -> str:\n    return "alpha"\n')
     (beta / "__init__.sage").write_text("")
-    (beta / "names.sage").write_text(
-        "from alpha.names import package_name\n\n"
-        "def qualified_name() -> str:\n"
-        '    return f"{package_name()}.beta"\n'
-    )
+    (beta / "names.sage").write_text('from alpha.names import package_name\n\ndef qualified_name() -> str:\n    return f"{package_name()}.beta"\n')
     init_git_repo(project)
-    assert run_git(
-        project,
-        "add",
-        "pyproject.toml",
-        "components/alpha/src/alpha/__init__.sage",
-        "components/alpha/src/alpha/names.sage",
-        "components/beta/src/beta/__init__.sage",
-        "components/beta/src/beta/names.sage",
-    ).returncode == 0
+    assert (
+        run_git(
+            project,
+            "add",
+            "pyproject.toml",
+            "components/alpha/src/alpha/__init__.sage",
+            "components/alpha/src/alpha/names.sage",
+            "components/beta/src/beta/__init__.sage",
+            "components/beta/src/beta/names.sage",
+        ).returncode
+        == 0
+    )
     commit_without_hooks(project, "fixture")
     env = os.environ.copy()
     sage_bin = shutil.which("sage")

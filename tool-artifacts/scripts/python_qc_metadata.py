@@ -83,6 +83,20 @@ def _hatch_wheel_packages(pyproject: dict[str, object]) -> list[str]:
     return [Path(package_path).name for package_path in package_paths]
 
 
+def _hatch_package_roots(project_root: Path, pyproject: dict[str, object]) -> list[Path]:
+    tool = _optional_table(pyproject, "tool", "tool")
+    hatch = _optional_table(tool, "hatch", "tool.hatch")
+    build = _optional_table(hatch, "build", "tool.hatch.build")
+    targets = _optional_table(build, "targets", "tool.hatch.build.targets")
+    wheel = _optional_table(targets, "wheel", "tool.hatch.build.targets.wheel")
+    packages = wheel.get("packages")
+    if packages is None:
+        return []
+
+    package_paths = _string_list(packages, "tool.hatch.build.targets.wheel.packages")
+    return [project_root / Path(package_path).parent for package_path in package_paths]
+
+
 def _setuptools_explicit_packages(pyproject: dict[str, object]) -> list[str]:
     # setuptools accepts packages as an explicit list of dotted package names
     # (the alternative to the {find = {where = [...]}} table). The top-level
@@ -131,6 +145,23 @@ def first_party_modules(project_root: Path) -> list[str]:
     modules.extend(_hatch_wheel_packages(pyproject))
     modules.extend(_setuptools_py_modules(pyproject))
     return list(dict.fromkeys(modules))
+
+
+def package_source_roots(project_root: Path) -> list[Path]:
+    """Return package bases declared by the project's build configuration."""
+    pyproject = _load_pyproject(project_root)
+    roots = [project_root]
+    conventional_src = project_root / "src"
+    if conventional_src.is_dir():
+        roots.append(conventional_src)
+    roots.extend(_setuptools_package_roots(project_root, pyproject))
+    roots.extend(_hatch_package_roots(project_root, pyproject))
+    resolved_project_root = project_root.resolve()
+    unique_roots = list(dict.fromkeys(root.resolve() for root in roots))
+    for root in unique_roots:
+        assert root.is_relative_to(resolved_project_root), f"package source root must be inside the project: {root}"
+        assert root.is_dir(), f"package source root does not exist: {root}"
+    return unique_roots
 
 
 def _first_party_packages(project_root: Path, modules: list[str]) -> list[str]:
@@ -276,6 +307,10 @@ def main() -> None:
     elif command == "dependency-group-requirements":
         assert len(sys.argv) == 3
         _print_lines(dependency_group_requirements(Path(sys.argv[2])))
+    elif command == "package-source-roots":
+        assert len(sys.argv) == 3
+        project_root = Path(sys.argv[2]).resolve()
+        _print_lines(str(root.relative_to(project_root)) or "." for root in package_source_roots(project_root))
     elif command == "pep723-scripts":
         _print_lines(pep723_scripts(sys.argv[2:]))
     elif command == "pep723-requirements":
