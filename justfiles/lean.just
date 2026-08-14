@@ -17,6 +17,38 @@
 # the kernel axiom set (never imported or compiled into the library); the
 # no-sorry scan excludes them like the semgrep axiom rule does.
 
+# public: check only staged Lean files before commit
+test-commit: _lean-staged-check
+
+# public: build the project and run the full Lean gate before push
+test-push: _lean-build lean-qc
+
+# public: run the full Lean push gate in CI
+test-ci: test-push
+
+[private]
+_lean-staged-check:
+	#!/usr/bin/env bash
+	set -euo pipefail
+	mapfile -d '' lean_files < <(git diff --cached --name-only --diff-filter=ACMR -z -- '*.lean')
+	[ "${#lean_files[@]}" -gt 0 ] || {
+		echo "No staged Lean files found"
+		exit 0
+	}
+	for file in "${lean_files[@]}"; do
+		matches="$(git show ":$file" | rg -n '\bsorry\b' || true)"
+		[ -z "$matches" ] || {
+			echo "$file:$matches"
+			echo "ERROR: staged Lean source contains sorry declarations." >&2
+			exit 1
+		}
+		lake env lean "$file"
+	done
+
+[private]
+_lean-build:
+	lake build
+
 infra := justfile_directory() / ".."
 justfiles := infra / "justfiles"
 
