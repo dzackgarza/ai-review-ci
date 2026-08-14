@@ -17,7 +17,7 @@
 # the kernel axiom set (never imported or compiled into the library); the
 # no-sorry scan excludes them like the semgrep axiom rule does.
 
-# public: check only staged Lean files before commit
+# public: scan staged Lean source without compiling the project
 test-commit: _lean-staged-check
 
 # public: build the project and run the full Lean gate before push
@@ -42,8 +42,8 @@ _lean-staged-check:
 			echo "ERROR: staged Lean source contains sorry declarations." >&2
 			exit 1
 		}
-		lake env lean "$file"
 	done
+	echo "Staged Lean source contains no sorry declarations"
 
 [private]
 _lean-build:
