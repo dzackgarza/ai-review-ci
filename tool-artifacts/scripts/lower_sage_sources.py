@@ -6,10 +6,9 @@ from pathlib import Path
 from sageparse.build import lower_file
 
 
-def lower_sources(snapshot_root: Path, relative_sources: list[str]) -> list[Path]:
+def lower_sources(snapshot_root: Path, relative_sources: list[str]) -> None:
     """Lower selected Sage sources inside one repository snapshot."""
     resolved_root = snapshot_root.resolve()
-    written: list[Path] = []
     for relative_source in relative_sources:
         relative = Path(relative_source)
         assert not relative.is_absolute(), f"Sage source must be relative: {relative}"
@@ -18,8 +17,7 @@ def lower_sources(snapshot_root: Path, relative_sources: list[str]) -> list[Path
         assert source.is_file(), f"Sage source does not exist: {source}"
         target = source.with_suffix(".py")
         assert not target.exists(), f"Sage source conflicts with an existing Python module: {target}"
-        written.append(lower_file(source, target))
-    return written
+        lower_file(source, target)
 
 
 def main() -> None:
