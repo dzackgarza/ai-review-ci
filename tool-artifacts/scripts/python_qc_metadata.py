@@ -114,16 +114,28 @@ def _setuptools_explicit_packages(pyproject: dict[str, object]) -> list[str]:
 def _setuptools_package_roots(project_root: Path, pyproject: dict[str, object]) -> list[Path]:
     tool = _optional_table(pyproject, "tool", "tool")
     setuptools = _optional_table(tool, "setuptools", "tool.setuptools")
-    # The explicit-list form declares package names, not source roots.
+    roots: list[Path] = []
+    package_dir = setuptools.get("package-dir")
+    if package_dir is not None:
+        assert isinstance(package_dir, dict), "tool.setuptools.package-dir must be a TOML table"
+        package_directories = cast("dict[str, object]", package_dir)
+        root_directory = package_directories.get("")
+        if root_directory is not None:
+            assert isinstance(root_directory, str) and root_directory, 'tool.setuptools.package-dir."" must be a non-empty string'
+            roots.append(project_root / root_directory)
+
+    # The explicit-list form declares package names. Its common source root is
+    # the empty-name package-dir entry above, when one is present.
     if isinstance(setuptools.get("packages"), list):
-        return []
+        return roots
     packages = _optional_table(setuptools, "packages", "tool.setuptools.packages")
     find = _optional_table(packages, "find", "tool.setuptools.packages.find")
     where = find.get("where")
     if where is None:
-        return []
+        return roots
 
-    return [project_root / path for path in _string_list(where, "tool.setuptools.packages.find.where")]
+    roots.extend(project_root / path for path in _string_list(where, "tool.setuptools.packages.find.where"))
+    return roots
 
 
 def _setuptools_py_modules(pyproject: dict[str, object]) -> list[str]:
