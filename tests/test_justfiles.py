@@ -4100,3 +4100,29 @@ def test_docs_and_configs_qc_routes_formatting_and_link_validation(tmp_path: pat
     assert f"--justfile {profile_justfile} _check-links" in push.stderr
     assert links.returncode == 0, links.stderr
     assert "lychee --no-progress" in links.stderr
+
+
+def test_every_generated_qc_config_matches_its_generator(tmp_path: pathlib.Path) -> None:
+    """qc-excludes.toml is the single owner of QC directory exclusions (#375).
+
+    The knip check above proves this for one file. The invariant covers every
+    config sync_qc_excludes.py writes: a hand edit, or a qc-excludes.toml change
+    that was never synced out, silently desynchronises what QC actually scans.
+    """
+    qc_root = tmp_path / "tool-configs"
+    shutil.copytree(ROOT / "tool-configs", qc_root)
+    result = subprocess.run(
+        ["uv", "run", str(ROOT / "tool-artifacts" / "scripts" / "sync_qc_excludes.py"), str(qc_root / "qc-excludes.toml")],
+        cwd=tmp_path,
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+    assert result.returncode == 0, result.stdout + result.stderr
+
+    drifted = [
+        path.name
+        for path in sorted(qc_root.iterdir())
+        if path.is_file() and path.read_bytes() != (ROOT / "tool-configs" / path.name).read_bytes()
+    ]
+    assert drifted == [], drifted

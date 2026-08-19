@@ -44,6 +44,10 @@
   "ignore": [
     "**/env.d.ts",
     "**/tests/fixtures/**",
+    "**/test/highlight/**",
+    "**/test/tags/**",
+    "**/examples/**",
+    "**/bindings/**",
     "**/node_modules/**",
     "**/.venv/**",
     "**/.pytest_cache/**",
@@ -74,7 +78,6 @@
     "**/archives/**",
     "**/src.bak/**",
     "**/notebooks/**",
-    "**/preamble/**",
     "**/notes/**",
     "**/.webpack/**",
     "**/out/**",
