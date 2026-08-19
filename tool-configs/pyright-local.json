@@ -4,6 +4,10 @@
   "pythonPlatform": "Linux",
   "exclude": [
     "**/tests/fixtures",
+    "**/test/highlight",
+    "**/test/tags",
+    "**/examples",
+    "**/bindings",
     "**/node_modules",
     "**/.venv",
     "**/.pytest_cache",
@@ -35,7 +39,6 @@
     "**/src.bak",
     "**/scripts",
     "**/notebooks",
-    "**/preamble",
     "**/notes",
     "**/.webpack",
     "**/out",
