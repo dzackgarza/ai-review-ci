@@ -4105,6 +4105,145 @@ def test_docs_and_configs_qc_routes_formatting_and_link_validation(tmp_path: pat
     assert "lychee --no-progress" in links.stderr
 
 
+# Config filenames each QC tool actually discovers, read from the tools themselves:
+#   biome      — ConfigName::BIOME_JSON in biome_fs/src/fs.rs
+#   eslint     — FLAT_CONFIG_FILENAMES in eslint/lib/config/config-loader.js (v10: flat config only)
+#   knip       — https://knip.dev/overview/configuration#location
+#   lint-staged— CONFIG_FILE_NAMES in lint-staged/lib/loadConfig.js
+LOCAL_QC_OVERRIDE_FILES = (
+    "biome.json",
+    "biome.jsonc",
+    ".biome.json",
+    ".biome.jsonc",
+    "eslint.config.js",
+    "eslint.config.mjs",
+    "eslint.config.cjs",
+    "eslint.config.ts",
+    "eslint.config.mts",
+    "eslint.config.cts",
+    "knip.json",
+    "knip.jsonc",
+    ".knip.json",
+    ".knip.jsonc",
+    "knip.ts",
+    "knip.js",
+    "knip.config.ts",
+    "knip.config.js",
+    "lint-staged.config.js",
+    "lint-staged.config.cjs",
+    "lint-staged.config.mjs",
+    ".lintstagedrc",
+    ".lintstagedrc.js",
+    ".lintstagedrc.cjs",
+    ".lintstagedrc.mjs",
+    ".lintstagedrc.json",
+    ".lintstagedrc.yaml",
+    ".lintstagedrc.yml",
+)
+
+
+def compliant_bun_project(tmp_path: pathlib.Path, manifest: dict[str, Any] | None = None) -> pathlib.Path:
+    """A bun project that satisfies every _check-ts-project rule except QC config isolation."""
+    project = tmp_path / "bun-project"
+    (project / "tests").mkdir(parents=True)
+    (project / "package.json").write_text(json.dumps(manifest or {"name": "ts-preflight-fixture", "version": "1.0.0"}) + "\n")
+    (project / "bun.lock").write_text("{}\n")
+    (project / "tests" / "app.test.ts").write_text("import { expect, test } from 'bun:test';\ntest('t', () => expect(1).toBe(1));\n")
+    return project
+
+
+def test_ts_preflight_accepts_a_project_with_no_local_qc_config(tmp_path: pathlib.Path) -> None:
+    """Positive control: the detector must not reject a project that owns no QC tool config."""
+    project = compliant_bun_project(tmp_path)
+
+    result = run_just(ROOT / "justfiles" / "bun.just", project, "_check-ts-project")
+
+    output = result.stdout + result.stderr
+    assert result.returncode == 0, output
+
+
+@pytest.mark.parametrize("config", LOCAL_QC_OVERRIDE_FILES)
+def test_ts_preflight_rejects_every_discoverable_local_qc_config(tmp_path: pathlib.Path, config: str) -> None:
+    """A project-local config any QC tool would load diverges local QC from canonical CI (#292)."""
+    project = compliant_bun_project(tmp_path)
+    (project / config).write_text("{}\n")
+
+    result = run_just(ROOT / "justfiles" / "bun.just", project, "_check-ts-project")
+
+    output = result.stdout + result.stderr
+    assert result.returncode != 0, output
+    assert config in output, output
+
+
+@pytest.mark.parametrize("key", ["knip", "lint-staged"])
+def test_ts_preflight_rejects_qc_config_embedded_in_the_package_manifest(tmp_path: pathlib.Path, key: str) -> None:
+    """knip and lint-staged also load config from a package.json key, not just a config file (#292)."""
+    project = compliant_bun_project(tmp_path, {"name": "manifest-config-fixture", "version": "1.0.0", key: {}})
+
+    result = run_just(ROOT / "justfiles" / "bun.just", project, "_check-ts-project")
+
+    output = result.stdout + result.stderr
+    assert result.returncode != 0, output
+    assert f"package.json#{key}" in output, output
+
+
+# setup.cfg and tox.ini are config-discovery surfaces for QC tools this repo supplies
+# configs for: mypy (mypy.defaults.SHARED_CONFIG_NAMES), coverage.py, and import-linter.
+# pytest and pyright are deliberately absent — global QC passes them no config, so a
+# project-local one is not an override of anything (#292).
+SHARED_MANIFEST_OVERRIDES = (
+    ("setup.cfg", "[mypy]\nwarn_return_any = True\n"),
+    ("setup.cfg", "[coverage:run]\nbranch = True\n"),
+    ("setup.cfg", "[importlinter]\nroot_package = app\n"),
+    ("tox.ini", "[coverage:run]\nbranch = True\n"),
+)
+
+
+def compliant_python_project(tmp_path: pathlib.Path) -> pathlib.Path:
+    """A python project that satisfies every _check-python-project rule except QC config isolation."""
+    project = tmp_path / "python-project"
+    (project / "tests").mkdir(parents=True)
+    (project / "pyproject.toml").write_text('[project]\nname = "preflight-fixture"\nrequires-python = ">=3.14"\n')
+    (project / "tests" / "test_app.py").write_text("def test_app() -> None:\n    assert 1 == 1\n")
+    return project
+
+
+def test_python_preflight_accepts_a_project_with_no_local_qc_config(tmp_path: pathlib.Path) -> None:
+    """Positive control: a project owning no QC tool config must pass."""
+    project = compliant_python_project(tmp_path)
+
+    result = run_just(ROOT / "justfiles" / "python.just", project, "_check-python-project")
+
+    output = result.stdout + result.stderr
+    assert result.returncode == 0, output
+
+
+@pytest.mark.parametrize(("manifest", "body"), SHARED_MANIFEST_OVERRIDES)
+def test_python_preflight_rejects_qc_config_in_shared_manifests(
+    tmp_path: pathlib.Path, manifest: str, body: str
+) -> None:
+    """mypy, coverage, and import-linter all read setup.cfg/tox.ini, which went unaudited (#292)."""
+    project = compliant_python_project(tmp_path)
+    (project / manifest).write_text(body)
+
+    result = run_just(ROOT / "justfiles" / "python.just", project, "_check-python-project")
+
+    output = result.stdout + result.stderr
+    assert result.returncode != 0, output
+    assert manifest in output, output
+
+
+def test_python_preflight_allows_pytest_config_global_qc_does_not_supply(tmp_path: pathlib.Path) -> None:
+    """Global QC passes pytest no config, so a project-local one overrides nothing (#292 part 2)."""
+    project = compliant_python_project(tmp_path)
+    (project / "pytest.ini").write_text("[pytest]\ntestpaths = tests\n")
+
+    result = run_just(ROOT / "justfiles" / "python.just", project, "_check-python-project")
+
+    output = result.stdout + result.stderr
+    assert result.returncode == 0, output
+
+
 def test_every_generated_qc_config_matches_its_generator(tmp_path: pathlib.Path) -> None:
     """qc-excludes.toml is the single owner of QC directory exclusions (#375).
 

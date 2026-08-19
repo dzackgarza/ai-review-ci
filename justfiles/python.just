@@ -311,7 +311,30 @@ _check-python-project:
 			failed=1
 		fi
 	done
-	# 5. Tests must exist
+	# 5. setup.cfg and tox.ini are config-discovery surfaces too, and went unaudited.
+	#    Each tool's own rules decide which sections count here: mypy reads setup.cfg
+	#    (mypy.defaults.SHARED_CONFIG_NAMES), import-linter reads setup.cfg, coverage.py
+	#    reads both. pytest and pyright are absent on purpose — global QC passes them no
+	#    config, so a project-local one overrides nothing.
+	audit_shared_manifest() {
+		manifest="$1"
+		shift
+		[ -f "$manifest" ] || return 0
+		for section in "$@"; do
+			if grep -qP "$section" "$manifest"; then
+				echo "ERROR: $manifest contains section matching '$section' — global QC owns this tool config."
+				echo "       DELETE this section from $manifest. The global config for this tool"
+				echo "       already exists in ~/ai-review-ci/ and is authoritative for all projects."
+				echo "       Do NOT copy the section contents to ~/ai-review-ci/ — that violates"
+				echo "       QC isolation policy. If the global config needs to change, contact"
+				echo "       the QC owner (dzack) to update it centrally."
+				failed=1
+			fi
+		done
+	}
+	audit_shared_manifest setup.cfg '\[mypy\]' '\[coverage:' '\[importlinter\]'
+	audit_shared_manifest tox.ini '\[coverage:'
+	# 6. Tests must exist
 	if ! rg --files -g 'test_*.py' -g '*_test.py' -g 'tests/*.py' -g '!*.sage.py' >/dev/null 2>&1; then
 		echo "ERROR: Python project must have tests. No test files found with patterns: test_*.py, *_test.py, tests/*.py"
 		"{{artifacts}}/scripts/emit-test-writing-directive.sh"
