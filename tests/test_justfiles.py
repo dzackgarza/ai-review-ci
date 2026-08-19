@@ -4120,11 +4120,7 @@ def test_every_generated_qc_config_matches_its_generator(tmp_path: pathlib.Path)
     )
     assert result.returncode == 0, result.stdout + result.stderr
 
-    drifted = [
-        path.name
-        for path in sorted(qc_root.iterdir())
-        if path.is_file() and path.read_bytes() != (ROOT / "tool-configs" / path.name).read_bytes()
-    ]
+    drifted = [path.name for path in sorted(qc_root.iterdir()) if path.is_file() and path.read_bytes() != (ROOT / "tool-configs" / path.name).read_bytes()]
     assert drifted == [], drifted
 
 
@@ -4137,9 +4133,7 @@ def test_global_stub_library_resolves_from_a_downstream_project(tmp_path: pathli
     """
     project = tmp_path / "downstream"
     project.mkdir()
-    (project / "pyproject.toml").write_text(
-        '[project]\nname = "downstream"\nversion = "0.1.0"\nrequires-python = ">=3.14"\n'
-    )
+    (project / "pyproject.toml").write_text('[project]\nname = "downstream"\nversion = "0.1.0"\nrequires-python = ">=3.14"\n')
     (project / "uses_stub.py").write_text("from sarif_pydantic import Sarif\n\n__all__ = ['Sarif']\n")
     subprocess.run(["git", "init", "-q"], cwd=project, check=True)
     subprocess.run(["git", "add", "-A"], cwd=project, check=True)
