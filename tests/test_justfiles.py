@@ -3570,6 +3570,9 @@ def test_mypy_recipe_uses_upstream_diff_in_git_repo(
         check=True,
         capture_output=True,
     )
+    # A bare runner has no global identity; committing without one exits 128.
+    subprocess.run(["git", "config", "user.email", "qc@example.invalid"], cwd=project, check=True, capture_output=True)
+    subprocess.run(["git", "config", "user.name", "QC Fixture"], cwd=project, check=True, capture_output=True)
     subprocess.run(["git", "add", "."], cwd=project, check=True, capture_output=True)
     subprocess.run(
         ["git", "commit", "-m", "Initial commit"],
