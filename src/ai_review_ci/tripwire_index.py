@@ -437,8 +437,14 @@ def audit_policy_isolation(root: Path) -> tuple[str, ...]:
         if path == canonical_policy_path:
             continue
         text = path.read_text(encoding="utf-8")
-        if _POLICY_CODE_RE.search(text) and _REMEDIATION_CODE_RE.search(text):
-            findings.append(f"{_display_path(path, root)}: scattered policy-to-remediation mapping")
+        remediation = _REMEDIATION_CODE_RE.search(text)
+        if _POLICY_CODE_RE.search(text) and remediation:
+            line = text.count("\n", 0, remediation.start()) + 1
+            findings.append(
+                f"{_display_path(path, root)}:{line}: scattered policy-to-remediation mapping"
+                f" — {remediation.group(0)} belongs only in references/policies.md;"
+                f" name the route in prose here instead"
+            )
     return tuple(sorted(set(findings)))
 
 
