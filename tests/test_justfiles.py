@@ -4182,3 +4182,60 @@ def test_ts_preflight_rejects_qc_config_embedded_in_the_package_manifest(tmp_pat
     output = result.stdout + result.stderr
     assert result.returncode != 0, output
     assert f"package.json#{key}" in output, output
+
+
+# setup.cfg and tox.ini are config-discovery surfaces for QC tools this repo supplies
+# configs for: mypy (mypy.defaults.SHARED_CONFIG_NAMES), coverage.py, and import-linter.
+# pytest and pyright are deliberately absent — global QC passes them no config, so a
+# project-local one is not an override of anything (#292).
+SHARED_MANIFEST_OVERRIDES = (
+    ("setup.cfg", "[mypy]\nwarn_return_any = True\n"),
+    ("setup.cfg", "[coverage:run]\nbranch = True\n"),
+    ("setup.cfg", "[importlinter]\nroot_package = app\n"),
+    ("tox.ini", "[coverage:run]\nbranch = True\n"),
+)
+
+
+def compliant_python_project(tmp_path: pathlib.Path) -> pathlib.Path:
+    """A python project that satisfies every _check-python-project rule except QC config isolation."""
+    project = tmp_path / "python-project"
+    (project / "tests").mkdir(parents=True)
+    (project / "pyproject.toml").write_text('[project]\nname = "preflight-fixture"\nrequires-python = ">=3.14"\n')
+    (project / "tests" / "test_app.py").write_text("def test_app() -> None:\n    assert 1 == 1\n")
+    return project
+
+
+def test_python_preflight_accepts_a_project_with_no_local_qc_config(tmp_path: pathlib.Path) -> None:
+    """Positive control: a project owning no QC tool config must pass."""
+    project = compliant_python_project(tmp_path)
+
+    result = run_just(ROOT / "justfiles" / "python.just", project, "_check-python-project")
+
+    output = result.stdout + result.stderr
+    assert result.returncode == 0, output
+
+
+@pytest.mark.parametrize(("manifest", "body"), SHARED_MANIFEST_OVERRIDES)
+def test_python_preflight_rejects_qc_config_in_shared_manifests(
+    tmp_path: pathlib.Path, manifest: str, body: str
+) -> None:
+    """mypy, coverage, and import-linter all read setup.cfg/tox.ini, which went unaudited (#292)."""
+    project = compliant_python_project(tmp_path)
+    (project / manifest).write_text(body)
+
+    result = run_just(ROOT / "justfiles" / "python.just", project, "_check-python-project")
+
+    output = result.stdout + result.stderr
+    assert result.returncode != 0, output
+    assert manifest in output, output
+
+
+def test_python_preflight_allows_pytest_config_global_qc_does_not_supply(tmp_path: pathlib.Path) -> None:
+    """Global QC passes pytest no config, so a project-local one overrides nothing (#292 part 2)."""
+    project = compliant_python_project(tmp_path)
+    (project / "pytest.ini").write_text("[pytest]\ntestpaths = tests\n")
+
+    result = run_just(ROOT / "justfiles" / "python.just", project, "_check-python-project")
+
+    output = result.stdout + result.stderr
+    assert result.returncode == 0, output
