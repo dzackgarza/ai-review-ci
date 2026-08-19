@@ -173,3 +173,19 @@ def test_policies_without_tripwires_are_reported_not_reclassified_as_errors() ->
 
 def test_policy_material_is_isolated_from_tripwire_implementation_and_mapping_copies() -> None:
     assert audit_policy_isolation(ROOT) == ()
+
+
+def test_scattered_mapping_finding_locates_the_offending_remediation_code(tmp_path: Path) -> None:
+    """#370 regressed twice because the finding named a file but not the line or the code."""
+    skills = tmp_path / "skills" / "some-skill"
+    skills.mkdir(parents=True)
+    (tmp_path / "skills" / "policy-index").mkdir(parents=True)
+    (tmp_path / "skills" / "style-guide" / "references").mkdir(parents=True)
+    (tmp_path / "skills" / "style-guide" / "references" / "style-guide-index.md").write_text("no codes here\n")
+    (skills / "SKILL.md").write_text("intro\nsee POLICY.NO_IF_ELSE\nfiller\nremediation via REMEDIATE.EXHAUSTIVE_DISPATCH\n")
+
+    findings = audit_policy_isolation(tmp_path)
+
+    assert len(findings) == 1, findings
+    assert findings[0].startswith("skills/some-skill/SKILL.md:4:"), findings[0]
+    assert "REMEDIATE.EXHAUSTIVE_DISPATCH" in findings[0], findings[0]

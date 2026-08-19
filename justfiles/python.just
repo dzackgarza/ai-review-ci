@@ -230,6 +230,8 @@ _mypy: _install-tools
 		exit 0
 	fi
 	effective_config="{{configs}}/mypy-global.ini"
+	# Shared stub library, owned here so downstream repos never grow their own.
+	export MYPYPATH="{{infra}}/typings${MYPYPATH:+:$MYPYPATH}"
 	with_args=(--with-editable .)
 	dependency_requirements_output="$(uv run --no-project python "{{artifacts}}/scripts/python_qc_metadata.py" dependency-group-requirements .)"
 	if [ -n "$dependency_requirements_output" ]; then
