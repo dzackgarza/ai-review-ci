@@ -31,7 +31,9 @@ class Label(BaseModel):
 
     name: str = Field(min_length=1)
     color: str = Field(pattern=_HEX_COLOR)
-    description: str = Field(min_length=1)
+    # GitHub rejects a longer description with HTTP 422 at create time, which
+    # surfaces as a failed install rather than as a defect in the taxonomy.
+    description: str = Field(min_length=1, max_length=100)
     category: LabelCategory
 
 
