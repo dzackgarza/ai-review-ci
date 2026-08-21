@@ -27,8 +27,6 @@ check: _normalize
     bash -n ci/private/submit-candidate
     sh -n ci/reviewer_home/bin/submit-candidate
     bash -n tool-artifacts/scripts/emit-test-writing-directive.sh
-    sh -n global-hooks/pre-commit
-    sh -n global-hooks/pre-push
     sh -n repo-hooks/pre-commit
     sh -n repo-hooks/pre-push
 
