@@ -62,7 +62,7 @@ rule:
               - any:
                   - kind: generic_type
                   - kind: subscript
-              - regex: '^(typing\.)?(Optional|Union)\[.*\]$'
+              - regex: '^(typing\.)?(Annotated|Optional|Union)\[.*\]$'
             stopBy: end
         - matches: parameter-type
         - not:
