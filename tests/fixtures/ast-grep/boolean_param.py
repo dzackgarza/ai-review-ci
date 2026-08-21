@@ -1,5 +1,6 @@
 """Direct boolean parameters are findings; nested boolean types are clean."""
 
+import builtins
 from collections.abc import Callable
 
 
@@ -9,7 +10,27 @@ def annotated(flag: bool) -> None:
 
 
 # ruleid: no-boolean-param
+def qualified(flag: builtins.bool) -> None:
+    pass
+
+
+# ruleid: no-boolean-param
+def forward(flag: "bool") -> None:
+    pass
+
+
+# ruleid: no-boolean-param
 def annotated_default(flag: bool = False) -> None:
+    pass
+
+
+# ruleid: no-boolean-param
+def qualified_default(flag: builtins.bool = False) -> None:
+    pass
+
+
+# ruleid: no-boolean-param
+def forward_default(flag: "bool" = False) -> None:
     pass
 
 
