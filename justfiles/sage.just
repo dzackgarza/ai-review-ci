@@ -571,12 +571,12 @@ _sage-mypy: _sage-qc-files
 	echo "============================="
 	echo "=== Running: mypy static type analysis (Sage-aware) ==="
 	echo "# Type checks Python and preparsed Sage files"
-	python_files_output="$(just -f {{justfiles}}/python.just -d . _python-qc-files 2>/dev/null || true)"
+	python_files_output="$(just -f {{justfiles}}/python.just -d . _python-qc-files)"
 	python_files=()
 	if [ -n "$python_files_output" ]; then
 		mapfile -t python_files <<<"$python_files_output"
 	fi
-	sage_files_output="$(just --justfile {{justfile()}} -d . _sage-qc-files 2>/dev/null || true)"
+	sage_files_output="$(just --justfile {{justfile()}} -d . _sage-qc-files)"
 	sage_files=()
 	if [ -n "$sage_files_output" ]; then
 		mapfile -t sage_files <<<"$sage_files_output"
@@ -613,41 +613,43 @@ _sage-mypy: _sage-qc-files
 			mypy_targets+=("${sage_file%.sage}.py")
 		done
 	fi
-	if [ "${#mypy_targets[@]}" -gt 0 ]; then
-		effective_config="{{configs}}/mypy-global.ini"
-		with_args=(--with-editable "$PWD")
-		dependency_requirements_output="$(uv run --no-project python "{{artifacts}}/scripts/python_qc_metadata.py" dependency-group-requirements . 2>/dev/null || true)"
-		if [ -n "$dependency_requirements_output" ]; then
-			mapfile -t dependency_requirements <<<"$dependency_requirements_output"
-			for requirement in "${dependency_requirements[@]}"; do
-				with_args+=(--with "$requirement")
-			done
+	if [ "${#mypy_targets[@]}" -eq 0 ]; then
+		echo "mypy: no Python or Sage files to check."
+		exit 0
+	fi
+	effective_config="{{configs}}/mypy-global.ini"
+	with_args=(--with-editable "$PWD")
+	dependency_requirements_output="$(uv run --no-project python "{{artifacts}}/scripts/python_qc_metadata.py" dependency-group-requirements .)"
+	if [ -n "$dependency_requirements_output" ]; then
+		mapfile -t dependency_requirements <<<"$dependency_requirements_output"
+		for requirement in "${dependency_requirements[@]}"; do
+			with_args+=(--with "$requirement")
+		done
+	fi
+	mypy_run_dir="."
+	mypy_flags=()
+	if [ -n "${sage_preparse_dir:-}" ]; then
+		# Run from the snapshot so targets and every intra-package import
+		# resolve inside it, ahead of the site-packages editable install.
+		# The packages are namespace packages, so bases must be explicit.
+		mypy_run_dir="$sage_preparse_dir"
+		mypy_flags+=(--explicit-package-bases)
+		if [ -d "$sage_preparse_dir/src" ]; then
+			export MYPYPATH="$sage_preparse_dir/src${MYPYPATH:+:$MYPYPATH}"
 		fi
-		mypy_run_dir="."
-		mypy_flags=()
-		if [ -n "${sage_preparse_dir:-}" ]; then
-			# Run from the snapshot so targets and every intra-package import
-			# resolve inside it, ahead of the site-packages editable install.
-			# The packages are namespace packages, so bases must be explicit.
-			mypy_run_dir="$sage_preparse_dir"
-			mypy_flags+=(--explicit-package-bases)
-			if [ -d "$sage_preparse_dir/src" ]; then
-				export MYPYPATH="$sage_preparse_dir/src${MYPYPATH:+:$MYPYPATH}"
-			fi
-		fi
-		if (cd "$mypy_run_dir" && uvx --python 3.14 --from mypy \
-			"${with_args[@]}" \
-			mypy \
-			--config-file "$effective_config" \
-			"${mypy_flags[@]}" \
-			"${mypy_targets[@]}"); then
-			:
-		else
-			ec=$?
-			echo "ERROR: mypy found type errors in project code."
-			"{{artifacts}}/scripts/emit-triage-directive.sh"
-			exit $ec
-		fi
+	fi
+	if (cd "$mypy_run_dir" && uvx --python 3.14 --from mypy \
+		"${with_args[@]}" \
+		mypy \
+		--config-file "$effective_config" \
+		"${mypy_flags[@]}" \
+		"${mypy_targets[@]}"); then
+		:
+	else
+		ec=$?
+		echo "ERROR: mypy found type errors in project code."
+		"{{artifacts}}/scripts/emit-triage-directive.sh"
+		exit $ec
 	fi
 
 # public: COMMIT gate — immediate, directly repairable feedback
