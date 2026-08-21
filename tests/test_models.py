@@ -212,9 +212,9 @@ def test_schema_version_pinned_to_one(checkout: Path) -> None:
     assert report.report_type == "slop"
 
 
-def test_retired_general_report_type_is_rejected(checkout: Path) -> None:
+def test_report_type_mismatch_rejected(checkout: Path) -> None:
     with pytest.raises(ValidationError):
-        SlopReport.model_validate(slop_candidate(report_type="general"))
+        SlopReport.model_validate(slop_candidate(report_type="audit"))
 
 
 def test_validation_preserves_agent_analysis_verbatim(checkout: Path) -> None:

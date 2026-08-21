@@ -12,7 +12,7 @@ One review type:
 
 - **Slop review** — AI-generated-code audit: bridge-burning violations, runtime control-flow defects, test/text antipatterns, validation-evasion constructs, defaults/fallbacks/mocks/skips.
 
-Every finding must trace to the original task, a repository policy, or a regression the diff introduced (#362). A reviewer that instead audits general code quality inflates product scope faster than it detects defects, so there is no general-review channel.
+Every finding must trace to the original task, a repository policy, or a regression the diff introduced (#362).
 
 Slop review runs in two scopes: **repo** (full-repository sweep) and **diff** (PR review focused on the diff against the base branch).
 
