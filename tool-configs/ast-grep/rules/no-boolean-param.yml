@@ -6,7 +6,19 @@ rule:
         context: 'def f($P: bool): pass'
         selector: typed_parameter
     - pattern:
+        context: 'def f($P: builtins.bool): pass'
+        selector: typed_parameter
+    - pattern:
+        context: 'def f($P: "bool"): pass'
+        selector: typed_parameter
+    - pattern:
         context: 'def f($P: bool = $D): pass'
+        selector: typed_default_parameter
+    - pattern:
+        context: 'def f($P: builtins.bool = $D): pass'
+        selector: typed_default_parameter
+    - pattern:
+        context: 'def f($P: "bool" = $D): pass'
         selector: typed_default_parameter
     - pattern:
         context: 'def f($P = True): pass'
