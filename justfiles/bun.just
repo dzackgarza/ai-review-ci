@@ -165,7 +165,7 @@ _biome:
 	[ -d src ] && dirs+=(src)
 	[ -d tests ] && dirs+=(tests)
 	[ ${#dirs[@]} -eq 0 ] && dirs=(.)
-	bun x biome check --config-path {{configs}}/biome.json "${dirs[@]}"
+	bun x --package @biomejs/biome biome check --config-path {{configs}}/biome.json "${dirs[@]}"
 
 _ast-grep:
 	#!/usr/bin/env bash
@@ -607,7 +607,7 @@ _normalize: _eslint-deps
 		echo "No staged JavaScript, TypeScript, or Vue files found"
 		exit 0
 	fi
-	if bun x biome check --write --unsafe --config-path {{configs}}/biome.json "${files[@]}"; then
+	if bun x --package @biomejs/biome biome check --write --unsafe --config-path {{configs}}/biome.json "${files[@]}"; then
 		:
 	else
 		ec=$?
