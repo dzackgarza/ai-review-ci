@@ -184,6 +184,13 @@ Every new general abstraction SHOULD have a non-target example: `\mathbf A^1\hoo
 
 Tests must include category membership, parent--element ownership, identity/associativity laws for morphisms, construction laws, action laws, functoriality, native-output types, backend opacity, and an unrelated generality example.
 
+Assertions MUST use the equivalence relation supplied by the mathematics. For an
+order-independent collection, compare sets; use multisets when multiplicities matter.
+MUST NOT sort two collections and assert list equality merely to make their current
+enumerations comparable. Assert sequence equality only when canonical ordering or normal
+form is itself part of the mathematics or the documented public contract. Tests and
+examples MUST survive changes to non-canonical enumeration and sorting algorithms.
+
 The primary external evidence is a literature oracle: full poset isomorphism, complete incidence relation, published action, quotient description, clutching source, dimension/homology theorem, or complete classification. Counts and rank vectors are diagnostics, not sufficient proof.
 
 ## 17. Documentation and API layering
