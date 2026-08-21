@@ -206,6 +206,21 @@ def test_lean_no_sorry_passes_clean_sources_and_excludes_quarantine(tmp_path: pa
     assert "No sorry declarations" in output
 
 
+def test_lean_no_sorry_fails_when_rg_cannot_run(tmp_path: pathlib.Path) -> None:
+    """A clean tree must not be reported clean by a scan that never ran (#361)."""
+    project = tmp_path / "lean-project"
+    project.mkdir()
+    (project / "Clean.lean").write_text("theorem fine : True := trivial\n")
+    env = os.environ.copy()
+    env["PATH"] = path_with_only(tmp_path, "just", "bash", "env")
+
+    result = run_just(ROOT / "justfiles" / "lean.just", project, "lean-no-sorry", env=env)
+
+    output = result.stdout + result.stderr
+    assert result.returncode != 0, output
+    assert "rg" in output
+
+
 def test_no_bypass_ignores_preexisting_markers_when_staging_other_changes(
     tmp_path: pathlib.Path,
 ) -> None:
