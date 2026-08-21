@@ -2,6 +2,8 @@
 
 import builtins
 from collections.abc import Callable
+import typing
+from typing import Optional, Union
 
 
 # ruleid: no-boolean-param
@@ -60,6 +62,36 @@ def forward_optional(flag: "bool" | None) -> None:
 
 
 # ruleid: no-boolean-param
+def generic_optional(flag: Optional[bool]) -> None:
+    pass
+
+
+# ruleid: no-boolean-param
+def qualified_generic_optional(flag: typing.Optional[bool] = None) -> None:
+    pass
+
+
+# ruleid: no-boolean-param
+def generic_union(flag: Union[str, bool, None]) -> None:
+    pass
+
+
+# ruleid: no-boolean-param
+def qualified_generic_union(flag: typing.Union[None, bool]) -> None:
+    pass
+
+
+# ruleid: no-boolean-param
+def forward_union(flag: "bool | None") -> None:
+    pass
+
+
+# ruleid: no-boolean-param
+def parenthesized(flag: (bool)) -> None:
+    pass
+
+
+# ruleid: no-boolean-param
 def inferred_true(flag=True) -> None:
     pass
 
@@ -86,6 +118,16 @@ def callable_optional_result(thunk: Callable[[], bool | None]) -> None:
 
 # ok: no-boolean-param
 def tuple_optional_items(values: tuple[bool | None, str]) -> None:
+    pass
+
+
+# ok: no-boolean-param
+def generic_optional_callable(thunk: Optional[Callable[[], bool]]) -> None:
+    pass
+
+
+# ok: no-boolean-param
+def generic_union_tuple(values: Union[tuple[bool, str], None]) -> None:
     pass
 
 
