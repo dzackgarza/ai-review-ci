@@ -1,6 +1,9 @@
 qc-type := "qc-tooling"
 repo := justfile_directory()
-global_hooks_source_dir := repo / "global-hooks"
+# One hook implementation. install-global-hooks (core.hooksPath, every repo) and
+# install-repo-hooks (a single repo's .git/hooks) differ in where they link, never
+# in what they link: a second copy of a gate this safety-critical drifts silently.
+global_hooks_source_dir := repo / "repo-hooks"
 repo_hooks_source_dir := repo / "repo-hooks"
 scaffold_source_dir := repo / "scaffolds"
 skills_source_dir := repo / "skills"

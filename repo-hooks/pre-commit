@@ -1,42 +1,13 @@
 #!/usr/bin/env sh
 set -e
-unset GIT_DIR GIT_INDEX_FILE GIT_WORK_TREE GIT_PREFIX GIT_OBJECT_DIRECTORY GIT_ALTERNATE_OBJECT_DIRECTORIES GIT_COMMON_DIR
-repo_root="$(git rev-parse --show-toplevel)"
-hook_file="$(readlink -f "$0")"
-hook_repo="$(CDPATH= cd -- "$(dirname -- "$hook_file")/.." && pwd -P)"
-repo_common_dir="$(git -C "$repo_root" rev-parse --git-common-dir)"
-hook_common_dir="$(git -C "$hook_repo" rev-parse --git-common-dir)"
-case "$repo_common_dir" in
-  /*) ;;
-  *) repo_common_dir="$repo_root/$repo_common_dir" ;;
-esac
-case "$hook_common_dir" in
-  /*) ;;
-  *) hook_common_dir="$hook_repo/$hook_common_dir" ;;
-esac
-repo_common_dir="$(CDPATH= cd -- "$repo_common_dir" && pwd -P)"
-hook_common_dir="$(CDPATH= cd -- "$hook_common_dir" && pwd -P)"
-if [ "$repo_common_dir" = "$hook_common_dir" ]; then
-  exit 0
+. "$(dirname -- "$(readlink -f "$0")")/qc-exempt.sh"
+
+if ! qc_should_gate; then
+	exit 0
 fi
 
-# Sanctioned QC-bypass exceptions. Some repositories are categorically outside
-# this QC regime; the inherited gate must not block commits to them.
-remote="$(git -C "$repo_root" config --get remote.origin.url 2>/dev/null || true)"
-case "${repo_root##*/}" in
-  *.wiki) echo "ai-review-ci hook: wiki repository — QC does not apply; proceeding without verification." >&2; exit 0 ;;
-esac
-case "$remote" in
-  *.wiki|*.wiki.git) echo "ai-review-ci hook: wiki repository — QC does not apply; proceeding without verification." >&2; exit 0 ;;
-esac
-case "$remote" in
-  "") ;;              # no remote: local QC repo, gate normally
-  *dzackgarza/*) ;;   # under the dzackgarza account: gate normally
-  *) echo "ai-review-ci hook: origin is not under the dzackgarza account — QC not owned here; proceeding without verification." >&2; exit 0 ;;
-esac
-
 if just test-commit; then
-  exit 0
+	exit 0
 fi
 
 cat >&2 <<'MSG'
@@ -52,9 +23,9 @@ this gate for that ONE commit only; ordinary hooks stay active):
     ai-review-ci red-commit --issue <owning-issue> -m "<message>"
 
 `git commit --no-verify` is also a permitted bypass for that same TDD red-proof
-audit case (and for wiki repos / repos not under the dzackgarza account, which
-are auto-detected and skipped above). See the git-integration-workflow skill
-(red-proof route) and test-guidelines.
+audit case (and for wiki repos, repos not under the dzackgarza account, and
+forks of third-party projects, which are auto-detected and skipped above).
+See the git-integration-workflow skill (red-proof route) and test-guidelines.
 
 Any other failure is direct local repair work. Fix the reported object and
 recommit; do not start a PR disposition or subagent remediation workflow.

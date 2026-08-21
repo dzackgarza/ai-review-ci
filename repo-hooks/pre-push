@@ -1,48 +1,19 @@
 #!/usr/bin/env sh
 set -e
-unset GIT_DIR GIT_INDEX_FILE GIT_WORK_TREE GIT_PREFIX GIT_OBJECT_DIRECTORY GIT_ALTERNATE_OBJECT_DIRECTORIES GIT_COMMON_DIR
-repo_root="$(git rev-parse --show-toplevel)"
-hook_file="$(readlink -f "$0")"
-hook_repo="$(CDPATH= cd -- "$(dirname -- "$hook_file")/.." && pwd -P)"
-repo_common_dir="$(git -C "$repo_root" rev-parse --git-common-dir)"
-hook_common_dir="$(git -C "$hook_repo" rev-parse --git-common-dir)"
-case "$repo_common_dir" in
-  /*) ;;
-  *) repo_common_dir="$repo_root/$repo_common_dir" ;;
-esac
-case "$hook_common_dir" in
-  /*) ;;
-  *) hook_common_dir="$hook_repo/$hook_common_dir" ;;
-esac
-repo_common_dir="$(CDPATH= cd -- "$repo_common_dir" && pwd -P)"
-hook_common_dir="$(CDPATH= cd -- "$hook_common_dir" && pwd -P)"
-if [ "$repo_common_dir" = "$hook_common_dir" ]; then
-  exit 0
-fi
+. "$(dirname -- "$(readlink -f "$0")")/qc-exempt.sh"
 
-# Sanctioned QC-bypass exceptions. Some repositories are categorically outside
-# this QC regime; the inherited gate must not block pushes to them.
-remote="$(git -C "$repo_root" config --get remote.origin.url 2>/dev/null || true)"
-case "${repo_root##*/}" in
-  *.wiki) echo "ai-review-ci hook: wiki repository — QC does not apply; proceeding without verification." >&2; exit 0 ;;
-esac
-case "$remote" in
-  *.wiki|*.wiki.git) echo "ai-review-ci hook: wiki repository — QC does not apply; proceeding without verification." >&2; exit 0 ;;
-esac
-case "$remote" in
-  "") ;;              # no remote: local QC repo, gate normally
-  *dzackgarza/*) ;;   # under the dzackgarza account: gate normally
-  *) echo "ai-review-ci hook: origin is not under the dzackgarza account — QC not owned here; proceeding without verification." >&2; exit 0 ;;
-esac
+if ! qc_should_gate; then
+	exit 0
+fi
 
 # Closure-claim confrontation (#244): a default-branch push whose commit
 # messages carry GitHub closing keywords closes those issues server-side.
 # Reads the same keyword input GitHub acts on, then blocks once with the
 # issues' verbatim asks. Consumes this hook's stdin (the ref lines).
-python3 "$hook_repo/global-hooks/confront_closes.py" "$1" || exit 1
+python3 "$qc_hook_repo/global-hooks/confront_closes.py" "$1" || exit 1
 
 if just test-push; then
-  exit 0
+	exit 0
 fi
 
 cat >&2 <<'MSG'
@@ -52,10 +23,9 @@ ai-review-ci push gate FAILED (just test-push).
 
 `git push --no-verify` is a SANCTIONED bypass ONLY for these pushes:
   • a TDD red-proof audit commit — a deliberately failing test landed
-    before the fix that makes it pass (the failing test IS the artifact);
-  • a push to a wiki repository;
-  • a push to a repository not under the dzackgarza account.
-The last two are auto-detected and skipped above, so if you see this
+    before the fix that makes it pass (the failing test IS the artifact).
+Wiki repositories, repositories not under the dzackgarza account, and forks of
+third-party projects are auto-detected and skipped above, so if you see this
 message the repo IS gated and only the TDD red-proof exception applies.
 
 Any other failure is direct project/test repair work. Fix the reported object
