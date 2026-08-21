@@ -2,8 +2,10 @@
 
 ## Doctrine
 
-The durable doctrine for global QC and review behavior lives in the [Global QC and Review Doctrine](https://github.com/dzackgarza/ai-review-ci/wiki/Global-QC-and-Review-Doctrine) wiki page.
-Use it when changing gates, scaffolds, review runners, reviewer state, or downstream enforcement contracts.
+**Read [CONTRIBUTING.md](./CONTRIBUTING.md) before filing an issue or opening a pull request.**
+It states what this repository holds — QC is not opt-in, local overrides are banned, a rule is right for all repositories or wrong for all of them — and the test a proposal has to pass.
+
+The [Global QC and Review Doctrine](https://github.com/dzackgarza/ai-review-ci/wiki/Global-QC-and-Review-Doctrine) wiki page covers system design: gates, scaffolds, review runners, reviewer state, and downstream enforcement contracts.
 
 Centrally-managed, OpenCode-powered review CI. Target repositories carry two thin trigger workflows plus explicit `ai_review_ci_*` contract variables in their root `justfile`; everything else — the reusable workflow, the review runner, the validator, the reviewer home template, the prompt corpus — lives here and is cloned inside the CI runner at execution time.
 Updating this repo updates every consumer on their next run.

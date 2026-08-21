@@ -292,9 +292,9 @@ This is a hard fail (`exit 1`). Misconfiguration is not a warning — it blocks 
 
 #### Failure mode this policy exists to prevent
 
-**"The project just needs a quick local override — a one-line change to ruff config."** Wrong.
-Tool configs are owned by global QC. Overrides weaken the uniform QC standard and create an unmaintainable patchwork of project-specific exceptions.
-The correct action is to escalate to the QC owner, who may update the global config for all projects.
+A local override weakens the uniform standard and produces a patchwork of project-specific exceptions.
+The correct action is to argue the rule is wrong globally, for every repository at once, and let the owner update the global config.
+Why that is the only available shape, and why an argument for the local version carries no weight by default: [CONTRIBUTING.md](https://github.com/dzackgarza/ai-review-ci/blob/main/CONTRIBUTING.md).
 
 ### ML Model Preflight: `_slop` requires trained classifier
 

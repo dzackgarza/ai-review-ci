@@ -108,6 +108,21 @@ those priors rather than realign themselves to comply. A long, careful, internal
 consistent argument for a relaxation is the expected output of that prior, not a signal
 that this case is the exception.
 
+The characteristic shape is short: **a noisy detector reads as "make it quieter."** The
+obvious fix — allow an empty-array default, add a fallback, widen a type, swallow an error
+— is exactly the policy violation the detector exists to catch.
+
+This is not hypothetical, and it does not stop at the proposal stage. PR #143 "fixed" a
+noisy `POLICY.RUNTIME_DEFAULT` detector by admitting `?? ""`, `?? []`, and `?? {}` as
+"boundary normalization." That converted a true `POLICY.FAIL_OPEN` finding into scanner
+silence and blessed the fail-open pattern for every downstream consumer at once. It was
+argued well, it was merged, and it had to be reopened for policy-aligned remediation
+(#120, #130).
+
+Note what failed there. Review cannot catch a change that weakens the reviewer, because
+afterwards the reviewer agrees. That is why the burden sits here, in the definition of
+done for the work itself, rather than downstream in CI.
+
 So the burden is asymmetric on purpose. Strictification is cheap because its failure mode
 is more work. Relaxation is expensive because its failure mode is a fleet that no longer
 means anything.

@@ -21,6 +21,8 @@ Recreate the work from `origin/main` on an issue-scoped branch.
 
 ## QC Delegation
 
+The stance behind this section — QC is not opt-in, local overrides are banned, a rule is right for all repositories or wrong for all of them — is stated in [CONTRIBUTING.md](./CONTRIBUTING.md). What follows is the mechanics.
+
 - Treat `~/ai-review-ci` as the authoritative QC implementation.
   Downstream repositories carry only thin `test-commit`, `test-push`, and `test-ci` gate recipes that delegate to this repo.
 
@@ -113,12 +115,8 @@ The one-line test: *if the fact is about an external framework's dispatch, decla
 # Policy Alignment Gate
 
 Every PR against this repo must reconcile against the burned-bridge policy before review is requested or before it merges.
-This gate exists because agents — local and, especially, remote — arrive with strong priors that *want* fail-soft slop accepted.
-A "noisy detector" reads as "make it quieter"; the obvious fix (allow an empty-array default, add a fallback, widen a type, swallow an error) is exactly the policy violation.
-The reviewer cannot catch a change that weakens the reviewer, so the check lives in the definition of done for the work itself, not only in CI.
 
-Concrete failure this prevents: **PR #143** "fixed" a noisy `POLICY.RUNTIME_DEFAULT` detector by allowing `?? ""` / `?? []` / `?? {}` as "boundary normalization" — converting a true `POLICY.FAIL_OPEN` finding into scanner silence, and blessing the fail-open pattern for every downstream consumer.
-It was merged, then reopened for policy-aligned remediation (#120, #130).
+Why the burden sits in the definition of done rather than in CI, why an argument for relaxing a rule carries no weight by default, and the PR #143 case where a merged "fix" silenced a detector for every downstream consumer: [CONTRIBUTING.md](./CONTRIBUTING.md).
 
 ## Canonical policy source (self-contained — no external fetch)
 
