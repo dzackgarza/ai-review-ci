@@ -10,6 +10,15 @@ utils:
                 kind: attribute
       - pattern: builtins.bool
       - pattern: '"bool"'
+  parameter-node:
+    any:
+      - kind: typed_parameter
+      - kind: typed_default_parameter
+  parameter-type:
+    inside:
+      matches: parameter-node
+      field: type
+      stopBy: end
 rule:
   any:
     - pattern:
@@ -34,12 +43,7 @@ rule:
         - matches: boolean-type
         - inside:
             kind: binary_operator
-        - inside:
-            any:
-              - kind: typed_parameter
-              - kind: typed_default_parameter
-            field: type
-            stopBy: end
+        - matches: parameter-type
         - not:
             inside:
               not:
@@ -50,9 +54,7 @@ rule:
                   - kind: typed_parameter
                   - kind: typed_default_parameter
               stopBy:
-                any:
-                  - kind: typed_parameter
-                  - kind: typed_default_parameter
+                matches: parameter-node
     - all:
         - matches: boolean-type
         - inside:
@@ -62,12 +64,7 @@ rule:
                   - kind: subscript
               - regex: '^(typing\.)?(Optional|Union)\[.*\]$'
             stopBy: end
-        - inside:
-            any:
-              - kind: typed_parameter
-              - kind: typed_default_parameter
-            field: type
-            stopBy: end
+        - matches: parameter-type
         - not:
             inside:
               all:
@@ -79,23 +76,14 @@ rule:
                       - kind: generic_type
                       - kind: subscript
                     stopBy:
-                      any:
-                        - kind: typed_parameter
-                        - kind: typed_default_parameter
+                      matches: parameter-node
               stopBy:
-                any:
-                  - kind: typed_parameter
-                  - kind: typed_default_parameter
+                matches: parameter-node
     - all:
         - matches: boolean-type
         - inside:
             kind: parenthesized_expression
-        - inside:
-            any:
-              - kind: typed_parameter
-              - kind: typed_default_parameter
-            field: type
-            stopBy: end
+        - matches: parameter-type
         - not:
             inside:
               not:
@@ -105,9 +93,7 @@ rule:
                   - kind: typed_parameter
                   - kind: typed_default_parameter
               stopBy:
-                any:
-                  - kind: typed_parameter
-                  - kind: typed_default_parameter
+                matches: parameter-node
     - pattern:
         context: 'def f($P: "bool | None"): pass'
         selector: typed_parameter
