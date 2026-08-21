@@ -20,6 +20,32 @@ rule:
     - pattern:
         context: 'def f($P: "bool" = $D): pass'
         selector: typed_default_parameter
+    - all:
+        - any:
+            - pattern: bool
+            - pattern: builtins.bool
+            - pattern: '"bool"'
+        - inside:
+            kind: binary_operator
+        - inside:
+            any:
+              - kind: typed_parameter
+              - kind: typed_default_parameter
+            field: type
+            stopBy: end
+        - not:
+            inside:
+              not:
+                any:
+                  - kind: binary_operator
+                  - kind: parenthesized_expression
+                  - kind: type
+                  - kind: typed_parameter
+                  - kind: typed_default_parameter
+              stopBy:
+                any:
+                  - kind: typed_parameter
+                  - kind: typed_default_parameter
     - pattern:
         context: 'def f($P = True): pass'
         selector: default_parameter
