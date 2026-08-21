@@ -343,7 +343,7 @@ _vulture: _sage-qc-files
 		done
 	fi
 
-	uvx --from vulture vulture \
+	uvx --python 3.14 --from vulture vulture \
 		--config {{configs}}/pyproject.toml \
 		"${python_files[@]}" \
 		"${generated_sage_python_files[@]}" \
