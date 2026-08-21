@@ -937,6 +937,21 @@ def test_python_ast_grep_uses_official_cli_and_central_rules(
     assert "no-field-default" in output
 
 
+def test_python_ast_grep_reports_boolean_parameter_in_target_repository(
+    tmp_path: pathlib.Path,
+) -> None:
+    project = tmp_path / "python-project"
+    project.mkdir()
+    (project / "app.py").write_text("def configure(verbose: bool) -> None:\n    pass\n")
+
+    result = run_just(ROOT / "justfiles" / "python.just", project, "_ast-grep")
+
+    output = result.stdout + result.stderr
+    assert result.returncode != 0, output
+    assert "no-boolean-param" in output
+    assert "app.py:1" in output
+
+
 def test_python_ast_grep_blocks_dynamic_import(
     tmp_path: pathlib.Path,
 ) -> None:

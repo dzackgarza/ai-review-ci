@@ -3,7 +3,7 @@
 import builtins
 from collections.abc import Callable
 import typing
-from typing import Optional, Union
+from typing import Annotated, Optional, Union
 
 
 # ruleid: no-boolean-param
@@ -82,6 +82,16 @@ def qualified_generic_union(flag: typing.Union[None, bool]) -> None:
 
 
 # ruleid: no-boolean-param
+def annotated_boolean(flag: Annotated[bool, "mode"]) -> None:
+    pass
+
+
+# ruleid: no-boolean-param
+def qualified_annotated_boolean(flag: typing.Annotated[builtins.bool, "mode"]) -> None:
+    pass
+
+
+# ruleid: no-boolean-param
 def forward_union(flag: "bool | None") -> None:
     pass
 
@@ -128,6 +138,11 @@ def generic_optional_callable(thunk: Optional[Callable[[], bool]]) -> None:
 
 # ok: no-boolean-param
 def generic_union_tuple(values: Union[tuple[bool, str], None]) -> None:
+    pass
+
+
+# ok: no-boolean-param
+def annotated_callable(thunk: Annotated[Callable[[], bool], "callback"]) -> None:
     pass
 
 
