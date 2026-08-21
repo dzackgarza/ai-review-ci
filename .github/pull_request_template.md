@@ -16,7 +16,7 @@
 <!-- policy-alignment-gate -->
 
 Authoritative policy is in this checkout: `skills/policy-index/SKILL.md` + `skills/policy-index/references/policies.md`. Load it **from this checkout** — do not rely on globally-installed skills (remote agents do not have them).
-Full rationale: AGENTS.md → **Policy Alignment Gate** and the wiki [Policy Alignment Gate](https://github.com/dzackgarza/ai-review-ci/wiki/Policy-Alignment-Gate).
+Full rationale: [CONTRIBUTING.md](../CONTRIBUTING.md), AGENTS.md → **Policy Alignment Gate**, and the wiki [Policy Alignment Gate](https://github.com/dzackgarza/ai-review-ci/wiki/Policy-Alignment-Gate).
 
 ### Tier 0 — every PR
 
