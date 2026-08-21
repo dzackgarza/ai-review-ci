@@ -563,7 +563,7 @@ _vulture: _install-tools
 		exit 0
 	fi
 
-	if uvx --from vulture vulture \
+	if uvx --python 3.14 --from vulture vulture \
 		--config {{configs}}/pyproject.toml \
 		"${python_files[@]}" \
 		"$whitelist_file"; then

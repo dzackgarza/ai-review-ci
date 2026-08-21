@@ -379,6 +379,31 @@ def test_sage_vulture_files_ignore_scripts_and_global_notebooks_directories(
     assert result.stdout.splitlines() == ["src/app.sage"]
 
 
+@pytest.mark.parametrize("justfile_name", ["python.just", "sage.just"])
+def test_vulture_parses_pep758_in_target_repository(
+    tmp_path: pathlib.Path,
+    justfile_name: str,
+) -> None:
+    project = tmp_path / "project"
+    project.mkdir()
+    init_git_repo(project)
+    (project / "app.py").write_text(
+        "def obviously_dead() -> None:\n"
+        "    try:\n"
+        "        pass\n"
+        "    except ValueError, TypeError:\n"
+        "        pass\n"
+    )
+    assert run_git(project, "add", "app.py").returncode == 0
+
+    result = run_just(ROOT / "justfiles" / justfile_name, project, "_vulture")
+
+    output = result.stdout + result.stderr
+    assert result.returncode != 0, output
+    assert "app.py:1: unused function 'obviously_dead'" in output
+    assert "multiple exception types must be parenthesized" not in output
+
+
 @pytest.mark.parametrize(
     ("justfile_name", "recipe", "suffix", "expected_active"),
     [
