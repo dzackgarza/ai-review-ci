@@ -650,9 +650,14 @@ _ast-grep: _install-tools
 		mapfile -t python_files <<<"$python_files_output"
 	fi
 	if [ "${#python_files[@]}" -eq 0 ]; then
-		echo "ERROR: ast-grep: no Python files found in a Python project."
-		"{{artifacts}}/scripts/emit-triage-directive.sh"
-		exit 1
+		project_files_output="$(QC_TIER=ambient just --justfile {{justfile()}} -d . _python-qc-files)"
+		if [ -z "$project_files_output" ]; then
+			echo "ERROR: ast-grep: no Python files found in a Python project."
+			"{{artifacts}}/scripts/emit-triage-directive.sh"
+			exit 1
+		fi
+		echo "ast-grep: no changed Python files."
+		exit 0
 	fi
 	findings_file=$(mktemp)
 	trap 'if [ -e "$findings_file" ]; then rm -f "$findings_file"; fi' EXIT
@@ -683,9 +688,14 @@ _jscpd-python:
 		mapfile -t python_files <<<"$python_files_output"
 	fi
 	if [ "${#python_files[@]}" -eq 0 ]; then
-		echo "ERROR: jscpd: no Python files found in a Python project."
-		"{{artifacts}}/scripts/emit-triage-directive.sh"
-		exit 1
+		project_files_output="$(QC_TIER=ambient just --justfile {{justfile()}} -d . _python-qc-files)"
+		if [ -z "$project_files_output" ]; then
+			echo "ERROR: jscpd: no Python files found in a Python project."
+			"{{artifacts}}/scripts/emit-triage-directive.sh"
+			exit 1
+		fi
+		echo "jscpd: no changed Python files."
+		exit 0
 	fi
 	if ! npx -y jscpd \
 		--config {{configs}}/jscpd.json \
@@ -712,9 +722,14 @@ _lizard-python ccn="7": _install-tools
 		mapfile -t python_files <<<"$python_files_output"
 	fi
 	if [ "${#python_files[@]}" -eq 0 ]; then
-		echo "ERROR: lizard: no Python files found in a Python project."
-		"{{artifacts}}/scripts/emit-triage-directive.sh"
-		exit 1
+		project_files_output="$(QC_TIER=ambient just --justfile {{justfile()}} -d . _python-qc-files)"
+		if [ -z "$project_files_output" ]; then
+			echo "ERROR: lizard: no Python files found in a Python project."
+			"{{artifacts}}/scripts/emit-triage-directive.sh"
+			exit 1
+		fi
+		echo "lizard: no changed Python files."
+		exit 0
 	fi
 	# lexicon subtrees are declared Sage reflection boundaries; their stub
 	# verifiers are recursive AST dispatch (dev tooling), not product code.

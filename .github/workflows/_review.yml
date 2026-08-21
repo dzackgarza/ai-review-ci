@@ -138,6 +138,9 @@ jobs:
       - name: Prepare reviewer
         run: just -f "$INFRA/ci/runner.just" prepare
 
+      - name: Check reviewer model
+        run: just -f "$INFRA/ci/runner.just" check-reviewer-model
+
       - name: Stage PR diff
         if: inputs.scope == 'diff'
         run: just -f "$INFRA/ci/runner.just" stage-pr-diff "$REVIEW_BASE_REF"

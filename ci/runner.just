@@ -141,6 +141,22 @@ prepare:
     just -f {{infra}}/ci/runner.just install-sudo-rule
     just -f {{infra}}/ci/runner.just copy-reviewer-repo
 
+check-reviewer-model:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    configured_model="$(jq -r '.model' {{reviewer_home}}/.config/opencode/opencode.json)"
+    available_models="$(sudo -u reviewer -H env \
+      PATH="{{reviewer_home}}/bin:/usr/bin:/bin" \
+      HOME="{{reviewer_home}}" \
+      XDG_CONFIG_HOME="{{reviewer_home}}/.config" \
+      /usr/local/bin/opencode models opencode)"
+    if ! grep -Fxq "$configured_model" <<<"$available_models"; then
+      echo "FATAL: configured reviewer model is unavailable: $configured_model" >&2
+      printf '%s\n' "$available_models" >&2
+      exit 1
+    fi
+    echo "Reviewer model available: $configured_model"
+
 stage-context-packet archive:
     #!/usr/bin/env bash
     set -euo pipefail
