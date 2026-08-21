@@ -1,5 +1,15 @@
 id: no-boolean-param
 language: python
+utils:
+  boolean-type:
+    any:
+      - all:
+          - pattern: bool
+          - not:
+              inside:
+                kind: attribute
+      - pattern: builtins.bool
+      - pattern: '"bool"'
 rule:
   any:
     - pattern:
@@ -21,10 +31,7 @@ rule:
         context: 'def f($P: "bool" = $D): pass'
         selector: typed_default_parameter
     - all:
-        - any:
-            - pattern: bool
-            - pattern: builtins.bool
-            - pattern: '"bool"'
+        - matches: boolean-type
         - inside:
             kind: binary_operator
         - inside:
@@ -46,6 +53,73 @@ rule:
                 any:
                   - kind: typed_parameter
                   - kind: typed_default_parameter
+    - all:
+        - matches: boolean-type
+        - inside:
+            all:
+              - any:
+                  - kind: generic_type
+                  - kind: subscript
+              - regex: '^(typing\.)?(Optional|Union)\[.*\]$'
+            stopBy: end
+        - inside:
+            any:
+              - kind: typed_parameter
+              - kind: typed_default_parameter
+            field: type
+            stopBy: end
+        - not:
+            inside:
+              all:
+                - any:
+                    - kind: generic_type
+                    - kind: subscript
+                - inside:
+                    any:
+                      - kind: generic_type
+                      - kind: subscript
+                    stopBy:
+                      any:
+                        - kind: typed_parameter
+                        - kind: typed_default_parameter
+              stopBy:
+                any:
+                  - kind: typed_parameter
+                  - kind: typed_default_parameter
+    - all:
+        - matches: boolean-type
+        - inside:
+            kind: parenthesized_expression
+        - inside:
+            any:
+              - kind: typed_parameter
+              - kind: typed_default_parameter
+            field: type
+            stopBy: end
+        - not:
+            inside:
+              not:
+                any:
+                  - kind: parenthesized_expression
+                  - kind: type
+                  - kind: typed_parameter
+                  - kind: typed_default_parameter
+              stopBy:
+                any:
+                  - kind: typed_parameter
+                  - kind: typed_default_parameter
+    - pattern:
+        context: 'def f($P: "bool | None"): pass'
+        selector: typed_parameter
+    - pattern:
+        context: 'def f($P: "None | bool"): pass'
+        selector: typed_parameter
+    - pattern:
+        context: 'def f($P: "bool | None" = $D): pass'
+        selector: typed_default_parameter
+    - pattern:
+        context: 'def f($P: "None | bool" = $D): pass'
+        selector: typed_default_parameter
     - pattern:
         context: 'def f($P = True): pass'
         selector: default_parameter
