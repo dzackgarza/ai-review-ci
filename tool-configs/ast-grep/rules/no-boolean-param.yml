@@ -1,8 +1,25 @@
 id: no-boolean-param
 language: python
 rule:
-  kind: function_definition
-  regex: def\s+\w+\s*\([^)]*\b(bool)\b[^)]*\)
+  any:
+    - pattern:
+        context: 'def f($P: bool): pass'
+        selector: typed_parameter
+    - pattern:
+        context: 'def f($P: bool = $D): pass'
+        selector: typed_default_parameter
+    - pattern:
+        context: 'def f($P = True): pass'
+        selector: default_parameter
+    - pattern:
+        context: 'def f($P = False): pass'
+        selector: default_parameter
+    - pattern:
+        context: 'def f($P: $T = True): pass'
+        selector: typed_default_parameter
+    - pattern:
+        context: 'def f($P: $T = False): pass'
+        selector: typed_default_parameter
 message: POLICY.NO_BOOLEAN_MODE
 severity: error
 metadata:
