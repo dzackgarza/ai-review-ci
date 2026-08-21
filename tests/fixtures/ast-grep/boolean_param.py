@@ -35,6 +35,31 @@ def forward_default(flag: "bool" = False) -> None:
 
 
 # ruleid: no-boolean-param
+def optional(flag: bool | None) -> None:
+    pass
+
+
+# ruleid: no-boolean-param
+def optional_default(flag: bool | None = None) -> None:
+    pass
+
+
+# ruleid: no-boolean-param
+def union_member(flag: str | bool | None) -> None:
+    pass
+
+
+# ruleid: no-boolean-param
+def qualified_optional(flag: builtins.bool | None) -> None:
+    pass
+
+
+# ruleid: no-boolean-param
+def forward_optional(flag: "bool" | None) -> None:
+    pass
+
+
+# ruleid: no-boolean-param
 def inferred_true(flag=True) -> None:
     pass
 
@@ -51,6 +76,16 @@ def callable_result(thunk: Callable[[], tuple[bool, str]]) -> None:
 
 # ok: no-boolean-param
 def tuple_items(values: tuple[bool, str]) -> None:
+    pass
+
+
+# ok: no-boolean-param
+def callable_optional_result(thunk: Callable[[], bool | None]) -> None:
+    pass
+
+
+# ok: no-boolean-param
+def tuple_optional_items(values: tuple[bool | None, str]) -> None:
     pass
 
 
