@@ -4,7 +4,7 @@ on:
   workflow_call:
     inputs:
       report_type:
-        description: 'Review type: general or slop'
+        description: 'Review type: slop'
         required: true
         type: string
       scope:
@@ -81,7 +81,7 @@ jobs:
       - name: Validate review inputs
         run: |
           case "$REVIEW_REPORT_TYPE" in
-            general|slop) ;;
+            slop) ;;
             *) echo "invalid report_type: $REVIEW_REPORT_TYPE" >&2; exit 1 ;;
           esac
           case "$REVIEW_SCOPE" in

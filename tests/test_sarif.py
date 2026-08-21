@@ -16,14 +16,14 @@ from ai_review_ci.sarif import (
     build_sarif,
     to_sarif,
 )
-from tests.conftest import APP_FILE, general_candidate, general_finding, slop_candidate, slop_finding
+from tests.conftest import APP_FILE, slop_candidate, slop_finding
 
 JsonDict = dict[str, Any]
 
 
 def existing_alert(*, category: str = "carried-forward", path: str = APP_FILE, state: str = "open") -> JsonDict:
     return {
-        "tool_name": "ai-review/general",
+        "tool_name": "ai-review/slop",
         "alert": {
             "state": state,
             "rule": {
@@ -57,9 +57,9 @@ def configure_github_env() -> None:
 def test_build_sarif_carries_existing_open_alerts(checkout: Path) -> None:
     configure_github_env()
 
-    artifact = general_candidate(
+    artifact = slop_candidate(
         findings=[
-            general_finding(
+            slop_finding(
                 category="new-review-finding",
                 label="NEW_FINDING",
                 location={"path": "tests/test_app.py", "start_line": 1, "end_line": 2},
@@ -69,8 +69,8 @@ def test_build_sarif_carries_existing_open_alerts(checkout: Path) -> None:
 
     sarif = build_sarif(
         artifact,
-        report_type="general",
-        category="ai-general-review",
+        report_type="slop",
+        category="ai-slop-review",
         carried_alerts=[existing_alert()],
     )
 
@@ -82,14 +82,14 @@ def test_build_sarif_carries_existing_open_alerts(checkout: Path) -> None:
 def test_build_sarif_results_reference_rule_table_indexes(checkout: Path) -> None:
     configure_github_env()
 
-    artifact = general_candidate(
+    artifact = slop_candidate(
         findings=[
-            general_finding(
+            slop_finding(
                 category="first-review-finding",
                 label="FIRST_FINDING",
                 location={"path": APP_FILE, "start_line": 1, "end_line": 2},
             ),
-            general_finding(
+            slop_finding(
                 category="second-review-finding",
                 label="SECOND_FINDING",
                 location={"path": "tests/test_app.py", "start_line": 3, "end_line": 4},
@@ -99,8 +99,8 @@ def test_build_sarif_results_reference_rule_table_indexes(checkout: Path) -> Non
 
     sarif = build_sarif(
         artifact,
-        report_type="general",
-        category="ai-general-review",
+        report_type="slop",
+        category="ai-slop-review",
     )
 
     run = sarif["runs"][0]
@@ -112,9 +112,9 @@ def test_build_sarif_results_reference_rule_table_indexes(checkout: Path) -> Non
 def test_build_sarif_resolves_policy_guidance_from_vendored_index(checkout: Path) -> None:
     configure_github_env()
 
-    artifact = general_candidate(
+    artifact = slop_candidate(
         findings=[
-            general_finding(
+            slop_finding(
                 category="hidden-config",
                 label="HIDDEN_CONFIG",
                 policy_code="POLICY.NO_HIDDEN_CONFIG",
@@ -124,8 +124,8 @@ def test_build_sarif_resolves_policy_guidance_from_vendored_index(checkout: Path
 
     sarif = build_sarif(
         artifact,
-        report_type="general",
-        category="ai-general-review",
+        report_type="slop",
+        category="ai-slop-review",
     )
 
     result = sarif["runs"][0]["results"][0]
@@ -144,23 +144,23 @@ def test_build_sarif_embeds_structured_reviewer_identity(checkout: Path, monkeyp
     configure_github_env()
     monkeypatch.setenv("AI_REVIEW_AGENT", "codex-reviewer")
 
-    artifact = general_candidate(findings=[general_finding()])
+    artifact = slop_candidate(findings=[slop_finding()])
 
     sarif = build_sarif(
         artifact,
-        report_type="general",
-        category="ai-general-review",
+        report_type="slop",
+        category="ai-slop-review",
     )
 
     assert sarif["runs"][0]["results"][0]["properties"]["reviewer"] == {
-        "type": "general",
+        "type": "slop",
         "agent": "codex-reviewer",
-        "prompt_id": "reviews/general",
+        "prompt_id": "reviews/slop",
         "prompt_version": "1.0.0",
     }
 
 
-def test_build_sarif_routes_reviewer_identity_by_report_type(checkout: Path) -> None:
+def test_build_sarif_defaults_reviewer_identity_to_the_ci_agent(checkout: Path) -> None:
     configure_github_env()
 
     artifact = slop_candidate(findings=[slop_finding()])
@@ -206,9 +206,9 @@ def test_append_result_updates_runtime_rule_index_field() -> None:
 def test_new_finding_replaces_matching_carried_alert(checkout: Path) -> None:
     configure_github_env()
 
-    artifact = general_candidate(
+    artifact = slop_candidate(
         findings=[
-            general_finding(
+            slop_finding(
                 category="carried-forward",
                 label="UPDATED_FINDING",
                 violated_invariant="Updated reviewer evidence for the same ledger item",
@@ -218,8 +218,8 @@ def test_new_finding_replaces_matching_carried_alert(checkout: Path) -> None:
 
     sarif = build_sarif(
         artifact,
-        report_type="general",
-        category="ai-general-review",
+        report_type="slop",
+        category="ai-slop-review",
         carried_alerts=[existing_alert()],
     )
 
@@ -241,7 +241,7 @@ def test_to_sarif_writes_artifact_with_optional_carried_alert_sidecar(
     second_output = tmp_path / "second.sarif"
     carried_alert = existing_alert()
     del carried_alert["alert"]["most_recent_instance"]["location"]["end_line"]
-    artifact_path.write_text(json.dumps(general_candidate(findings=[])))
+    artifact_path.write_text(json.dumps(slop_candidate(findings=[])))
     sidecar_path.write_text(
         json.dumps(
             {
@@ -251,8 +251,8 @@ def test_to_sarif_writes_artifact_with_optional_carried_alert_sidecar(
         )
     )
 
-    to_sarif(artifact_path, first_output, "ai-general-review")
-    to_sarif(artifact_path, second_output, "ai-general-review", sidecar_path)
+    to_sarif(artifact_path, first_output, "ai-slop-review")
+    to_sarif(artifact_path, second_output, "ai-slop-review", sidecar_path)
 
     first_sarif = json.loads(first_output.read_text())
     second_sarif = json.loads(second_output.read_text())
@@ -269,9 +269,9 @@ def test_build_sarif_carries_github_rest_alert_without_location_properties(
     carried_alert = existing_alert()
 
     sarif = build_sarif(
-        general_candidate(findings=[]),
-        report_type="general",
-        category="ai-general-review",
+        slop_candidate(findings=[]),
+        report_type="slop",
+        category="ai-slop-review",
         carried_alerts=[carried_alert],
     )
 
@@ -290,12 +290,12 @@ def test_build_sarif_ignores_non_target_and_resolved_carried_alerts(
 ) -> None:
     configure_github_env()
     other_tool = existing_alert()
-    other_tool["tool_name"] = "ai-review/slop"
+    other_tool["tool_name"] = "github/codeql"
 
     sarif = build_sarif(
-        general_candidate(findings=[]),
-        report_type="general",
-        category="ai-general-review",
+        slop_candidate(findings=[]),
+        report_type="slop",
+        category="ai-slop-review",
         carried_alerts=[
             other_tool,
             existing_alert(state="dismissed"),
@@ -310,8 +310,8 @@ def test_build_sarif_ignores_non_target_and_resolved_carried_alerts(
 @pytest.mark.parametrize(
     ("carried_alert", "broken_location_key"),
     [
-        ({"tool_name": "ai-review/general", "alert": []}, None),
-        ({"tool_name": "ai-review/general", "alert": {"state": ""}}, None),
+        ({"tool_name": "ai-review/slop", "alert": []}, None),
+        ({"tool_name": "ai-review/slop", "alert": {"state": ""}}, None),
         (existing_alert(state="unexpected"), None),
         (existing_alert(), "start_line"),
         (existing_alert(), "end_line"),
@@ -329,9 +329,9 @@ def test_build_sarif_rejects_malformed_carried_alerts(
 
     with pytest.raises(SystemExit):
         build_sarif(
-            general_candidate(findings=[]),
-            report_type="general",
-            category="ai-general-review",
+            slop_candidate(findings=[]),
+            report_type="slop",
+            category="ai-slop-review",
             carried_alerts=[carried_alert],
         )
 
@@ -351,14 +351,14 @@ def test_to_sarif_rejects_invalid_carry_forward_sidecars(
     configure_github_env()
     artifact_path = tmp_path / "artifact.json"
     sidecar_path = tmp_path / "carry-forward.json"
-    artifact_path.write_text(json.dumps(general_candidate(findings=[])))
+    artifact_path.write_text(json.dumps(slop_candidate(findings=[])))
     sidecar_path.write_text(json.dumps(sidecar_payload))
 
     with pytest.raises(SystemExit):
         to_sarif(
             artifact_path,
             tmp_path / "out.sarif",
-            "ai-general-review",
+            "ai-slop-review",
             sidecar_path,
         )
 
@@ -369,13 +369,13 @@ def test_to_sarif_rejects_missing_carry_forward_sidecar(
 ) -> None:
     configure_github_env()
     artifact_path = tmp_path / "artifact.json"
-    artifact_path.write_text(json.dumps(general_candidate(findings=[])))
+    artifact_path.write_text(json.dumps(slop_candidate(findings=[])))
 
     with pytest.raises(SystemExit):
         to_sarif(
             artifact_path,
             tmp_path / "out.sarif",
-            "ai-general-review",
+            "ai-slop-review",
             tmp_path / "missing.json",
         )
 
@@ -386,7 +386,7 @@ def test_to_sarif_rejects_missing_or_unknown_artifacts(
 ) -> None:
     configure_github_env()
     invalid_artifact = tmp_path / "invalid-artifact.json"
-    invalid_artifact.write_text(json.dumps(general_candidate(report_type="unknown")))
+    invalid_artifact.write_text(json.dumps(slop_candidate(report_type="unknown")))
 
     with pytest.raises(SystemExit):
         to_sarif(tmp_path / "missing-artifact.json", tmp_path / "missing.sarif", "x")

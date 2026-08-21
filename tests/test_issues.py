@@ -35,7 +35,7 @@ def _finding(label: str = "WRONG_DUAL", path: str = "src/lattice.py") -> JsonDic
 
 def _artifact(tmp_path: Path, findings: list[JsonDict]) -> Path:
     artifact = tmp_path / ".review-report-artifact.json"
-    artifact.write_text(json.dumps({"report_type": "general", "findings": findings}))
+    artifact.write_text(json.dumps({"report_type": "slop", "findings": findings}))
     return artifact
 
 
@@ -49,7 +49,7 @@ def test_issue_fingerprint_is_finer_than_coarse_fingerprint() -> None:
 
 
 def test_issue_body_carries_marker_narrative_and_parent() -> None:
-    body = _issue_body(_finding(), "general", parent_issue=46)
+    body = _issue_body(_finding(), "slop", parent_issue=46)
     fp = issue_fingerprint("semantic-regression", "src/lattice.py", "WRONG_DUAL")
     assert _marked_fingerprint(body) == fp
     assert "src/lattice.py:10-12" in body
@@ -63,7 +63,7 @@ def test_issue_body_routes_to_catalogue_without_inlining_remediation() -> None:
     finding = _finding()
     finding["policy_code"] = "POLICY.NO_HIDDEN_CONFIG"
 
-    body = _issue_body(finding, "general", parent_issue=46)
+    body = _issue_body(finding, "slop", parent_issue=46)
 
     route = canonical_route("POLICY.NO_HIDDEN_CONFIG")
     remediation_text = load_policy_index().remediation_for_policy("POLICY.NO_HIDDEN_CONFIG").required_remediation
@@ -121,7 +121,7 @@ def test_publish_creates_updates_and_respects_dispositions(tmp_path: Path, monke
 
 def test_context_issue_ledger_lines_render_states() -> None:
     lines = _issue_ledger_lines(
-        "ai-review/general",
+        "ai-review/slop",
         [
             {"number": 7, "state": "open", "title": "open finding"},
             {"number": 3, "state": "closed", "state_reason": "not_planned", "title": "rejected finding"},
@@ -132,7 +132,7 @@ def test_context_issue_ledger_lines_render_states() -> None:
     assert "open finding (#7)" in text
     assert "rejected finding (#3, not_planned)" in text
     assert "do not re-raise" in text
-    assert _issue_ledger_lines("ai-review/general", []) == []
+    assert _issue_ledger_lines("ai-review/slop", []) == []
 
 
 def test_review_workflow_gates_delivery_paths() -> None:

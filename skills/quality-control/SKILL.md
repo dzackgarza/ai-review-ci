@@ -768,7 +768,7 @@ This preserves "delegate, never reimplement" while letting projects layer on the
 
 ## Hooks
 
-Pre-commit blocks on `just test-commit`; pre-push blocks on `just test-push`. Required pull-request CI runs `just test-ci` in parallel with general and slop review. Install the centralized global hook collection from `~/ai-review-ci/global-hooks/`:
+Pre-commit blocks on `just test-commit`; pre-push blocks on `just test-push`. Required pull-request CI runs `just test-ci` in parallel with slop review. Install the centralized global hook collection from `~/ai-review-ci/global-hooks/`:
 
 ```bash
 just --justfile ~/ai-review-ci/justfile install-global-hooks

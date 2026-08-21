@@ -30,44 +30,6 @@ def checkout(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     return root
 
 
-def general_finding(**overrides: Any) -> JsonDict:
-    finding: JsonDict = {
-        "tier": "tier1",
-        "label": "SUPPRESSED_ERROR",
-        "category": "test-quality",
-        "policy_code": None,
-        "location": {"path": APP_FILE, "start_line": 3, "end_line": 5},
-        "violated_invariant": "The runner silently swallows diff-retrieval failures instead of aborting on them",
-        "proof_command": "grep -rn 'except Exception' src/app.py",
-        "symptom": "CI reports success on a failed diff fetch",
-        "source": "bare except around the diff call",
-        "consequence": "reviews silently run against an empty diff",
-        "evidence": [{"kind": "file-read", "path": APP_FILE, "lines": [3, 5]}],
-    }
-    finding.update(overrides)
-    return finding
-
-
-def general_candidate(**overrides: Any) -> JsonDict:
-    candidate: JsonDict = {
-        "schema_version": 1,
-        "report_type": "general",
-        "review_scope": [APP_FILE, TEST_FILE],
-        "findings": [general_finding()],
-        "checked_surfaces": [
-            {
-                "path": APP_FILE,
-                "reason": "diff-context",
-                "lines_read": [1, APP_LINES],
-                "result": "finding",
-            }
-        ],
-        "rejected_easy_wins": ["import order in src/app.py — formatting-only"],
-    }
-    candidate.update(overrides)
-    return candidate
-
-
 def slop_finding(**overrides: Any) -> JsonDict:
     finding: JsonDict = {
         "tier": "tier1",

@@ -43,16 +43,12 @@ ISSUE_LABELS = ("ai-review", "needs-triage")
 LABEL_COLORS = {
     "ai-review": "1d76db",
     "needs-triage": "d93f0b",
-    "ai-review/general": "0e8a16",
     "ai-review/slop": "5319e7",
 }
 
 # Narrative fields rendered by presence, mirroring sarif._OPTIONAL_PROPERTY_KEYS.
 _NARRATIVE_KEYS = (
     ("violated_invariant", "Violated invariant"),
-    ("symptom", "Symptom"),
-    ("source", "Source"),
-    ("consequence", "Consequence"),
     ("pattern", "Slop pattern"),
     ("task_narrative", "Task narrative"),
     ("slop_narrative", "Slop narrative"),

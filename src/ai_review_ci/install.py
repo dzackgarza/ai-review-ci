@@ -2,13 +2,12 @@
 
 All review complexity lives upstream: the reusable workflow referenced by
 these triggers clones this repository inside the CI runner at execution time.
-Installing into a repo writes three minimally-correct trigger workflows —
+Installing into a repo writes two minimally-correct trigger workflows —
 plain configuration files (triggers, crons, thresholds) that the repo owns and
 edits directly afterward:
 
-- review-general.yml  — repo-wide general review (cron, push to main, dispatch)
-- review-slop.yml     — repo-wide slop review   (cron, push to main, dispatch)
-- review-pr.yml       — required test-ci plus parallel diff-scoped reviews on
+- review-slop.yml     — repo-wide slop review (cron, push to main, dispatch)
+- review-pr.yml       — required test-ci plus the diff-scoped slop review on
                         every pull request, rendered for the declared profile
 
 Existing files are never overwritten: once installed they are repo-owned
@@ -22,7 +21,7 @@ from importlib.resources import files
 
 from ai_review_ci.gates import SUPPORTED_PROFILES, protect_branch
 
-TEMPLATES = ("review-general.yml", "review-slop.yml", "review-pr.yml")
+TEMPLATES = ("review-slop.yml", "review-pr.yml")
 SCAFFOLD_FILES = ("justfile",)
 PR_TEMPLATE = "pull_request_template.md"
 # The canonical aislop policy, distributed into every governed repo (#228).

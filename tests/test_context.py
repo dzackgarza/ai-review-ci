@@ -279,15 +279,15 @@ def test_fetch_context_fails_loudly_on_gh_rest_and_graphql_errors(
 ) -> None:
     _write_json(
         gh_fixture / "failures.json",
-        [{"tool_name": "ai-review/general", "state": "open"}],
+        [{"tool_name": "ai-review/slop", "state": "open"}],
     )
     with pytest.raises(SystemExit):
-        fetch_context("owner/repo", tool_names="ai-review/general")
+        fetch_context("owner/repo", tool_names="ai-review/slop")
 
     (gh_fixture / "failures.json").unlink()
     (gh_fixture / "graphql_failure").write_text("1\n", encoding="utf-8")
     with pytest.raises(SystemExit):
-        fetch_context("owner/repo", tool_names="ai-review/general", pr_number=9)
+        fetch_context("owner/repo", tool_names="ai-review/slop", pr_number=9)
 
 
 def test_fetch_context_carries_repo_and_pr_alerts_without_duplicate_numbers(tmp_path: Path, gh_fixture: Path) -> None:
@@ -297,15 +297,15 @@ def test_fetch_context_carries_repo_and_pr_alerts_without_duplicate_numbers(tmp_
     _write_json(
         gh_fixture / "alerts.json",
         [
-            {"tool_name": "ai-review/general", "state": "open", "alert": repo_alert},
+            {"tool_name": "ai-review/slop", "state": "open", "alert": repo_alert},
             {
-                "tool_name": "ai-review/general",
+                "tool_name": "ai-review/slop",
                 "state": "open",
                 "ref": "refs/pull/8/merge",
                 "alert": duplicate_pr_alert,
             },
             {
-                "tool_name": "ai-review/general",
+                "tool_name": "ai-review/slop",
                 "state": "open",
                 "ref": "refs/pull/8/merge",
                 "alert": pr_alert,
@@ -316,7 +316,7 @@ def test_fetch_context_carries_repo_and_pr_alerts_without_duplicate_numbers(tmp_
 
     fetch_context(
         "owner/repo",
-        tool_names="ai-review/general",
+        tool_names="ai-review/slop",
         alerts_output=carry_forward,
         pr_number=8,
     )
@@ -325,8 +325,8 @@ def test_fetch_context_carries_repo_and_pr_alerts_without_duplicate_numbers(tmp_
     assert payload == {
         "schema_version": 1,
         "alerts": [
-            {"tool_name": "ai-review/general", "alert": repo_alert},
-            {"tool_name": "ai-review/general", "alert": pr_alert},
+            {"tool_name": "ai-review/slop", "alert": repo_alert},
+            {"tool_name": "ai-review/slop", "alert": pr_alert},
         ],
     }
 
@@ -335,9 +335,9 @@ def test_fetch_context_treats_no_analysis_as_empty_context(tmp_path: Path, gh_fi
     _write_json(
         gh_fixture / "no_analysis.json",
         [
-            {"tool_name": "ai-review/general", "state": "open"},
-            {"tool_name": "ai-review/general", "state": "dismissed"},
-            {"tool_name": "ai-review/general", "state": "fixed"},
+            {"tool_name": "ai-review/slop", "state": "open"},
+            {"tool_name": "ai-review/slop", "state": "dismissed"},
+            {"tool_name": "ai-review/slop", "state": "fixed"},
         ],
     )
     output = tmp_path / "context.md"
@@ -345,7 +345,7 @@ def test_fetch_context_treats_no_analysis_as_empty_context(tmp_path: Path, gh_fi
 
     fetch_context(
         "owner/repo",
-        tool_names="ai-review/general",
+        tool_names="ai-review/slop",
         output=output,
         alerts_output=carry_forward,
     )
@@ -358,7 +358,7 @@ def test_fetch_context_treats_no_analysis_as_empty_context(tmp_path: Path, gh_fi
         "reappears in a materially different form, or the previous resolution is directly "
         "contradicted by the current code.\n"
         "\n"
-        "### ai-review/general\n"
+        "### ai-review/slop\n"
         "\n"
         "_No existing findings._\n"
     )
@@ -375,9 +375,9 @@ def test_fetch_context_treats_code_scanning_disabled_as_empty_context(
     _write_json(
         gh_fixture / "code_scanning_disabled.json",
         [
-            {"tool_name": "ai-review/general", "state": "open"},
-            {"tool_name": "ai-review/general", "state": "dismissed"},
-            {"tool_name": "ai-review/general", "state": "fixed"},
+            {"tool_name": "ai-review/slop", "state": "open"},
+            {"tool_name": "ai-review/slop", "state": "dismissed"},
+            {"tool_name": "ai-review/slop", "state": "fixed"},
         ],
     )
     output = tmp_path / "context.md"
@@ -385,7 +385,7 @@ def test_fetch_context_treats_code_scanning_disabled_as_empty_context(
 
     fetch_context(
         "owner/repo",
-        tool_names="ai-review/general",
+        tool_names="ai-review/slop",
         output=output,
         alerts_output=carry_forward,
     )
@@ -398,7 +398,7 @@ def test_fetch_context_treats_code_scanning_disabled_as_empty_context(
         "reappears in a materially different form, or the previous resolution is directly "
         "contradicted by the current code.\n"
         "\n"
-        "### ai-review/general\n"
+        "### ai-review/slop\n"
         "\n"
         "_No existing findings._\n"
     )
@@ -412,16 +412,16 @@ def test_fetch_context_reads_alert_pages_until_short_page(tmp_path: Path, gh_fix
     alerts = [_alert(number, "open", f"Finding {number}", f"src/file_{number}.py", number) for number in range(1, 102)]
     _write_json(
         gh_fixture / "alerts.json",
-        [{"tool_name": "ai-review/general", "state": "open", "alert": alert} for alert in alerts],
+        [{"tool_name": "ai-review/slop", "state": "open", "alert": alert} for alert in alerts],
     )
     carry_forward = tmp_path / "carry-forward.json"
 
-    fetch_context("owner/repo", tool_names="ai-review/general", alerts_output=carry_forward)
+    fetch_context("owner/repo", tool_names="ai-review/slop", alerts_output=carry_forward)
 
     payload = json.loads(carry_forward.read_text(encoding="utf-8"))
     assert payload == {
         "schema_version": 1,
-        "alerts": [{"tool_name": "ai-review/general", "alert": alert} for alert in alerts],
+        "alerts": [{"tool_name": "ai-review/slop", "alert": alert} for alert in alerts],
     }
 
 

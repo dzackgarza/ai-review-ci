@@ -5,15 +5,16 @@
 The durable doctrine for global QC and review behavior lives in the [Global QC and Review Doctrine](https://github.com/dzackgarza/ai-review-ci/wiki/Global-QC-and-Review-Doctrine) wiki page.
 Use it when changing gates, scaffolds, review runners, reviewer state, or downstream enforcement contracts.
 
-Centrally-managed, OpenCode-powered review CI. Target repositories carry three thin trigger workflows plus explicit `ai_review_ci_*` contract variables in their root `justfile`; everything else — the reusable workflow, the review runner, the validator, the reviewer home template, the prompt corpus — lives here and is cloned inside the CI runner at execution time.
+Centrally-managed, OpenCode-powered review CI. Target repositories carry two thin trigger workflows plus explicit `ai_review_ci_*` contract variables in their root `justfile`; everything else — the reusable workflow, the review runner, the validator, the reviewer home template, the prompt corpus — lives here and is cloned inside the CI runner at execution time.
 Updating this repo updates every consumer on their next run.
 
-Two review types:
+One review type:
 
-- **General review** — structural code quality audit: architectural decay, dead code, test quality, dependency mismanagement, semantic regressions.
 - **Slop review** — AI-generated-code audit: bridge-burning violations, runtime control-flow defects, test/text antipatterns, validation-evasion constructs, defaults/fallbacks/mocks/skips.
 
-Each type runs in two scopes: **repo** (full-repository sweep) and **diff** (PR review focused on the diff against the base branch).
+Every finding must trace to the original task, a repository policy, or a regression the diff introduced (#362). A reviewer that instead audits general code quality inflates product scope faster than it detects defects, so there is no general-review channel.
+
+Slop review runs in two scopes: **repo** (full-repository sweep) and **diff** (PR review focused on the diff against the base branch).
 
 ## Installing the skills
 
@@ -40,23 +41,22 @@ uvx --from git+https://github.com/dzackgarza/ai-review-ci ai-review-ci install -
 
 Pass `--profile <profile>` with one of `python`, `bun`, `bun-playwright`, `bun-python`, `rust`, or `sage`. The profile is the enforced project bin: it selects the required project shape, the central justfile delegation target, the installed PR gates, and the branch-protection checks.
 
-This installs the complete QC enforcement surface: it writes the root `justfile` contract, writes the three trigger workflows, and applies branch protection requiring the installed PR gate jobs for the declared profile.
+This installs the complete QC enforcement surface: it writes the root `justfile` contract, writes the two trigger workflows, and applies branch protection requiring the installed PR gate jobs for the declared profile.
 
 | File | Triggers |
 | --- | --- |
-| `review-general.yml` | weekly cron, push to main, manual dispatch |
 | `review-slop.yml` | weekly cron, push to main, manual dispatch |
-| `review-pr.yml` | every pull request (both types, diff-scoped) |
+| `review-pr.yml` | every pull request (diff-scoped) |
 
-The three files are minimally-correct base configuration and become **repo-owned** the moment they are installed: edit crons, branches, thresholds, and the upstream `@ref` directly in the YAML — that is the whole downstream surface.
+The two files are minimally-correct base configuration and become **repo-owned** the moment they are installed: edit crons, branches, thresholds, and the upstream `@ref` directly in the YAML — that is the whole downstream surface.
 The installer never overwrites them.
 All review *behavior* lives upstream and needs no reinstall: every run clones this repo fresh.
 Branch protection is not optional setup; without it the workflows can run without enforcing the merge gate.
 
-What an installed trigger looks like (`review-general.yml` — pure configuration pointing at the upstream reusable workflow):
+What an installed trigger looks like (`review-slop.yml` — pure configuration pointing at the upstream reusable workflow):
 
 ```yaml
-name: General Review
+name: Slop Review
 on:
   workflow_dispatch:
   schedule:
@@ -64,7 +64,7 @@ on:
   push:
     branches: [main]
 jobs:
-  general:
+  slop:
     uses: dzackgarza/ai-review-ci/.github/workflows/_review.yml@main
     permissions:
       contents: read
@@ -72,7 +72,7 @@ jobs:
       actions: read
       pull-requests: write
     with:
-      report_type: general
+      report_type: slop
       scope: repo
 ```
 
@@ -292,12 +292,12 @@ Generic linting, formatting, typechecking, coverage, complexity, copy-paste, slo
 
 ### Running repo-wide reviews
 
-- **Automatic:** every push to the default branch runs both review types; weekly crons re-run them on schedule.
-- **On demand:** `gh workflow run "General Review"` or `gh workflow run "Slop Review"` (or the Actions UI).
+- **Automatic:** every push to the default branch runs the repo-wide sweep; a weekly cron re-runs it on schedule.
+- **On demand:** `gh workflow run "Slop Review"` (or the Actions UI).
 
 ### Finding all outstanding reported issues
 
-The single ledger is **GitHub code scanning alerts**, under tool names `ai-review/general` and `ai-review/slop`:
+The single ledger is **GitHub code scanning alerts**, under the tool name `ai-review/slop`:
 
 - Agent/CLI, formatted (the same context document CI reviewers receive — open / dismissed-with-reason / fixed, each with `path:line` and alert URL):
 
@@ -375,7 +375,7 @@ The gates are split by failure ownership, runtime, and gaming surface:
 - `just test-ci` (required PR context) includes the push gate and adds coverage/diff-cover, dependency and import boundaries, dead-code, duplication, complexity, policy, slop, security, and hosted checks.
   Policy-sensitive findings retain independent triage because agents can game them by suppressing diagnostics, weakening thresholds, or golfing error counts.
 
-The first coherent push starts deterministic CI and general/slop review in parallel.
+The first coherent push starts deterministic CI and slop review in parallel.
 Review is a separate acceptance channel, not a final step postponed until every CI detail is already green.
 
 Every language-specific tier runs shared normalization first: Markdown/JSON/YAML formatting and Semgrep autofix happen before language-specific checks and before verification gates.

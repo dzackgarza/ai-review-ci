@@ -24,7 +24,7 @@ from pydantic import ValidationError
 
 from ai_review_ci.models import MODEL_BY_TYPE, finding_fingerprint
 
-ReportType = Literal["general", "slop"]
+ReportType = Literal["slop"]
 
 SCHEMA_VERSION = 1
 
@@ -38,7 +38,7 @@ def validate_report(path: Path, report_type: ReportType, output: Path) -> None:
 
     Args:
         path: Path to the candidate report JSON file.
-        report_type: Type of report — "general" or "slop".
+        report_type: Type of report — "slop".
         output: Where to write the validated artifact.
     """
     if not path.is_file():
@@ -70,7 +70,7 @@ def report_schema(report_type: ReportType) -> None:
     """Dump JSON Schema for a report type.
 
     Args:
-        report_type: Which report schema to dump — "general" or "slop".
+        report_type: Which report schema to dump — "slop".
     """
     print(json.dumps(MODEL_BY_TYPE[report_type].model_json_schema(), indent=2))
 

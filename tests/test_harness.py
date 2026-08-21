@@ -110,7 +110,7 @@ def _prompt_inputs(tmp_path: Path, scope_name: str) -> dict[str, Path]:
     scope = tmp_path / scope_name
     scope.write_text("scope instructions\n")
     reviews_root = tmp_path / "reviews"
-    manifest_dir = reviews_root / "general"
+    manifest_dir = reviews_root / "slop"
     manifest_dir.mkdir(parents=True, exist_ok=True)
     manifest = manifest_dir / "manifest.txt"
     manifest.write_text("manifest-doc.md\n")
@@ -429,13 +429,13 @@ def test_opencode_config_from_env_rejects_malformed_and_out_of_range() -> None:
 def _write_review_inputs(repo: Path) -> dict[str, Path]:
     """Minimal real reviewer inputs for a non-diff (repo-sweep) run."""
     reviews = repo / "reviews"
-    (reviews / "general").mkdir(parents=True)
-    manifest = reviews / "general" / "manifest.txt"
+    (reviews / "slop").mkdir(parents=True)
+    manifest = reviews / "slop" / "manifest.txt"
     manifest.write_text("doc.md\n")
     (reviews / "doc.md").write_text("review doctrine\n")
     template = repo / "template.md"
     template.write_text("write the report\n")
-    scope = repo / "scope-general.md"
+    scope = repo / "scope-repo.md"
     scope.write_text("sweep the whole repo\n")
     context = repo / "context.md"
     context.write_text("no prior findings\n")

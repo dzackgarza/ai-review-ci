@@ -169,9 +169,9 @@ def test_install_writes_trigger_workflows(tmp_path: pathlib.Path) -> None:
     for name in TEMPLATES:
         text = (wf / name).read_text()
         assert "uses: dzackgarza/ai-review-ci/.github/workflows/_review.yml@main" in text
-    general = (wf / "review-general.yml").read_text()
-    assert "report_type: general" in general
-    assert "scope: repo" in general
+    sweep = (wf / "review-slop.yml").read_text()
+    assert "report_type: slop" in sweep
+    assert "scope: repo" in sweep
     pr = (wf / "review-pr.yml").read_text()
     assert "uses: dzackgarza/ai-review-ci/.github/workflows/_qc.yml@main" in pr
     assert "tier: test-ci" in pr
@@ -367,7 +367,7 @@ def test_install_refuses_overwriting_repo_owned_config(
 ) -> None:
     repo = _git_repo(tmp_path)
     _write_trigger_workflows(repo, "bun")
-    customized = repo / ".github" / "workflows" / "review-general.yml"
+    customized = repo / ".github" / "workflows" / "review-slop.yml"
     customized.write_text("# locally customized\n")
     with pytest.raises(SystemExit):
         _write_trigger_workflows(repo, "bun")
@@ -741,7 +741,6 @@ def test_pr_qc_and_reviews_start_in_parallel(profile: str) -> None:
 
     assert jobs["qc-ci"]["with"]["tier"] == "test-ci"
     assert "needs" not in jobs["qc-ci"]
-    assert "needs" not in jobs["general"]
     assert "needs" not in jobs["slop"]
 
 

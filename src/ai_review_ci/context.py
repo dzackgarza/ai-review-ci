@@ -4,7 +4,7 @@ This context is given to review agents before they run. It suppresses duplicate
 report prose; open alerts are carried forward mechanically by SARIF conversion.
 
 Queries code scanning alerts for the relevant SARIF tool names
-(ai-review/general, ai-review/slop) and formats them by state
+(ai-review/slop) and formats them by state
 (open, dismissed, fixed). The alerts API filters by tool.driver.name,
 NOT by the upload-sarif category.
 
@@ -30,7 +30,7 @@ from ai_review_ci.github_api import CodeScanningAlert, ReviewThread
 
 JsonDict = dict[str, Any]
 
-DEFAULT_TOOL_NAMES = "ai-review/general,ai-review/slop"
+DEFAULT_TOOL_NAMES = "ai-review/slop"
 
 
 def _fail(msg: str) -> NoReturn:
