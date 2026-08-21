@@ -942,7 +942,9 @@ def test_python_ast_grep_reports_boolean_parameter_in_target_repository(
 ) -> None:
     project = tmp_path / "python-project"
     project.mkdir()
+    init_git_repo(project)
     (project / "app.py").write_text("def configure(verbose: bool) -> None:\n    pass\n")
+    assert run_git(project, "add", "app.py").returncode == 0
 
     result = run_just(ROOT / "justfiles" / "python.just", project, "_ast-grep")
 
