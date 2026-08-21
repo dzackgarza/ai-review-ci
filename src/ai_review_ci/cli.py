@@ -51,6 +51,7 @@ from ai_review_ci.install import install
 from ai_review_ci.issues import publish_issues
 from ai_review_ci.labels import install_labels
 from ai_review_ci.red_commit import red_commit
+from ai_review_ci.issue_alignment import check_issue_alignment
 from ai_review_ci.report import (
     enforce_report_status,
     report_metadata,
@@ -95,6 +96,7 @@ app.command(fetch_context)
 app.command(post_threads)
 app.command(publish_issues, name="publish-issues")
 app.command(run_review)
+app.command(check_issue_alignment, name="check-issue-alignment")
 
 
 def main() -> None:

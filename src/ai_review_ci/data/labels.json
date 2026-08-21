@@ -22,6 +22,7 @@
     { "name": "duplicate", "color": "cfd3d7", "description": "This issue or pull request already exists", "category": "status" },
     { "name": "invalid", "color": "e4e669", "description": "This doesn't seem right", "category": "status" },
     { "name": "question", "color": "d876e3", "description": "Further information is requested", "category": "status" },
+    { "name": "needs-alignment-ruling", "color": "d93f0b", "description": "Alignment check flagged a proposal that may let a repository make a rule stand down; needs an owner ruling", "category": "status" },
 
     { "name": "area:frontend", "color": "1d76db", "description": "Frontend / UI concerns", "category": "area" },
     { "name": "area:backend", "color": "1d76db", "description": "Backend / API concerns", "category": "area" },

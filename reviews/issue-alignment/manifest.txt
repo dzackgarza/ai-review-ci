@@ -1,0 +1,6 @@
+# Documents inlined into the alignment-checker prompt, in order.
+# Paths relative to the reviews/ directory (this file's parent's parent).
+# A directory entry inlines all of its top-level *.md files, sorted by name.
+# Missing entries are fatal.
+../CONTRIBUTING.md
+../skills/policy-index/references/policies.md
