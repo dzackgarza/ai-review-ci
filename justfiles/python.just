@@ -510,7 +510,24 @@ _diff-cover: _pytest_with_coverage
 		"{{artifacts}}/scripts/emit-triage-directive.sh"
 		exit 1
 	fi
-	if uvx --from diff-cover diff-cover "$coverage_xml" --compare-branch ${DIFF_COVER_BASE:-main}; then
+	base="${DIFF_COVER_BASE:-main}"
+	# A clone that checked out a feature branch directly has no local `main`, only
+	# the remote-tracking ref. Both spellings name the same base branch; try each and
+	# name every one tried when none resolves, rather than reporting only the first.
+	compare=""
+	for candidate in "$base" "origin/$base"; do
+		if git rev-parse --verify "$candidate^{commit}" >/dev/null 2>&1; then
+			compare="$candidate"
+			break
+		fi
+	done
+	if [ -z "$compare" ]; then
+		echo "ERROR: diff-cover: no comparison ref resolves; tried '$base' and 'origin/$base'." >&2
+		"{{artifacts}}/scripts/emit-triage-directive.sh"
+		exit 1
+	fi
+	echo "# Comparing against $compare"
+	if uvx --from diff-cover diff-cover "$coverage_xml" --compare-branch "$compare"; then
 		:
 	else
 		ec=$?
