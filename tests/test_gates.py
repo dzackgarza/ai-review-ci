@@ -259,7 +259,6 @@ def test_branch_protection_payload_uses_profile_check_contexts() -> None:
         {"context": "delegation-conformance / delegation-conformance"},
         {"context": "qc-doctor / qc-doctor"},
         {"context": "pr-description-checklist / pr-description-checklist"},
-        {"context": "general / review"},
         {"context": "slop / review"},
         {"context": "thread-resolution / thread-resolution"},
     ]

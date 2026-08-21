@@ -12,7 +12,7 @@ Before writing code:
 - update that issue with the plan, proof obligations, checklist, and expected review evidence before broad implementation continues;
 - keep the PR diff limited to that work-unit issue and its evidence; unrelated reopened issues require separate branches/PRs;
 - open the PR when implementation starts, synthesize its body from the issue acceptance criteria and the Policy Alignment Gate, and refresh that synthesis before review;
-- use the first coherent push to enter the automated PR review loop; `test-ci`, general review, and slop review run in parallel so architectural feedback arrives before local polishing drifts;
+- use the first coherent push to enter the automated PR review loop; `test-ci` and slop review run in parallel so architectural feedback arrives before local polishing drifts;
 - request review only after tests/evidence and adversarial policy review are complete;
 - route returned review feedback through [[pr-feedback-triage/SKILL|pr-feedback-triage]]: every substantive item receives a visible thread- or surface-local disposition, and accepted or modified feedback receives committed, proven remediation before any positive reply.
 

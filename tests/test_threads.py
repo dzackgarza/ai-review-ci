@@ -81,7 +81,7 @@ def test_partition_findings_skips_existing_fingerprint_threads() -> None:
     fingerprint = finding_fingerprint("DOC_CONSISTENCY", "src/example.py")
     seen = {fingerprint}
 
-    comments, off_diff, possible_duplicates = partition_findings([finding], {"src/example.py": {12}}, seen, "General Review")
+    comments, off_diff, possible_duplicates = partition_findings([finding], {"src/example.py": {12}}, seen, "Slop Review")
 
     assert not comments
     assert not off_diff

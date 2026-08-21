@@ -63,17 +63,6 @@ jobs:
     with:
       gate: pr-description-checklist
       profile: '{{ profile }}'
-  general:
-    uses: dzackgarza/ai-review-ci/.github/workflows/_review.yml@{{ ref }}
-    permissions:
-      contents: read
-      security-events: write
-      actions: read
-      pull-requests: write
-      issues: write
-    with:
-      report_type: general
-      scope: diff
   slop:
     uses: dzackgarza/ai-review-ci/.github/workflows/_review.yml@{{ ref }}
     permissions:
@@ -87,7 +76,6 @@ jobs:
       scope: diff
   thread-resolution:
     needs:
-      - general
       - slop
     uses: dzackgarza/ai-review-ci/.github/workflows/_gates.yml@{{ ref }}
     permissions:

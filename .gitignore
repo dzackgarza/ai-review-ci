@@ -5,3 +5,5 @@ dist/
 node_modules/
 .coverage
 .claude/
+.pr/triage_state.json
+.pr/REVIEW_DISPOSITIONS.md

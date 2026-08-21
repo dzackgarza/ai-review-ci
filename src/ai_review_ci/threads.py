@@ -37,7 +37,7 @@ from ai_review_ci.reviewer_identity import reviewer_identity
 JsonDict = dict[str, Any]
 
 FINGERPRINT_MARKER = "ai-review-fingerprint:"
-REVIEW_LABELS = {"general": "General Review", "slop": "Slop Review"}
+REVIEW_LABELS = {"slop": "Slop Review"}
 REVIEW_IDENTITY_MARKER = "ai-review-reviewer:"
 
 THREADS_QUERY = """
@@ -144,7 +144,7 @@ def pick_anchor(finding: JsonDict, commentable: dict[str, set[int]]) -> int | No
 
 def _thread_body_lines(finding: JsonDict, review_label: str, fp: str) -> list[str]:
     loc = finding["location"]
-    review_type = next((key for key, label in REVIEW_LABELS.items() if label == review_label), "general")
+    review_type = next((key for key, label in REVIEW_LABELS.items() if label == review_label), "slop")
     identity = reviewer_identity(review_type)
     lines = [
         f"### [{review_label}][{finding['tier']}] {finding['label']}",

@@ -2,7 +2,7 @@
 
 The SARIF file is uploaded as GitHub code scanning alerts. The ``category``
 argument is written to ``run.automationDetails.id`` — use
-"ai-general-review" or "ai-slop-review" to match GitHub category
+"ai-slop-review" to match GitHub category
 expectations from upload-sarif's category parameter.
 
 Each finding becomes one SARIF result. The partialFingerprint is the
@@ -12,9 +12,8 @@ alert across runs.
 
 Inputs are artifacts produced by ``validate-report``: the model-required
 keys are indexed directly, so feeding an unvalidated file fails loudly.
-Keys that are report-type-specific (symptom/consequence for general,
-pattern/why_it_matters for slop) or agent-supplied extras (remedy) are
-forwarded by presence.
+Optional keys (pattern, why_it_matters) and agent-supplied extras (remedy)
+are forwarded by presence.
 """
 
 import json
@@ -50,8 +49,6 @@ SARIF_SCHEMA = "https://raw.githubusercontent.com/oasis-tcs/sarif-spec/master/Sc
 CATEGORY_PREFIX = "ai-review"
 _OPTIONAL_PROPERTY_KEYS = (
     ("policy_code", "policy_code"),
-    ("symptom", "symptom"),
-    ("consequence", "consequence"),
     ("proof_command", "proof_command"),
     ("pattern", "slop_pattern"),
     ("why_it_matters", "why_it_matters"),
@@ -374,7 +371,7 @@ def to_sarif(
     Args:
         artifact: Path to validated .review-report-artifact.json.
         output: Path to write .review-report.sarif.
-        category: run.automationDetails.id (e.g. ai-general-review or ai-slop-review).
+        category: run.automationDetails.id (e.g. ai-slop-review).
         carry_forward_alerts: JSON sidecar of existing open alerts to keep in
             the uploaded ledger snapshot.
     """
@@ -384,7 +381,7 @@ def to_sarif(
     data = _mapping(json.loads(artifact.read_text()), "artifact")
 
     report_type = _string(data, "report_type", "artifact")
-    if report_type not in ("general", "slop"):
+    if report_type != "slop":
         _die(f"unknown report_type '{report_type}' in artifact")
 
     sarif = build_sarif(

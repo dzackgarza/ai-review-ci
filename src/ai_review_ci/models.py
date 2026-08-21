@@ -1,6 +1,6 @@
 """Pydantic report models — the single validation spec for review reports.
 
-The model selected by ``report_type`` ("general" or "slop") defines the
+The model selected by ``report_type`` ("slop") defines the
 report contract: field semantics, semantic rejection rules, and the
 hallucination checks (every cited path must exist in the reviewed checkout,
 every line range must lie within the file). The reviewed checkout is the
@@ -272,172 +272,6 @@ class Evidence(BaseModel):
         return self
 
 
-class CheckedSurface(BaseModel):
-    path: Path = Field(description="File path examined during review.")
-    reason: str = Field(description="Why this surface was selected: high-churn, diff-context, dependency-graph.")
-    lines_read: list[Annotated[int, Field(ge=1)]] = Field(
-        min_length=2,
-        max_length=2,
-        description="Line range [start, end] read during review (1-indexed).",
-    )
-    result: str = Field(description="Outcome: finding, clean, needs-attention.")
-
-
-# ---------------------------------------------------------------------------
-# General review
-# ---------------------------------------------------------------------------
-
-_GENERAL_TIER_EXAMPLES = "'semantic-regression', 'test-quality'"
-_GENERAL_INVARIANT_GOOD = "The CI runner silently swallows diff-retrieval failures instead of aborting"
-
-
-class GeneralFinding(BaseModel):
-    model_config = ConfigDict(
-        extra="forbid",
-        json_schema_extra={
-            "x-custom-validation": {
-                "_tier_category_consistency": {
-                    "rule": "Low-signal categories (see LOW_SIGNAL_CATEGORIES) require tier2",
-                    "validator": "_tier_category_consistency",
-                }
-            }
-        },
-    )
-    tier: Literal["tier1", "tier2"] = Field(
-        description="tier1: a real semantic regression, broken invariant, or "
-        "incorrect behavior that changes program output or violates a correctness "
-        "property. tier2: a minor concern, code quality observation, or low-risk "
-        "issue. Low-signal categories (naming, formatting, etc.) are forced to "
-        "tier2 by validation.",
-        json_schema_extra={
-            "x-custom-validation": {
-                "rule": "Low-signal categories must be tier2. See category field and _tier_category_consistency",
-                "validator": "_tier_category_consistency",
-            }
-        },
-    )
-    label: str = Field(
-        description="Short label describing defect shape (not severity). "
-        "Ground it in what the code actually does wrong — e.g. if a function "
-        "returns wrong output: INCORRECT_OUTPUT; if stderr is silenced: "
-        "SUPPRESSED_ERROR; if Optional is unwrapped without guard: NULL_UNSAFE. "
-        "Look at the bridge-burning-red-flags.md and runtime-control-flow-red-flags.md "
-        "inventories in reviewing-llm-code for grounded pattern names.",
-    )
-    category: str = Field(
-        description="Defect type. Ground it in known categories from policy-index "
-        "and the bridge-burning rules. "
-        "Examples: semantic-regression, test-quality, null-safety, "
-        "missing-error-handling, logic-error, ci-pipeline, workflow.",
-    )
-    policy_code: str | None = Field(
-        description="Explicit POLICY.* code for policy-bearing findings; use null when the finding is not policy-bearing.",
-    )
-    location: Location = Field(description="File and line range where the finding occurs.")
-    violated_invariant: str = Field(
-        min_length=20,
-        description="A specific, verifiable contract or behavior that is violated. "
-        "Must name something falsifiable — provable or disprovable via a command or "
-        "code inspection. Not a blanket judgment. "
-        "Rejected patterns (blanket claims that name nothing specific): -O, "
-        "optimized mode, clean code, no violation, nothing to report, "
-        "looks (good|correct|fine|right|ok), no issues found, appears correct, "
-        "everything (looks|seems|is).",
-        json_schema_extra={
-            "x-custom-validation": {
-                "rule": "Must name a specific falsifiable contract. "
-                "Rejected against patterns: -O, optimized mode, clean code, "
-                "no violation, nothing to report, looks (good|correct|fine|right|ok), "
-                "no issues found, appears correct, everything (looks|seems|is)",
-                "validator": "_no_empty_invariant",
-            }
-        },
-    )
-    proof_command: str = Field(
-        min_length=10,
-        description="Shell command or code path that proves the invariant is "
-        "violated. Must be reproducible by another agent. "
-        "Example: 'grep -rn get_diff src/ai_review_ci/harness.py'",
-    )
-    symptom: str = Field(description="Observable symptom of the defect.")
-    source: str = Field(description="Root cause: what code or pattern produces the symptom.")
-    consequence: str = Field(description="What breaks or degrades due to this defect.")
-    evidence: list[Evidence] = Field(
-        min_length=1,
-        description="Supporting evidence proving the finding. At least one item required.",
-    )
-
-    @model_validator(mode="after")
-    def _tier_category_consistency(self) -> Self:
-        require_tier2_for_low_signal(self.tier, self.category, fix_examples=_GENERAL_TIER_EXAMPLES)
-        return self
-
-    @model_validator(mode="after")
-    def _policy_reference(self) -> Self:
-        validate_policy_reference(self.policy_code)
-        return self
-
-    @field_validator("violated_invariant")
-    @classmethod
-    def _no_empty_invariant(cls, v: str) -> str:
-        return reject_blanket_invariant(v, good_example=_GENERAL_INVARIANT_GOOD)
-
-
-class GeneralReport(BaseModel):
-    model_config = ConfigDict(
-        extra="forbid",
-        json_schema_extra={
-            "x-custom-validation": {
-                "_require_substantive_finding": {
-                    "rule": "A non-empty findings list must contain at least one Tier 1 or non-low-signal finding",
-                    "validator": "_require_substantive_finding",
-                },
-                "_check_paths": {
-                    "rule": "Every path must exist in the reviewed checkout",
-                    "validator": "_check_paths",
-                },
-            }
-        },
-    )
-    schema_version: Literal[1] = Field(
-        description="Report format version. Always 1. Stamped by validate-report when absent — omit it or set it to exactly 1.",
-    )
-    report_type: Literal["general"] = Field(
-        description="Must be 'general'. Stamped by validate-report when absent. Selects the GeneralFinding model for validation.",
-    )
-    review_scope: list[Path] = Field(
-        min_length=1,
-        description="Files examined during review, relative to repo root. All must exist in the reviewed checkout. Typically drawn from the PR diff.",
-    )
-    findings: list[GeneralFinding] = Field(
-        description="General review findings. An empty list is a valid, honest "
-        "report — never invent findings to fill it. Any non-empty list must "
-        "contain at least one substantive finding (Tier 1 or non-low-signal "
-        "category).",
-    )
-    checked_surfaces: list[CheckedSurface] = Field(
-        description="Surfaces inspected during review, whether findings were found or not. Documents review thoroughness.",
-    )
-    rejected_easy_wins: list[str] = Field(
-        description="Low-signal observations the agent considered but declined to "
-        "elevate to findings, with brief reason. Documents that non-trivial "
-        "patterns were evaluated and dismissed, not missed.",
-    )
-
-    @model_validator(mode="after")
-    def _check_paths(self) -> Self:
-        validate_checkout_paths(self.review_scope, self.findings)
-        return self
-
-    @model_validator(mode="after")
-    def _require_substantive_finding(self) -> Self:
-        require_substantive_finding(
-            self.findings,
-            fix_tail="A substantive finding has a concrete 'violated_invariant' and reproducible 'proof_command'.",
-        )
-        return self
-
-
 # ---------------------------------------------------------------------------
 # Slop review
 # ---------------------------------------------------------------------------
@@ -616,7 +450,4 @@ class SlopReport(BaseModel):
         return self
 
 
-MODEL_BY_TYPE: dict[str, type[GeneralReport | SlopReport]] = {
-    "general": GeneralReport,
-    "slop": SlopReport,
-}
+MODEL_BY_TYPE: dict[str, type[SlopReport]] = {"slop": SlopReport}
