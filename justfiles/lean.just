@@ -36,7 +36,12 @@ _lean-staged-check:
 		exit 0
 	}
 	for file in "${lean_files[@]}"; do
-		matches="$(git show ":$file" | rg -n '\bsorry\b' || true)"
+		rg_status=0
+		matches="$(git show ":$file" | rg -n '\bsorry\b')" || rg_status=$?
+		if [ "$rg_status" -gt 1 ]; then
+			echo "ERROR: rg exited $rg_status; the sorry scan did not run." >&2
+			exit "$rg_status"
+		fi
 		[ -z "$matches" ] || {
 			echo "$file:$matches"
 			echo "ERROR: staged Lean source contains sorry declarations." >&2
@@ -61,7 +66,12 @@ lean-no-sorry:
 	# manipulates the `sorry` syntax; it carries no unproved proof. Consumers get it
 	# under `.lake` (already unscanned); this glob also covers ai-review-ci's own tree
 	# and any in-tree vendoring.
-	matches="$(rg -n --glob '*.lean' --glob '!*.conjecture*' --glob '!**/AiReviewCi/Answer.lean' '\bsorry\b' . || true)"
+	rg_status=0
+	matches="$(rg -n --glob '*.lean' --glob '!*.conjecture*' --glob '!**/AiReviewCi/Answer.lean' '\bsorry\b' .)" || rg_status=$?
+	if [ "$rg_status" -gt 1 ]; then
+		echo "ERROR: rg exited $rg_status; the sorry scan did not run." >&2
+		exit "$rg_status"
+	fi
 	if [ -n "$matches" ]; then
 		echo "$matches"
 		echo "ERROR: Lean source contains sorry declarations." >&2
