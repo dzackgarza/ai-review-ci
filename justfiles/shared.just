@@ -79,7 +79,11 @@ _semgrep-autofix:
 	done
 	exclude_args+=("--exclude=*.html")
 	exclude_args+=("--exclude=**/*.html")
-	if uvx --from semgrep semgrep scan \
+	if "{{artifacts}}/scripts/semgrep-with-qc-ignores.sh" \
+		"{{artifacts}}/scripts/read_qc_excludes.py" \
+		"{{configs}}/qc-excludes.toml" \
+		-- \
+		uvx --from semgrep semgrep scan \
 		--config={{configs}}/semgrep.yml \
 		--config=p/ci \
 		--exclude=codeql-db \
