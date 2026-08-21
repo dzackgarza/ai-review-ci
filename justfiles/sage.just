@@ -599,6 +599,8 @@ _sage-mypy: _sage-qc-files
 	echo "============================="
 	echo "=== Running: mypy static type analysis (Sage-aware) ==="
 	echo "# Type checks Python and preparsed Sage files"
+	sage_python="$(just --justfile {{justfile()}} -d . _sage-python)"
+	export MYPYPATH="{{infra}}/typings${MYPYPATH:+:$MYPYPATH}"
 	python_files_output="$(just -f {{justfiles}}/python.just -d . _python-qc-files)"
 	python_files=()
 	if [ -n "$python_files_output" ]; then
@@ -614,7 +616,6 @@ _sage-mypy: _sage-qc-files
 		[ -n "$pf" ] && mypy_targets+=("$pf")
 	done
 	if [ "${#sage_files[@]}" -gt 0 ]; then
-		sage_python="$(just --justfile {{justfile()}} -d . _sage-python)"
 		sage_preparse="$(just --justfile {{justfile()}} -d . _sage-preparse-bin)"
 		sage_preparse_dir="$(mktemp -d "${TMPDIR:-/tmp}/qc-mypy-sage.XXXXXX")"
 		trap 'if [ -e "$sage_preparse_dir" ]; then gio trash "$sage_preparse_dir"; fi' EXIT
@@ -647,14 +648,6 @@ _sage-mypy: _sage-qc-files
 		exit 0
 	fi
 	effective_config="{{configs}}/mypy-global.ini"
-	with_args=(--with-editable "$PWD")
-	dependency_requirements_output="$(uv run --no-project python "{{artifacts}}/scripts/python_qc_metadata.py" dependency-group-requirements .)"
-	if [ -n "$dependency_requirements_output" ]; then
-		mapfile -t dependency_requirements <<<"$dependency_requirements_output"
-		for requirement in "${dependency_requirements[@]}"; do
-			with_args+=(--with "$requirement")
-		done
-	fi
 	mypy_run_dir="."
 	mypy_flags=()
 	if [ -n "${sage_preparse_dir:-}" ]; then
@@ -666,10 +659,11 @@ _sage-mypy: _sage-qc-files
 		if [ -d "$sage_preparse_dir/src" ]; then
 			export MYPYPATH="$sage_preparse_dir/src${MYPYPATH:+:$MYPYPATH}"
 		fi
+		if [ -d "$sage_preparse_dir/typings" ]; then
+			export MYPYPATH="$sage_preparse_dir/typings${MYPYPATH:+:$MYPYPATH}"
+		fi
 	fi
-	if (cd "$mypy_run_dir" && uvx --python 3.14 --from mypy \
-		"${with_args[@]}" \
-		mypy \
+	if (cd "$mypy_run_dir" && "$sage_python" -m mypy \
 		--config-file "$effective_config" \
 		"${mypy_flags[@]}" \
 		"${mypy_targets[@]}"); then
