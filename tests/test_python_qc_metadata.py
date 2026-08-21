@@ -68,6 +68,24 @@ def test_first_party_modules_accepts_explicit_setuptools_packages_list(tmp_path:
     assert result == ["spam"], result
 
 
+def test_package_source_roots_include_setuptools_package_dir(tmp_path: pathlib.Path) -> None:
+    (tmp_path / "lib").mkdir()
+    (tmp_path / "pyproject.toml").write_text(
+        "\n".join(
+            [
+                "[tool.setuptools]",
+                'package-dir = {"" = "lib"}',
+                'packages = ["alpha", "beta"]',
+                "",
+            ]
+        )
+    )
+
+    result = _MOD.package_source_roots(tmp_path)
+
+    assert result == [tmp_path.resolve(), (tmp_path / "lib").resolve()]
+
+
 def test_dependency_group_requirements_dedupes_preserving_order(tmp_path: pathlib.Path) -> None:
     (tmp_path / "pyproject.toml").write_text(
         "\n".join(

@@ -146,6 +146,66 @@ def project_with_sage_file(tmp_path: pathlib.Path) -> pathlib.Path:
     return project
 
 
+def test_sage_mypy_resolves_imports_between_declared_package_roots(
+    tmp_path: pathlib.Path,
+) -> None:
+    project = tmp_path / "sage-package-workspace"
+    alpha = project / "components" / "alpha" / "src" / "alpha"
+    beta = project / "components" / "beta" / "src" / "beta"
+    alpha.mkdir(parents=True)
+    beta.mkdir(parents=True)
+    (project / "pyproject.toml").write_text(
+        "\n".join(
+            [
+                "[project]",
+                'name = "sage-package-workspace"',
+                'version = "0.1.0"',
+                'requires-python = ">=3.14"',
+                "dependencies = []",
+                "",
+                "[dependency-groups]",
+                'dev = ["tree-sitter-sage @ git+https://github.com/dzackgarza/tree-sitter-sage"]',
+                "",
+                "[build-system]",
+                'requires = ["setuptools>=80"]',
+                'build-backend = "setuptools.build_meta"',
+                "",
+                "[tool.setuptools.packages.find]",
+                'where = ["components/alpha/src", "components/beta/src"]',
+                "",
+            ]
+        )
+    )
+    (alpha / "__init__.sage").write_text("")
+    (alpha / "names.sage").write_text('def package_name() -> str:\n    return "alpha"\n')
+    (beta / "__init__.sage").write_text("")
+    (beta / "names.sage").write_text('from alpha.names import package_name\n\ndef qualified_name() -> str:\n    return f"{package_name()}.beta"\n')
+    init_git_repo(project)
+    assert (
+        run_git(
+            project,
+            "add",
+            "pyproject.toml",
+            "components/alpha/src/alpha/__init__.sage",
+            "components/alpha/src/alpha/names.sage",
+            "components/beta/src/beta/__init__.sage",
+            "components/beta/src/beta/names.sage",
+        ).returncode
+        == 0
+    )
+    commit_without_hooks(project, "fixture")
+    env = os.environ.copy()
+    sage_bin = shutil.which("sage")
+    assert sage_bin is not None
+    env["SAGE_BIN"] = sage_bin
+
+    result = run_just(ROOT / "justfiles" / "sage.just", project, "_sage-mypy", env=env)
+
+    output = result.stdout + result.stderr
+    assert result.returncode == 0, output
+    assert "Success: no issues found" in output
+
+
 def test_lean_push_gate_propagates_target_axiom_audit_failure(tmp_path: pathlib.Path) -> None:
     """The shared gate must run the target's explicit audit command at its root."""
     project = tmp_path / "lean-project"
