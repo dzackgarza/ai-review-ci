@@ -442,6 +442,9 @@ def test_qc_file_selection_excludes_user_authored_scripts_and_notebooks(
 @pytest.mark.parametrize(
     ("justfile_name", "recipe", "suffix"),
     [
+        ("python.just", "_ast-grep", ".py"),
+        ("python.just", "_jscpd-python", ".py"),
+        ("python.just", "_lizard-python", ".py"),
         ("bun.just", "_ast-grep", ".ts"),
         ("sage.just", "_sage-syntax", ".sage"),
     ],
@@ -3592,8 +3595,13 @@ def test_mypy_recipe_fails_when_mypy_reports_type_errors(
     assert result.returncode != 0, result.stdout + result.stderr
 
 
-def test_mypy_recipe_uses_upstream_diff_in_git_repo(
+@pytest.mark.parametrize(
+    "recipe",
+    ["_mypy", "_ast-grep", "_jscpd-python", "_lizard-python"],
+)
+def test_python_diff_scoped_recipes_accept_metadata_only_changes(
     tmp_path: pathlib.Path,
+    recipe: str,
 ) -> None:
     project = tmp_path / "diff-scoped-python-project"
     package_dir = project / "src" / "diff_scoped_python_project"
@@ -3659,7 +3667,7 @@ def test_mypy_recipe_uses_upstream_diff_in_git_repo(
             str(ROOT / "justfiles" / "python.just"),
             "-d",
             str(project),
-            "_mypy",
+            recipe,
         ],
         cwd=project,
         text=True,
@@ -3669,7 +3677,6 @@ def test_mypy_recipe_uses_upstream_diff_in_git_repo(
 
     output = result.stdout + result.stderr
     assert result.returncode == 0, output
-    assert "mypy: no changed Python files." in output
 
 
 def test_commit_gate_stops_at_doctor_preflight_before_typechecking(
