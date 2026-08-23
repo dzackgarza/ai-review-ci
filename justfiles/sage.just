@@ -12,8 +12,10 @@
 #
 # WORKFLOW (three-tier):
 #   just test-commit — Sage/Python syntax, normalization, mypy, bypass check.
-#   just test-push   — commit checks plus the full Sage test suite.
-#   just test-ci     — push checks plus coverage and policy-sensitive gates.
+#   just test-push   — commit checks, the full Sage test suite, and the cheap
+#                      deterministic gates (vulture, ast-grep, deptry, grain).
+#   just test-ci     — push checks plus the threshold metrics (coverage,
+#                      duplication) and the minutes-long import graph.
 
 infra := justfile_directory() / ".."
 configs := infra / "tool-configs"
@@ -56,7 +58,8 @@ setup:
 	@echo "   installed into Sage's python)."
 	@echo ""
 	@echo "6. Gates: pre-commit runs 'just test-commit' (syntax and mypy);"
-	@echo "   pre-push runs 'just test-push' (adds Sage tests); CI runs 'just test-ci'."
+	@echo "   pre-push runs 'just test-push' (adds Sage tests and the cheap"
+	@echo "   deterministic gates); CI runs 'just test-ci' (threshold metrics)."
 	@echo "   Commit/push failures are direct repair; CI policy findings are triaged."
 
 _sage-qc-files:

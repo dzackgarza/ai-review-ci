@@ -14,8 +14,10 @@
 #
 # WORKFLOW (three-tier):
 #   just test-commit — preflight, normalization, syntax, mypy, bypass check.
-#   just test-push   — commit checks plus the full pytest suite.
-#   just test-ci     — push checks plus coverage and policy-sensitive gates.
+#   just test-push   — commit checks, the full pytest suite, and the cheap
+#                      deterministic gates (deptry, ast-grep, grain).
+#   just test-ci     — push checks plus the threshold metrics (coverage,
+#                      duplication) and the minutes-long import graph.
 #
 # HOOKS: pre-commit blocks on `just test-commit`; pre-push blocks on `just test-push`.
 #   Run `just install-global-hooks` from ~/ai-review-ci to activate them globally.
@@ -50,7 +52,8 @@ setup:
 	@echo "4. Tests must exist (test_*.py / *_test.py / tests/*.py)."
 	@echo ""
 	@echo "5. Gates: pre-commit runs 'just test-commit' (syntax and mypy);"
-	@echo "   pre-push runs 'just test-push' (adds pytest); CI runs 'just test-ci'."
+	@echo "   pre-push runs 'just test-push' (adds pytest and the cheap"
+	@echo "   deterministic gates); CI runs 'just test-ci' (threshold metrics)."
 	@echo "   Commit/push failures are direct repair; CI policy findings are triaged."
 	@echo ""
 	@echo "Sage projects: use sage.just instead ('just -f ~/ai-review-ci/justfiles/sage.just setup')."
