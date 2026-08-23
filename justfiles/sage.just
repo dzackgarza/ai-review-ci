@@ -702,32 +702,25 @@ test-commit:
 # dependencies, dead code and prose rules. Each reports the same verdict locally
 # and in CI, so discovering it here costs one edit and discovering it there
 # costs a CI round trip.
-_sage-module-length:
+_sage-file-length:
 	#!/usr/bin/env bash
 	set -euo pipefail
 	echo "============================="
-	echo "=== Running: Python module length ==="
-	python_files_output="$(just -f {{justfiles}}/python.just -d . _python-qc-files)"
-	python_files=()
-	if [ -n "$python_files_output" ]; then
-		mapfile -t python_files <<<"$python_files_output"
+	echo "=== Running: repository file length ==="
+	linecheck_root="${XDG_CACHE_HOME:-$HOME/.cache}/ai-review-ci/linecheck-1.2.1"
+	linecheck_bin="$linecheck_root/bin/linecheck"
+	if [ ! -x "$linecheck_bin" ]; then
+		cargo install --locked --version 1.2.1 --root "$linecheck_root" linecheck
 	fi
-	if [ "${#python_files[@]}" -eq 0 ]; then
-		echo "pylint: no changed Python files."
-		exit 0
-	fi
-	uvx --from pylint pylint \
-		--disable=all \
-		--enable=too-many-lines \
-		--max-module-lines=1000 \
-		--score=no \
-		"${python_files[@]}"
+	repo_files=()
+	mapfile -d '' -t repo_files < <(git ls-files -z --cached --others --exclude-standard)
+	"$linecheck_bin" --config {{configs}}/linecheck.yml "${repo_files[@]}"
 
 test-push:
 	#!/usr/bin/env bash
 	set -euo pipefail
 	export AI_REVIEW_CI_FAILURE_MODE=direct
-	just --justfile {{justfile()}} -d . test-commit _sage-pytest _vulture _sage-ast-grep _sage-module-length
+	just --justfile {{justfile()}} -d . test-commit _sage-pytest _vulture _sage-ast-grep _sage-file-length
 	just -f {{justfiles}}/python.just -d . _deptry _ast-grep _grain
 	echo "Sage push quality checks completed"
 

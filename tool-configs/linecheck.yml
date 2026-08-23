@@ -1,0 +1,4 @@
+rules:
+  - pattern: "**/*"
+    warn: 500
+    error: 700
