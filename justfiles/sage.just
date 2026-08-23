@@ -687,12 +687,20 @@ test-commit:
 	just -f {{justfiles}}/shared.just -d . _no-bypass
 	echo "Sage commit quality checks completed"
 
-# public: PUSH gate — commit checks plus the full project-owned test suite
+# public: PUSH gate — commit checks, the project-owned test suite, and the
+# deterministic checks a developer can answer without leaving the local loop.
+#
+# A gate belongs here when it names a specific defect at a specific location and
+# costs about a second: the duck-typing audit, banned patterns, missing
+# dependencies, dead code and prose rules. Each reports the same verdict locally
+# and in CI, so discovering it here costs one edit and discovering it there
+# costs a CI round trip.
 test-push:
 	#!/usr/bin/env bash
 	set -euo pipefail
 	export AI_REVIEW_CI_FAILURE_MODE=direct
-	just --justfile {{justfile()}} -d . test-commit _sage-pytest
+	just --justfile {{justfile()}} -d . test-commit _sage-pytest _vulture _sage-ast-grep
+	just -f {{justfiles}}/python.just -d . _deptry _ast-grep _grain
 	echo "Sage push quality checks completed"
 
 _sage-ast-grep:
@@ -762,13 +770,18 @@ _sage-ast-grep:
 	fi
 
 # public: CI gate — push checks plus gameable and long-running acceptance gates
+#
+# What remains here earns it on one of two counts. Coverage, duplication and
+# complexity are threshold metrics: run them in the local loop and they become
+# a number to golf rather than a defect to fix. `_import-linter` builds the
+# whole import graph and takes minutes, which no push gate can carry.
 test-ci:
 	#!/usr/bin/env bash
 	set -euo pipefail
 	export AI_REVIEW_CI_FAILURE_MODE=triage
-	just --justfile {{justfile()}} -d . test-push _vulture _sage-ast-grep
+	just --justfile {{justfile()}} -d . test-push
 	python_qc_repo="{{justfiles}}/python.just"
-	python_qc_recipes=(_deptry _import-linter _ast-grep _jscpd-python _grain)
+	python_qc_recipes=(_import-linter _jscpd-python)
 	just -f "$python_qc_repo" -d . "${python_qc_recipes[@]}"
 	# CCN 15 (lizard's own default) for Sage projects: mathematical case
 	# analysis is irreducibly branchy; see _lizard-python in python.just.

@@ -882,22 +882,33 @@ test-commit:
 	just -f {{justfiles}}/shared.just -d . _no-bypass
 	echo "Commit quality checks completed"
 
-# public: PUSH gate — commit checks plus the full project-owned test suite
+# public: PUSH gate — commit checks, the project-owned test suite, and the
+# deterministic checks a developer can answer without leaving the local loop.
+#
+# A gate belongs here when it names a specific defect at a specific location and
+# costs about a second: banned patterns, missing dependencies, dead code and
+# prose rules. Each reports the same verdict locally and in CI, so discovering
+# it here costs one edit and discovering it there costs a CI round trip.
 test-push:
 	#!/usr/bin/env bash
 	set -euo pipefail
 	export AI_REVIEW_CI_FAILURE_MODE=direct
-	just --justfile {{justfile()}} -d . test-commit _pytest
+	just --justfile {{justfile()}} -d . test-commit _pytest _deptry _ast-grep _grain
 	echo "Push quality checks completed"
 
 # private: ambient broad-debt audit — not push-blocking for unrelated diffs
 _ambient-python-debt: _lizard-python _vulture _grain
 
 # public: CI gate — push checks plus gameable and long-running acceptance gates
+#
+# What remains here earns it on one of two counts. Coverage, duplication and
+# complexity are threshold metrics: run them in the local loop and they become
+# a number to golf rather than a defect to fix. `_import-linter` builds the
+# whole import graph and takes minutes, which no push gate can carry.
 test-ci:
 	#!/usr/bin/env bash
 	set -euo pipefail
 	export AI_REVIEW_CI_FAILURE_MODE=triage
-	just --justfile {{justfile()}} -d . test-push _pytest_with_coverage _diff-cover _deptry _import-linter _ast-grep _jscpd-python
+	just --justfile {{justfile()}} -d . test-push _pytest_with_coverage _diff-cover _import-linter _jscpd-python
 	just -f {{justfiles}}/shared.just -d . _global-qc
 	echo "CI quality checks completed"
