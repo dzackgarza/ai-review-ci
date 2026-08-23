@@ -654,7 +654,7 @@ _sage-mypy: _sage-qc-files
 		echo "mypy: no Python or Sage files to check."
 		exit 0
 	fi
-	effective_config="{{configs}}/mypy-global.ini"
+	effective_config="{{configs}}/mypy-sage.ini"
 	mypy_run_dir="."
 	mypy_flags=()
 	if [ -n "${sage_preparse_dir:-}" ]; then
