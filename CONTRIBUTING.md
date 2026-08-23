@@ -146,7 +146,7 @@ If the answer is "only this repository, by changing the rule for everyone," the 
 fits.
 
 Both halves are recorded as enforceable policy — `POLICY.GLOBAL_QC_AUTHORITY` and
-`POLICY.NO_QC_SILENCING` in `skills/policy-index/references/policies.md`.
+`POLICY.NO_QC_SILENCING` in the [`automated-reviews` policy index](https://github.com/dzackgarza/automated-reviews/blob/main/src/automated_reviews/resources/skills/policy-index/references/policies.md).
 
 ### Sanctioned exceptions exist, and this is their shape
 
@@ -302,7 +302,7 @@ other documents own.
 | Question | Owner |
 | --- | --- |
 | Why the QC and review system behaves as it does | [Global QC and Review Doctrine](https://github.com/dzackgarza/ai-review-ci/wiki/Global-QC-and-Review-Doctrine) (wiki) |
-| The enforceable policy records | `skills/policy-index/references/policies.md` |
+| The enforceable policy records | [`automated-reviews` policy index](https://github.com/dzackgarza/automated-reviews/blob/main/src/automated_reviews/resources/skills/policy-index/references/policies.md) |
 | Agent rules, PR lifecycle, review guidelines | `AGENTS.md` |
 | What the system is and how to install it | `README.md` |
-| Test and proof standards | `skills/test-guidelines/SKILL.md` |
+| Test and proof standards | [`automated-reviews` test guidelines](https://github.com/dzackgarza/automated-reviews/blob/main/src/automated_reviews/resources/skills/test-guidelines/SKILL.md) |

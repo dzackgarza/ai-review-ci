@@ -118,16 +118,16 @@ Every PR against this repo must reconcile against the burned-bridge policy befor
 
 Why the burden sits in the definition of done rather than in CI, why an argument for relaxing a rule carries no weight by default, and the PR #143 case where a merged "fix" silenced a detector for every downstream consumer: [CONTRIBUTING.md](./CONTRIBUTING.md).
 
-## Canonical policy source (self-contained — no external fetch)
+## Canonical policy source
 
-The authoritative policy is owned by this repo under `skills/`. Load it from the checkout:
+The authoritative policy is owned by `automated-reviews`. Load it from that checkout:
 
-- `skills/policy-index/SKILL.md` and `skills/policy-index/references/policies.md` — the `POLICY.*` records and their **Invalid local fixes**.
-- `skills/policy-index/references/red-flags.md` — the red-flag inventory.
-- `skills/policy-index/references/runtime-control-flow.md` — runtime control-flow red flags.
+- [`policy-index/SKILL.md`](https://github.com/dzackgarza/automated-reviews/blob/main/src/automated_reviews/resources/skills/policy-index/SKILL.md) and [`policies.md`](https://github.com/dzackgarza/automated-reviews/blob/main/src/automated_reviews/resources/skills/policy-index/references/policies.md) own the `POLICY.*` records.
+- [`red-flags.md`](https://github.com/dzackgarza/automated-reviews/blob/main/src/automated_reviews/resources/skills/policy-index/references/red-flags.md) owns the red-flag inventory.
+- [`runtime-control-flow.md`](https://github.com/dzackgarza/automated-reviews/blob/main/src/automated_reviews/resources/skills/policy-index/references/runtime-control-flow.md) owns runtime control-flow red flags.
 
 Do not rely on globally-installed skills: remote review/coding agents (Codex, Jules, cloud runs) do not have them.
-The in-repo copy is the contract — this repo is the canonical home; other machines install these skills as symlinks via `just install-skills`.
+The `automated-reviews` checkout is the contract.
 
 ## Tier 0 — every PR
 
@@ -142,7 +142,7 @@ Genuinely optional product state is represented as an explicit typed/semantic st
 
 ## Tier 1 — PRs that change the QC tooling itself
 
-Any PR touching `tool-configs/`, `reviews/`, the detectors, or QC `justfiles/` additionally must carry an **adversarial regression-lock**:
+Any PR touching `tool-configs/`, the detectors, or QC `justfiles/` additionally must carry an **adversarial regression-lock**:
 
 - A fixture (`// ruleid:` or equivalent) proving each previously-flagged banned pattern **still fires** after the change.
   A precision fix narrows by **position** — excluding genuine boolean/control-flow uses — never by **value**. No fallback value is reclassified as safe.

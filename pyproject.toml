@@ -1,14 +1,13 @@
 [project]
 name = "ai-review-ci"
 version = "0.1.0"
-description = "OpenCode-powered review CI: SARIF-tracked repo-wide audits and PR diff reviews, installed into a repo with one command"
+description = "Deterministic QC, branch protection, and workflow installation for automated reviews"
 requires-python = ">=3.14"
 dependencies = [
+    "automated-reviews",
     "cyclopts",
-    "playwright",
     "pydantic>=2",
     "pyyaml>=6.0.3",
-    "sarif-pydantic>=0.6.2",
     "unidiff>=0.7.5",
 ]
 
@@ -43,11 +42,8 @@ addopts = ["-m", "not gh_boundary"]
 root_packages = ["ai_review_ci"]
 include_external_packages = true
 
-[[tool.importlinter.contracts]]
-name = "Report models are pure validation: no process execution, no network"
-type = "forbidden"
-source_modules = ["ai_review_ci.models"]
-forbidden_modules = ["subprocess", "os", "urllib", "http", "socket", "requests"]
-
 [tool.hatch.build.targets.wheel]
 packages = ["src/ai_review_ci"]
+
+[tool.uv.sources]
+automated-reviews = { git = "https://github.com/dzackgarza/automated-reviews.git", rev = "main" }

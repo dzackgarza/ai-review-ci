@@ -12,10 +12,10 @@ from pathlib import Path
 from typing import Literal, NoReturn
 
 import yaml
+from automated_reviews.policy_index import PolicyIndex, load_policy_index, skills_path
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
 from ai_review_ci.gates import LEXICAL_DIFF_RULES, DiffRule
-from ai_review_ci.policy_index import PolicyIndex, load_policy_index
 
 EngineClass = Literal["python-re", "semgrep", "ast-grep"]
 AnalysisCapability = Literal["line-regex", "syntax-tree-query"]
@@ -413,12 +413,13 @@ def _collect_diff_rules(
     return tuple(records)
 
 
-def audit_policy_isolation(root: Path) -> tuple[str, ...]:
+def audit_policy_isolation(root: Path, *, policy_root: Path | None = None) -> tuple[str, ...]:
     """Return policy/remediation knowledge leaks into the wrong authored surface."""
     findings: list[str] = []
-    policy_dir = root / "skills/policy-index"
+    canonical_skills = policy_root or skills_path()
+    policy_dir = canonical_skills / "policy-index"
     policy_paths = sorted(policy_dir.rglob("*.md"))
-    remediation_path = root / "skills/style-guide/references/style-guide-index.md"
+    remediation_path = canonical_skills / "style-guide/references/style-guide-index.md"
     for path in (*policy_paths, remediation_path):
         text = path.read_text(encoding="utf-8")
         for pattern in _POLICY_INTERNAL_PATTERNS:
@@ -432,10 +433,7 @@ def audit_policy_isolation(root: Path) -> tuple[str, ...]:
                 line = text.count("\n", 0, match.start()) + 1
                 findings.append(f"{_display_path(path, root)}:{line}: inverse policy mapping in remediation index")
 
-    canonical_policy_path = root / "skills/policy-index/references/policies.md"
     for path in sorted((root / "skills").rglob("*.md")):
-        if path == canonical_policy_path:
-            continue
         text = path.read_text(encoding="utf-8")
         remediation = _REMEDIATION_CODE_RE.search(text)
         if _POLICY_CODE_RE.search(text) and remediation:

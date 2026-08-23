@@ -1,49 +1,16 @@
 name: Issue alignment
-
-# Advisory only. Weighs a new or edited issue against CONTRIBUTING.md and the QC
-# authority policies, and comments only when it suspects the issue hands a consuming
-# repository a way to make a rule stand down. It never closes, never blocks, and a clean
-# run leaves no trace — so the absence of a comment is not clearance.
-#
-# Owner-authored issues only: this repository's proposals come from the owner and from
-# agents filing under the owner's token. An issue from anyone else is not this check's
-# business.
-
 on:
   issues:
-    types: [opened, edited]
-
+    types:
+      - opened
+      - edited
 jobs:
   alignment:
     if: github.event.issue.user.login == 'dzackgarza'
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      issues: write
-    env:
-      AI_REVIEW_OPENCODE_BIN: /usr/local/bin/opencode
-      AI_REVIEW_OPENCODE_TIMEOUT: '300'
-      AI_REVIEW_MAX_ATTEMPTS: '3'
-      AI_REVIEW_BACKOFF: '5'
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Setup Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.14'
-
-      - name: Install tools
-        run: |
-          curl -LsSf https://astral.sh/uv/install.sh | env UV_INSTALL_DIR=/usr/local/bin sh
-          npm install -g opencode-ai
-
-      - name: Weigh the issue against CONTRIBUTING.md
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          uv run ai-review-ci check-issue-alignment \
-            --repo "${GITHUB_REPOSITORY}" \
-            --issue "${{ github.event.issue.number }}" \
-            --task reviews/issue-alignment/task.md \
-            --manifest reviews/issue-alignment/manifest.txt
+    uses: dzackgarza/automated-reviews/.github/workflows/_issue-alignment.yml@main
+    with:
+      issue: ${{ github.event.issue.number }}
+      policy_document: CONTRIBUTING.md
+permissions:
+  contents: read
+  issues: write

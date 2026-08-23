@@ -15,7 +15,7 @@ from cyclopts import Parameter
 from pydantic import BaseModel, ConfigDict, Field, TypeAdapter, ValidationError
 
 from ai_review_ci.gates import PROJECT_PROFILES, SUPPORTED_PROFILES, ProjectProfile, delegates_to_global_qc, required_check_contexts
-from ai_review_ci.install import TEMPLATES
+from automated_reviews.publication import WORKFLOW_NAMES
 from ai_review_ci.labels import Label, RemoteLabel, compute_label_actions, load_taxonomy
 from ai_review_ci.review_guidelines import classify_review_guidelines, load_canonical_review_guidelines
 
@@ -448,7 +448,7 @@ def _profile_proofs(target: Path) -> dict[str, ProfileProofObservation]:
 def _workflow_refs(target: Path, contract: JustfileContractDeclaration, profile: ProfileName) -> dict[str, WorkflowRefObservation]:
     workflows: dict[str, WorkflowRefObservation] = {}
     required_ref = contract.installed_ref if isinstance(contract, QcJustfileContract) else ""
-    for name in TEMPLATES:
+    for name in WORKFLOW_NAMES:
         path = target / ".github" / "workflows" / name
         refs: set[str] = set()
         gates: set[str] = set()
@@ -457,7 +457,10 @@ def _workflow_refs(target: Path, contract: JustfileContractDeclaration, profile:
             jobs = TypeAdapter(dict[str, dict[str, Any]]).validate_python(data["jobs"] if "jobs" in data else {})
             for job_name, job in jobs.items():
                 uses = str(job["uses"]) if "uses" in job else ""
-                if "dzackgarza/ai-review-ci/.github/workflows/" in uses and "@" in uses:
+                if (
+                    "dzackgarza/ai-review-ci/.github/workflows/" in uses
+                    or "dzackgarza/automated-reviews/.github/workflows/" in uses
+                ) and "@" in uses:
                     refs.add(uses.rsplit("@", 1)[1])
                 if job_name == "qc-ci" and "dzackgarza/ai-review-ci/.github/workflows/_qc.yml" in uses:
                     with_block = TypeAdapter(dict[str, Any]).validate_python(job["with"]) if "with" in job else {}
@@ -751,7 +754,9 @@ def _findings(
                     severity="warning",
                     surface="workflow_ref",
                     evidence=f"{workflow.path} uses {workflow.observed_ref}; justfile contract requires {workflow.required_ref}",
-                    remediation_commands=(f"edit {workflow.path} to use dzackgarza/ai-review-ci reusable workflows at @{workflow.required_ref}",),
+                    remediation_commands=(
+                        f"edit {workflow.path} to use automated-reviews and ai-review-ci reusable workflows at @{workflow.required_ref}",
+                    ),
                 )
             )
     for recipe, observation in justfile_delegation.items():
@@ -944,7 +949,7 @@ def _invalidation_inputs(target: Path, declaration_hash: str) -> tuple[str, ...]
     for path in [
         target / "justfile",
         target / "Justfile",
-        *(target / ".github" / "workflows" / name for name in TEMPLATES),
+        *(target / ".github" / "workflows" / name for name in WORKFLOW_NAMES),
     ]:
         if path.is_file():
             inputs.append(f"{path.relative_to(target)}:{_sha256(path)}")

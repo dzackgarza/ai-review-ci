@@ -1,4 +1,4 @@
-"""Cyclopts CLI for ai-review-ci.
+"""Cyclopts CLI for deterministic ai-review-ci controls.
 
 Presentation layer only: every subcommand is a typed function imported from
 its logic module and registered here. Help text comes from those functions'
@@ -22,20 +22,10 @@ Subcommands:
 - doctor-ci       — validate repository-owned doctor checks for CI
 - doctor-preflight — validate local justfile/profile health before code QC
 - doctor-schema    — dump the JSON Schema for the doctor payload
-- validate-report  — validate a candidate report and write the artifact
-- report-schema    — dump the JSON Schema for a report type
-- report-metadata  — print machine-parseable metadata from an artifact
-- enforce-report-status — fail if a report contains actionable findings
-- to-sarif         — convert a validated artifact to SARIF 2.1.0
-- fetch-context    — build reviewer context from code scanning alerts
-- post-threads     — post validated findings as resolvable PR threads
-- publish-issues   — publish validated findings as fingerprint-tracked issues
-- run-review       — assemble the reviewer prompt and loop opencode
 """
 
 from cyclopts import App
 
-from ai_review_ci.context import fetch_context
 from ai_review_ci.doctor import check_justfile, doctor, doctor_ci, doctor_preflight, doctor_schema, version_command
 from ai_review_ci.gates import (
     check_app_boot,
@@ -46,26 +36,15 @@ from ai_review_ci.gates import (
     check_staged_bypass,
     protect_branch,
 )
-from ai_review_ci.harness import run_review
 from ai_review_ci.install import install
-from ai_review_ci.issues import publish_issues
 from ai_review_ci.labels import install_labels
 from ai_review_ci.red_commit import red_commit
-from ai_review_ci.issue_alignment import check_issue_alignment
-from ai_review_ci.report import (
-    enforce_report_status,
-    report_metadata,
-    report_schema,
-    validate_report,
-)
 from ai_review_ci.review_guidelines import check_review_guidelines
-from ai_review_ci.sarif import to_sarif
-from ai_review_ci.threads import post_threads
 from ai_review_ci.tripwire_index import check_tripwire_index, tripwire_index
 
 app = App(
     name="ai-review-ci",
-    help="Centrally-managed, OpenCode-powered review CI.",
+    help="Centrally managed deterministic review QC.",
 )
 
 app.command(install)
@@ -87,16 +66,6 @@ app.command(check_review_guidelines)
 app.command(tripwire_index, name="tripwire-index")
 app.command(check_tripwire_index, name="check-tripwire-index")
 app.command(protect_branch)
-app.command(validate_report)
-app.command(report_schema)
-app.command(report_metadata)
-app.command(enforce_report_status)
-app.command(to_sarif)
-app.command(fetch_context)
-app.command(post_threads)
-app.command(publish_issues, name="publish-issues")
-app.command(run_review)
-app.command(check_issue_alignment, name="check-issue-alignment")
 
 
 def main() -> None:

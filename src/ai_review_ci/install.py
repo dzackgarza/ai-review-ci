@@ -1,7 +1,7 @@
-"""Installer for the complete ai-review-ci enforcement surface.
+"""Installer for deterministic QC and published LLM review workflows.
 
-All review complexity lives upstream: the reusable workflow referenced by
-these triggers clones this repository inside the CI runner at execution time.
+``automated-reviews`` publishes the review workflows. ``ai-review-ci`` installs
+them with its deterministic QC scaffold and branch protection contract.
 Installing into a repo writes two minimally-correct trigger workflows —
 plain configuration files (triggers, crons, thresholds) that the repo owns and
 edits directly afterward:
@@ -19,9 +19,10 @@ import pathlib
 import sys
 from importlib.resources import files
 
+from automated_reviews.publication import WORKFLOW_NAMES, workflow_text
+
 from ai_review_ci.gates import SUPPORTED_PROFILES, protect_branch
 
-TEMPLATES = ("review-slop.yml", "review-pr.yml")
 SCAFFOLD_FILES = ("justfile",)
 PR_TEMPLATE = "pull_request_template.md"
 # The canonical aislop policy, distributed into every governed repo (#228).
@@ -55,9 +56,7 @@ def _git_repo_root(target: pathlib.Path) -> pathlib.Path:
 
 
 def _template_text(name: str, profile: str, ref: str = DEFAULT_INFRA_REF) -> str:
-    source_name = "review-pr-bun-playwright.yml" if name == "review-pr.yml" and profile == "bun-playwright" else name
-    text = (files("ai_review_ci") / "templates" / source_name).read_text()
-    return text.replace("{{ profile }}", profile).replace("{{ ref }}", ref)
+    return workflow_text(name, profile=profile, review_ref=ref, qc_ref=ref)
 
 
 def _replace_just_variable(text: str, variable: str, value: str) -> str:
@@ -118,7 +117,7 @@ def _write_trigger_workflows(target: pathlib.Path, profile: str, ref: str = DEFA
     target = _git_repo_root(target)
 
     wf_dir = target / ".github" / "workflows"
-    existing = [n for n in TEMPLATES if (wf_dir / n).exists()]
+    existing = [n for n in WORKFLOW_NAMES if (wf_dir / n).exists()]
     if existing:
         print(
             f"FATAL: already installed in {target}: {', '.join(existing)} — these are repo-owned configuration; edit them directly, or remove them first to re-initialize.",
@@ -127,7 +126,7 @@ def _write_trigger_workflows(target: pathlib.Path, profile: str, ref: str = DEFA
         sys.exit(1)
 
     wf_dir.mkdir(parents=True, exist_ok=True)
-    for name in TEMPLATES:
+    for name in WORKFLOW_NAMES:
         (wf_dir / name).write_text(_template_text(name, profile, ref))
         print(f"installed .github/workflows/{name}")
 

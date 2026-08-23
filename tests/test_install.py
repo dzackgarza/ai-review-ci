@@ -5,13 +5,13 @@ from typing import Any
 
 import pytest
 import yaml
+from automated_reviews.publication import WORKFLOW_NAMES
 
 from ai_review_ci.doctor import _review_guidelines_findings
 from ai_review_ci.gates import POLICY_GATE_MARKER, SUPPORTED_PROFILES
 from ai_review_ci.install import (
     AISLOP_CONFIG,
     PR_TEMPLATE,
-    TEMPLATES,
     _prove_installation,
     _template_text,
     _write_aislop_config,
@@ -28,26 +28,7 @@ from ai_review_ci.review_guidelines import (
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 
-# A job referencing a reusable workflow in this repo names it as
-# `dzackgarza/ai-review-ci/.github/workflows/<file>@<ref>`.
-_REUSABLE_PREFIX = "dzackgarza/ai-review-ci/.github/workflows/"
 _WORKFLOWS_DIR = ROOT / ".github" / "workflows"
-
-
-def _workflow_call_inputs(workflow_file: str) -> set[str]:
-    """Declared `workflow_call` input names of a reusable workflow file."""
-    data = yaml.safe_load((_WORKFLOWS_DIR / workflow_file).read_text())
-    # PyYAML parses the bare `on:` key as the boolean True (YAML 1.1).
-    on_block = data.get("on", data.get(True)) or {}
-    return set((on_block.get("workflow_call") or {}).get("inputs") or {})
-
-
-def _reusable_target(job: dict[str, object]) -> str | None:
-    """The reusable-workflow filename a job calls, or None if not in-repo."""
-    uses = job.get("uses")
-    if not isinstance(uses, str) or not uses.startswith(_REUSABLE_PREFIX):
-        return None
-    return uses[len(_REUSABLE_PREFIX) :].split("@", 1)[0]
 
 
 def _workflow_jobs(workflow_file: str) -> dict[str, dict[str, Any]]:
@@ -165,10 +146,10 @@ def test_install_writes_trigger_workflows(tmp_path: pathlib.Path) -> None:
     repo = _git_repo(tmp_path)
     _write_trigger_workflows(repo, "bun")
     wf = repo / ".github" / "workflows"
-    assert sorted(p.name for p in wf.iterdir()) == sorted(TEMPLATES)
-    for name in TEMPLATES:
+    assert sorted(p.name for p in wf.iterdir()) == sorted(WORKFLOW_NAMES)
+    for name in WORKFLOW_NAMES:
         text = (wf / name).read_text()
-        assert "uses: dzackgarza/ai-review-ci/.github/workflows/_review.yml@main" in text
+        assert "uses: dzackgarza/automated-reviews/.github/workflows/_review.yml@main" in text
     sweep = (wf / "review-slop.yml").read_text()
     assert "report_type: slop" in sweep
     assert "scope: repo" in sweep
@@ -374,22 +355,7 @@ def test_install_refuses_overwriting_repo_owned_config(
     assert customized.read_text() == "# locally customized\n"
 
 
-def test_review_workflow_uploads_structured_state_before_enforcing_status() -> None:
-    steps = _workflow_jobs("_review.yml")["review"]["steps"]
-    names = [step.get("name") for step in steps if isinstance(step, dict)]
-
-    assert names.index("Write structured review state") < names.index("Upload structured review state")
-    assert names.index("Upload structured review state") < names.index("Enforce review status")
-
-    upload_step = next(step for step in steps if isinstance(step, dict) and step.get("name") == "Upload structured review state")
-    assert upload_step["uses"] == "actions/upload-artifact@v4"
-    assert upload_step["with"] == {
-        "name": "ai-${{ inputs.report_type }}-review-state",
-        "path": ".review-findings.json",
-    }
-
-
-@pytest.mark.parametrize("workflow_file", ["_qc.yml", "_review.yml", "_gates.yml"])
+@pytest.mark.parametrize("workflow_file", ["_qc.yml", "_gates.yml"])
 def test_reusable_workflows_use_maintained_just_installer(workflow_file: str) -> None:
     """Regression guard for #129.
 
@@ -417,11 +383,11 @@ def test_thread_resolution_checks_out_target_repository() -> None:
 
 @pytest.mark.parametrize(
     "workflow_file,job_name",
-    [(wf, job) for wf in ("_qc.yml", "_review.yml", "_gates.yml") for job in _workflow_jobs(wf)],
+    [(wf, job) for wf in ("_qc.yml", "_gates.yml") for job in _workflow_jobs(wf)],
 )
 def test_reusable_workflow_just_installs_via_setup_action(workflow_file: str, job_name: str) -> None:
     """Every job's Install just step uses extractions/setup-just@v4 with a token."""
-    job = _workflow_jobs(workflow_file)[job_name]  # noqa: F811 — parametrize computes names, test needs dict
+    job = _workflow_jobs(workflow_file)[job_name]
     steps = job.get("steps")
     assert isinstance(steps, list), f"{workflow_file} job {job_name!r} has no steps"
     install_steps = [step for step in steps if isinstance(step, dict) and step.get("name") == "Install just"]
@@ -430,73 +396,6 @@ def test_reusable_workflow_just_installs_via_setup_action(workflow_file: str, jo
         assert step.get("uses") == "extractions/setup-just@v4"
         assert step.get("with", {}).get("github-token") == "${{ github.token }}"
         assert "env" not in step
-
-
-@pytest.mark.parametrize("profile", SUPPORTED_PROFILES)
-@pytest.mark.parametrize("template", TEMPLATES)
-def test_trigger_inputs_are_declared_by_reusable_workflow(template: str, profile: str) -> None:
-    """Every input an installed trigger passes must be declared by the
-    reusable workflow it calls.
-
-    Regression guard for #123: the installed triggers passed a `fail_below`
-    input that `_review.yml` never declared, so GitHub rejected the run at
-    startup (`startup_failure`) and the review silently never ran. An
-    undeclared input is a workflow-file error for *any* input, so this checks
-    the whole `with:` contract against the reusable workflow's declared inputs
-    — across every profile-rendered trigger — rather than blocklisting one
-    known-bad key.
-    """
-    rendered = _template_text(template, profile, "main")
-    workflow = yaml.safe_load(rendered)
-
-    checked_a_reusable_call = False
-    for job_name, job in workflow["jobs"].items():
-        target = _reusable_target(job)
-        if target is None:
-            continue
-        checked_a_reusable_call = True
-        declared = _workflow_call_inputs(target)
-        passed = set(job.get("with") or {})
-        undeclared = passed - declared
-        assert not undeclared, (
-            f"{template} (profile={profile}) job {job_name!r} passes input(s) "
-            f"{sorted(undeclared)} to {target}, which declares only {sorted(declared)}. "
-            f"GitHub fails such a run at startup before any review step runs."
-        )
-
-    assert checked_a_reusable_call, f"{template} (profile={profile}) calls no in-repo reusable workflow"
-
-
-@pytest.mark.parametrize("profile", SUPPORTED_PROFILES)
-@pytest.mark.parametrize("template", TEMPLATES)
-def test_trigger_permissions_cover_reusable_workflow_permissions(template: str, profile: str) -> None:
-    """A called workflow cannot elevate permissions omitted by its caller."""
-    workflow = yaml.safe_load(_template_text(template, profile, "main"))
-    checked_reusable_call = False
-    permission_rank = {"none": 0, "read": 1, "write": 2}
-
-    for job_name, job in workflow["jobs"].items():
-        target = _reusable_target(job)
-        if target is None:
-            continue
-        checked_reusable_call = True
-        callee_jobs = _workflow_jobs(target)
-        required: dict[str, str] = {}
-        for callee in callee_jobs.values():
-            for scope, level in (callee.get("permissions") or {}).items():
-                if permission_rank[level] > permission_rank[required.get(scope, "none")]:
-                    required[scope] = level
-        granted = job.get("permissions") or {}
-        insufficient = {
-            scope: {"required": level, "granted": granted.get(scope, "none")}
-            for scope, level in required.items()
-            if permission_rank[granted.get(scope, "none")] < permission_rank[level]
-        }
-        assert not insufficient, (
-            f"{template} (profile={profile}) job {job_name!r} under-grants reusable-workflow permissions {insufficient} required by {target}; GitHub rejects this at startup"
-        )
-
-    assert checked_reusable_call, f"{template} (profile={profile}) calls no reusable workflow"
 
 
 def test_gates_qc_doctor_grants_labels_read_scope() -> None:
@@ -586,7 +485,7 @@ def test_skip_scaffold_final_proof_adopts_brownfield_non_delegating_justfile(
     # Success end state: adoption completed and the brownfield justfile is intact.
     assert existing.read_text() == brownfield_justfile
     assert not (repo / ".ai-review-ci.toml").exists()
-    for name in TEMPLATES:
+    for name in WORKFLOW_NAMES:
         assert (repo / ".github" / "workflows" / name).is_file()
 
 

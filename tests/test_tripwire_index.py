@@ -2,7 +2,7 @@ from pathlib import Path
 
 import pytest
 
-from ai_review_ci.policy_index import canonical_route
+from automated_reviews.policy_index import canonical_route
 from ai_review_ci.tripwire_index import (
     TripwireIndexError,
     audit_policy_isolation,
@@ -184,7 +184,7 @@ def test_scattered_mapping_finding_locates_the_offending_remediation_code(tmp_pa
     (tmp_path / "skills" / "style-guide" / "references" / "style-guide-index.md").write_text("no codes here\n")
     (skills / "SKILL.md").write_text("intro\nsee POLICY.NO_IF_ELSE\nfiller\nremediation via REMEDIATE.EXHAUSTIVE_DISPATCH\n")
 
-    findings = audit_policy_isolation(tmp_path)
+    findings = audit_policy_isolation(tmp_path, policy_root=tmp_path / "skills")
 
     assert len(findings) == 1, findings
     assert findings[0].startswith("skills/some-skill/SKILL.md:4:"), findings[0]
