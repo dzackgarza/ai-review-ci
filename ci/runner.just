@@ -145,7 +145,7 @@ check-reviewer-model:
     #!/usr/bin/env bash
     set -euo pipefail
     configured_model="$(jq -r '.model' {{reviewer_home}}/.config/opencode/opencode.json)"
-    available_models="$(sudo -u reviewer -H env \
+    available_models="$(cd "{{reviewer_home}}" && sudo -u reviewer -H env \
       PATH="{{reviewer_home}}/bin:/usr/bin:/bin" \
       HOME="{{reviewer_home}}" \
       XDG_CONFIG_HOME="{{reviewer_home}}/.config" \
