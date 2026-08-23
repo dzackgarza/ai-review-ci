@@ -545,12 +545,16 @@ _vulture: _install-tools
 	echo "============================="
 	echo "=== Running: vulture dead code detection ==="
 	echo "# Finds unused code (functions, classes, variables) that can be safely removed"
-	all_python_files_output="$(just --justfile {{justfile()}} -d . _python-qc-files)"
+	# Whole tree, never the diff. A symbol is dead only if nothing anywhere
+	# calls it, so a file subset cannot answer the question: every definition
+	# whose callers sit in an unchanged file reads as unused, and the false
+	# positives grow as the diff shrinks.
+	all_python_files_output="$(QC_TIER=ambient just --justfile {{justfile()}} -d . _python-qc-files)"
 	all_python_files=()
 	if [ -n "$all_python_files_output" ]; then
 		mapfile -t all_python_files <<<"$all_python_files_output"
 	fi
-	python_files_output="$(just --justfile {{justfile()}} -d . _python-vulture-files)"
+	python_files_output="$(QC_TIER=ambient just --justfile {{justfile()}} -d . _python-vulture-files)"
 	python_files=()
 	if [ -n "$python_files_output" ]; then
 		mapfile -t python_files <<<"$python_files_output"
