@@ -5,6 +5,7 @@ import re
 import shlex
 import shutil
 import subprocess
+import sys
 import tomllib
 from typing import Any
 
@@ -340,7 +341,7 @@ def test_sage_syntax_uses_tools_from_the_sage_virtual_environment(
     sage = sage_bin_dir / "sage"
     sage.write_text("#!/usr/bin/env bash\nexit 97\n")
     sage.chmod(0o755)
-    (sage_bin_dir / "python").symlink_to(pathlib.Path(os.sys.executable))
+    (sage_bin_dir / "python").symlink_to(pathlib.Path(sys.executable))
     sage_preparse = sage_bin_dir / "sage-preparse"
     sage_preparse.write_text(
         "from pathlib import Path\nimport sys\nfor source_name in sys.argv[1:]:\n    source = Path(source_name)\n    Path(f'{source}.py').write_text(source.read_text())\n"
