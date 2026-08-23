@@ -702,11 +702,32 @@ test-commit:
 # dependencies, dead code and prose rules. Each reports the same verdict locally
 # and in CI, so discovering it here costs one edit and discovering it there
 # costs a CI round trip.
+_sage-module-length:
+	#!/usr/bin/env bash
+	set -euo pipefail
+	echo "============================="
+	echo "=== Running: Python module length ==="
+	python_files_output="$(just -f {{justfiles}}/python.just -d . _python-qc-files)"
+	python_files=()
+	if [ -n "$python_files_output" ]; then
+		mapfile -t python_files <<<"$python_files_output"
+	fi
+	if [ "${#python_files[@]}" -eq 0 ]; then
+		echo "pylint: no changed Python files."
+		exit 0
+	fi
+	uvx --from pylint pylint \
+		--disable=all \
+		--enable=too-many-lines \
+		--max-module-lines=1000 \
+		--score=no \
+		"${python_files[@]}"
+
 test-push:
 	#!/usr/bin/env bash
 	set -euo pipefail
 	export AI_REVIEW_CI_FAILURE_MODE=direct
-	just --justfile {{justfile()}} -d . test-commit _sage-pytest _vulture _sage-ast-grep
+	just --justfile {{justfile()}} -d . test-commit _sage-pytest _vulture _sage-ast-grep _sage-module-length
 	just -f {{justfiles}}/python.just -d . _deptry _ast-grep _grain
 	echo "Sage push quality checks completed"
 
