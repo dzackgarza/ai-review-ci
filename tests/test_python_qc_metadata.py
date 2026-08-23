@@ -125,3 +125,14 @@ def test_import_linter_config_lints_packages_only(tmp_path: pathlib.Path) -> Non
     assert config is not None
     assert '"alpha"' in config
     assert "beta" not in config
+
+
+def test_first_party_source_roots_selects_package_containers(tmp_path: pathlib.Path) -> None:
+    source_root = tmp_path / "src"
+    (source_root / "alpha").mkdir(parents=True)
+    (source_root / "alpha" / "__init__.py").write_text("")
+    (tmp_path / "pyproject.toml").write_text('[project]\nname = "x"\nversion = "0"\n')
+
+    roots = _MOD.first_party_source_roots(tmp_path)
+
+    assert roots == [str(source_root.resolve())]

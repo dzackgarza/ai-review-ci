@@ -12,8 +12,8 @@ def _load_pyproject(project_root: Path) -> dict[str, object]:
     pyproject_path = project_root / "pyproject.toml"
     if not pyproject_path.is_file():
         raise SystemExit(
-            f"ERROR: no pyproject.toml at {pyproject_path.resolve()} — QC installs the project\n"
-            "       editable and reads dependency groups from it. Create a minimal one:\n"
+            f"ERROR: no pyproject.toml at {pyproject_path.resolve()} — QC reads project metadata from it.\n"
+            "       Create a minimal one:\n"
             "         [project]\n"
             '         name = "<project-name>"\n'
             '         version = "0.0.1"\n'
@@ -133,6 +133,15 @@ def first_party_modules(project_root: Path) -> list[str]:
     return list(dict.fromkeys(modules))
 
 
+def _candidate_source_roots(project_root: Path, pyproject: dict[str, object]) -> list[Path]:
+    roots = [
+        project_root / "src",
+        *_setuptools_package_roots(project_root, pyproject),
+        project_root,
+    ]
+    return list(dict.fromkeys(roots))
+
+
 def _first_party_packages(project_root: Path, modules: list[str]) -> list[str]:
     """The subset of first-party modules that are packages (have __init__.py).
 
@@ -140,8 +149,19 @@ def _first_party_packages(project_root: Path, modules: list[str]) -> list[str]:
     so only true packages are lintable.
     """
     pyproject = _load_pyproject(project_root)
-    roots = [project_root / "src", *_setuptools_package_roots(project_root, pyproject), project_root]
+    roots = _candidate_source_roots(project_root, pyproject)
     return [m for m in modules if any((root / m / "__init__.py").is_file() for root in roots)]
+
+
+def first_party_source_roots(project_root: Path) -> list[str]:
+    pyproject = _load_pyproject(project_root)
+    packages = _first_party_packages(project_root, first_party_modules(project_root))
+    roots = _candidate_source_roots(project_root, pyproject)
+    return [
+        str(root.resolve())
+        for root in roots
+        if any((root / package / "__init__.py").is_file() for package in packages)
+    ]
 
 
 def import_linter_config(project_root: Path) -> str | None:
@@ -263,6 +283,9 @@ def main() -> None:
     if command == "first-party-modules":
         assert len(sys.argv) == 3
         _print_lines(first_party_modules(Path(sys.argv[2])))
+    elif command == "first-party-source-roots":
+        assert len(sys.argv) == 3
+        _print_lines(first_party_source_roots(Path(sys.argv[2])))
     elif command == "import-linter-config":
         assert len(sys.argv) == 3
         config = import_linter_config(Path(sys.argv[2]))

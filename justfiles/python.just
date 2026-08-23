@@ -770,7 +770,11 @@ _import-linter: _install-tools
 		"{{artifacts}}/scripts/emit-triage-directive.sh"
 		exit 1
 	fi
-	if uvx --python 3.14 --from import-linter --with-editable . lint-imports --config "$config"; then
+	source_path="$(uv run --no-project python "{{artifacts}}/scripts/python_qc_metadata.py" first-party-source-roots . | paste -sd ':' -)"
+	if [ -n "${PYTHONPATH:-}" ]; then
+		source_path="${source_path}:${PYTHONPATH}"
+	fi
+	if PYTHONPATH="$source_path" uvx --python 3.14 --from import-linter lint-imports --config "$config"; then
 		:
 	else
 		ec=$?
