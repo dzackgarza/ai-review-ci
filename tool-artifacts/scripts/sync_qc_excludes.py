@@ -130,6 +130,7 @@ configs: list[ToolConfig] = [
             "*.sage.py",
             "src/external/**",
             "src/backends/external/**",
+            "**/resources/skills/**",
             "theory/literature/**",
             "theory/references/literature/**",
         ],
