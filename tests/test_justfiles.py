@@ -343,11 +343,7 @@ def test_sage_syntax_uses_tools_from_the_sage_virtual_environment(
     (sage_bin_dir / "python").symlink_to(pathlib.Path(os.sys.executable))
     sage_preparse = sage_bin_dir / "sage-preparse"
     sage_preparse.write_text(
-        "from pathlib import Path\n"
-        "import sys\n"
-        "for source_name in sys.argv[1:]:\n"
-        "    source = Path(source_name)\n"
-        "    Path(f'{source}.py').write_text(source.read_text())\n"
+        "from pathlib import Path\nimport sys\nfor source_name in sys.argv[1:]:\n    source = Path(source_name)\n    Path(f'{source}.py').write_text(source.read_text())\n"
     )
     sage_preparse.chmod(0o755)
 
@@ -419,13 +415,7 @@ def test_vulture_parses_pep758_in_target_repository(
     project = tmp_path / "project"
     project.mkdir()
     init_git_repo(project)
-    (project / "app.py").write_text(
-        "def obviously_dead() -> None:\n"
-        "    try:\n"
-        "        pass\n"
-        "    except ValueError, TypeError:\n"
-        "        pass\n"
-    )
+    (project / "app.py").write_text("def obviously_dead() -> None:\n    try:\n        pass\n    except ValueError, TypeError:\n        pass\n")
     assert run_git(project, "add", "app.py").returncode == 0
 
     result = run_just(ROOT / "justfiles" / justfile_name, project, "_vulture")
@@ -3149,6 +3139,7 @@ def write_import_linter_project(
     *,
     import_sibling: bool = False,
     local_importlinter_override: bool = False,
+    unbuildable_dependency: bool = False,
 ) -> None:
     package_a = project / "src" / "import_linter_a"
     package_b = project / "src" / "import_linter_b"
@@ -3161,15 +3152,23 @@ def write_import_linter_project(
         'name = "import-linter-project"',
         'version = "0.1.0"',
         'requires-python = ">=3.14"',
-        "",
-        "[build-system]",
-        'requires = ["setuptools"]',
-        'build-backend = "setuptools.build_meta"',
-        "",
-        "[tool.setuptools.packages.find]",
-        'where = ["src"]',
-        "",
     ]
+    if unbuildable_dependency:
+        pyproject_lines.append(
+            'dependencies = ["ai-review-ci-unbuildable-fixture==0"]',
+        )
+    pyproject_lines.extend(
+        [
+            "",
+            "[build-system]",
+            'requires = ["setuptools"]',
+            'build-backend = "setuptools.build_meta"',
+            "",
+            "[tool.setuptools.packages.find]",
+            'where = ["src"]',
+            "",
+        ],
+    )
     if local_importlinter_override:
         pyproject_lines.extend(
             [
@@ -3217,6 +3216,20 @@ def test_import_linter_uses_central_config_without_downstream_override(
     project = tmp_path / "central-importlinter-project"
     project.mkdir()
     write_import_linter_project(project)
+
+    result = run_just(ROOT / "justfiles" / "python.just", project, "_import-linter")
+    output = result.stdout + result.stderr
+
+    assert result.returncode == 0, output
+    assert "First-party packages are independent KEPT" in output
+
+
+def test_import_linter_reads_sources_without_installing_runtime_dependencies(
+    tmp_path: pathlib.Path,
+) -> None:
+    project = tmp_path / "import-linter-unbuildable-dependency-project"
+    project.mkdir()
+    write_import_linter_project(project, unbuildable_dependency=True)
 
     result = run_just(ROOT / "justfiles" / "python.just", project, "_import-linter")
     output = result.stdout + result.stderr
@@ -4315,9 +4328,7 @@ def test_python_preflight_accepts_a_project_with_no_local_qc_config(tmp_path: pa
 
 
 @pytest.mark.parametrize(("manifest", "body"), SHARED_MANIFEST_OVERRIDES)
-def test_python_preflight_rejects_qc_config_in_shared_manifests(
-    tmp_path: pathlib.Path, manifest: str, body: str
-) -> None:
+def test_python_preflight_rejects_qc_config_in_shared_manifests(tmp_path: pathlib.Path, manifest: str, body: str) -> None:
     """mypy, coverage, and import-linter all read setup.cfg/tox.ini, which went unaudited (#292)."""
     project = compliant_python_project(tmp_path)
     (project / manifest).write_text(body)
