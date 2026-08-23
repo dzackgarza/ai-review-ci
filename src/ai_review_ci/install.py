@@ -1,6 +1,6 @@
-"""Installer for deterministic QC and published LLM review workflows.
+"""Installer for deterministic QC and published LLM slop-review workflows.
 
-``automated-reviews`` publishes the review workflows. ``ai-review-ci`` installs
+``automated-reviews`` publishes the slop-review workflows. ``ai-review-ci`` installs
 them with its deterministic QC scaffold and branch protection contract.
 Installing into a repo writes two minimally-correct trigger workflows —
 plain configuration files (triggers, crons, thresholds) that the repo owns and
@@ -235,7 +235,7 @@ def install(
     release_channel: str = DEFAULT_INFRA_REF,
     skip_scaffold: bool = False,
 ) -> None:
-    """Install the review trigger workflows and required branch protection.
+    """Install the slop-review triggers and required branch protection.
 
     Args:
         target: Target repository root (default: current directory).

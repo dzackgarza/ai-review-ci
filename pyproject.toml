@@ -1,7 +1,7 @@
 [project]
 name = "ai-review-ci"
 version = "0.1.0"
-description = "Deterministic QC, branch protection, and workflow installation for automated reviews"
+description = "Deterministic QC, branch protection, and slop-review workflow installation"
 requires-python = ">=3.14"
 dependencies = [
     "automated-reviews",

@@ -149,9 +149,9 @@ def test_install_writes_trigger_workflows(tmp_path: pathlib.Path) -> None:
     assert sorted(p.name for p in wf.iterdir()) == sorted(WORKFLOW_NAMES)
     for name in WORKFLOW_NAMES:
         text = (wf / name).read_text()
-        assert "uses: dzackgarza/automated-reviews/.github/workflows/_review.yml@main" in text
+        assert "uses: dzackgarza/automated-reviews/.github/workflows/_slop-review.yml@main" in text
     sweep = (wf / "review-slop.yml").read_text()
-    assert "report_type: slop" in sweep
+    assert "name: Slop Review" in sweep
     assert "scope: repo" in sweep
     pr = (wf / "review-pr.yml").read_text()
     assert "uses: dzackgarza/ai-review-ci/.github/workflows/_qc.yml@main" in pr
@@ -634,13 +634,13 @@ def test_qc_workflow_accepts_only_remote_acceptance_tiers() -> None:
 
 
 @pytest.mark.parametrize("profile", ["python", "bun-playwright"])
-def test_pr_qc_and_reviews_start_in_parallel(profile: str) -> None:
+def test_pr_qc_and_slop_review_start_in_parallel(profile: str) -> None:
     workflow = yaml.safe_load(_template_text("review-pr.yml", profile, "main"))
     jobs = workflow["jobs"]
 
     assert jobs["qc-ci"]["with"]["tier"] == "test-ci"
     assert "needs" not in jobs["qc-ci"]
-    assert "needs" not in jobs["slop"]
+    assert "needs" not in jobs["slop-review"]
 
 
 def test_qc_scopes_gh_token_to_explicitly_opted_in_gh_boundary_step() -> None:

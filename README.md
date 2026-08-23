@@ -3,8 +3,8 @@
 `ai-review-ci` owns deterministic quality control for the repositories it governs.
 It supplies QC recipes, profile checks, Git hooks, branch protection, and repository diagnostics.
 
-[`automated-reviews`](https://github.com/dzackgarza/automated-reviews) owns all LLM review behavior.
-It publishes the review workflows, prompts, schemas, runner, delivery code, policy material, and model metadata.
+[`automated-reviews`](https://github.com/dzackgarza/automated-reviews) owns all LLM slop-review behavior.
+It publishes the slop-review workflows, prompts, schemas, runner, delivery code, policy material, and model metadata.
 This package consumes those published workflows during installation.
 
 Read [CONTRIBUTING.md](./CONTRIBUTING.md) before you change a rule or open a pull request.
@@ -109,7 +109,7 @@ ai-review-ci tripwire-index
 ai-review-ci check-tripwire-index
 ```
 
-Run LLM reviews, replay frozen review environments, or change the active model with `automated-reviews`.
+Run slop reviews, replay frozen slop-review environments, or change the active model with `automated-reviews`.
 
 ## Repository layout
 

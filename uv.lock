@@ -60,7 +60,7 @@ wheels = [
 [[package]]
 name = "automated-reviews"
 version = "0.1.0"
-source = { git = "https://github.com/dzackgarza/automated-reviews.git?rev=main#353e90517edfc9e2854340e6e0e61ce6663688fb" }
+source = { git = "https://github.com/dzackgarza/automated-reviews.git?rev=main#fcfe6b8a67a79e69cfcaa988e070e0ecbc75aefe" }
 dependencies = [
     { name = "cyclopts" },
     { name = "playwright" },
