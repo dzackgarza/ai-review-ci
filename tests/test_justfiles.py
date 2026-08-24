@@ -439,6 +439,36 @@ def test_sage_check_runner_replaces_only_the_reached_check_artifacts(
     ignored = run_git(project, "check-ignore", ".ai-review-ci/sage/fixture.log")
     assert ignored.returncode == 0, ignored.stdout + ignored.stderr
 
+    writer_failure_log = artifacts / "writer-failure.log"
+    writer_failure_log.symlink_to("/dev/full")
+    writer_failure_env = os.environ | {"FIXTURE_MESSAGE": "complete check output", "FIXTURE_STATUS": "0"}
+    writer_failure = subprocess.run(
+        [
+            "just",
+            "--justfile",
+            str(ROOT / "justfiles" / "sage.just"),
+            "-d",
+            str(project),
+            "_sage-run-check",
+            "writer-failure",
+            str(fixture_justfile),
+            "check",
+        ],
+        cwd=project,
+        env=writer_failure_env,
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+
+    assert writer_failure.returncode != 0, writer_failure.stdout + writer_failure.stderr
+    assert json.loads((artifacts / "writer-failure.json").read_text()) == {
+        "check": "writer-failure",
+        "diagnostics": ".ai-review-ci/sage/writer-failure.diagnostics.log",
+        "log": ".ai-review-ci/sage/writer-failure.log",
+        "status": "running",
+    }
+
 
 def test_qc_excludes_notebooks_as_user_work() -> None:
     data = tomllib.loads((ROOT / "tool-configs" / "qc-excludes.toml").read_text())
