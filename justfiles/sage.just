@@ -25,6 +25,52 @@ justfiles := infra / "justfiles"
 default:
 	@just test-commit
 
+_sage-run-check check_name check_justfile check_recipe check_arg="":
+	#!/usr/bin/env bash
+	set -euo pipefail
+	output_root=".ai-review-ci/sage"
+	log_path="$output_root/{{check_name}}.log"
+	diagnostics_path="$output_root/{{check_name}}.diagnostics.log"
+	status_path="$output_root/{{check_name}}.json"
+	mkdir -p "$output_root"
+	exclude_file="$(git rev-parse --git-path info/exclude)"
+	if ! git check-ignore --quiet "$output_root/"; then
+		printf '\n.ai-review-ci/\n' >>"$exclude_file"
+	fi
+	: >"$log_path"
+	jq -n \
+		--arg check "{{check_name}}" \
+		--arg diagnostics "$diagnostics_path" \
+		--arg log "$log_path" \
+		'{check: $check, diagnostics: $diagnostics, log: $log, status: "running"}' \
+		>"$status_path"
+	check_args=()
+	if [ -n "{{check_arg}}" ]; then
+		check_args+=("{{check_arg}}")
+	fi
+	set +e
+	just --justfile "{{check_justfile}}" -d . "{{check_recipe}}" "${check_args[@]}" 2>&1 | tee "$log_path"
+	status=${PIPESTATUS[0]}
+	set -e
+	if rg --line-number --ignore-case '\b(error|warning|failed|failure)\b' "$log_path" >"$diagnostics_path"; then
+		:
+	else
+		search_status=$?
+		if [ "$search_status" -ne 1 ]; then
+			exit "$search_status"
+		fi
+	fi
+	status_temp="$status_path.tmp"
+	jq -n \
+		--arg check "{{check_name}}" \
+		--arg diagnostics "$diagnostics_path" \
+		--arg log "$log_path" \
+		--argjson status "$status" \
+		'{check: $check, diagnostics: $diagnostics, log: $log, status: $status}' \
+		>"$status_temp"
+	mv "$status_temp" "$status_path"
+	exit "$status"
+
 # public: print the wiring contract for putting a Sage project on this QC
 setup:
 	@echo "Sage QC wiring contract (what _sage-preflight enforces):"
@@ -687,11 +733,14 @@ test-commit:
 	#!/usr/bin/env bash
 	set -euo pipefail
 	export AI_REVIEW_CI_FAILURE_MODE=direct
-	just --justfile {{justfile()}} -d . _doctor-preflight _sage-preflight _normalize-common _sage-syntax _sage-mypy
-	python_qc_repo="{{justfiles}}/python.just"
-	python_qc_recipes=(_normalize _python-syntax)
-	just -f "$python_qc_repo" -d . "${python_qc_recipes[@]}"
-	just -f {{justfiles}}/shared.just -d . _no-bypass
+	just --justfile {{justfile()}} -d . _sage-run-check doctor-preflight {{justfile()}} _doctor-preflight
+	just --justfile {{justfile()}} -d . _sage-run-check sage-preflight {{justfile()}} _sage-preflight
+	just --justfile {{justfile()}} -d . _sage-run-check normalize-common {{justfile()}} _normalize-common
+	just --justfile {{justfile()}} -d . _sage-run-check sage-syntax {{justfile()}} _sage-syntax
+	just --justfile {{justfile()}} -d . _sage-run-check sage-mypy {{justfile()}} _sage-mypy
+	just --justfile {{justfile()}} -d . _sage-run-check python-normalize {{justfiles}}/python.just _normalize
+	just --justfile {{justfile()}} -d . _sage-run-check python-syntax {{justfiles}}/python.just _python-syntax
+	just --justfile {{justfile()}} -d . _sage-run-check no-bypass {{justfiles}}/shared.just _no-bypass
 	echo "Sage commit quality checks completed"
 
 # public: PUSH gate — commit checks, the project-owned test suite, and the
@@ -720,8 +769,14 @@ test-push:
 	#!/usr/bin/env bash
 	set -euo pipefail
 	export AI_REVIEW_CI_FAILURE_MODE=direct
-	just --justfile {{justfile()}} -d . test-commit _sage-pytest _vulture _sage-ast-grep _sage-file-length
-	just -f {{justfiles}}/python.just -d . _deptry _ast-grep _grain
+	just --justfile {{justfile()}} -d . _sage-run-check test-commit {{justfile()}} test-commit
+	just --justfile {{justfile()}} -d . _sage-run-check sage-pytest {{justfile()}} _sage-pytest
+	just --justfile {{justfile()}} -d . _sage-run-check vulture {{justfile()}} _vulture
+	just --justfile {{justfile()}} -d . _sage-run-check sage-ast-grep {{justfile()}} _sage-ast-grep
+	just --justfile {{justfile()}} -d . _sage-run-check sage-file-length {{justfile()}} _sage-file-length
+	just --justfile {{justfile()}} -d . _sage-run-check deptry {{justfiles}}/python.just _deptry
+	just --justfile {{justfile()}} -d . _sage-run-check python-ast-grep {{justfiles}}/python.just _ast-grep
+	just --justfile {{justfile()}} -d . _sage-run-check grain {{justfiles}}/python.just _grain
 	echo "Sage push quality checks completed"
 
 _sage-ast-grep:
@@ -800,15 +855,14 @@ test-ci:
 	#!/usr/bin/env bash
 	set -euo pipefail
 	export AI_REVIEW_CI_FAILURE_MODE=triage
-	just --justfile {{justfile()}} -d . test-push
-	python_qc_repo="{{justfiles}}/python.just"
-	python_qc_recipes=(_import-linter _jscpd-python)
-	just -f "$python_qc_repo" -d . "${python_qc_recipes[@]}"
+	just --justfile {{justfile()}} -d . _sage-run-check test-push {{justfile()}} test-push
+	just --justfile {{justfile()}} -d . _sage-run-check import-linter {{justfiles}}/python.just _import-linter
+	just --justfile {{justfile()}} -d . _sage-run-check jscpd-python {{justfiles}}/python.just _jscpd-python
 	# CCN 15 (lizard's own default) for Sage projects: mathematical case
 	# analysis is irreducibly branchy; see _lizard-python in python.just.
-	just -f "$python_qc_repo" -d . _lizard-python 15
+	just --justfile {{justfile()}} -d . _sage-run-check lizard-python {{justfiles}}/python.just _lizard-python 15
 	# Coverage runs under the Sage interpreter (python-flavor coverage cannot
 	# import sage.* or see preparsed .sage tests).
-	just --justfile {{justfile()}} -d . _sage-diff-cover
-	just -f {{justfiles}}/shared.just -d . _global-qc
+	just --justfile {{justfile()}} -d . _sage-run-check sage-diff-cover {{justfile()}} _sage-diff-cover
+	just --justfile {{justfile()}} -d . _sage-run-check global-qc {{justfiles}}/shared.just _global-qc
 	echo "Sage CI quality checks completed"

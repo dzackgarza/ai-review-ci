@@ -361,6 +361,7 @@ def test_sage_check_runner_replaces_only_the_reached_check_artifacts(
 ) -> None:
     project = tmp_path / "sage-project"
     project.mkdir()
+    init_git_repo(project)
     fixture_justfile = project / "fixture.just"
     fixture_justfile.write_text(
         "check:\n"
@@ -418,9 +419,14 @@ def test_sage_check_runner_replaces_only_the_reached_check_artifacts(
     )
 
     assert second.returncode == 7, second.stdout + second.stderr
-    assert (artifacts / "fixture.log").read_text() == ("second run\nWARNING: inspect this warning\nERROR: inspect this error\n")
-    assert "first run" not in (artifacts / "fixture.log").read_text()
-    assert (artifacts / "fixture.diagnostics.log").read_text() == ("2:WARNING: inspect this warning\n3:ERROR: inspect this error\n")
+    fixture_log = (artifacts / "fixture.log").read_text()
+    assert fixture_log.startswith("second run\nWARNING: inspect this warning\nERROR: inspect this error\n")
+    assert "recipe `check` failed with exit code 7" in fixture_log
+    assert "first run" not in fixture_log
+    diagnostics = (artifacts / "fixture.diagnostics.log").read_text()
+    assert "2:WARNING: inspect this warning" in diagnostics
+    assert "3:ERROR: inspect this error" in diagnostics
+    assert "recipe `check` failed with exit code 7" in diagnostics
     assert json.loads((artifacts / "fixture.json").read_text()) == {
         "check": "fixture",
         "diagnostics": ".ai-review-ci/sage/fixture.diagnostics.log",
@@ -430,6 +436,8 @@ def test_sage_check_runner_replaces_only_the_reached_check_artifacts(
     assert (artifacts / "unreached.log").read_text() == "older log\n"
     assert (artifacts / "unreached.diagnostics.log").read_text() == "older diagnostics\n"
     assert json.loads((artifacts / "unreached.json").read_text()) == {"status": 0}
+    ignored = run_git(project, "check-ignore", ".ai-review-ci/sage/fixture.log")
+    assert ignored.returncode == 0, ignored.stdout + ignored.stderr
 
 
 def test_qc_excludes_notebooks_as_user_work() -> None:
