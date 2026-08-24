@@ -701,7 +701,7 @@ _aislop:
 
 # ── Config Sync ───────────────────────────────────────────────────
 # Sync qc-excludes.toml into every tool config (biome, eslint, knip,
-# jscpd, slop-scan, pyright, grain, and justfile-rust _rust-qc-files).
+# jscpd, slop-scan, pyright, and justfile-rust _rust-qc-files).
 
 # Run this whenever qc-excludes.toml changes.
 _sync-qc-excludes:

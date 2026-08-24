@@ -14,7 +14,6 @@
 #   - knip.json                              (ignore)
 #   - .jscpd.json                            (ignore)
 #   - slop-scan.config.json                  (ignores)
-#   - grain.toml                             (exclude)
 #   - pyright-local.json                     (exclude)
 #
 # Each tool config references this file as its single source of truth.

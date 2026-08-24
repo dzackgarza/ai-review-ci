@@ -67,9 +67,8 @@ This applies every deterministic auto-fix the toolchain supports:
 **Python stack (`~/ai-review-ci/justfiles/python.just`):**
 | Tool | Flag | Fixes |
 | --- | --- | --- |
-| `ruff check` | `--fix` | Lint errors (E, F, I, UP) — unused imports, import sorting, pyupgrade patterns |
+| `ruff check` | `--fix` | Lint errors (E, F, I, UP, BLE) — unused imports, import sorting, pyupgrade patterns, broad exception catches |
 | `ruff format` | (implicit) | PEP 8 style formatting |
-| `grain` | `--fix` | Unused code removal |
 
 **TypeScript stack (`~/ai-review-ci/justfiles/bun.just`):**
 | Tool | Flag | Fixes |
@@ -239,7 +238,7 @@ Validates:
 1. **`pyproject.toml` exists** — Python QC requires a project config.
 2. **`requires-python` targets >=3.14** — Global QC pins to Python 3.14. If the project targets an older Python, tool versions and type stubs may not align.
 3. **No local QC tool overrides in `pyproject.toml` sections** — The following sections are owned by global QC and must not be set locally: `[tool.ruff]`, `[tool.mypy]`, `[tool.coverage]`, `[tool.deptry]`, `[tool.vulture]`, `[tool.import-linter]`.
-4. **No standalone Python tool config files** — `ruff.toml`, `.ruff.toml`, `mypy.ini`, `.mypy.ini`, `grain.toml`, `.coveragerc`, `.importlinter`.
+4. **No standalone Python tool config files** — `ruff.toml`, `.ruff.toml`, `mypy.ini`, `.mypy.ini`, `.coveragerc`, `.importlinter`.
 5. **Tests must exist** — At least one file matching `test_*.py`, `*_test.py`, or `tests/*.py`.
 
 #### TypeScript Preflight: `_check-ts-project`
@@ -465,7 +464,7 @@ Location: `~/ai-review-ci/justfiles/python.just`
 
 Shared recipe composition: calls `shared.just` explicitly.
 
-Recipes: `_normalize-common` wrapper, `_python-syntax`, `_mypy`, `_normalize` (ruff), `_pytest_with_coverage`, `_diff-cover`, `_vulture`, `_deptry`, `_import-linter`, `_grain`, `_ast-grep`, `_jscpd-python`, `_lizard-python`, `_codeql` plus shared recipe calls.
+Recipes: `_normalize-common` wrapper, `_python-syntax`, `_mypy`, `_normalize` (ruff), `_pytest_with_coverage`, `_diff-cover`, `_vulture`, `_deptry`, `_import-linter`, `_ast-grep`, `_jscpd-python`, `_lizard-python`, `_codeql` plus shared recipe calls.
 
 Invocations:
 
@@ -780,7 +779,7 @@ The QC system uses these configs (all stored in `~/ai-review-ci/tool-configs/`):
 
 | Config | Tool | Purpose |
 | --- | --- | --- |
-| `ruff-global.toml` | Ruff | Python linting (E, F, I, UP), Python 3.14, strict |
+| `ruff-global.toml` | Ruff | Python linting (E, F, I, UP, BLE), Python 3.14, strict |
 | `mypy-global.ini` | Mypy | Python type checking, strict mode |
 | `pytest-local.ini` | pytest | Python test configuration |
 | `pyproject.toml` | Various | Python project metadata |
@@ -788,7 +787,6 @@ The QC system uses these configs (all stored in `~/ai-review-ci/tool-configs/`):
 | `eslint.config.js` | ESLint | TypeScript/JS linting |
 | `knip.json` | Knip | TypeScript/JS dead code detection |
 | `semgrep.yml` | Semgrep | Custom security and quality rules |
-| `grain.toml` | Grain | Unused code and low-quality pattern detection |
 | `.jscpd.json` | jscpd | Copy-paste detection |
 | `sgconfig.yml` | [[ast-grep/SKILL|ast-grep]] | Custom AST-based rules |
 | `lintstagedrc.mjs` | lint-staged | Pre-commit hook staged file processing |

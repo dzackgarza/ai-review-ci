@@ -10,12 +10,12 @@
 # Python-specific recipes:
 #   _python-qc-files, _python-syntax, _mypy, _normalize (ruff),
 #   _pytest_with_coverage, _diff-cover, _vulture, _deptry,
-#   _import-linter, _grain, _ast-grep, _jscpd, _lizard, _codeql
+#   _import-linter, _ast-grep, _jscpd, _lizard, _codeql
 #
 # WORKFLOW (three-tier):
 #   just test-commit — preflight, normalization, syntax, mypy, bypass check.
 #   just test-push   — commit checks, the full pytest suite, and the cheap
-#                      deterministic gates (deptry, ast-grep, grain).
+#                      deterministic gates (deptry, ast-grep).
 #   just test-ci     — push checks plus the threshold metrics (coverage,
 #                      duplication) and the minutes-long import graph.
 #
@@ -303,7 +303,7 @@ _check-python-project:
 		done
 	fi
 	# 4. Check for standalone Python tool config files (also QC overrides)
-	for config in ruff.toml .ruff.toml mypy.ini .mypy.ini grain.toml .coveragerc .importlinter; do
+	for config in ruff.toml .ruff.toml mypy.ini .mypy.ini .coveragerc .importlinter; do
 		if [ -f "$config" ]; then
 			echo "ERROR: Local QC override detected: $config — global QC owns this tool config."
 			echo "       DELETE this file. The global config for this tool already exists in"
@@ -790,28 +790,6 @@ _import-linter: _install-tools
 		exit $ec
 	fi
 
-_grain:
-	#!/usr/bin/env bash
-	set -euo pipefail
-	# Strip git env vars the pre-commit hook inherits from `git commit`; left
-	# set, they redirect uvx's git-sourced tool fetch (grain) at the host
-	# project's .git and it fails with "Git operation failed".
-	unset GIT_DIR GIT_INDEX_FILE GIT_WORK_TREE GIT_PREFIX GIT_OBJECT_DIRECTORY GIT_ALTERNATE_OBJECT_DIRECTORIES GIT_COMMON_DIR
-	echo "============================="
-	echo "=== Running: grain unused code detection ==="
-	echo "# Finds unused imports and variables that can be safely removed"
-	cp {{configs}}/grain.toml .grain.toml
-	if uvx --from git+https://github.com/mmartoccia/grain grain check --all; then
-		:
-	else
-		ec=$?
-		[ -e .grain.toml ] && rm -f -- .grain.toml
-		echo "ERROR: grain found unused code in project."
-		"{{artifacts}}/scripts/emit-triage-directive.sh"
-		exit $ec
-	fi
-	[ -e .grain.toml ] && rm -f -- .grain.toml
-
 _codeql:
 	#!/usr/bin/env bash
 	set -euo pipefail
@@ -900,11 +878,11 @@ test-push:
 	#!/usr/bin/env bash
 	set -euo pipefail
 	export AI_REVIEW_CI_FAILURE_MODE=direct
-	just --justfile {{justfile()}} -d . test-commit _pytest _deptry _ast-grep _grain
+	just --justfile {{justfile()}} -d . test-commit _pytest _deptry _ast-grep
 	echo "Push quality checks completed"
 
 # private: ambient broad-debt audit — not push-blocking for unrelated diffs
-_ambient-python-debt: _lizard-python _vulture _grain
+_ambient-python-debt: _lizard-python _vulture
 
 # public: CI gate — push checks plus gameable and long-running acceptance gates
 #

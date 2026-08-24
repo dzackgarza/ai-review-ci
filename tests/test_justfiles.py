@@ -679,7 +679,7 @@ def test_install_global_hooks_requires_env_only_inside_recipe(
     assert not (home / ".config" / "git" / "hooks").exists()
 
 
-def test_sync_qc_excludes_preserves_non_owned_artifacts_and_updates_grain(
+def test_sync_qc_excludes_preserves_non_owned_artifacts(
     tmp_path: pathlib.Path,
 ) -> None:
     repo = tmp_path / "repo"
@@ -695,7 +695,6 @@ def test_sync_qc_excludes_preserves_non_owned_artifacts_and_updates_grain(
         "slop-scan.config.json",
         "pyright-local.json",
         "slopconfig.yaml",
-        "grain.toml",
     ):
         shutil.copy(ROOT / "tool-configs" / file_name, qc_root / file_name)
     (qc_root / "qc-excludes.toml").write_text('directories = ["central-owned"]\n')
@@ -719,9 +718,6 @@ def test_sync_qc_excludes_preserves_non_owned_artifacts_and_updates_grain(
 
     output = result.stdout + result.stderr
     assert result.returncode == 0, output
-    grain = tomllib.loads((qc_root / "grain.toml").read_text())
-    assert "fail_on" in grain["grain"]
-    assert "central-owned/*" in grain["grain"]["exclude"]
     slopconfig_text = (qc_root / "slopconfig.yaml").read_text()
     assert slopconfig_text.startswith("# Maximally strict production config for ai-slop-detector\n")
     slopconfig = yaml.safe_load(slopconfig_text)
@@ -860,65 +856,6 @@ def test_knip_ignores_exact_assembled_pdfjs_module_only(tmp_path: pathlib.Path) 
     assert result.returncode != 0, output
     assert "./vendor/pdfjs/not-assembled.mjs" in output
     assert "./vendor/pdfjs/pdf_viewer.mjs" not in output
-
-
-def test_grain_config_preserves_lexicon_sage_verifier_exemption(
-    tmp_path: pathlib.Path,
-) -> None:
-    """#225 Defect 5: Sage stub verifiers under lexicon/ accumulate import
-    failures into a hard-failing problems list grain misreads as NAKED_EXCEPT.
-    Both glob depths (grain fnmatches relative paths) must survive regeneration,
-    and the shipped config must equal the sync script's deterministic output."""
-    shipped = tomllib.loads((ROOT / "tool-configs" / "grain.toml").read_text())
-    for pattern in ("**/lexicon/**", "lexicon/**"):
-        assert pattern in shipped["grain"]["exclude"], shipped["grain"]["exclude"]
-
-    repo = tmp_path / "repo"
-    qc_root = repo / "tool-configs"
-    qc_root.mkdir(parents=True)
-    shutil.copytree(ROOT / "tool-configs", qc_root, dirs_exist_ok=True)
-    result = subprocess.run(
-        ["uv", "run", str(ROOT / "tool-artifacts" / "scripts" / "sync_qc_excludes.py"), str(qc_root / "qc-excludes.toml")],
-        cwd=repo,
-        text=True,
-        capture_output=True,
-        check=False,
-    )
-    assert result.returncode == 0, result.stdout + result.stderr
-    regenerated = tomllib.loads((qc_root / "grain.toml").read_text())["grain"]["exclude"]
-    for pattern in ("**/lexicon/**", "lexicon/**"):
-        assert pattern in regenerated, regenerated
-
-
-def test_grain_config_excludes_nested_directory_occurrences(
-    tmp_path: pathlib.Path,
-) -> None:
-    """#225 Defect 6: grain matches excludes with fnmatch (grain/runner.py),
-    where a root-anchored `node_modules/*` misses a nested
-    `pkg/sub/node_modules/x.py` — unlike the JSON tools' `**/{d}/**`. Vendored
-    and generated trees deep in the layout must stay out of grain's scan, so
-    every TOML-derived directory must be excluded at both depths."""
-    import fnmatch
-
-    nested = "packages/app/node_modules/vendored/mod.py"
-    shipped = tomllib.loads((ROOT / "tool-configs" / "grain.toml").read_text())["grain"]["exclude"]
-    assert any(fnmatch.fnmatch(nested, pat) for pat in shipped), f"nested vendored path not excluded by grain's fnmatch patterns:\n{shipped}"
-
-    # Deterministic SSOT output: regenerating in a temp copy holds the property.
-    repo = tmp_path / "repo"
-    qc_root = repo / "tool-configs"
-    qc_root.mkdir(parents=True)
-    shutil.copytree(ROOT / "tool-configs", qc_root, dirs_exist_ok=True)
-    result = subprocess.run(
-        ["uv", "run", str(ROOT / "tool-artifacts" / "scripts" / "sync_qc_excludes.py"), str(qc_root / "qc-excludes.toml")],
-        cwd=repo,
-        text=True,
-        capture_output=True,
-        check=False,
-    )
-    assert result.returncode == 0, result.stdout + result.stderr
-    regenerated = tomllib.loads((qc_root / "grain.toml").read_text())["grain"]["exclude"]
-    assert any(fnmatch.fnmatch(nested, pat) for pat in regenerated), regenerated
 
 
 def test_rust_qc_files_consume_central_excludes(tmp_path: pathlib.Path) -> None:

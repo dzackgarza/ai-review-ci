@@ -3,12 +3,11 @@
 # requires-python = ">=3.11"
 # dependencies = [
 #   "ruamel.yaml>=0.18.16",
-#   "tomlkit>=0.13.2",
 # ]
 # ///
 """Sync qc-excludes.toml into structured tool config exclude arrays.
 
-Each owned JSON/TOML exclude array gets the UNION of its own static entries
+Each owned JSON/YAML exclude array gets the UNION of its own static entries
 (preserved verbatim, first) and the canonical directory-exclusion list from
 qc-excludes.toml (converted to the tool's glob format, appended).
 
@@ -24,7 +23,6 @@ import sys
 from pathlib import Path
 from typing import Never
 
-import tomlkit
 from ruamel.yaml import YAML
 from ruamel.yaml.comments import CommentedMap
 
@@ -32,13 +30,13 @@ from ruamel.yaml.comments import CommentedMap
 # Each entry describes how to update one config file.
 #
 #   path       : relative to QC root
-#   format     : "json" or "toml"
-#   key        : [key, ...] path to the exclude array (for json/toml)
-#   is_dir_fn  : lambda(str) -> glob pattern(s) for a TOML directory entry;
+#   format     : "json" or "yaml"
+#   key        : [key, ...] path to the exclude array
+#   is_dir_fn  : lambda(str) -> glob pattern(s) for a directory entry;
 #                may return one pattern or a list of patterns per directory
-#   static     : list of entries preserved verbatim, emitted before TOML dirs
+#   static     : list of entries preserved verbatim, emitted before configured dirs
 #
-# The generated list is always: static + flatten(is_dir_fn(d) for d in toml_dirs)
+# The generated list is always: static + flatten(is_dir_fn(d) for d in configured dirs)
 
 ToolConfig = dict
 
@@ -108,33 +106,6 @@ configs: list[ToolConfig] = [
         "is_dir_fn": lambda d: f"**/{d}/**",
         "static": [],
     },
-    {
-        "path": "grain.toml",
-        "format": "toml",
-        "key": ["grain", "exclude"],
-        # grain matches with fnmatch (grain/runner.py), so a root-anchored
-        # `d/*` misses a nested `pkg/sub/d/...`, while `**/d/**` misses the
-        # root-level `d/...`. Emit both depths to match the JSON tools' intent.
-        "is_dir_fn": lambda d: [f"{d}/*", f"**/{d}/**"],
-        "static": [
-            # lexicon subtrees are declared Sage reflection/verification
-            # boundaries; the stub verifier accumulates import failures into a
-            # hard-failing problems list, which grain reads as a naked except.
-            # Both glob depths are needed because grain fnmatches relative
-            # paths (repo-root lexicon/ vs a nested */lexicon/).
-            "**/lexicon/**",
-            "lexicon/**",
-            "tests/*",
-            "*_test.py",
-            "test_*.py",
-            "*.sage.py",
-            "src/external/**",
-            "src/backends/external/**",
-            "**/resources/skills/**",
-            "theory/literature/**",
-            "theory/references/literature/**",
-        ],
-    },
 ]
 
 
@@ -173,7 +144,7 @@ def load_toml_dirs(config: Path) -> list[str]:
 
 
 def _build_entries(cfg: ToolConfig, dirs: list[str]) -> list[str]:
-    """Build the full exclude list for one tool: static + TOML-derived."""
+    """Build the full exclude list for one tool from static and configured directories."""
     result = list(cfg["static"])
     fn = cfg["is_dir_fn"]
     omitted = set(cfg.get("omit_dirs", []))
@@ -205,29 +176,6 @@ def write_json_config(qc_root: Path, cfg: ToolConfig, dirs: list[str]) -> None:
     with path.open("w") as f:
         json.dump(data, f, indent=2)
         f.write("\n")
-    print(f"  Updated {cfg['path']} ({len(entries)} entries)")
-
-
-def write_toml_config(qc_root: Path, cfg: ToolConfig, dirs: list[str]) -> None:
-    path = qc_root / cfg["path"]
-    entries = _build_entries(cfg, dirs)
-    document = tomlkit.parse(path.read_text())
-
-    parent = document
-    for key in cfg["key"][:-1]:
-        parent = parent[key]
-    last_key = cfg["key"][-1]
-
-    if list(parent[last_key]) == entries:
-        print(f"  No change: {cfg['path']}")
-        return
-
-    exclude = tomlkit.array()
-    exclude.multiline(True)
-    for entry in entries:
-        exclude.append(entry)
-    parent[last_key] = exclude
-    path.write_text(tomlkit.dumps(document))
     print(f"  Updated {cfg['path']} ({len(entries)} entries)")
 
 
@@ -304,7 +252,6 @@ def _print_dry_run_status() -> None:
 
 _CONFIG_WRITERS = {
     "json": write_json_config,
-    "toml": write_toml_config,
     "yaml": write_yaml_config,
 }
 

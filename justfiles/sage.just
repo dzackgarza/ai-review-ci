@@ -13,7 +13,7 @@
 # WORKFLOW (three-tier):
 #   just test-commit — Sage/Python syntax, normalization, mypy, bypass check.
 #   just test-push   — commit checks, the full Sage test suite, and the cheap
-#                      deterministic gates (vulture, ast-grep, deptry, grain).
+#                      deterministic gates (vulture, ast-grep, deptry).
 #   just test-ci     — push checks plus the threshold metrics (coverage,
 #                      duplication) and the minutes-long import graph.
 
@@ -777,7 +777,6 @@ test-push:
 	just --justfile {{justfile()}} -d . _sage-run-check sage-file-length {{justfile()}} _sage-file-length
 	just --justfile {{justfile()}} -d . _sage-run-check deptry {{justfiles}}/python.just _deptry
 	just --justfile {{justfile()}} -d . _sage-run-check python-ast-grep {{justfiles}}/python.just _ast-grep
-	just --justfile {{justfile()}} -d . _sage-run-check grain {{justfiles}}/python.just _grain
 	echo "Sage push quality checks completed"
 
 _sage-ast-grep:
