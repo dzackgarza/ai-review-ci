@@ -37,7 +37,6 @@ _sage-run-check check_name check_justfile check_recipe check_arg="":
 	if ! git check-ignore --quiet "$output_root/"; then
 		printf '\n.ai-review-ci/\n' >>"$exclude_file"
 	fi
-	: >"$log_path"
 	jq -n \
 		--arg check "{{check_name}}" \
 		--arg diagnostics "$diagnostics_path" \
@@ -50,8 +49,13 @@ _sage-run-check check_name check_justfile check_recipe check_arg="":
 	fi
 	set +e
 	just --justfile "{{check_justfile}}" -d . "{{check_recipe}}" "${check_args[@]}" 2>&1 | tee "$log_path"
-	status=${PIPESTATUS[0]}
+	pipeline_status=("${PIPESTATUS[@]}")
 	set -e
+	status=${pipeline_status[0]}
+	log_status=${pipeline_status[1]}
+	if [ "$log_status" -ne 0 ]; then
+		exit "$log_status"
+	fi
 	if rg --line-number --ignore-case '\b(error|warning|failed|failure)\b' "$log_path" >"$diagnostics_path"; then
 		:
 	else
