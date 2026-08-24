@@ -356,6 +356,82 @@ def test_sage_syntax_uses_tools_from_the_sage_virtual_environment(
     assert result.returncode == 0, output
 
 
+def test_sage_check_runner_replaces_only_the_reached_check_artifacts(
+    tmp_path: pathlib.Path,
+) -> None:
+    project = tmp_path / "sage-project"
+    project.mkdir()
+    fixture_justfile = project / "fixture.just"
+    fixture_justfile.write_text(
+        "check:\n"
+        "    #!/usr/bin/env bash\n"
+        '    echo "$FIXTURE_MESSAGE"\n'
+        '    echo "WARNING: inspect this warning" >&2\n'
+        '    echo "ERROR: inspect this error" >&2\n'
+        '    exit "$FIXTURE_STATUS"\n'
+    )
+    artifacts = project / ".ai-review-ci" / "sage"
+    artifacts.mkdir(parents=True)
+    (artifacts / "unreached.log").write_text("older log\n")
+    (artifacts / "unreached.diagnostics.log").write_text("older diagnostics\n")
+    (artifacts / "unreached.json").write_text('{"status":0}\n')
+
+    first_env = os.environ | {"FIXTURE_MESSAGE": "first run", "FIXTURE_STATUS": "0"}
+    first = subprocess.run(
+        [
+            "just",
+            "--justfile",
+            str(ROOT / "justfiles" / "sage.just"),
+            "-d",
+            str(project),
+            "_sage-run-check",
+            "fixture",
+            str(fixture_justfile),
+            "check",
+        ],
+        cwd=project,
+        env=first_env,
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+    assert first.returncode == 0, first.stdout + first.stderr
+
+    second_env = os.environ | {"FIXTURE_MESSAGE": "second run", "FIXTURE_STATUS": "7"}
+    second = subprocess.run(
+        [
+            "just",
+            "--justfile",
+            str(ROOT / "justfiles" / "sage.just"),
+            "-d",
+            str(project),
+            "_sage-run-check",
+            "fixture",
+            str(fixture_justfile),
+            "check",
+        ],
+        cwd=project,
+        env=second_env,
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+
+    assert second.returncode == 7, second.stdout + second.stderr
+    assert (artifacts / "fixture.log").read_text() == ("second run\nWARNING: inspect this warning\nERROR: inspect this error\n")
+    assert "first run" not in (artifacts / "fixture.log").read_text()
+    assert (artifacts / "fixture.diagnostics.log").read_text() == ("2:WARNING: inspect this warning\n3:ERROR: inspect this error\n")
+    assert json.loads((artifacts / "fixture.json").read_text()) == {
+        "check": "fixture",
+        "diagnostics": ".ai-review-ci/sage/fixture.diagnostics.log",
+        "log": ".ai-review-ci/sage/fixture.log",
+        "status": 7,
+    }
+    assert (artifacts / "unreached.log").read_text() == "older log\n"
+    assert (artifacts / "unreached.diagnostics.log").read_text() == "older diagnostics\n"
+    assert json.loads((artifacts / "unreached.json").read_text()) == {"status": 0}
+
+
 def test_qc_excludes_notebooks_as_user_work() -> None:
     data = tomllib.loads((ROOT / "tool-configs" / "qc-excludes.toml").read_text())
 
