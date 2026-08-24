@@ -33,10 +33,7 @@ _sage-run-check check_name check_justfile check_recipe check_arg="":
 	diagnostics_path="$output_root/{{check_name}}.diagnostics.log"
 	status_path="$output_root/{{check_name}}.json"
 	mkdir -p "$output_root"
-	exclude_file="$(git rev-parse --git-path info/exclude)"
-	if ! git check-ignore --quiet "$output_root/"; then
-		printf '\n.ai-review-ci/\n' >>"$exclude_file"
-	fi
+	printf '*\n' >"${output_root%/sage}/.gitignore"
 	jq -n \
 		--arg check "{{check_name}}" \
 		--arg diagnostics "$diagnostics_path" \
