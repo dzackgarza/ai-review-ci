@@ -67,6 +67,12 @@ class Str(Inline):
 class Space(Inline):
     def __init__(self) -> None: ...
 
+class SoftBreak(Inline):
+    def __init__(self) -> None: ...
+
+class LineBreak(Inline):
+    def __init__(self) -> None: ...
+
 class Emph(Inline):
     def __init__(self, *args: Inline) -> None: ...
 
@@ -91,12 +97,26 @@ class Code(Inline):
 class Link(Inline):
     url: str
     title: str
-    def __init__(self, *args: Inline, url: str = ..., title: str = ...) -> None: ...
+    identifier: str
+    classes: list[str]
+    attributes: dict[str, str]
+    def __init__(
+        self,
+        *args: Inline,
+        url: str = ...,
+        title: str = ...,
+        identifier: str = ...,
+        classes: list[str] = ...,
+        attributes: dict[str, str] = ...,
+    ) -> None: ...
 
 class Image(Inline):
     url: str
     title: str
     def __init__(self, *args: Inline, url: str = ..., title: str = ...) -> None: ...
+
+class Note(Inline):
+    def __init__(self, *args: Block) -> None: ...
 
 class Span(Inline):
     classes: list[str]
@@ -122,6 +142,9 @@ class Caption(Element):
 
 class Figure(Block):
     caption: Caption
+    identifier: str
+    classes: list[str]
+    attributes: dict[str, str]
     def __init__(
         self,
         *args: Block,
