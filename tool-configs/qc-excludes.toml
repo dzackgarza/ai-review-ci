@@ -44,6 +44,7 @@ directories = [
     "dist",
     "build",
     "coverage",
+    ".nyc_output",
     "_ci-support",
     # Developer-only tooling (lint/benchmark scripts), never shipped in the wheel
     # and free to depend on untyped helper libs; not held to product QC.

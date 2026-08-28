@@ -658,3 +658,18 @@ test-ci:
 	just --justfile {{justfile()}} -d . test-push _coverage _diff-cover _knip _biome _ast-grep _eslint _jscpd-bun _lizard-bun _slop-scan
 	just -f {{justfiles}}/shared.just -d . _global-qc
 	echo "CI quality checks completed"
+
+# `_qc.yml` accepts `tier: ambient` and dispatches `just ambient`, so a profile
+# that does not define it fails every scheduled run before any tool starts.
+# QC_TIER=ambient is what the diff-scoped recipes read to widen from the
+# changed files to the whole tree, so the debt surfaces run here unscoped
+# rather than against a base ref a schedule does not have.
+
+# public: AMBIENT audit — full-repo deferred-debt scan, not a PR gate
+ambient:
+	#!/usr/bin/env bash
+	set -euo pipefail
+	export AI_REVIEW_CI_FAILURE_MODE=triage
+	export QC_TIER=ambient
+	just --justfile {{justfile()}} -d . _knip _jscpd-bun _lizard-bun _slop-scan
+	echo "Bun ambient debt audit completed"
