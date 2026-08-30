@@ -101,7 +101,17 @@ jobs:
         # The QC file-discovery recipes (_python-qc-files etc.) shell out to `rg`.
         # Dev machines have it on PATH; a bare runner does not, so install it
         # explicitly — same contract for downstream consumers of this workflow.
-        run: sudo apt-get update && sudo apt-get install -y pandoc ripgrep
+        #
+        # DEBIAN_FRONTEND=noninteractive is passed through sudo, not set on the step:
+        # apt otherwise blocks forever on a conffile or service-restart prompt with
+        # nothing to answer it. Observed on PR #380, where this step sat in_progress
+        # for over twelve hours and did not die when the run was cancelled.
+        # The timeout is the backstop: a package mirror that stalls should fail the
+        # job in minutes, not occupy a runner until the six-hour ceiling.
+        timeout-minutes: 5
+        run: |
+          sudo DEBIAN_FRONTEND=noninteractive apt-get update
+          sudo DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends pandoc ripgrep
 
       - name: Install bun
         # Some QC profiles (and ai-review-ci's own suite) drive JS tooling
