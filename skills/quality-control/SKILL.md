@@ -1,6 +1,6 @@
 ---
 name: quality-control
-description: Use when implementing, understanding, or delegating to the global quality control system in ~/ai-review-ci. Also use when setting up new projects with CI/CD, or when a local [[justfile/SKILL|justfile]] needs to reference global QC recipes.
+description: Global quality control system, review gates, and CI automation.
 ---
 
 # Quality Control System
@@ -29,7 +29,7 @@ A domain skill may narrow these policies for its domain but may not weaken them.
 It may not relax them (e.g., no skill may permit mocks or pytest-mock).
 
 **When a lower-ranked skill contradicts a higher-ranked skill, the higher-ranked skill wins.** If [[test-driven-development/SKILL|test-driven-development]] says "mocks if unavoidable" and [[test-guidelines/SKILL|test-guidelines]] says "no mocks, no exceptions," [[test-guidelines/SKILL|test-guidelines]] wins.
-If [[code-patterns/legacy/clean-code/SKILL|clean-code]] says "start with try/catch" and [[code-patterns/legacy/python-patterns/SKILL|python-patterns]] says "fail fast, no speculative try/catch," [[code-patterns/legacy/python-patterns/SKILL|python-patterns]] (as a domain skill narrowing tool-provisioning's fail-loud doctrine) wins.
+If [[code-patterns/legacy/clean-code/clean-code|clean-code]] says "start with try/catch" and [[code-patterns/legacy/python-patterns/python-patterns|python-patterns]] says "fail fast, no speculative try/catch," [[code-patterns/legacy/python-patterns/python-patterns|python-patterns]] (as a domain skill narrowing tool-provisioning's fail-loud doctrine) wins.
 
 The hierarchy is designed so that no skill below rank 3 can re-introduce mock seams, local QC reimplementation, or global tool installation.
 

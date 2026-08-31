@@ -1,6 +1,6 @@
 ---
 name: fixing-slop
-description: Use when fixing slop identified by [[anti-slop/SKILL|anti-slop]] or [[reviewing-llm-code/SKILL|reviewing-llm-code]] — converting fraudulent artifacts back into correct implementations without laundering. Also use when an agent proposes "renaming to be honest," "deleting the dead code," or any label-only remediation of a slop finding.
+description: Remediate code-quality defects identified by anti-slop and style guides.
 ---
 
 # Fixing Slop
@@ -187,7 +187,7 @@ Remediation machinery scales with the artifact's durability and blast radius, no
 In-place editing reseeds the same slop in cleaner prose.
 Agents do reliable greenfield work and unreliable brownfield work, so the only safe repair is to **force the brownfield job to look like a greenfield job**:
 
-1. **Encode the standard.** The skill that owns the artifact type must already state what a correct and an incorrect such artifact looks like ([[writing/documentation/SKILL|writing-documentation]], the [[plan/SKILL|plan]] skill, etc.). This is the priming, not the contaminated artifact.
+1. **Encode the standard.** The skill that owns the artifact type must already state what a correct and an incorrect such artifact looks like ([[writing/documentation/documentation|writing-documentation]], the [[plan/SKILL|plan]] skill, etc.). This is the priming, not the contaminated artifact.
 2. **Adversarial requirement extraction (fresh agent).** A fresh agent, primed on the owning skill and *not* carrying the correction history, audits the contaminated artifact and extracts only the real, externally-verifiable, user-facing requirements and surviving facts.
    It must verify each surviving claim against inspected reality (code, data, command output, external sources), not against other generated documents.
    Anything that cannot be grounded is dropped, not relabeled.

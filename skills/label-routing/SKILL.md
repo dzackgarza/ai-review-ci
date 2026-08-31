@@ -1,6 +1,6 @@
 ---
 name: label-routing
-description: Use before opening or triaging a GitHub issue or PR on any repo managed by ai-review-ci — routes each issue to the correct canonical label (type / scope / status / area / complexity) and explains the issue-lifecycle labels (epic, work-unit, research, split-from-*, superseded) and the complexity axis (drift risk, for agent-dispatch tiering).
+description: Determine GitHub labels and issue classifications.
 ---
 
 # Label Routing
