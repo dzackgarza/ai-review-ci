@@ -1,6 +1,10 @@
 ---
 name: fixing-slop
-description: Remediate code-quality defects identified by anti-slop and style guides.
+description: "Use when fixing slop identified by [[anti-slop/SKILL|anti-slop]] or\
+  \ [[reviewing-llm-code/SKILL|reviewing-llm-code]] \u2014 converting fraudulent artifacts\
+  \ back into correct implementations without laundering. Also use when an agent proposes\
+  \ \"renaming to be honest,\" \"deleting the dead code,\" or any label-only remediation\
+  \ of a slop finding."
 ---
 
 # Fixing Slop

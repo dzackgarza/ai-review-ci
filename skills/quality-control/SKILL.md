@@ -1,6 +1,8 @@
 ---
 name: quality-control
-description: Global quality control system, review gates, and CI automation.
+description: Use when implementing, understanding, or delegating to the global quality
+  control system in ~/ai-review-ci. Also use when setting up new projects with CI/CD,
+  or when a local [[justfile/SKILL|justfile]] needs to reference global QC recipes.
 ---
 
 # Quality Control System
