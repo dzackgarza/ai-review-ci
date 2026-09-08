@@ -503,7 +503,7 @@ rules:
     languages:
       - rust
     severity: ERROR
-    pattern-regex: .ok()
+    pattern-regex: '\.ok\(\)'
     metadata:
       policy_code: POLICY.NO_ERROR_DISCARD
   - id: rs-no-filter-map-ok
@@ -523,7 +523,7 @@ rules:
     metadata:
       policy_code: POLICY.NO_TYPE_ESCAPE
   - id: rs-no-serde-default
-    pattern: '#[serde(default)]'
+    pattern-regex: '#\s*\[\s*serde\s*\(\s*default\s*\)\s*\]'
     message: POLICY.RUNTIME_DEFAULT
     languages:
       - rust
@@ -531,9 +531,7 @@ rules:
     metadata:
       policy_code: POLICY.RUNTIME_DEFAULT
   - id: rs-no-allow-attr
-    pattern-either:
-      - pattern: '#[allow($ARGS)]'
-      - pattern: '#![allow($ARGS)]'
+    pattern-regex: '#!?\s*\[\s*allow\s*\('
     message: POLICY.NO_QC_SILENCING
     languages:
       - rust
