@@ -65,6 +65,7 @@ _format-structured-text:
 _semgrep-autofix:
 	#!/usr/bin/env bash
 	set -euo pipefail
+	source "{{artifacts}}/scripts/heavy-gate-lock.sh"
 	echo "============================="
 	echo "=== Running: semgrep auto-fix ==="
 	echo "# Applies Semgrep autofixes; CI-tier Semgrep verification owns remaining findings"
@@ -250,6 +251,7 @@ _ensure-qc-repo-current:
 _semgrep:
 	#!/usr/bin/env bash
 	set -euo pipefail
+	source "{{artifacts}}/scripts/heavy-gate-lock.sh"
 	echo "============================="
 	echo "=== Running: semgrep security pattern verification ==="
 	echo "# Static analysis for code quality and fraud patterns after normalization"
@@ -428,6 +430,7 @@ _ast-grep:
 _vibecheck:
 	#!/usr/bin/env bash
 	set -euo pipefail
+	source "{{artifacts}}/scripts/heavy-gate-lock.sh"
 	# Strip git env vars the pre-commit hook inherits from `git commit`; left
 	# set, they redirect uvx's git-sourced tool fetch (vibecheck) at the host
 	# project's .git and it fails with "Git operation failed".
@@ -539,6 +542,7 @@ _vibecheck:
 _slop:
 	#!/usr/bin/env bash
 	set -euo pipefail
+	source "{{artifacts}}/scripts/heavy-gate-lock.sh"
 	# Preflight: verify the ML model file exists (centrally owned artifact)
 	model_file="{{artifacts}}/models/slop_classifier.pkl"
 	if [ ! -f "$model_file" ]; then
@@ -577,6 +581,7 @@ _slop:
 _aislop:
 	#!/usr/bin/env bash
 	set -euo pipefail
+	source "{{artifacts}}/scripts/heavy-gate-lock.sh"
 	echo "============================="
 	echo "=== Running: aislop AI-slop quality scan ==="
 	echo "# Runs scanaislop.com's aislop scanner; blocks on error-severity findings (warnings surface but do not block)"

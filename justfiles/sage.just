@@ -187,6 +187,7 @@ _sage-bin:
 _sage-syntax:
 	#!/usr/bin/env bash
 	set -euo pipefail
+	source "{{artifacts}}/scripts/heavy-gate-lock.sh"
 	echo "============================="
 	echo "=== Running: Sage syntax validation ==="
 	echo "# Preparses .sage files and byte-compiles the generated Python to catch syntax errors early"
@@ -337,6 +338,7 @@ _vulture: _sage-qc-files
 _sage-pytest:
 	#!/usr/bin/env bash
 	set -euo pipefail
+	source "{{artifacts}}/scripts/heavy-gate-lock.sh"
 	echo "============================="
 	echo "=== Running: pytest on Sage test files (preparsed) ==="
 	echo "# Preparses .sage test files so integer literals become Sage Integer/Rational,"
@@ -420,6 +422,7 @@ _sage-pytest:
 _sage-pytest-coverage:
 	#!/usr/bin/env bash
 	set -euo pipefail
+	source "{{artifacts}}/scripts/heavy-gate-lock.sh"
 	echo "============================="
 	echo "=== Running: pytest with coverage under the Sage interpreter ==="
 	echo "# Same preparse flow as _sage-pytest, run under coverage.py inside Sage's"

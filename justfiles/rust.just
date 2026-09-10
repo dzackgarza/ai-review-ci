@@ -124,6 +124,7 @@ _normalize:
 _clippy:
 	#!/usr/bin/env bash
 	set -euo pipefail
+	source "{{artifacts}}/scripts/heavy-gate-lock.sh"
 	echo "============================="
 	echo "=== Running: clippy Rust linting ==="
 	echo "# Runs cargo clippy with deny-level warnings"
@@ -184,6 +185,7 @@ _rustfmt:
 _cargo-test:
 	#!/usr/bin/env bash
 	set -euo pipefail
+	source "{{artifacts}}/scripts/heavy-gate-lock.sh"
 	echo "============================="
 	echo "=== Running: cargo test ==="
 	echo "# Runs Rust unit and integration tests"
@@ -204,6 +206,7 @@ _cargo-test:
 _codeql:
 	#!/usr/bin/env bash
 	set -euo pipefail
+	source "{{artifacts}}/scripts/heavy-gate-lock.sh"
 	echo "============================="
 	echo "=== Running: codeql security analysis (Rust) ==="
 	echo "# GitHub's static analysis engine for code quality and security vulnerabilities"

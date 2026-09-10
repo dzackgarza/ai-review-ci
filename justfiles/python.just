@@ -217,6 +217,7 @@ _doctor-preflight:
 _mypy: _install-tools
 	#!/usr/bin/env bash
 	set -euo pipefail
+	source "{{artifacts}}/scripts/heavy-gate-lock.sh"
 	echo "============================="
 	echo "=== Running: mypy type checking ==="
 	echo "# Checks static typing after syntax validation and before lint/style normalization"
@@ -356,6 +357,7 @@ _normalize: _install-tools
 _pytest: _install-tools
 	#!/usr/bin/env bash
 	set -euo pipefail
+	source "{{artifacts}}/scripts/heavy-gate-lock.sh"
 	echo "============================="
 	echo "=== Running: pytest (push tier — no coverage gate) ==="
 	echo "# Runs the project's own test suite; coverage thresholds are enforced in CI."
@@ -391,6 +393,7 @@ _pytest: _install-tools
 test-gh-boundary: _install-tools
 	#!/usr/bin/env bash
 	set -euo pipefail
+	source "{{artifacts}}/scripts/heavy-gate-lock.sh"
 	echo "============================="
 	echo "=== Running: pytest gh_boundary tests ==="
 	if ! rg --files tests -g 'test_*.py' -g '*_test.py' -g '!*.sage.py' >/dev/null 2>&1; then
@@ -423,6 +426,7 @@ test-gh-boundary: _install-tools
 _pytest_with_coverage: _install-tools
 	#!/usr/bin/env bash
 	set -euo pipefail
+	source "{{artifacts}}/scripts/heavy-gate-lock.sh"
 	echo "============================="
 	echo "=== Running: pytest with coverage measurement ==="
 	echo "# Runs pytest with coverage.py and generates coverage.xml for diff-cover"
@@ -741,6 +745,7 @@ _grain:
 _codeql:
 	#!/usr/bin/env bash
 	set -euo pipefail
+	source "{{artifacts}}/scripts/heavy-gate-lock.sh"
 	echo "============================="
 	echo "=== Running: codeql security analysis ==="
 	echo "# GitHub's static analysis engine for code quality and security vulnerabilities"
