@@ -87,6 +87,35 @@ That analogy is the triage rule: classify every claimed false positive by *whose
 
 The one-line test: *if the fact is about an external framework's dispatch, declare it here once; if the fact is about the downstream repo's own types, the repo fixes its types.*
 
+## First-Party Dependencies Are Not Defects
+
+Every component of this system is bespoke, single-user and pre-launch, and internal
+dependencies are routed through GitHub rather than a package index by design. A requirement
+spelled `name @ git+https://github.com/dzackgarza/...`, or a plugin absent from PyPI, is the
+house pattern working as intended — not an unreleased dependency to be removed, pinned to a
+registry, or vendored.
+
+Generic open-source packaging hygiene does not transfer here. "This package is not
+published", "this depends on an unreleased plugin", and "a shared config references a
+first-party tool" are observations about a deliberate architecture, not findings. Before
+writing any of them up, establish that something actually broke.
+
+**Do not open an issue that names no observed failure.** An issue against QC configuration
+needs the command, the output, and the downstream symptom. Reading a config line and
+inferring a problem from where the package lives is not a finding, and it costs an owner
+the triage that discovers there was never anything to fix.
+
+**Establish that the surface is live before proposing changes to it.** A config file with no
+reference anywhere in this repository injects nothing into any downstream, whatever it
+contains.
+
+Precedent: `#406` proposed removing a first-party Sage mypy plugin from
+`tool-configs/mypy-sage.ini` as an "unreleased" dependency. It recorded no error, no
+reproducer and no downstream symptom; the plugin is a first-party tool correctly sourced
+from git; and `mypy-sage.ini` turned out to be referenced by nothing, so the injection it
+described could not occur. Closed invalid after twelve days open. The live defect on that
+same path, found by running the gate and reading its output, is `#409`.
+
 ## Semgrep Findings
 
 - Separate Semgrep rule provenance from finding ownership.
