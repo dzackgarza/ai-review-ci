@@ -235,30 +235,33 @@ _mypy: _install-tools
 	effective_config="{{configs}}/mypy-global.ini"
 	# Shared stub library, owned here so downstream repos never grow their own.
 	export MYPYPATH="{{infra}}/typings${MYPYPATH:+:$MYPYPATH}"
-	with_args=(--with-editable .)
-	dependency_requirements_output="$(uv run --no-project python "{{artifacts}}/scripts/python_qc_metadata.py" dependency-group-requirements .)"
-	if [ -n "$dependency_requirements_output" ]; then
-		mapfile -t dependency_requirements <<<"$dependency_requirements_output"
-		for requirement in "${dependency_requirements[@]}"; do
-			with_args+=(--with "$requirement")
-		done
-	fi
+	# Run inside the target project's uv environment so workspace/path sources
+	# retain their declared resolution semantics. Dependency groups belong to
+	# that project environment; only script-local PEP 723 dependencies are tool
+	# overlays here.
+	uv_run_args=(--project . --all-groups --with mypy)
 	pep723_requirements_output="$(uv run --no-project python "{{artifacts}}/scripts/python_qc_metadata.py" pep723-requirements "${python_files[@]}")"
 	if [ -n "$pep723_requirements_output" ]; then
 		mapfile -t pep723_requirements <<<"$pep723_requirements_output"
 		for requirement in "${pep723_requirements[@]}"; do
-			with_args+=(--with "$requirement")
+			uv_run_args+=(--with "$requirement")
 		done
 	fi
-	if uvx --python 3.14 --from mypy \
-		"${with_args[@]}" \
-		mypy \
+	if uv run "${uv_run_args[@]}" mypy --version; then
+		:
+	else
+		ec=$?
+		echo "ERROR: mypy environment setup failed before type checking."
+		"{{artifacts}}/scripts/emit-triage-directive.sh"
+		exit $ec
+	fi
+	if uv run "${uv_run_args[@]}" mypy \
 		--config-file "$effective_config" \
 		"${python_files[@]}"; then
 		:
 	else
 		ec=$?
-		echo "ERROR: mypy found type errors in project code."
+		echo "ERROR: mypy type checking failed after mypy started."
 		"{{artifacts}}/scripts/emit-triage-directive.sh"
 		exit $ec
 	fi

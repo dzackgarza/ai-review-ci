@@ -147,6 +147,103 @@ def project_with_sage_file(tmp_path: pathlib.Path) -> pathlib.Path:
     return project
 
 
+def python_mypy_workspace_fixture(tmp_path: pathlib.Path) -> pathlib.Path:
+    project = tmp_path / "python-mypy-workspace"
+    member = project / "native" / "homotopy-python"
+    (project / "src" / "fixture_app").mkdir(parents=True)
+    (member / "src" / "sage_categories_homotopy").mkdir(parents=True)
+    (project / "src" / "fixture_app" / "__init__.py").write_text(
+        "from sage_categories_homotopy import answer\n\n"
+        "def value() -> int:\n    return answer()\n"
+    )
+    (member / "src" / "sage_categories_homotopy" / "__init__.py").write_text(
+        "def answer() -> int:\n    return 1\n"
+    )
+    (member / "src" / "sage_categories_homotopy" / "py.typed").write_text("")
+    (member / "pyproject.toml").write_text(
+        "[project]\n"
+        'name = "sage-categories-homotopy"\n'
+        'version = "0.0.0"\n'
+        'requires-python = ">=3.14"\n\n'
+        "[build-system]\n"
+        'requires = ["hatchling"]\n'
+        'build-backend = "hatchling.build"\n\n'
+        "[tool.hatch.build.targets.wheel]\n"
+        'packages = ["src/sage_categories_homotopy"]\n'
+    )
+    (project / "pyproject.toml").write_text(
+        "[project]\n"
+        'name = "python-mypy-workspace-fixture"\n'
+        'version = "0.0.0"\n'
+        'requires-python = ">=3.14"\n\n'
+        "[dependency-groups]\n"
+        'dev = ["sage-categories-homotopy"]\n\n'
+        "[tool.uv.sources]\n"
+        'sage-categories-homotopy = { workspace = true }\n\n'
+        "[tool.uv.workspace]\n"
+        'members = ["native/homotopy-python"]\n\n'
+        "[build-system]\n"
+        'requires = ["hatchling"]\n'
+        'build-backend = "hatchling.build"\n\n'
+        "[tool.hatch.build.targets.wheel]\n"
+        'packages = ["src/fixture_app"]\n'
+    )
+    init_git_repo(project)
+    assert run_git(project, "add", ".").returncode == 0
+    commit_without_hooks(project, "baseline")
+    source = project / "src" / "fixture_app" / "__init__.py"
+    source.write_text(
+        "from sage_categories_homotopy import answer\n\n"
+        "def value() -> int:\n    return answer() + 1\n"
+    )
+    assert run_git(project, "add", str(source.relative_to(project))).returncode == 0
+    return project
+
+
+def test_python_mypy_honors_target_uv_workspace(tmp_path: pathlib.Path) -> None:
+    project = python_mypy_workspace_fixture(tmp_path)
+
+    result = run_just(ROOT / "justfiles" / "python.just", project, "_mypy")
+
+    output = result.stdout + result.stderr
+    assert result.returncode == 0, output
+    assert "Success: no issues found" in output
+
+
+def test_mypy_resolution_failure_is_not_reported_as_type_errors(tmp_path: pathlib.Path) -> None:
+    project = tmp_path / "broken-mypy-project"
+    (project / "src" / "broken_fixture").mkdir(parents=True)
+    (project / "src" / "broken_fixture" / "__init__.py").write_text(
+        "def value() -> int:\n    return 1\n"
+    )
+    (project / "pyproject.toml").write_text(
+        "[project]\n"
+        'name = "broken-mypy-project"\n'
+        'version = "0.0.0"\n'
+        'requires-python = ">=3.14"\n\n'
+        "[dependency-groups]\n"
+        'dev = ["ai-review-ci-package-that-does-not-exist-anywhere"]\n\n'
+        "[build-system]\n"
+        'requires = ["hatchling"]\n'
+        'build-backend = "hatchling.build"\n\n'
+        "[tool.hatch.build.targets.wheel]\n"
+        'packages = ["src/broken_fixture"]\n'
+    )
+    init_git_repo(project)
+    assert run_git(project, "add", ".").returncode == 0
+    commit_without_hooks(project, "baseline")
+    source = project / "src" / "broken_fixture" / "__init__.py"
+    source.write_text("def value() -> int:\n    return 2\n")
+    assert run_git(project, "add", str(source.relative_to(project))).returncode == 0
+
+    result = run_just(ROOT / "justfiles" / "python.just", project, "_mypy")
+
+    output = result.stdout + result.stderr
+    assert result.returncode != 0, output
+    assert "mypy environment setup failed before type checking" in output
+    assert "mypy found type errors in project code" not in output
+
+
 def test_lean_push_gate_propagates_target_axiom_audit_failure(tmp_path: pathlib.Path) -> None:
     """The shared gate must run the target's explicit audit command at its root."""
     project = tmp_path / "lean-project"
