@@ -2894,6 +2894,14 @@ def test_tsc_fails_when_declared_typecheck_command_is_missing(
     assert TRIAGE_MARKER in output
 
 
+def test_sage_commit_selects_the_sage_mypy_profile() -> None:
+    sage = (ROOT / "justfiles" / "sage.just").read_text()
+    python = (ROOT / "justfiles" / "python.just").read_text()
+
+    assert 'AI_REVIEW_CI_MYPY_CONFIG="{{configs}}/mypy-sage.ini"' in sage
+    assert 'AI_REVIEW_CI_MYPY_CONFIG:-{{configs}}/mypy-global.ini' in python
+
+
 def test_pytest_installs_dependency_group_requirements(
     tmp_path: pathlib.Path,
 ) -> None:

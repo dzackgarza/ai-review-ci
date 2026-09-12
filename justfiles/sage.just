@@ -539,7 +539,7 @@ test-commit:
 	just --justfile {{justfile()}} -d . _doctor-preflight _sage-preflight _normalize-common _sage-syntax
 	python_qc_repo="{{justfiles}}/python.just"
 	python_qc_recipes=(_normalize _python-syntax _mypy)
-	just -f "$python_qc_repo" -d . "${python_qc_recipes[@]}"
+	AI_REVIEW_CI_MYPY_CONFIG="{{configs}}/mypy-sage.ini" just -f "$python_qc_repo" -d . "${python_qc_recipes[@]}"
 	just -f {{justfiles}}/shared.just -d . _no-bypass
 	echo "Sage commit quality checks completed"
 

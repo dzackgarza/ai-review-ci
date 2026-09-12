@@ -230,7 +230,7 @@ _mypy: _install-tools
 		echo "mypy: no changed Python files."
 		exit 0
 	fi
-	effective_config="{{configs}}/mypy-global.ini"
+	effective_config="${AI_REVIEW_CI_MYPY_CONFIG:-{{configs}}/mypy-global.ini}"
 	with_args=(--with-editable .)
 	dependency_requirements_output="$(uv run --no-project python "{{artifacts}}/scripts/python_qc_metadata.py" dependency-group-requirements .)"
 	if [ -n "$dependency_requirements_output" ]; then

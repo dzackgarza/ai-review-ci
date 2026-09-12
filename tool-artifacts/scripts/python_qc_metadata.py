@@ -172,6 +172,37 @@ def import_linter_config(project_root: Path) -> str | None:
 
 def dependency_group_requirements(project_root: Path) -> list[str]:
     pyproject = _load_pyproject(project_root)
+    tool = pyproject.get("tool", {})
+    uv = tool.get("uv", {}) if isinstance(tool, dict) else {}
+    sources = uv.get("sources", {}) if isinstance(uv, dict) else {}
+    workspace = uv.get("workspace", {}) if isinstance(uv, dict) else {}
+    members = workspace.get("members", ()) if isinstance(workspace, dict) else ()
+    workspace_projects: dict[str, Path] = {}
+    if isinstance(members, list):
+        for member in members:
+            if not isinstance(member, str):
+                continue
+            member_root = project_root / member
+            member_pyproject = _load_pyproject(member_root)
+            project = member_pyproject.get("project", {})
+            name = project.get("name") if isinstance(project, dict) else None
+            if isinstance(name, str) and name:
+                workspace_projects[name.replace("_", "-").lower()] = member_root
+
+    def resolve_workspace_requirement(requirement: str) -> str:
+        name = requirement.split(";", 1)[0].strip()
+        for separator in (" @ ", "[", "<", ">", "=", "!", "~"):
+            if separator in name:
+                name = name.split(separator, 1)[0].strip()
+        normalized = name.replace("_", "-").lower()
+        source = sources.get(name, sources.get(normalized)) if isinstance(sources, dict) else None
+        if not (isinstance(source, dict) and source.get("workspace") is True):
+            return requirement
+        member_root = workspace_projects.get(normalized)
+        if member_root is None:
+            raise AssertionError(f"workspace source {name!r} has no matching project member")
+        return f"{name} @ {member_root.resolve().as_uri()}"
+
     groups = pyproject.get("dependency-groups")
     if groups is None:
         return []
@@ -189,7 +220,7 @@ def dependency_group_requirements(project_root: Path) -> list[str]:
         for index, item in enumerate(group):
             if isinstance(item, str):
                 assert item, f"dependency-groups.{group_name}[{index}] must be non-empty"
-                requirements.append(item)
+                requirements.append(resolve_workspace_requirement(item))
             elif isinstance(item, dict):
                 include = cast("dict[str, object]", item)
                 assert set(include) == {"include-group"}, f"dependency-groups.{group_name}[{index}] must be an include-group table"
