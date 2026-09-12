@@ -24,10 +24,10 @@ artifacts := infra / "tool-artifacts"
 _format-structured-text:
 	#!/usr/bin/env bash
 	set -euo pipefail
-	# Strip git env vars the pre-commit hook inherits from `git commit`; left
-	# set, they redirect uvx's git-sourced tool fetch (flowmark) at the host
-	# project's .git and it fails with "Git operation failed".
-	unset GIT_DIR GIT_INDEX_FILE GIT_WORK_TREE GIT_PREFIX GIT_OBJECT_DIRECTORY GIT_ALTERNATE_OBJECT_DIRECTORIES GIT_COMMON_DIR
+	# Keep GIT_INDEX_FILE through staged-file discovery: pathspec commits provide
+	# a temporary commit index, and selecting from the shared index would format
+	# unrelated sibling-staged files. Repository-location Git variables are
+	# cleared only after the commit input list has been captured below.
 	echo "============================="
 	echo "=== Running: structured text formatting ==="
 	echo "# Formats Markdown (flowmark), JSON, and YAML (prettier) before agents spend time on whitespace"
@@ -50,6 +50,10 @@ _format-structured-text:
 			*.json|*.jsonc|*.yaml|*.yml) data_files+=("$file") ;;
 		esac
 	done < <(git diff --cached --name-only --diff-filter=ACMR -z)
+	# git-sourced uvx tools must not inherit repository-location variables: they
+	# can otherwise redirect their own fetch at the host repository and fail.
+	# The selected file lists above already preserve the temporary commit index.
+	unset GIT_DIR GIT_INDEX_FILE GIT_WORK_TREE GIT_PREFIX GIT_OBJECT_DIRECTORY GIT_ALTERNATE_OBJECT_DIRECTORIES GIT_COMMON_DIR
 	if [ "${#md_files[@]}" -eq 0 ] && [ "${#data_files[@]}" -eq 0 ]; then
 		echo "No staged Markdown, JSON, or YAML files found"
 		exit 0
