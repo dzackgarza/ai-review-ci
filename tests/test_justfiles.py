@@ -942,6 +942,77 @@ def test_common_normalization_formats_structured_text(
     assert json_file.read_text() == '{ "b": 2, "a": 1 }\n'
 
 
+
+def test_structured_text_formatter_preserves_temporary_commit_index(
+    tmp_path: pathlib.Path,
+) -> None:
+    project = tmp_path / "project"
+    project.mkdir()
+    mine = project / "mine.md"
+    sibling = project / "sibling.md"
+    mine.write_text("# Mine\n\n- base\n")
+    sibling.write_text("# Sibling\n\n- base\n")
+    subprocess.run(["git", "init", "-q"], cwd=project, check=True)
+    subprocess.run(["git", "config", "user.name", "Test"], cwd=project, check=True)
+    subprocess.run(["git", "config", "user.email", "test@example.invalid"], cwd=project, check=True)
+    subprocess.run(["git", "add", "mine.md", "sibling.md"], cwd=project, check=True)
+    subprocess.run(
+        ["git", "-c", "core.hooksPath=/dev/null", "commit", "-q", "-m", "base"],
+        cwd=project,
+        check=True,
+    )
+
+    # Another stream owns sibling.md and has its unformatted change staged in
+    # the shared index.
+    sibling.write_text("# Sibling\n\n-   sibling item\n")
+    subprocess.run(["git", "add", "sibling.md"], cwd=project, check=True)
+
+    # The current pathspec commit owns only mine.md. Model Git's temporary
+    # commit index explicitly: start at HEAD, then stage mine.md there only.
+    mine.write_text("# Mine\n\n-   mine item\n")
+    temporary_index = tmp_path / "commit-index"
+    env = os.environ.copy()
+    env["GIT_INDEX_FILE"] = str(temporary_index)
+    subprocess.run(["git", "read-tree", "HEAD"], cwd=project, env=env, check=True)
+    subprocess.run(["git", "add", "mine.md"], cwd=project, env=env, check=True)
+
+    result = subprocess.run(
+        [
+            "just",
+            "--justfile",
+            str(ROOT / "justfiles" / "shared.just"),
+            "-d",
+            str(project),
+            "_format-structured-text",
+        ],
+        cwd=project,
+        env=env,
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+
+    output = result.stdout + result.stderr
+    assert result.returncode == 0, output
+    assert mine.read_text() == "# Mine\n\n- mine item\n"
+    assert sibling.read_text() == "# Sibling\n\n-   sibling item\n"
+    assert subprocess.run(
+        ["git", "show", ":mine.md"],
+        cwd=project,
+        env=env,
+        text=True,
+        capture_output=True,
+        check=True,
+    ).stdout == "# Mine\n\n- mine item\n"
+    assert subprocess.run(
+        ["git", "diff", "--cached", "--name-only"],
+        cwd=project,
+        text=True,
+        capture_output=True,
+        check=True,
+    ).stdout.splitlines() == ["sibling.md"]
+
+
 def load_lint_staged_config() -> dict[str, list[str]]:
     result = subprocess.run(
         [
