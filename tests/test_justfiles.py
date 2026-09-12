@@ -2900,6 +2900,7 @@ def test_sage_commit_selects_the_sage_mypy_profile() -> None:
 
     assert 'AI_REVIEW_CI_MYPY_CONFIG="{{configs}}/mypy-sage.ini"' in sage
     assert 'AI_REVIEW_CI_MYPY_CONFIG:-{{configs}}/mypy-global.ini' in python
+    assert "mypy_path = typings" in (ROOT / "tool-configs" / "mypy-sage.ini").read_text()
 
 
 def test_pytest_installs_dependency_group_requirements(
