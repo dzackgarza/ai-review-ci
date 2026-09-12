@@ -44,3 +44,4 @@ ignore = ["E741", "UP049"]  # see planning/README.md for justification
 
 # Enforce strictness: fix everything
 fixable = ["ALL"]
+unfixable = ["SIM401", "PERF102"]
