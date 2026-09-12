@@ -24,10 +24,12 @@ artifacts := infra / "tool-artifacts"
 _format-structured-text:
 	#!/usr/bin/env bash
 	set -euo pipefail
-	# Strip git env vars the pre-commit hook inherits from `git commit`; left
-	# set, they redirect uvx's git-sourced tool fetch (flowmark) at the host
-	# project's .git and it fails with "Git operation failed".
-	unset GIT_DIR GIT_INDEX_FILE GIT_WORK_TREE GIT_PREFIX GIT_OBJECT_DIRECTORY GIT_ALTERNATE_OBJECT_DIRECTORIES GIT_COMMON_DIR
+	# Preserve GIT_INDEX_FILE: pathspec commits provide a temporary commit index,
+	# and both staged-file selection and formatter re-staging must target that
+	# snapshot rather than the shared index. Repository-location variables are
+	# still cleared for Git commands; GIT_INDEX_FILE is stripped only from the
+	# external formatter subprocesses whose git-sourced tool fetches reject it.
+	unset GIT_DIR GIT_WORK_TREE GIT_PREFIX GIT_OBJECT_DIRECTORY GIT_ALTERNATE_OBJECT_DIRECTORIES GIT_COMMON_DIR
 	echo "============================="
 	echo "=== Running: structured text formatting ==="
 	echo "# Formats Markdown (flowmark), JSON, and YAML (prettier) before agents spend time on whitespace"
@@ -55,11 +57,15 @@ _format-structured-text:
 		exit 0
 	fi
 	if [ "${#md_files[@]}" -gt 0 ]; then
-		uvx --from 'git+https://github.com/dzackgarza/flowmark.git' flowmark \
+		env -u GIT_INDEX_FILE uvx --from 'git+https://github.com/dzackgarza/flowmark.git' flowmark \
 			--inplace --nobackup --semantic --no-respect-gitignore "${md_files[@]}"
 	fi
 	if [ "${#data_files[@]}" -gt 0 ]; then
-		npx -y prettier --write --config {{configs}}/prettier-global.json "${data_files[@]}"
+		env -u GIT_INDEX_FILE npx -y prettier --write --config {{configs}}/prettier-global.json "${data_files[@]}"
+	fi
+	formatted_files=("${md_files[@]}" "${data_files[@]}")
+	if [ "${#formatted_files[@]}" -gt 0 ]; then
+		git add -- "${formatted_files[@]}"
 	fi
 
 _semgrep-autofix:
