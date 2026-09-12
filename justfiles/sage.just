@@ -11,8 +11,8 @@
 #   _sage-qc-files, _sage-syntax, _vulture, _sage-ast-grep (Sage-aware preparse)
 #
 # WORKFLOW (three-tier):
-#   just test-commit — Sage/Python syntax, normalization, mypy, bypass check.
-#   just test-push   — commit checks plus the full Sage test suite.
+#   just test-commit — Sage/Python syntax, normalization, bypass check.
+#   just test-push   — commit checks plus mypy and the full Sage test suite.
 #   just test-ci     — push checks plus coverage and policy-sensitive gates.
 
 infra := justfile_directory() / ".."
@@ -55,8 +55,8 @@ setup:
 	@echo "   The package must be importable there (PYTHONPATH via .envrc, or"
 	@echo "   installed into Sage's python)."
 	@echo ""
-	@echo "6. Gates: pre-commit runs 'just test-commit' (syntax and mypy);"
-	@echo "   pre-push runs 'just test-push' (adds Sage tests); CI runs 'just test-ci'."
+	@echo "6. Gates: pre-commit runs 'just test-commit' (syntax and normalization);"
+	@echo "   pre-push runs 'just test-push' (adds mypy and Sage tests); CI runs 'just test-ci'."
 	@echo "   Commit/push failures are direct repair; CI policy findings are triaged."
 
 _sage-qc-files:
@@ -538,8 +538,8 @@ test-commit:
 	export AI_REVIEW_CI_FAILURE_MODE=direct
 	just --justfile {{justfile()}} -d . _doctor-preflight _sage-preflight _normalize-common _sage-syntax
 	python_qc_repo="{{justfiles}}/python.just"
-	python_qc_recipes=(_normalize _python-syntax _mypy)
-	AI_REVIEW_CI_MYPY_CONFIG="{{configs}}/mypy-sage.ini" just -f "$python_qc_repo" -d . "${python_qc_recipes[@]}"
+	python_qc_recipes=(_normalize _python-syntax)
+	just -f "$python_qc_repo" -d . "${python_qc_recipes[@]}"
 	just -f {{justfiles}}/shared.just -d . _no-bypass
 	echo "Sage commit quality checks completed"
 
@@ -548,7 +548,9 @@ test-push:
 	#!/usr/bin/env bash
 	set -euo pipefail
 	export AI_REVIEW_CI_FAILURE_MODE=direct
-	just --justfile {{justfile()}} -d . test-commit _sage-pytest
+	just --justfile {{justfile()}} -d . test-commit
+	AI_REVIEW_CI_MYPY_CONFIG="{{configs}}/mypy-sage.ini" just -f {{justfiles}}/python.just -d . _mypy
+	just --justfile {{justfile()}} -d . _sage-pytest
 	echo "Sage push quality checks completed"
 
 _sage-ast-grep:

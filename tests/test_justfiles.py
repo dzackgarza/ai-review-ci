@@ -2894,11 +2894,16 @@ def test_tsc_fails_when_declared_typecheck_command_is_missing(
     assert TRIAGE_MARKER in output
 
 
-def test_sage_commit_selects_the_sage_mypy_profile() -> None:
+def test_sage_push_selects_the_sage_mypy_profile() -> None:
     sage = (ROOT / "justfiles" / "sage.just").read_text()
     python = (ROOT / "justfiles" / "python.just").read_text()
+    commit = sage.split("test-commit:", 1)[1].split("test-push:", 1)[0]
+    push = sage.split("test-push:", 1)[1].split("_sage-ast-grep:", 1)[0]
 
-    assert 'AI_REVIEW_CI_MYPY_CONFIG="{{configs}}/mypy-sage.ini"' in sage
+    assert "_mypy" not in commit
+    assert 'AI_REVIEW_CI_MYPY_CONFIG="{{configs}}/mypy-sage.ini"' in push
+    assert "_mypy" in push
+    assert "_sage-pytest" in push
     assert 'AI_REVIEW_CI_MYPY_CONFIG:-{{configs}}/mypy-global.ini' in python
     assert "mypy_path = typings" in (ROOT / "tool-configs" / "mypy-sage.ini").read_text()
 
