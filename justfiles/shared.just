@@ -85,20 +85,30 @@ _semgrep-autofix:
 	done
 	exclude_args+=("--exclude=*.html")
 	exclude_args+=("--exclude=**/*.html")
+	# This gate applies autofixes; CI-tier verification owns the remaining findings, so
+	# printing them here is advisory output the caller cannot act on. Measured at 177 lines
+	# and 8.4 KB per run in one repository — on every commit, in every repository. Agent
+	# callers carry that into their conversation, so capture it and print a summary instead,
+	# replaying the whole thing only when the scan actually fails.
+	scan_log="$(mktemp -t semgrep-autofix.XXXXXX)"
+	trap 'rm -f -- "$scan_log"' EXIT
 	if uvx --from semgrep semgrep scan \
 		--config={{configs}}/semgrep.yml \
 		--config=p/ci \
 		--exclude=codeql-db \
 		"${exclude_args[@]}" \
 		--scan-unknown-extensions \
-		--autofix; then
-		:
+		--autofix >"$scan_log" 2>&1; then
+		grep -E '^(Ran [0-9]+ rules|.*files? (modified|left unchanged) by autofix)' "$scan_log" || true
+		findings="$(grep -cE '^\s+❯❯❱ ' "$scan_log" || true)"
+		echo "semgrep autofix: ${findings:-0} advisory finding group(s); CI-tier verification owns them"
 	else
 		ec=$?
 		echo ""
 		echo "!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!"
 		echo "  ERROR: semgrep auto-fix failed to run."
 		echo "  Fix the QC tooling or Semgrep invocation before rerunning project checks."
+		cat "$scan_log"
 		echo "!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!"
 		"{{artifacts}}/scripts/emit-triage-directive.sh"
 		exit $ec
