@@ -205,7 +205,7 @@ _sage-syntax:
 	sage_bin="$(just --justfile {{justfile()}} -d . _sage-bin)"
 
 	sage_preparse_dir="$(mktemp -d "${TMPDIR:-/tmp}/qc-sage-syntax.XXXXXX")"
-	trap 'if [ -e "$sage_preparse_dir" ]; then gio trash "$sage_preparse_dir"; fi' EXIT
+	trap 'if [ -e "$sage_preparse_dir" ]; then rm -rf -- "$sage_preparse_dir"; fi' EXIT
 	echo "# Preparsing and compiling ${#sage_files[@]} Sage file(s)"
 	copied_sage_files=()
 	compile_args=()
@@ -306,7 +306,7 @@ _vulture: _sage-qc-files
 		sage_bin="$(just --justfile {{justfile()}} -d . _sage-bin)"
 
 		sage_preparse_dir="$(mktemp -d "${TMPDIR:-/tmp}/qc-vulture-sage.XXXXXX")"
-		trap 'if [ -e "$sage_preparse_dir" ]; then gio trash "$sage_preparse_dir"; fi' EXIT
+		trap 'if [ -e "$sage_preparse_dir" ]; then rm -rf -- "$sage_preparse_dir"; fi' EXIT
 		echo "# Preparsing ${#sage_files[@]} Sage file(s) for vulture"
 		copied_sage_files=()
 		for sage_file in "${sage_files[@]}"; do
@@ -378,7 +378,7 @@ _sage-pytest:
 
 	if [ "${#sage_test_files[@]}" -gt 0 ]; then
 		sage_preparse_dir="$(mktemp -d "${TMPDIR:-/tmp}/qc-sage-pytest.XXXXXX")"
-		trap 'if [ -e "$sage_preparse_dir" ]; then gio trash "$sage_preparse_dir"; fi' EXIT
+		trap 'if [ -e "$sage_preparse_dir" ]; then rm -rf -- "$sage_preparse_dir"; fi' EXIT
 
 		echo "# Preparsing ${#sage_test_files[@]} .sage test file(s)"
 		for sage_file in "${sage_test_files[@]}"; do
@@ -458,7 +458,7 @@ _sage-pytest-coverage:
 	pytest_args=()
 	if [ "${#sage_test_files[@]}" -gt 0 ]; then
 		sage_preparse_dir="$(mktemp -d "${TMPDIR:-/tmp}/qc-sage-cov.XXXXXX")"
-		trap 'if [ -e "$sage_preparse_dir" ]; then gio trash "$sage_preparse_dir"; fi' EXIT
+		trap 'if [ -e "$sage_preparse_dir" ]; then rm -rf -- "$sage_preparse_dir"; fi' EXIT
 		echo "# Preparsing ${#sage_test_files[@]} .sage test file(s)"
 		for sage_file in "${sage_test_files[@]}"; do
 			target="$sage_preparse_dir/$sage_file"
@@ -582,7 +582,7 @@ _sage-ast-grep:
 		sage_bin="$(just --justfile {{justfile()}} -d . _sage-bin)"
 
 		sage_preparse_dir="$(mktemp -d "${TMPDIR:-/tmp}/qc-astgrep-sage.XXXXXX")"
-		trap 'if [ -e "$sage_preparse_dir" ]; then gio trash "$sage_preparse_dir"; fi' EXIT
+		trap 'if [ -e "$sage_preparse_dir" ]; then rm -rf -- "$sage_preparse_dir"; fi' EXIT
 		echo "# Preparsing ${#sage_files[@]} Sage file(s) for ast-grep"
 		copied_sage_files=()
 		for sage_file in "${sage_files[@]}"; do
@@ -607,7 +607,7 @@ _sage-ast-grep:
 	fi
 
 	findings_file=$(mktemp)
-	trap 'if [ -e "$findings_file" ]; then rm -f "$findings_file"; fi; if [ -e "${sage_preparse_dir:-}" ]; then gio trash "$sage_preparse_dir"; fi' EXIT
+	trap 'if [ -e "$findings_file" ]; then rm -f "$findings_file"; fi; if [ -e "${sage_preparse_dir:-}" ]; then rm -rf -- "$sage_preparse_dir"; fi' EXIT
 	npx -y --package @ast-grep/cli ast-grep scan \
 		--config {{configs}}/sage-sgconfig.yml \
 		--report-style short \

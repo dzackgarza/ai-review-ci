@@ -312,6 +312,54 @@ def test_sage_recipes_require_configured_executable_sage_path(
     assert TRIAGE_MARKER in output
 
 
+def test_sage_syntax_cleanup_removes_owned_tempdir_without_desktop_trash(
+    tmp_path: pathlib.Path,
+) -> None:
+    project = project_with_sage_file(tmp_path)
+    scratch = tmp_path / "scratch"
+    scratch.mkdir()
+    shim_dir = tmp_path / "shim"
+    shim_dir.mkdir()
+
+    sage_bin = shim_dir / "sage"
+    sage_bin.write_text(
+        '#!/usr/bin/env bash\n'
+        'set -euo pipefail\n'
+        'if [ "${1:-}" = --preparse ]; then\n'
+        '    shift\n'
+        '    for source in "$@"; do cp "$source" "$source.py"; done\n'
+        'elif [ "${1:-}" = -python ]; then\n'
+        '    shift\n'
+        '    exec python3 "$@"\n'
+        'else\n'
+        '    exit 64\n'
+        'fi\n'
+    )
+    sage_bin.chmod(0o755)
+
+    gio_log = tmp_path / "gio-called"
+    gio = shim_dir / "gio"
+    gio.write_text(
+        '#!/usr/bin/env bash\n'
+        "printf '%s\\n' \"$*\" >> \"$GIO_LOG\"\n"
+        'exit 91\n'
+    )
+    gio.chmod(0o755)
+
+    env = os.environ | {
+        "SAGE_BIN": str(sage_bin),
+        "TMPDIR": str(scratch),
+        "GIO_LOG": str(gio_log),
+        "PATH": f"{shim_dir}:{os.environ['PATH']}",
+    }
+    result = run_just(ROOT / "justfiles" / "sage.just", project, "_sage-syntax", env=env)
+
+    output = result.stdout + result.stderr
+    assert result.returncode == 0, output
+    assert not gio_log.exists(), output
+    assert list(scratch.glob("qc-sage-syntax.*")) == []
+
+
 def test_qc_excludes_notebooks_as_user_work() -> None:
     data = tomllib.loads((ROOT / "tool-configs" / "qc-excludes.toml").read_text())
 
