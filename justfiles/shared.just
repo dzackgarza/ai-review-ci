@@ -46,6 +46,7 @@ _format-structured-text:
 	while IFS= read -r -d '' file; do
 		case "$file" in
 			AGENTS.md|*/AGENTS.md) ;;
+			assets/attachments/extracted/*|assets/attachments/*_extracted.md) ;;
 			*.md|*.markdown) md_files+=("$file") ;;
 			*.json|*.jsonc|*.yaml|*.yml) data_files+=("$file") ;;
 		esac

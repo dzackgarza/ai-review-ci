@@ -825,6 +825,46 @@ def test_common_normalization_formats_structured_text(
     assert json_file.read_text() == '{ "b": 2, "a": 1 }\n'
 
 
+def test_structured_text_formatting_preserves_raw_pdf_extractions(
+    tmp_path: pathlib.Path,
+) -> None:
+    project = tmp_path / "project"
+    project.mkdir()
+    authored = project / "README.md"
+    extracted_dir = project / "assets" / "attachments" / "extracted"
+    extracted_dir.mkdir(parents=True)
+    raw_nested = extracted_dir / "exam.md"
+    raw_legacy = extracted_dir.parent / "exam_extracted.md"
+
+    authored.write_text("# Title\n\n-   item\n")
+    raw = "fraction layout:\n  1\n-----\n  x\n"
+    raw_nested.write_text(raw)
+    raw_legacy.write_text(raw)
+    subprocess.run(["git", "init", "-q"], cwd=project, check=True)
+    subprocess.run(["git", "add", "."], cwd=project, check=True)
+
+    result = subprocess.run(
+        [
+            "just",
+            "--justfile",
+            str(ROOT / "justfiles" / "shared.just"),
+            "-d",
+            str(project),
+            "_format-structured-text",
+        ],
+        cwd=project,
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+
+    output = result.stdout + result.stderr
+    assert result.returncode == 0, output
+    assert authored.read_text() == "# Title\n\n- item\n"
+    assert raw_nested.read_text() == raw
+    assert raw_legacy.read_text() == raw
+
+
 def test_structured_text_formatting_respects_temporary_commit_index(
     tmp_path: pathlib.Path,
 ) -> None:
