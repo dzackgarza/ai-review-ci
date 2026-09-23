@@ -147,3 +147,23 @@ The commit hook runs flowmark, prettier and biome on staged Markdown, JSON and
 TypeScript and leaves the reformatted files unstaged. The commit contains the
 pre-format content; the working tree holds the formatted one. Run `just test-commit`
 before `git add`, or expect a second formatting-only commit.
+
+## 8. Build output that git must never see
+
+`tsc` writes `tsconfig.tsbuildinfo` next to any tsconfig that has `composite` or
+`incremental` set, and a `git add` of a directory picks it up. Semgrep scans tracked files
+regardless of extension, so a tracked `.tsbuildinfo` reports Rust-rule findings such as
+`rs-no-result-ok` on its JSON. Ignore `*.tsbuildinfo`, `coverage/`, `lcov.info`, `dist/`,
+`.output/` and `.wxt/` before the first commit, and stage files by name.
+
+## 9. The slop reviewer files threads on stubs
+
+The `slop / review` check posts inline review threads, and the `thread-resolution` check
+fails while any thread is unresolved. On a scaffold PR the reviewer flags every stub
+entrypoint as a "hollow facade". Each thread needs a visible reply carrying the
+disposition fields (claim disposition, remediation disposition, policy basis, action
+taken, audit anchor), then `resolveReviewThread` through the GraphQL API, and a top-level
+PR comment titled `Review feedback disposition ledger` for every rejected or modified
+thread. Silent resolution is banned by the review guidelines and the gate does not accept
+it. `gh pr checks` cannot read these repos with the personal token; use
+`gh api graphql` to list `reviewThreads` and `gh run view --log-failed` for the gate text.
