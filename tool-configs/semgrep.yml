@@ -123,6 +123,15 @@ rules:
           - pattern-regex: expect\([^\n]*\.status\(\)\)\.toBe\(200\);\s*\n\s*\}\);
     metadata:
       policy_code: POLICY.NO_EXACT_STRING_PROOF
+  - id: ts-no-console-error
+    pattern: console.error(...)
+    message: POLICY.NO_ERROR_DISCARD
+    languages:
+      - typescript
+      - javascript
+    severity: ERROR
+    metadata:
+      policy_code: POLICY.NO_ERROR_DISCARD
   - id: rust-silenced-result
     pattern: let _ = $EXPR;
     message: POLICY.NO_ERROR_DISCARD
