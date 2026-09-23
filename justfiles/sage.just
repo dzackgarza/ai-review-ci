@@ -433,11 +433,10 @@ _sage-pytest:
 	#!/usr/bin/env bash
 	set -euo pipefail
 	echo "============================="
-	echo "=== Running: pytest on Sage test files (preparsed) ==="
-	echo "# Preparses .sage test files so integer literals become Sage Integer/Rational,"
-	echo "# then runs pytest on the generated .py files."
+	echo "=== Running: pytest on Sage test files ==="
+	echo "# Collects .sage tests in place as Sage scripts (qc_sage_session), so the"
+	echo "# project's conftests and pytest configuration apply."
 	sage_python="$(just --justfile {{justfile()}} -d . _sage-python)"
-	sage_preparse="$(just --justfile {{justfile()}} -d . _sage-preparse-bin)"
 
 	# Collect only files owned by this repository; the shared discovery boundary
 	# excludes gitlinks and independently initialized nested repositories.
@@ -468,41 +467,12 @@ _sage-pytest:
 		exit 1
 	fi
 
-	pytest_args=()
-
-	if [ "${#sage_test_files[@]}" -gt 0 ]; then
-		sage_preparse_dir="$(mktemp -d "${TMPDIR:-/tmp}/qc-sage-pytest.XXXXXX")"
-		trap 'if [ -e "$sage_preparse_dir" ]; then gio trash "$sage_preparse_dir"; fi' EXIT
-
-		echo "# Preparsing ${#sage_test_files[@]} .sage test file(s)"
-		for sage_file in "${sage_test_files[@]}"; do
-			target="$sage_preparse_dir/$sage_file"
-			mkdir -p "$(dirname "$target")"
-			cp "$sage_file" "$target"
-		done
-		(
-			cd "$sage_preparse_dir"
-			"$sage_python" "$sage_preparse" "${sage_test_files[@]}" >/dev/null
-		)
-		for sage_file in "${sage_test_files[@]}"; do
-			generated="$sage_preparse_dir/${sage_file}.py"
-			if [ ! -f "$generated" ]; then
-				echo "ERROR: Sage preparser did not produce $generated for $sage_file"
-				"{{artifacts}}/scripts/emit-triage-directive.sh"
-				exit 1
-			fi
-			# foo.sage.py is not an importable module name for pytest
-			# (the extra dot breaks module resolution); strip the .sage.
-			importable="${generated%.sage.py}.py"
-			mv "$generated" "$importable"
-			pytest_args+=("$importable")
-		done
-	fi
-
-	# Add .py test files directly
-	for py_file in "${py_test_files[@]:-}"; do
-		[ -n "$py_file" ] && pytest_args+=("$py_file")
+	# Both kinds are collected where they live, from the project root.
+	pytest_args=(-p qc_sage_session)
+	for test_file in "${sage_test_files[@]:-}" "${py_test_files[@]:-}"; do
+		[ -n "$test_file" ] && pytest_args+=("$test_file")
 	done
+	export PYTHONPATH="{{artifacts}}/pytest_plugins${PYTHONPATH:+:$PYTHONPATH}"
 
 	# The Sage virtual environment's Python has `sage` importable, but it is not
 	# a Sage session: `sage.all` is absent from sys.modules there, while `sage -c`
@@ -526,10 +496,9 @@ _sage-pytest-coverage:
 	set -euo pipefail
 	echo "============================="
 	echo "=== Running: pytest with coverage under the Sage interpreter ==="
-	echo "# Same preparse flow as _sage-pytest, run under coverage.py inside Sage's"
+	echo "# Same in-place collection as _sage-pytest, run under coverage.py inside Sage's"
 	echo "# Python (uvx CPython cannot import sage.*); emits coverage.xml for diff-cover."
 	sage_python="$(just --justfile {{justfile()}} -d . _sage-python)"
-	sage_preparse="$(just --justfile {{justfile()}} -d . _sage-preparse-bin)"
 	sage_test_files_output="$(just --justfile {{justfile()}} -d . _sage-test-files)"
 	sage_test_files=()
 	if [ -n "$sage_test_files_output" ]; then
@@ -557,35 +526,11 @@ _sage-pytest-coverage:
 		"{{artifacts}}/scripts/emit-triage-directive.sh"
 		exit 1
 	fi
-	pytest_args=()
-	if [ "${#sage_test_files[@]}" -gt 0 ]; then
-		sage_preparse_dir="$(mktemp -d "${TMPDIR:-/tmp}/qc-sage-cov.XXXXXX")"
-		trap 'if [ -e "$sage_preparse_dir" ]; then gio trash "$sage_preparse_dir"; fi' EXIT
-		echo "# Preparsing ${#sage_test_files[@]} .sage test file(s)"
-		for sage_file in "${sage_test_files[@]}"; do
-			target="$sage_preparse_dir/$sage_file"
-			mkdir -p "$(dirname "$target")"
-			cp "$sage_file" "$target"
-		done
-		(
-			cd "$sage_preparse_dir"
-			"$sage_python" "$sage_preparse" "${sage_test_files[@]}" >/dev/null
-		)
-		for sage_file in "${sage_test_files[@]}"; do
-			generated="$sage_preparse_dir/${sage_file}.py"
-			if [ ! -f "$generated" ]; then
-				echo "ERROR: Sage preparser did not produce $generated for $sage_file"
-				"{{artifacts}}/scripts/emit-triage-directive.sh"
-				exit 1
-			fi
-			importable="${generated%.sage.py}.py"
-			mv "$generated" "$importable"
-			pytest_args+=("$importable")
-		done
-	fi
-	for py_file in "${py_test_files[@]:-}"; do
-		[ -n "$py_file" ] && pytest_args+=("$py_file")
+	pytest_args=(-p qc_sage_session)
+	for test_file in "${sage_test_files[@]:-}" "${py_test_files[@]:-}"; do
+		[ -n "$test_file" ] && pytest_args+=("$test_file")
 	done
+	export PYTHONPATH="{{artifacts}}/pytest_plugins${PYTHONPATH:+:$PYTHONPATH}"
 	project_root="$(pwd -P)"
 	project_slug="$(printf '%s' "$project_root" | sed 's#[^A-Za-z0-9._-]#_#g')"
 	coverage_root="${XDG_CACHE_HOME:-$HOME/.cache}/quality-control/coverage/$project_slug"
