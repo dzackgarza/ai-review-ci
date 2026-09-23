@@ -660,6 +660,21 @@ _sage-mypy: _sage-qc-files
 		exit 0
 	fi
 	effective_config="{{configs}}/mypy-sage.ini"
+	# The category plugin projects the category packages a project declares in
+	# pyproject.toml ([tool.sage-mypy-category-plugin] packages); they replace
+	# the shared default. The plugin selects one oracle per configuration, so
+	# the list is replaced, not extended.
+	plugin_packages="$(yq -p toml -oy '.tool."sage-mypy-category-plugin".packages[]' pyproject.toml)"
+	if [ -n "$plugin_packages" ]; then
+		plugin_config_dir="$(mktemp -d "${TMPDIR:-/tmp}/qc-mypy-config.XXXXXX")"
+		trap 'for d in "${sage_preparse_dir:-}" "$plugin_config_dir"; do if [ -n "$d" ] && [ -e "$d" ]; then gio trash "$d"; fi; done' EXIT
+		effective_config="$plugin_config_dir/mypy-sage.ini"
+		awk -v packages="$plugin_packages" '
+			/^packages =$/ { print; n = split(packages, p, "\n"); for (i = 1; i <= n; i++) print "    " p[i]; skip = 1; next }
+			skip && /^[ \t]/ { next }
+			{ skip = 0; print }
+		' "{{configs}}/mypy-sage.ini" >"$effective_config"
+	fi
 	mypy_run_dir="."
 	mypy_flags=()
 	if [ -n "${sage_preparse_dir:-}" ]; then
