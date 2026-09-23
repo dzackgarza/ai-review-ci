@@ -37,6 +37,10 @@ The deterministic jobs call reusable workflows from `ai-review-ci`.
 Existing repository-owned files are not overwritten.
 Use `--skip-scaffold` when a repository already has a root `justfile`.
 
+For a new repository on the `bun-python` profile, especially one with a Tauri crate, read
+[RUST-TAURI-SETUP.md](RUST-TAURI-SETUP.md) first: it lists every layout, script, installer
+and CI-tier expectation the gates enforce, in the order that lands the first CI run green.
+
 ## QC contract
 
 Each governed repository declares its profile and release reference in the root `justfile`:
