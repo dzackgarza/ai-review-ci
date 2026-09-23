@@ -641,6 +641,19 @@ _sage-mypy: _sage-qc-files
 			mv "$sage_preparse_dir/$sage_file.py" "$sage_preparse_dir/${sage_file%.sage}.py"
 			mypy_targets+=("${sage_file%.sage}.py")
 		done
+		# Excluded directories are not targets, but mypy still checks any
+		# module it reaches by import. Mark each snapshot copy with mypy's
+		# per-file inline option so it supplies types without reporting errors.
+		exclude_dirs_output="$(uv run {{artifacts}}/scripts/read_qc_excludes.py {{configs}}/qc-excludes.toml)"
+		exclude_dirs=()
+		if [ -n "$exclude_dirs_output" ]; then
+			mapfile -t exclude_dirs <<<"$exclude_dirs_output"
+		fi
+		for dir in "${exclude_dirs[@]}"; do
+			while IFS= read -r -d '' excluded_file; do
+				sed -i '1i # mypy: ignore-errors' "$excluded_file"
+			done < <(find "$sage_preparse_dir" -path "*/$dir/*" -name '*.py' -print0)
+		done
 	fi
 	if [ "${#mypy_targets[@]}" -eq 0 ]; then
 		echo "mypy: no Python or Sage files to check."
