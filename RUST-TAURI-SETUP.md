@@ -29,6 +29,10 @@ creates. Out of order, each refuses with a message that names only its own preco
 5. Commit the installed files and push. From this point `main` accepts only pull requests
    with the seven required checks green; `enforce_admins` is on, so direct pushes are
    refused for everyone. The PR template requires a linked issue, so file the issue first.
+   On a scaffold with no real code to review this is ceremony without a reviewer: remove
+   the protection (`gh api -X DELETE repos/<owner>/<name>/branches/main/protection`), land
+   commits on `main`, and re-apply it with `ai-review-ci protect-branch` when there is
+   code worth gating.
    `gh pr checks` fails with the personal-token scope on these repos; read status with
    `gh run list --branch <branch>` and `gh run view <id> --log-failed`.
 6. Before every push, run both CI-tier gates locally against the base branch. They are
