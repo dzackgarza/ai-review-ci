@@ -118,3 +118,11 @@ LEAN_REFERENT_RULES = (
 def test_lean_referent_rules_flag_shims_and_conventions() -> None:
     """#309: engineering shims graduated to mathematical placement (lean-lattices referent audit)."""
     _assert_rules_match_annotations(LEAN_REFERENT_RULES, "*.lean")
+
+
+RUST_ATTRIBUTE_RULES = ("rs-no-allow-attr", "rs-no-serde-default")
+
+
+def test_rust_attribute_rules_flag_only_the_attributes() -> None:
+    """#420: a bare attribute pattern matched every Rust item; only the attribute lines fire."""
+    _assert_rules_match_annotations(RUST_ATTRIBUTE_RULES, "rust_attributes.rs")
