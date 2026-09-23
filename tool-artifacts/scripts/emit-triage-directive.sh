@@ -11,7 +11,7 @@
 
 set -euo pipefail
 
-failure_mode="${AI_REVIEW_CI_FAILURE_MODE:?AI_REVIEW_CI_FAILURE_MODE must be set by test-commit, test-push, test-ci, or ambient}"
+failure_mode="${AI_REVIEW_CI_FAILURE_MODE:-direct}"
 
 if [[ "$failure_mode" == "direct" ]]; then
   cat << 'DIRECT_EOF'

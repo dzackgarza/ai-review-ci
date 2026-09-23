@@ -1,6 +1,8 @@
 ---
 name: pr-feedback-triage
-description: Use when collecting, judging, remediating, replying to, resolving, or converging returned pull-request review feedback. Owns the thread-local policy-routed workflow; generating review findings belongs elsewhere.
+description: Use when collecting, judging, remediating, replying to, resolving, or
+  converging returned pull-request review feedback. Owns the thread-local policy-routed
+  workflow; generating review findings belongs elsewhere.
 ---
 
 # PR Feedback Triage

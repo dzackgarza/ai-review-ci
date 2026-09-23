@@ -102,6 +102,10 @@ def test_type_escape_rules_own_single_and_double_casts() -> None:
     _assert_rules_match_annotations(("ts-no-any-cast", "no-double-cast", "no-unproven-boundary-cast"), "no_double_cast.ts")
 
 
+def test_direct_console_error_is_rejected() -> None:
+    _assert_rules_match_annotations(("ts-no-console-error",), "no_console_error.ts")
+
+
 LEAN_REFERENT_RULES = (
     "lean-no-axiom",
     "lean-shim-suffix-decl",

@@ -1,6 +1,10 @@
 ---
 name: git-integration-workflow
-description: 'Use when integrating code at the GitHub boundary — creating or updating a PR, updating work-unit issues, marking a PR ready, triggering automated review, dispositioning returned review/check feedback, merging, or filing and triaging issues. This is the enforced integration workflow, distinct from during-writing edit hygiene.'
+description: "Use when integrating code at the GitHub boundary \u2014 creating or\
+  \ updating a PR, updating work-unit issues, marking a PR ready, triggering automated\
+  \ review, dispositioning returned review/check feedback, merging, or filing and\
+  \ triaging issues. This is the enforced integration workflow, distinct from during-writing\
+  \ edit hygiene."
 ---
 
 # Git Integration Workflow

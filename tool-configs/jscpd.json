@@ -22,6 +22,7 @@
     "**/dist/**",
     "**/build/**",
     "**/coverage/**",
+    "**/.nyc_output/**",
     "**/_ci-support/**",
     "**/devtools/**",
     "**/codeql-db/**",
