@@ -496,7 +496,7 @@ rules:
     languages:
       - rust
     severity: ERROR
-    pattern-regex: .unwrap_or($DEFAULT)
+    pattern-regex: \.unwrap_or\(
     metadata:
       policy_code: POLICY.RUNTIME_DEFAULT
   - id: rs-no-unwrap-or-default
@@ -504,7 +504,7 @@ rules:
     languages:
       - rust
     severity: ERROR
-    pattern-regex: .unwrap_or_default()
+    pattern-regex: \.unwrap_or_default\(\)
     metadata:
       policy_code: POLICY.RUNTIME_DEFAULT
   - id: rs-no-result-ok
@@ -512,7 +512,7 @@ rules:
     languages:
       - rust
     severity: ERROR
-    pattern-regex: .ok()
+    pattern-regex: \.ok\(\)
     metadata:
       policy_code: POLICY.NO_ERROR_DISCARD
   - id: rs-no-filter-map-ok

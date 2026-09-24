@@ -130,3 +130,11 @@ RUST_ATTRIBUTE_RULES = ("rs-no-allow-attr", "rs-no-serde-default")
 def test_rust_attribute_rules_flag_only_the_attributes() -> None:
     """#420: a bare attribute pattern matched every Rust item; only the attribute lines fire."""
     _assert_rules_match_annotations(RUST_ATTRIBUTE_RULES, "rust_attributes.rs")
+
+
+RUST_ERROR_DISCARD_RULES = ("rs-no-result-ok", "rs-no-unwrap-or", "rs-no-unwrap-or-default")
+
+
+def test_rust_error_discard_rules_flag_only_the_calls() -> None:
+    """Only the discarding calls fire; identifiers that contain `ok` or `unwrap_or` do not."""
+    _assert_rules_match_annotations(RUST_ERROR_DISCARD_RULES, "rust_error_discard.rs")
