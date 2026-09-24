@@ -111,7 +111,7 @@ _normalize:
 		exit 1
 	fi
 	for manifest in "${cargo_manifests[@]}"; do
-		if cargo fmt --manifest-path "$manifest"; then
+		if cargo fmt --all --manifest-path "$manifest"; then
 			:
 		else
 			ec=$?
@@ -178,7 +178,7 @@ _rustfmt:
 		exit 1
 	fi
 	for manifest in "${cargo_manifests[@]}"; do
-		cargo fmt --manifest-path "$manifest" --check
+		cargo fmt --all --manifest-path "$manifest" --check
 	done
 
 _cargo-test:

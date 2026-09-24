@@ -4118,6 +4118,44 @@ def test_rust_normalization_formats_nested_manifest_project(
     assert (source_dir / "lib.rs").read_text() == "pub fn value() -> u8 {\n    42\n}\n"
 
 
+def test_rust_normalization_formats_a_workspace_and_its_members(
+    tmp_path: pathlib.Path,
+) -> None:
+    # Two members: cargo fmt takes a lone member for a virtual manifest, and finds no targets
+    # for one with two unless it is asked for all of them.
+    project = tmp_path / "rust-workspace"
+    project.mkdir(parents=True)
+    (project / "Cargo.toml").write_text('[workspace]\nmembers = ["server", "desktop"]\nresolver = "2"\n')
+    for member in ("server", "desktop"):
+        (project / member / "src").mkdir(parents=True)
+        (project / member / "Cargo.toml").write_text(
+            f'[package]\nname = "{member}"\nversion = "0.1.0"\nedition = "2021"\n'
+        )
+        (project / member / "src" / "lib.rs").write_text("pub fn value()->u8{42}\n")
+
+    result = subprocess.run(
+        [
+            "just",
+            "--justfile",
+            str(ROOT / "justfiles" / "rust.just"),
+            "-d",
+            str(project),
+            "_normalize",
+            "_rustfmt",
+        ],
+        cwd=project,
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+
+    output = result.stdout + result.stderr
+    assert result.returncode == 0, output
+    for member in ("server", "desktop"):
+        formatted = (project / member / "src" / "lib.rs").read_text()
+        assert formatted == "pub fn value() -> u8 {\n    42\n}\n"
+
+
 # Regression for #17: just >= 1.46 binds JUST_WORKING_DIRECTORY to
 # -d/--working-directory, which then requires --justfile — so any consumer that
 # exported JUST_WORKING_DIRECTORY (the old delegated-gate routing hint) could no
