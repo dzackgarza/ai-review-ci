@@ -253,7 +253,9 @@ _sage-python:
 	#!/usr/bin/env bash
 	set -euo pipefail
 	sage_bin="$(just --justfile {{justfile()}} -d . _sage-bin)"
-	sage_python="$(dirname "$sage_bin")/python"
+	# Ask the launcher which interpreter it runs. SAGE_BIN may be a source-tree launcher that
+	# sets up GAP and friends before exec'ing its venv, so its own directory holds no python.
+	sage_python="$("$sage_bin" -python -c 'import sys; print(sys.executable)')"
 	if [ ! -x "$sage_python" ]; then
 		echo "ERROR: Sage virtual-environment Python is not executable: $sage_python" >&2
 		"{{artifacts}}/scripts/emit-triage-directive.sh" >&2
@@ -264,8 +266,8 @@ _sage-python:
 _sage-preparse-bin:
 	#!/usr/bin/env bash
 	set -euo pipefail
-	sage_bin="$(just --justfile {{justfile()}} -d . _sage-bin)"
-	sage_preparse="$(dirname "$sage_bin")/sage-preparse"
+	sage_python="$(just --justfile {{justfile()}} -d . _sage-python)"
+	sage_preparse="$(dirname "$sage_python")/sage-preparse"
 	if [ ! -x "$sage_preparse" ]; then
 		echo "ERROR: Sage virtual-environment preparser is not executable: $sage_preparse" >&2
 		"{{artifacts}}/scripts/emit-triage-directive.sh" >&2
