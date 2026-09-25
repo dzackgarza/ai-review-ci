@@ -1,6 +1,10 @@
 ---
 name: fixing-slop
-description: Use when fixing slop identified by [[anti-slop/SKILL|anti-slop]] or [[reviewing-llm-code/SKILL|reviewing-llm-code]] — converting fraudulent artifacts back into correct implementations without laundering. Also use when an agent proposes "renaming to be honest," "deleting the dead code," or any label-only remediation of a slop finding.
+description: "Use when fixing slop identified by [[anti-slop/SKILL|anti-slop]] or\
+  \ [[reviewing-llm-code/SKILL|reviewing-llm-code]] \u2014 converting fraudulent artifacts\
+  \ back into correct implementations without laundering. Also use when an agent proposes\
+  \ \"renaming to be honest,\" \"deleting the dead code,\" or any label-only remediation\
+  \ of a slop finding."
 ---
 
 # Fixing Slop
@@ -177,11 +181,17 @@ Some slop is not a localized defect inside an otherwise sound artifact — the a
 This is common in agent-generated prose artifacts: READMEs, architecture docs, roadmaps, schemas, and prompts that have accreted private ontology, correction history, invented institutions, or governance machinery disproportionate to the work.
 See `llm-failure-modes/documentation-failures.md` and the `L10`/`C9`/`T8` codes in `llm-failure-modes/references/agent-distortion-index.md`.
 
+**Gate: this protocol is for durable artifacts whose contamination accreted across sessions or contexts.**
+An in-flight draft in the authoring session — a plan, PR body, or document whose correction cycle is still live — is not a contaminated artifact; it is an unconverged one.
+Rewrite it directly from the real requirements: one writer, one pass.
+Escalating a draft rewrite into extraction/rebuild/review pipelines converts a prose edit into a coordination project and manufactures the concurrent-writer failures the pipeline exists to prevent.
+Remediation machinery scales with the artifact's durability and blast radius, not with the severity of the critique.
+
 **An agent holding the contaminated artifact and its correction history in context cannot cleanly repair it.** It reads the existing material as gospel (treats generated residue as a requirement), and every correction it receives gets written *into* the artifact rather than fixing the process that produced it.
 In-place editing reseeds the same slop in cleaner prose.
 Agents do reliable greenfield work and unreliable brownfield work, so the only safe repair is to **force the brownfield job to look like a greenfield job**:
 
-1. **Encode the standard.** The skill that owns the artifact type must already state what a correct and an incorrect such artifact looks like ([[writing/documentation/SKILL|writing-documentation]], the [[plan/SKILL|plan]] skill, etc.). This is the priming, not the contaminated artifact.
+1. **Encode the standard.** The skill that owns the artifact type must already state what a correct and an incorrect such artifact looks like ([[writing/documentation/documentation|writing-documentation]], the [[plan/SKILL|plan]] skill, etc.). This is the priming, not the contaminated artifact.
 2. **Adversarial requirement extraction (fresh agent).** A fresh agent, primed on the owning skill and *not* carrying the correction history, audits the contaminated artifact and extracts only the real, externally-verifiable, user-facing requirements and surviving facts.
    It must verify each surviving claim against inspected reality (code, data, command output, external sources), not against other generated documents.
    Anything that cannot be grounded is dropped, not relabeled.

@@ -21,6 +21,7 @@ from pathlib import Path
 from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
+from automated_reviews.publication import review_labels_text
 
 LabelCategory = Literal["type", "scope", "status", "area", "complexity"]
 _HEX_COLOR = r"^[0-9a-fA-F]{6}$"
@@ -31,7 +32,9 @@ class Label(BaseModel):
 
     name: str = Field(min_length=1)
     color: str = Field(pattern=_HEX_COLOR)
-    description: str = Field(min_length=1)
+    # GitHub rejects a longer description with HTTP 422 at create time, which
+    # surfaces as a failed install rather than as a defect in the taxonomy.
+    description: str = Field(min_length=1, max_length=100)
     category: LabelCategory
 
 
@@ -91,8 +94,11 @@ def load_taxonomy(path: Path | None = None) -> tuple[Label, ...]:
     Reads the packaged ``data/labels.json`` by default, or a caller-supplied override.
     Malformed data fails loudly at the pydantic boundary.
     """
-    text = path.read_text(encoding="utf-8") if path is not None else (files("ai_review_ci") / "data" / "labels.json").read_text(encoding="utf-8")
-    return Taxonomy.model_validate_json(text).labels
+    if path is not None:
+        return Taxonomy.model_validate_json(path.read_text(encoding="utf-8")).labels
+    local = Taxonomy.model_validate_json((files("ai_review_ci") / "data" / "labels.json").read_text(encoding="utf-8"))
+    review = Taxonomy.model_validate_json(review_labels_text())
+    return Taxonomy(labels=local.labels + review.labels).labels
 
 
 def compute_label_actions(remote: Mapping[str, RemoteLabel], taxonomy: Sequence[Label]) -> LabelPlan:

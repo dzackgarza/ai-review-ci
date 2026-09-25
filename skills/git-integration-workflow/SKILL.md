@@ -1,6 +1,10 @@
 ---
 name: git-integration-workflow
-description: 'Use when integrating code at the GitHub boundary — creating or updating a PR, updating work-unit issues, marking a PR ready, triggering automated review, dispositioning returned review/check feedback, merging, or filing and triaging issues. This is the enforced integration workflow, distinct from during-writing edit hygiene.'
+description: "Use when integrating code at the GitHub boundary \u2014 creating or\
+  \ updating a PR, updating work-unit issues, marking a PR ready, triggering automated\
+  \ review, dispositioning returned review/check feedback, merging, or filing and\
+  \ triaging issues. This is the enforced integration workflow, distinct from during-writing\
+  \ edit hygiene."
 ---
 
 # Git Integration Workflow
@@ -41,7 +45,7 @@ Each arrow is a gate, not a suggestion.
 3. **PR review synthesis.** Open or update the PR from the current work-unit issue: summarize the issue scope, close/reference split, proof obligations addressed, evidence, and reviewer checklist.
    The PR body is a review submission derived from the issue, not a second planning tracker.
    Open the PR on the first coherent push.
-   Deterministic `test-ci`, general review, and slop review start in parallel; do not spend hours polishing an unreviewed architecture before entering this loop.
+   Deterministic `test-ci` and slop review start in parallel; do not spend hours polishing an unreviewed architecture before entering this loop.
    Use closing keywords (`Closes`) only for the work-unit issue this PR fully completes on merge; use `Refs` or prose for organizational parents and deferred work.
    A visible open checkbox in the PR body is a reviewer-facing blocker copied from the issue; if it is still open, the PR is not ready.
 

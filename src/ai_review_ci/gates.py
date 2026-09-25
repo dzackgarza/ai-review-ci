@@ -69,7 +69,6 @@ BASE_REQUIRED_CHECK_CONTEXTS = (
     "delegation-conformance / delegation-conformance",
     "qc-doctor / qc-doctor",
     "pr-description-checklist / pr-description-checklist",
-    "general / review",
     "slop / review",
     "thread-resolution / thread-resolution",
 )

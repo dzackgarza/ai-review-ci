@@ -92,7 +92,11 @@ _semgrep-autofix:
 	# replaying the whole thing only when the scan actually fails.
 	scan_log="$(mktemp -t semgrep-autofix.XXXXXX)"
 	trap 'rm -f -- "$scan_log"' EXIT
-	if uvx --from semgrep semgrep scan \
+	if "{{artifacts}}/scripts/semgrep-with-qc-ignores.sh" \
+		"{{artifacts}}/scripts/read_qc_excludes.py" \
+		"{{configs}}/qc-excludes.toml" \
+		-- \
+		uvx --from semgrep semgrep scan \
 		--config={{configs}}/semgrep.yml \
 		--config=p/ci \
 		--exclude=codeql-db \
@@ -322,7 +326,7 @@ _semgrep:
 			while IFS= read -r exclude_dir; do
 				[ -n "$exclude_dir" ] || continue
 				exclude_dir="${exclude_dir%/}"
-				[[ "$file" == "$exclude_dir" || "$file" == "$exclude_dir"/* ]] && return 0
+				[[ "$file" == "$exclude_dir" || "$file" == "$exclude_dir"/* || "$file" == *"/$exclude_dir/"* ]] && return 0
 			done <<< "$exclude_dirs_output"
 			return 1
 		}
@@ -717,7 +721,7 @@ _aislop:
 
 # ── Config Sync ───────────────────────────────────────────────────
 # Sync qc-excludes.toml into every tool config (biome, eslint, knip,
-# jscpd, slop-scan, pyright, grain, and justfile-rust _rust-qc-files).
+# jscpd, slop-scan, pyright, and justfile-rust _rust-qc-files).
 
 # Run this whenever qc-excludes.toml changes.
 _sync-qc-excludes:

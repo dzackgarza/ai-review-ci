@@ -102,6 +102,10 @@ def test_type_escape_rules_own_single_and_double_casts() -> None:
     _assert_rules_match_annotations(("ts-no-any-cast", "no-double-cast", "no-unproven-boundary-cast"), "no_double_cast.ts")
 
 
+def test_direct_console_error_is_rejected() -> None:
+    _assert_rules_match_annotations(("ts-no-console-error",), "no_console_error.ts")
+
+
 LEAN_REFERENT_RULES = (
     "lean-no-axiom",
     "lean-shim-suffix-decl",
@@ -118,3 +122,19 @@ LEAN_REFERENT_RULES = (
 def test_lean_referent_rules_flag_shims_and_conventions() -> None:
     """#309: engineering shims graduated to mathematical placement (lean-lattices referent audit)."""
     _assert_rules_match_annotations(LEAN_REFERENT_RULES, "*.lean")
+
+
+RUST_ATTRIBUTE_RULES = ("rs-no-allow-attr", "rs-no-serde-default")
+
+
+def test_rust_attribute_rules_flag_only_the_attributes() -> None:
+    """#420: a bare attribute pattern matched every Rust item; only the attribute lines fire."""
+    _assert_rules_match_annotations(RUST_ATTRIBUTE_RULES, "rust_attributes.rs")
+
+
+RUST_ERROR_DISCARD_RULES = ("rs-no-result-ok", "rs-no-unwrap-or", "rs-no-unwrap-or-default")
+
+
+def test_rust_error_discard_rules_flag_only_the_calls() -> None:
+    """Only the discarding calls fire; identifiers that contain `ok` or `unwrap_or` do not."""
+    _assert_rules_match_annotations(RUST_ERROR_DISCARD_RULES, "rust_error_discard.rs")

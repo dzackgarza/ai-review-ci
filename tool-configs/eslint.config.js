@@ -140,7 +140,15 @@ export default [
       "@typescript-eslint/no-floating-promises": "error",
       "@typescript-eslint/no-misused-promises": "error",
       "@typescript-eslint/await-thenable": "error",
-      "@typescript-eslint/no-unnecessary-type-assertion": "error",
+      // Deliberately off, and never autofixed: an assertion the compiler can
+      // prove redundant is still the only machine-readable record of what a
+      // value is supposed to be. The autofix deletes that record. Observed
+      // failure: a preload IPC bridge typed `invoke(channel: string, ...args:
+      // any[])` makes every `payload as SomeIPCAPI` assertion "unnecessary",
+      // so the fixer stripped the payload contracts from 13 call sites and
+      // then failed the same commit on the now-unused type imports. More type
+      // information is always better; deleting it is not a quality gate.
+      "@typescript-eslint/no-unnecessary-type-assertion": "off",
       "@typescript-eslint/no-unnecessary-boolean-literal-compare": "error",
       "@typescript-eslint/consistent-type-imports": [
         "error",
@@ -229,7 +237,15 @@ export default [
       "@typescript-eslint/no-floating-promises": "error",
       "@typescript-eslint/no-misused-promises": "error",
       "@typescript-eslint/await-thenable": "error",
-      "@typescript-eslint/no-unnecessary-type-assertion": "error",
+      // Deliberately off, and never autofixed: an assertion the compiler can
+      // prove redundant is still the only machine-readable record of what a
+      // value is supposed to be. The autofix deletes that record. Observed
+      // failure: a preload IPC bridge typed `invoke(channel: string, ...args:
+      // any[])` makes every `payload as SomeIPCAPI` assertion "unnecessary",
+      // so the fixer stripped the payload contracts from 13 call sites and
+      // then failed the same commit on the now-unused type imports. More type
+      // information is always better; deleting it is not a quality gate.
+      "@typescript-eslint/no-unnecessary-type-assertion": "off",
       "@typescript-eslint/no-unnecessary-boolean-literal-compare": "error",
       "@typescript-eslint/consistent-type-imports": [
         "error",

@@ -108,12 +108,19 @@ jobs:
         # configs through bun; node ships on the runner, bun does not.
         uses: oven-sh/setup-bun@v2
 
-      - name: Install project dependencies
-        run: just -f "$HOME/ai-review-ci/ci/runner.just" setup-profile "$QC_PROFILE"
-
       - name: Provision project CI environment
+        # Ahead of setup-profile, because that step validates the toolchain
+        # this one installs. The sage profile asserts SAGE_BIN is executable
+        # and installs nothing, so with the old order no caller could ever
+        # satisfy it on a runner: Sage had to exist before the only hook
+        # that could provide it ran. Setup-then-validate is also the right
+        # order generally -- a validator that runs first can only pass on
+        # what the image already happened to carry.
         if: inputs.setup_recipe != ''
         run: just "$QC_SETUP_RECIPE"
+
+      - name: Install project dependencies
+        run: just -f "$HOME/ai-review-ci/ci/runner.just" setup-profile "$QC_PROFILE"
 
       - name: Run QC tier
         # No GH_TOKEN here (#218): the tier runs every QC recipe and every

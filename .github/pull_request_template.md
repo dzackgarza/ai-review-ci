@@ -15,12 +15,12 @@
 
 <!-- policy-alignment-gate -->
 
-Authoritative policy is in this checkout: `skills/policy-index/SKILL.md` + `skills/policy-index/references/policies.md`. Load it **from this checkout** — do not rely on globally-installed skills (remote agents do not have them).
+Authoritative policy is in the [`automated-reviews` policy index](https://github.com/dzackgarza/automated-reviews/tree/main/src/automated_reviews/resources/skills/policy-index). Load it from that checkout.
 Full rationale: AGENTS.md → **Policy Alignment Gate** and the wiki [Policy Alignment Gate](https://github.com/dzackgarza/ai-review-ci/wiki/Policy-Alignment-Gate).
 
 ### Tier 0 — every PR
 
-- [ ] Loaded the in-repo `POLICY.*` records.
+- [ ] Loaded the canonical `POLICY.*` records.
   Codes this change touches or risks: `POLICY.____`
 - [ ] No **Invalid local fix** introduced — no new fallback, runtime default, optional core-state, swallowed error, or partial-success path that makes required work look successful after it should fail loudly.
 - [ ] No empty/falsy-literal fallback (`""`, `[]`, `{}`, `null`, `false`, `0`) added or reclassified as "safe."
@@ -30,7 +30,7 @@ Full rationale: AGENTS.md → **Policy Alignment Gate** and the wiki [Policy Ali
 
 Check the one line that applies (both are valid answers, so this never blocks a non-QC PR):
 
-- [ ] **Not applicable** — this PR touches none of `tool-configs/`, `reviews/`, detectors, QC `justfiles/`, or `skills/`; **or** it does, and: a `ruleid`/equivalent **regression-lock** fixture proves each previously-flagged banned pattern still fires (precision narrows by *position*, never *value*), the change weakens no `POLICY.*` / silences no true finding, and any change to an owned enforcement skill was authored under `skills/<name>/` and verified from this checkout.
+- [ ] **Not applicable** — this PR touches none of `tool-configs/`, detectors, or QC `justfiles/`; **or** it does, and: a `ruleid`/equivalent **regression-lock** fixture proves each previously-flagged banned pattern still fires (precision narrows by *position*, never *value*), and the change weakens no `POLICY.*` or true finding.
 
 ## Evidence
 

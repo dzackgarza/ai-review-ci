@@ -63,6 +63,10 @@ reporting:
     fail_on_critical: true
 ignore:
 - '**/tests/fixtures/**'
+- '**/test/highlight/**'
+- '**/test/tags/**'
+- '**/examples/**'
+- '**/bindings/**'
 - '**/node_modules/**'
 - '**/.venv/**'
 - '**/.pytest_cache/**'
@@ -71,6 +75,7 @@ ignore:
 - '**/dist/**'
 - '**/build/**'
 - '**/coverage/**'
+- '**/.nyc_output/**'
 - '**/_ci-support/**'
 - '**/devtools/**'
 - '**/codeql-db/**'
@@ -94,7 +99,6 @@ ignore:
 - '**/src.bak/**'
 - '**/scripts/**'
 - '**/notebooks/**'
-- '**/preamble/**'
 - '**/notes/**'
 - '**/.webpack/**'
 - '**/out/**'

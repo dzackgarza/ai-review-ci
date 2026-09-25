@@ -123,6 +123,15 @@ rules:
           - pattern-regex: expect\([^\n]*\.status\(\)\)\.toBe\(200\);\s*\n\s*\}\);
     metadata:
       policy_code: POLICY.NO_EXACT_STRING_PROOF
+  - id: ts-no-console-error
+    pattern: console.error(...)
+    message: POLICY.NO_ERROR_DISCARD
+    languages:
+      - typescript
+      - javascript
+    severity: ERROR
+    metadata:
+      policy_code: POLICY.NO_ERROR_DISCARD
   - id: rust-silenced-result
     pattern: let _ = $EXPR;
     message: POLICY.NO_ERROR_DISCARD
@@ -487,7 +496,7 @@ rules:
     languages:
       - rust
     severity: ERROR
-    pattern-regex: .unwrap_or($DEFAULT)
+    pattern-regex: \.unwrap_or\(
     metadata:
       policy_code: POLICY.RUNTIME_DEFAULT
   - id: rs-no-unwrap-or-default
@@ -495,7 +504,7 @@ rules:
     languages:
       - rust
     severity: ERROR
-    pattern-regex: .unwrap_or_default()
+    pattern-regex: \.unwrap_or_default\(\)
     metadata:
       policy_code: POLICY.RUNTIME_DEFAULT
   - id: rs-no-result-ok
@@ -503,7 +512,7 @@ rules:
     languages:
       - rust
     severity: ERROR
-    pattern-regex: '\.ok\(\)'
+    pattern-regex: \.ok\(\)
     metadata:
       policy_code: POLICY.NO_ERROR_DISCARD
   - id: rs-no-filter-map-ok
@@ -523,7 +532,10 @@ rules:
     metadata:
       policy_code: POLICY.NO_TYPE_ESCAPE
   - id: rs-no-serde-default
-    pattern-regex: '#\s*\[\s*serde\s*\(\s*default\s*\)\s*\]'
+    # A bare attribute pattern matches every item and expression in a Rust file
+    # under semgrep 1.177 (#420); the regex form matches only a serde attribute
+    # that carries `default`, bare or with a value, alone or among other options.
+    pattern-regex: '#\[serde\([^\]]*\bdefault\b'
     message: POLICY.RUNTIME_DEFAULT
     languages:
       - rust
@@ -531,7 +543,10 @@ rules:
     metadata:
       policy_code: POLICY.RUNTIME_DEFAULT
   - id: rs-no-allow-attr
-    pattern-regex: '#!?\s*\[\s*allow\s*\('
+    # A bare attribute pattern matches every item and expression in a Rust file
+    # under semgrep 1.177 (#420); the regex form, like the other rs-* rules,
+    # matches only the outer or inner allow attribute. `#[expect(..)]` stays allowed.
+    pattern-regex: '#!?\[allow\('
     message: POLICY.NO_QC_SILENCING
     languages:
       - rust

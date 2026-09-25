@@ -12,7 +12,7 @@ Before writing code:
 - update that issue with the plan, proof obligations, checklist, and expected review evidence before broad implementation continues;
 - keep the PR diff limited to that work-unit issue and its evidence; unrelated reopened issues require separate branches/PRs;
 - open the PR when implementation starts, synthesize its body from the issue acceptance criteria and the Policy Alignment Gate, and refresh that synthesis before review;
-- use the first coherent push to enter the automated PR review loop; `test-ci`, general review, and slop review run in parallel so architectural feedback arrives before local polishing drifts;
+- use the first coherent push to enter the automated PR review loop; `test-ci` and slop review run in parallel so architectural feedback arrives before local polishing drifts;
 - request review only after tests/evidence and adversarial policy review are complete;
 - route returned review feedback through [[pr-feedback-triage/SKILL|pr-feedback-triage]]: every substantive item receives a visible thread- or surface-local disposition, and accepted or modified feedback receives committed, proven remediation before any positive reply.
 
@@ -20,6 +20,8 @@ If a branch is discovered to contain a broad, untriaged, or policy-poisoned diff
 Recreate the work from `origin/main` on an issue-scoped branch.
 
 ## QC Delegation
+
+The stance behind this section — QC is not opt-in, local overrides are banned, a rule is right for all repositories or wrong for all of them — is stated in [CONTRIBUTING.md](./CONTRIBUTING.md). What follows is the mechanics.
 
 - Treat `~/ai-review-ci` as the authoritative QC implementation.
   Downstream repositories carry only thin `test-commit`, `test-push`, and `test-ci` gate recipes that delegate to this repo.
@@ -142,23 +144,19 @@ same path, found by running the gate and reading its output, is `#409`.
 # Policy Alignment Gate
 
 Every PR against this repo must reconcile against the burned-bridge policy before review is requested or before it merges.
-This gate exists because agents — local and, especially, remote — arrive with strong priors that *want* fail-soft slop accepted.
-A "noisy detector" reads as "make it quieter"; the obvious fix (allow an empty-array default, add a fallback, widen a type, swallow an error) is exactly the policy violation.
-The reviewer cannot catch a change that weakens the reviewer, so the check lives in the definition of done for the work itself, not only in CI.
 
-Concrete failure this prevents: **PR #143** "fixed" a noisy `POLICY.RUNTIME_DEFAULT` detector by allowing `?? ""` / `?? []` / `?? {}` as "boundary normalization" — converting a true `POLICY.FAIL_OPEN` finding into scanner silence, and blessing the fail-open pattern for every downstream consumer.
-It was merged, then reopened for policy-aligned remediation (#120, #130).
+Why the burden sits in the definition of done rather than in CI, why an argument for relaxing a rule carries no weight by default, and the PR #143 case where a merged "fix" silenced a detector for every downstream consumer: [CONTRIBUTING.md](./CONTRIBUTING.md).
 
-## Canonical policy source (self-contained — no external fetch)
+## Canonical policy source
 
-The authoritative policy is owned by this repo under `skills/`. Load it from the checkout:
+The authoritative policy is owned by `automated-reviews`. Load it from that checkout:
 
-- `skills/policy-index/SKILL.md` and `skills/policy-index/references/policies.md` — the `POLICY.*` records and their **Invalid local fixes**.
-- `skills/policy-index/references/red-flags.md` — the red-flag inventory.
-- `skills/policy-index/references/runtime-control-flow.md` — runtime control-flow red flags.
+- [`policy-index/SKILL.md`](https://github.com/dzackgarza/automated-reviews/blob/main/src/automated_reviews/resources/skills/policy-index/SKILL.md) and [`policies.md`](https://github.com/dzackgarza/automated-reviews/blob/main/src/automated_reviews/resources/skills/policy-index/references/policies.md) own the `POLICY.*` records.
+- [`red-flags.md`](https://github.com/dzackgarza/automated-reviews/blob/main/src/automated_reviews/resources/skills/policy-index/references/red-flags.md) owns the red-flag inventory.
+- [`runtime-control-flow.md`](https://github.com/dzackgarza/automated-reviews/blob/main/src/automated_reviews/resources/skills/policy-index/references/runtime-control-flow.md) owns runtime control-flow red flags.
 
 Do not rely on globally-installed skills: remote review/coding agents (Codex, Jules, cloud runs) do not have them.
-The in-repo copy is the contract — this repo is the canonical home; other machines install these skills as symlinks via `just install-skills`.
+The `automated-reviews` checkout is the contract.
 
 ## Tier 0 — every PR
 
@@ -173,7 +171,7 @@ Genuinely optional product state is represented as an explicit typed/semantic st
 
 ## Tier 1 — PRs that change the QC tooling itself
 
-Any PR touching `tool-configs/`, `reviews/`, the detectors, or QC `justfiles/` additionally must carry an **adversarial regression-lock**:
+Any PR touching `tool-configs/`, the detectors, or QC `justfiles/` additionally must carry an **adversarial regression-lock**:
 
 - A fixture (`// ruleid:` or equivalent) proving each previously-flagged banned pattern **still fires** after the change.
   A precision fix narrows by **position** — excluding genuine boolean/control-flow uses — never by **value**. No fallback value is reclassified as safe.

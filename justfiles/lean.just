@@ -17,6 +17,43 @@
 # the kernel axiom set (never imported or compiled into the library); the
 # no-sorry scan excludes them like the semgrep axiom rule does.
 
+# public: scan staged Lean source without compiling the project
+test-commit: _lean-staged-check
+
+# public: build the project and run the full Lean gate before push
+test-push: _lean-build lean-qc
+
+# public: run the full Lean push gate in CI
+test-ci: test-push
+
+[private]
+_lean-staged-check:
+	#!/usr/bin/env bash
+	set -euo pipefail
+	mapfile -d '' lean_files < <(git diff --cached --name-only --diff-filter=ACMR -z -- '*.lean')
+	[ "${#lean_files[@]}" -gt 0 ] || {
+		echo "No staged Lean files found"
+		exit 0
+	}
+	for file in "${lean_files[@]}"; do
+		rg_status=0
+		matches="$(git show ":$file" | rg -n '\bsorry\b')" || rg_status=$?
+		if [ "$rg_status" -gt 1 ]; then
+			echo "ERROR: rg exited $rg_status; the sorry scan did not run." >&2
+			exit "$rg_status"
+		fi
+		[ -z "$matches" ] || {
+			echo "$file:$matches"
+			echo "ERROR: staged Lean source contains sorry declarations." >&2
+			exit 1
+		}
+	done
+	echo "Staged Lean source contains no sorry declarations"
+
+[private]
+_lean-build:
+	lake build
+
 infra := justfile_directory() / ".."
 justfiles := infra / "justfiles"
 artifacts := infra / "tool-artifacts"
@@ -30,7 +67,12 @@ lean-no-sorry:
 	# manipulates the `sorry` syntax; it carries no unproved proof. Consumers get it
 	# under `.lake` (already unscanned); this glob also covers ai-review-ci's own tree
 	# and any in-tree vendoring.
-	matches="$(rg -n --glob '*.lean' --glob '!*.conjecture*' --glob '!**/AiReviewCi/Answer.lean' '\bsorry\b' . || true)"
+	rg_status=0
+	matches="$(rg -n --glob '*.lean' --glob '!*.conjecture*' --glob '!**/AiReviewCi/Answer.lean' '\bsorry\b' .)" || rg_status=$?
+	if [ "$rg_status" -gt 1 ]; then
+		echo "ERROR: rg exited $rg_status; the sorry scan did not run." >&2
+		exit "$rg_status"
+	fi
 	if [ -n "$matches" ]; then
 		echo "$matches"
 		echo "ERROR: Lean source contains sorry declarations." >&2

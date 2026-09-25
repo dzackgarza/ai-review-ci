@@ -1,0 +1,16 @@
+name: Issue alignment
+on:
+  issues:
+    types:
+      - opened
+      - edited
+jobs:
+  alignment:
+    if: github.event.issue.user.login == 'dzackgarza'
+    uses: dzackgarza/automated-reviews/.github/workflows/_issue-alignment.yml@main
+    with:
+      issue: ${{ github.event.issue.number }}
+      policy_document: CONTRIBUTING.md
+permissions:
+  contents: read
+  issues: write

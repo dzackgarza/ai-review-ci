@@ -1,6 +1,8 @@
 ---
 name: quality-control
-description: Use when implementing, understanding, or delegating to the global quality control system in ~/ai-review-ci. Also use when setting up new projects with CI/CD, or when a local [[justfile/SKILL|justfile]] needs to reference global QC recipes.
+description: Use when implementing, understanding, or delegating to the global quality
+  control system in ~/ai-review-ci. Also use when setting up new projects with CI/CD,
+  or when a local [[justfile/SKILL|justfile]] needs to reference global QC recipes.
 ---
 
 # Quality Control System
@@ -29,7 +31,7 @@ A domain skill may narrow these policies for its domain but may not weaken them.
 It may not relax them (e.g., no skill may permit mocks or pytest-mock).
 
 **When a lower-ranked skill contradicts a higher-ranked skill, the higher-ranked skill wins.** If [[test-driven-development/SKILL|test-driven-development]] says "mocks if unavoidable" and [[test-guidelines/SKILL|test-guidelines]] says "no mocks, no exceptions," [[test-guidelines/SKILL|test-guidelines]] wins.
-If [[code-patterns/legacy/clean-code/SKILL|clean-code]] says "start with try/catch" and [[code-patterns/legacy/python-patterns/SKILL|python-patterns]] says "fail fast, no speculative try/catch," [[code-patterns/legacy/python-patterns/SKILL|python-patterns]] (as a domain skill narrowing tool-provisioning's fail-loud doctrine) wins.
+If [[code-patterns/legacy/clean-code/clean-code|clean-code]] says "start with try/catch" and [[code-patterns/legacy/python-patterns/python-patterns|python-patterns]] says "fail fast, no speculative try/catch," [[code-patterns/legacy/python-patterns/python-patterns|python-patterns]] (as a domain skill narrowing tool-provisioning's fail-loud doctrine) wins.
 
 The hierarchy is designed so that no skill below rank 3 can re-introduce mock seams, local QC reimplementation, or global tool installation.
 
@@ -67,9 +69,8 @@ This applies every deterministic auto-fix the toolchain supports:
 **Python stack (`~/ai-review-ci/justfiles/python.just`):**
 | Tool | Flag | Fixes |
 | --- | --- | --- |
-| `ruff check` | `--fix` | Lint errors (E, F, I, UP) — unused imports, import sorting, pyupgrade patterns |
+| `ruff check` | `--fix` | Lint errors (E, F, I, UP, BLE) — unused imports, import sorting, pyupgrade patterns, broad exception catches |
 | `ruff format` | (implicit) | PEP 8 style formatting |
-| `grain` | `--fix` | Unused code removal |
 
 **TypeScript stack (`~/ai-review-ci/justfiles/bun.just`):**
 | Tool | Flag | Fixes |
@@ -239,7 +240,7 @@ Validates:
 1. **`pyproject.toml` exists** — Python QC requires a project config.
 2. **`requires-python` targets >=3.14** — Global QC pins to Python 3.14. If the project targets an older Python, tool versions and type stubs may not align.
 3. **No local QC tool overrides in `pyproject.toml` sections** — The following sections are owned by global QC and must not be set locally: `[tool.ruff]`, `[tool.mypy]`, `[tool.coverage]`, `[tool.deptry]`, `[tool.vulture]`, `[tool.import-linter]`.
-4. **No standalone Python tool config files** — `ruff.toml`, `.ruff.toml`, `mypy.ini`, `.mypy.ini`, `grain.toml`, `.coveragerc`, `.importlinter`.
+4. **No standalone Python tool config files** — `ruff.toml`, `.ruff.toml`, `mypy.ini`, `.mypy.ini`, `.coveragerc`, `.importlinter`.
 5. **Tests must exist** — At least one file matching `test_*.py`, `*_test.py`, or `tests/*.py`.
 
 #### TypeScript Preflight: `_check-ts-project`
@@ -250,7 +251,7 @@ Validates:
 
 1. **`package.json` exists** — TypeScript QC requires a package manifest.
 2. **Bun is the package manager** — `bun.lock` or `bun.lockb` must exist.
-3. **No local QC tool config overrides** — `biome.json`, `eslint.config.js`, `knip.json`, `.lintstagedrc.json`, `.lintstagedrc.mjs`.
+3. **No local QC tool config overrides** — every filename biome, eslint, knip, and lint-staged discover on their own, plus the `knip` and `lint-staged` keys in `package.json`. The lists live in `local_qc_config_files` and `local_qc_manifest_keys` in `justfiles/bun.just` and follow each tool's own resolution order, so a variant spelling like `eslint.config.mjs` cannot slip through.
 4. **`tsconfig.json` does not set `strict: false`** — TypeScript strict mode is required by global QC.
 5. **Tests must exist** — At least one file matching `*.test.ts`, `*.test.tsx`, `*.spec.ts`, `*.spec.tsx`, or a `tests/` directory.
 
@@ -263,19 +264,19 @@ Validates:
 1. **At least one `Cargo.toml` exists anywhere in the repository** — Rust QC supports nested Rust layouts such as Tauri projects where the manifest lives in `src-tauri/Cargo.toml`.
 2. **Tests must exist** — Either a `tests/` directory or `#[test]` functions in source files.
 
-#### Missing Tests: [[test-writing/SKILL|Test-Writing]] Triage
+#### Missing Tests: Test-Writing Triage
 
 Missing tests are not routed through ordinary QC triage.
 A project with source code and no tests needs a separate proof-design workflow, because immediately fixing application code or adding placeholder tests launders the absence of proof into a generic QC failure.
 
-When a language preflight reports missing tests, it emits the `TEST-WRITING TRIAGE REQUIRED` directive and points agents to the global [[test-writing/SKILL|test-writing]] and [[test-guidelines/SKILL|test-guidelines]] skills.
+When a language preflight reports missing tests, it emits the `TEST-WRITING TRIAGE REQUIRED` directive and points agents to the global [[test-guidelines/SKILL|test-guidelines]] skill.
 The required workflow is:
 
 - A subagent defines the repository's real-world proof obligations: owned behavior, user-visible boundaries, real fixtures/data, and assertions that would prove the behavior.
 - A separate subagent writes and locks in those tests, observes them fail for the expected reason, and commits the red tests.
 - The main agent changes application code until those tests pass.
 - If the main agent believes a test is wrong, it may not edit the test or instruct a fixer to edit it.
-  It must ask the same [[test-writing/SKILL|test-writing]] subagent, or a fresh neutral subagent primed on all policies and testing guidelines, for an unbiased verdict.
+  It must ask the same test-writing subagent, or a fresh neutral subagent primed on all policies and testing guidelines, for an unbiased verdict.
   The verdict determines whether the app changes or the validating subagent updates the test.
 
 #### Why preflight gates exist
@@ -292,9 +293,9 @@ This is a hard fail (`exit 1`). Misconfiguration is not a warning — it blocks 
 
 #### Failure mode this policy exists to prevent
 
-**"The project just needs a quick local override — a one-line change to ruff config."** Wrong.
-Tool configs are owned by global QC. Overrides weaken the uniform QC standard and create an unmaintainable patchwork of project-specific exceptions.
-The correct action is to escalate to the QC owner, who may update the global config for all projects.
+A local override weakens the uniform standard and produces a patchwork of project-specific exceptions.
+The correct action is to argue the rule is wrong globally, for every repository at once, and let the owner update the global config.
+Why that is the only available shape, and why an argument for the local version carries no weight by default: [CONTRIBUTING.md](https://github.com/dzackgarza/ai-review-ci/blob/main/CONTRIBUTING.md).
 
 ### ML Model Preflight: `_slop` requires trained classifier
 
@@ -465,7 +466,7 @@ Location: `~/ai-review-ci/justfiles/python.just`
 
 Shared recipe composition: calls `shared.just` explicitly.
 
-Recipes: `_normalize-common` wrapper, `_python-syntax`, `_mypy`, `_normalize` (ruff), `_pytest_with_coverage`, `_diff-cover`, `_vulture`, `_deptry`, `_import-linter`, `_grain`, `_ast-grep`, `_jscpd-python`, `_lizard-python`, `_codeql` plus shared recipe calls.
+Recipes: `_normalize-common` wrapper, `_python-syntax`, `_mypy`, `_normalize` (ruff), `_pytest_with_coverage`, `_diff-cover`, `_vulture`, `_deptry`, `_import-linter`, `_ast-grep`, `_jscpd-python`, `_lizard-python`, `_codeql` plus shared recipe calls.
 
 Invocations:
 
@@ -768,7 +769,7 @@ This preserves "delegate, never reimplement" while letting projects layer on the
 
 ## Hooks
 
-Pre-commit blocks on `just test-commit`; pre-push blocks on `just test-push`. Required pull-request CI runs `just test-ci` in parallel with general and slop review. Install the centralized global hook collection from `~/ai-review-ci/global-hooks/`:
+Pre-commit blocks on `just test-commit`; pre-push blocks on `just test-push`. Required pull-request CI runs `just test-ci` in parallel with slop review. Install the centralized global hook collection from `~/ai-review-ci/global-hooks/`:
 
 ```bash
 just --justfile ~/ai-review-ci/justfile install-global-hooks
@@ -780,7 +781,7 @@ The QC system uses these configs (all stored in `~/ai-review-ci/tool-configs/`):
 
 | Config | Tool | Purpose |
 | --- | --- | --- |
-| `ruff-global.toml` | Ruff | Python linting (E, F, I, UP), Python 3.14, strict |
+| `ruff-global.toml` | Ruff | Python linting (E, F, I, UP, BLE), Python 3.14, strict |
 | `mypy-global.ini` | Mypy | Python type checking, strict mode |
 | `pytest-local.ini` | pytest | Python test configuration |
 | `pyproject.toml` | Various | Python project metadata |
@@ -788,7 +789,6 @@ The QC system uses these configs (all stored in `~/ai-review-ci/tool-configs/`):
 | `eslint.config.js` | ESLint | TypeScript/JS linting |
 | `knip.json` | Knip | TypeScript/JS dead code detection |
 | `semgrep.yml` | Semgrep | Custom security and quality rules |
-| `grain.toml` | Grain | Unused code and low-quality pattern detection |
 | `.jscpd.json` | jscpd | Copy-paste detection |
 | `sgconfig.yml` | [[ast-grep/SKILL|ast-grep]] | Custom AST-based rules |
 | `lintstagedrc.mjs` | lint-staged | Pre-commit hook staged file processing |

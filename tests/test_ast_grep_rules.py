@@ -53,3 +53,12 @@ def test_no_dynamic_import_python_flags_only_static_literals() -> None:
     false_positives = sorted(matched - expected_flag)
     assert not false_negatives, f"expected-flag line(s) not flagged: {false_negatives}"
     assert not false_positives, f"expected-clean line(s) wrongly flagged: {false_positives}"
+
+
+def test_no_boolean_param_matches_direct_parameter_types_and_defaults() -> None:
+    fixture = FIXTURES / "boolean_param.py"
+    expected_flag, _ = _expected([fixture])
+
+    matched = _ast_grep_matches(AST_GREP_RULES / "no-boolean-param.yml", [fixture])
+
+    assert matched == expected_flag

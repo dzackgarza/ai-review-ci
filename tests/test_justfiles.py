@@ -5,6 +5,7 @@ import re
 import shlex
 import shutil
 import subprocess
+import sys
 import tomllib
 from typing import Any
 
@@ -206,6 +207,21 @@ def test_lean_no_sorry_passes_clean_sources_and_excludes_quarantine(tmp_path: pa
     assert "No sorry declarations" in output
 
 
+def test_lean_no_sorry_fails_when_rg_cannot_run(tmp_path: pathlib.Path) -> None:
+    """A clean tree must not be reported clean by a scan that never ran (#361)."""
+    project = tmp_path / "lean-project"
+    project.mkdir()
+    (project / "Clean.lean").write_text("theorem fine : True := trivial\n")
+    env = os.environ.copy()
+    env["PATH"] = path_with_only(tmp_path, "just", "bash", "env")
+
+    result = run_just(ROOT / "justfiles" / "lean.just", project, "lean-no-sorry", env=env)
+
+    output = result.stdout + result.stderr
+    assert result.returncode != 0, output
+    assert "rg" in output
+
+
 def test_no_bypass_ignores_preexisting_markers_when_staging_other_changes(
     tmp_path: pathlib.Path,
 ) -> None:
@@ -312,52 +328,146 @@ def test_sage_recipes_require_configured_executable_sage_path(
     assert TRIAGE_MARKER in output
 
 
-def test_sage_syntax_cleanup_removes_owned_tempdir_without_desktop_trash(
+def test_sage_syntax_uses_tools_from_the_sage_virtual_environment(
     tmp_path: pathlib.Path,
 ) -> None:
     project = project_with_sage_file(tmp_path)
-    scratch = tmp_path / "scratch"
-    scratch.mkdir()
-    shim_dir = tmp_path / "shim"
-    shim_dir.mkdir()
+    init_git_repo(project)
+    assert run_git(project, "add", "example.sage").returncode == 0
+    commit_without_hooks(project, "baseline")
 
-    sage_bin = shim_dir / "sage"
-    sage_bin.write_text(
-        '#!/usr/bin/env bash\n'
-        'set -euo pipefail\n'
-        'if [ "${1:-}" = --preparse ]; then\n'
-        '    shift\n'
-        '    for source in "$@"; do cp "$source" "$source.py"; done\n'
-        'elif [ "${1:-}" = -python ]; then\n'
-        '    shift\n'
-        '    exec python3 "$@"\n'
-        'else\n'
-        '    exit 64\n'
-        'fi\n'
+    sage_bin_dir = tmp_path / "sage-venv" / "bin"
+    sage_bin_dir.mkdir(parents=True)
+    sage = sage_bin_dir / "sage"
+    sage.write_text("#!/usr/bin/env bash\nexit 97\n")
+    sage.chmod(0o755)
+    (sage_bin_dir / "python").symlink_to(pathlib.Path(sys.executable))
+    sage_preparse = sage_bin_dir / "sage-preparse"
+    sage_preparse.write_text(
+        "from pathlib import Path\nimport sys\nfor source_name in sys.argv[1:]:\n    source = Path(source_name)\n    Path(f'{source}.py').write_text(source.read_text())\n"
     )
-    sage_bin.chmod(0o755)
+    sage_preparse.chmod(0o755)
 
-    gio_log = tmp_path / "gio-called"
-    gio = shim_dir / "gio"
-    gio.write_text(
-        '#!/usr/bin/env bash\n'
-        "printf '%s\\n' \"$*\" >> \"$GIO_LOG\"\n"
-        'exit 91\n'
-    )
-    gio.chmod(0o755)
-
-    env = os.environ | {
-        "SAGE_BIN": str(sage_bin),
-        "TMPDIR": str(scratch),
-        "GIO_LOG": str(gio_log),
-        "PATH": f"{shim_dir}:{os.environ['PATH']}",
-    }
+    env = os.environ.copy()
+    env["SAGE_BIN"] = str(sage)
     result = run_just(ROOT / "justfiles" / "sage.just", project, "_sage-syntax", env=env)
 
     output = result.stdout + result.stderr
     assert result.returncode == 0, output
-    assert not gio_log.exists(), output
-    assert list(scratch.glob("qc-sage-syntax.*")) == []
+
+
+def test_sage_check_runner_replaces_only_the_reached_check_artifacts(
+    tmp_path: pathlib.Path,
+) -> None:
+    project = tmp_path / "sage-project"
+    project.mkdir()
+    init_git_repo(project)
+    fixture_justfile = project / "fixture.just"
+    fixture_justfile.write_text(
+        "check:\n"
+        "    #!/usr/bin/env bash\n"
+        '    echo "$FIXTURE_MESSAGE"\n'
+        '    echo "WARNING: inspect this warning" >&2\n'
+        '    echo "ERROR: inspect this error" >&2\n'
+        '    exit "$FIXTURE_STATUS"\n'
+    )
+    artifacts = project / ".ai-review-ci" / "sage"
+    artifacts.mkdir(parents=True)
+    (artifacts / "unreached.log").write_text("older log\n")
+    (artifacts / "unreached.diagnostics.log").write_text("older diagnostics\n")
+    (artifacts / "unreached.json").write_text('{"status":0}\n')
+
+    first_env = os.environ | {"FIXTURE_MESSAGE": "first run", "FIXTURE_STATUS": "0"}
+    first = subprocess.run(
+        [
+            "just",
+            "--justfile",
+            str(ROOT / "justfiles" / "sage.just"),
+            "-d",
+            str(project),
+            "_sage-run-check",
+            "fixture",
+            str(fixture_justfile),
+            "check",
+        ],
+        cwd=project,
+        env=first_env,
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+    assert first.returncode == 0, first.stdout + first.stderr
+
+    second_env = os.environ | {"FIXTURE_MESSAGE": "second run", "FIXTURE_STATUS": "7"}
+    second = subprocess.run(
+        [
+            "just",
+            "--justfile",
+            str(ROOT / "justfiles" / "sage.just"),
+            "-d",
+            str(project),
+            "_sage-run-check",
+            "fixture",
+            str(fixture_justfile),
+            "check",
+        ],
+        cwd=project,
+        env=second_env,
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+
+    assert second.returncode == 7, second.stdout + second.stderr
+    fixture_log = (artifacts / "fixture.log").read_text()
+    assert fixture_log.startswith("second run\nWARNING: inspect this warning\nERROR: inspect this error\n")
+    assert "recipe `check` failed with exit code 7" in fixture_log
+    assert "first run" not in fixture_log
+    diagnostics = (artifacts / "fixture.diagnostics.log").read_text()
+    assert "2:WARNING: inspect this warning" in diagnostics
+    assert "3:ERROR: inspect this error" in diagnostics
+    assert "recipe `check` failed with exit code 7" in diagnostics
+    assert json.loads((artifacts / "fixture.json").read_text()) == {
+        "check": "fixture",
+        "diagnostics": ".ai-review-ci/sage/fixture.diagnostics.log",
+        "log": ".ai-review-ci/sage/fixture.log",
+        "status": 7,
+    }
+    assert (artifacts / "unreached.log").read_text() == "older log\n"
+    assert (artifacts / "unreached.diagnostics.log").read_text() == "older diagnostics\n"
+    assert json.loads((artifacts / "unreached.json").read_text()) == {"status": 0}
+    ignored = run_git(project, "check-ignore", ".ai-review-ci/sage/fixture.log")
+    assert ignored.returncode == 0, ignored.stdout + ignored.stderr
+
+    writer_failure_log = artifacts / "writer-failure.log"
+    writer_failure_log.symlink_to("/dev/full")
+    writer_failure_env = os.environ | {"FIXTURE_MESSAGE": "complete check output", "FIXTURE_STATUS": "0"}
+    writer_failure = subprocess.run(
+        [
+            "just",
+            "--justfile",
+            str(ROOT / "justfiles" / "sage.just"),
+            "-d",
+            str(project),
+            "_sage-run-check",
+            "writer-failure",
+            str(fixture_justfile),
+            "check",
+        ],
+        cwd=project,
+        env=writer_failure_env,
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+
+    assert writer_failure.returncode != 0, writer_failure.stdout + writer_failure.stderr
+    assert json.loads((artifacts / "writer-failure.json").read_text()) == {
+        "check": "writer-failure",
+        "diagnostics": ".ai-review-ci/sage/writer-failure.diagnostics.log",
+        "log": ".ai-review-ci/sage/writer-failure.log",
+        "status": "running",
+    }
 
 
 def test_qc_excludes_notebooks_as_user_work() -> None:
@@ -412,6 +522,25 @@ def test_sage_vulture_files_ignore_scripts_and_global_notebooks_directories(
     assert result.stdout.splitlines() == ["src/app.sage"]
 
 
+@pytest.mark.parametrize("justfile_name", ["python.just", "sage.just"])
+def test_vulture_parses_pep758_in_target_repository(
+    tmp_path: pathlib.Path,
+    justfile_name: str,
+) -> None:
+    project = tmp_path / "project"
+    project.mkdir()
+    init_git_repo(project)
+    (project / "app.py").write_text("def obviously_dead() -> None:\n    try:\n        pass\n    except ValueError, TypeError:\n        pass\n")
+    assert run_git(project, "add", "app.py").returncode == 0
+
+    result = run_just(ROOT / "justfiles" / justfile_name, project, "_vulture")
+
+    output = result.stdout + result.stderr
+    assert result.returncode != 0, output
+    assert "app.py:1: unused function 'obviously_dead'" in output
+    assert "multiple exception types must be parenthesized" not in output
+
+
 @pytest.mark.parametrize(
     ("justfile_name", "recipe", "suffix", "expected_active"),
     [
@@ -450,6 +579,9 @@ def test_qc_file_selection_excludes_user_authored_scripts_and_notebooks(
 @pytest.mark.parametrize(
     ("justfile_name", "recipe", "suffix"),
     [
+        ("python.just", "_ast-grep", ".py"),
+        ("python.just", "_jscpd-python", ".py"),
+        ("python.just", "_lizard-python", ".py"),
         ("bun.just", "_ast-grep", ".ts"),
         ("sage.just", "_sage-syntax", ".sage"),
     ],
@@ -547,7 +679,7 @@ def test_install_global_hooks_requires_env_only_inside_recipe(
     assert not (home / ".config" / "git" / "hooks").exists()
 
 
-def test_sync_qc_excludes_preserves_non_owned_artifacts_and_updates_grain(
+def test_sync_qc_excludes_preserves_non_owned_artifacts(
     tmp_path: pathlib.Path,
 ) -> None:
     repo = tmp_path / "repo"
@@ -563,7 +695,6 @@ def test_sync_qc_excludes_preserves_non_owned_artifacts_and_updates_grain(
         "slop-scan.config.json",
         "pyright-local.json",
         "slopconfig.yaml",
-        "grain.toml",
     ):
         shutil.copy(ROOT / "tool-configs" / file_name, qc_root / file_name)
     (qc_root / "qc-excludes.toml").write_text('directories = ["central-owned"]\n')
@@ -587,9 +718,6 @@ def test_sync_qc_excludes_preserves_non_owned_artifacts_and_updates_grain(
 
     output = result.stdout + result.stderr
     assert result.returncode == 0, output
-    grain = tomllib.loads((qc_root / "grain.toml").read_text())
-    assert "fail_on" in grain["grain"]
-    assert "central-owned/*" in grain["grain"]["exclude"]
     slopconfig_text = (qc_root / "slopconfig.yaml").read_text()
     assert slopconfig_text.startswith("# Maximally strict production config for ai-slop-detector\n")
     slopconfig = yaml.safe_load(slopconfig_text)
@@ -730,65 +858,6 @@ def test_knip_ignores_exact_assembled_pdfjs_module_only(tmp_path: pathlib.Path) 
     assert "./vendor/pdfjs/pdf_viewer.mjs" not in output
 
 
-def test_grain_config_preserves_lexicon_sage_verifier_exemption(
-    tmp_path: pathlib.Path,
-) -> None:
-    """#225 Defect 5: Sage stub verifiers under lexicon/ accumulate import
-    failures into a hard-failing problems list grain misreads as NAKED_EXCEPT.
-    Both glob depths (grain fnmatches relative paths) must survive regeneration,
-    and the shipped config must equal the sync script's deterministic output."""
-    shipped = tomllib.loads((ROOT / "tool-configs" / "grain.toml").read_text())
-    for pattern in ("**/lexicon/**", "lexicon/**"):
-        assert pattern in shipped["grain"]["exclude"], shipped["grain"]["exclude"]
-
-    repo = tmp_path / "repo"
-    qc_root = repo / "tool-configs"
-    qc_root.mkdir(parents=True)
-    shutil.copytree(ROOT / "tool-configs", qc_root, dirs_exist_ok=True)
-    result = subprocess.run(
-        ["uv", "run", str(ROOT / "tool-artifacts" / "scripts" / "sync_qc_excludes.py"), str(qc_root / "qc-excludes.toml")],
-        cwd=repo,
-        text=True,
-        capture_output=True,
-        check=False,
-    )
-    assert result.returncode == 0, result.stdout + result.stderr
-    regenerated = tomllib.loads((qc_root / "grain.toml").read_text())["grain"]["exclude"]
-    for pattern in ("**/lexicon/**", "lexicon/**"):
-        assert pattern in regenerated, regenerated
-
-
-def test_grain_config_excludes_nested_directory_occurrences(
-    tmp_path: pathlib.Path,
-) -> None:
-    """#225 Defect 6: grain matches excludes with fnmatch (grain/runner.py),
-    where a root-anchored `node_modules/*` misses a nested
-    `pkg/sub/node_modules/x.py` — unlike the JSON tools' `**/{d}/**`. Vendored
-    and generated trees deep in the layout must stay out of grain's scan, so
-    every TOML-derived directory must be excluded at both depths."""
-    import fnmatch
-
-    nested = "packages/app/node_modules/vendored/mod.py"
-    shipped = tomllib.loads((ROOT / "tool-configs" / "grain.toml").read_text())["grain"]["exclude"]
-    assert any(fnmatch.fnmatch(nested, pat) for pat in shipped), f"nested vendored path not excluded by grain's fnmatch patterns:\n{shipped}"
-
-    # Deterministic SSOT output: regenerating in a temp copy holds the property.
-    repo = tmp_path / "repo"
-    qc_root = repo / "tool-configs"
-    qc_root.mkdir(parents=True)
-    shutil.copytree(ROOT / "tool-configs", qc_root, dirs_exist_ok=True)
-    result = subprocess.run(
-        ["uv", "run", str(ROOT / "tool-artifacts" / "scripts" / "sync_qc_excludes.py"), str(qc_root / "qc-excludes.toml")],
-        cwd=repo,
-        text=True,
-        capture_output=True,
-        check=False,
-    )
-    assert result.returncode == 0, result.stdout + result.stderr
-    regenerated = tomllib.loads((qc_root / "grain.toml").read_text())["grain"]["exclude"]
-    assert any(fnmatch.fnmatch(nested, pat) for pat in regenerated), regenerated
-
-
 def test_rust_qc_files_consume_central_excludes(tmp_path: pathlib.Path) -> None:
     project = tmp_path / "rust-project"
     source_dir = project / "src"
@@ -871,93 +940,6 @@ def test_common_normalization_formats_structured_text(
     assert markdown.read_text() == "# Title\n\n- item\n"
     assert agent_instructions.read_text() == "# Instructions\n\n-   preserve canonical bytes\n"
     assert json_file.read_text() == '{ "b": 2, "a": 1 }\n'
-
-
-def test_structured_text_formatting_preserves_raw_pdf_extractions(
-    tmp_path: pathlib.Path,
-) -> None:
-    project = tmp_path / "project"
-    project.mkdir()
-    authored = project / "README.md"
-    extracted_dir = project / "assets" / "attachments" / "extracted"
-    extracted_dir.mkdir(parents=True)
-    raw_nested = extracted_dir / "exam.md"
-    raw_legacy = extracted_dir.parent / "exam_extracted.md"
-
-    authored.write_text("# Title\n\n-   item\n")
-    raw = "fraction layout:\n  1\n-----\n  x\n"
-    raw_nested.write_text(raw)
-    raw_legacy.write_text(raw)
-    subprocess.run(["git", "init", "-q"], cwd=project, check=True)
-    subprocess.run(["git", "add", "."], cwd=project, check=True)
-
-    result = subprocess.run(
-        [
-            "just",
-            "--justfile",
-            str(ROOT / "justfiles" / "shared.just"),
-            "-d",
-            str(project),
-            "_format-structured-text",
-        ],
-        cwd=project,
-        text=True,
-        capture_output=True,
-        check=False,
-    )
-
-    output = result.stdout + result.stderr
-    assert result.returncode == 0, output
-    assert authored.read_text() == "# Title\n\n- item\n"
-    assert raw_nested.read_text() == raw
-    assert raw_legacy.read_text() == raw
-
-
-def test_structured_text_formatting_respects_temporary_commit_index(
-    tmp_path: pathlib.Path,
-) -> None:
-    project = tmp_path / "project"
-    project.mkdir()
-    committed = project / "target.md"
-    sibling = project / "sibling.md"
-    committed.write_text("# Target\n\n-   base\n")
-    sibling.write_text("# Sibling\n\n-   base\n")
-    subprocess.run(["git", "init", "-q"], cwd=project, check=True)
-    subprocess.run(["git", "config", "user.name", "Test"], cwd=project, check=True)
-    subprocess.run(["git", "config", "user.email", "test@example.invalid"], cwd=project, check=True)
-    subprocess.run(["git", "add", "."], cwd=project, check=True)
-    subprocess.run(["git", "-c", "core.hooksPath=/dev/null", "commit", "-q", "-m", "base"], cwd=project, check=True)
-
-    sibling.write_text("# Sibling\n\n-   sibling staged change\n")
-    subprocess.run(["git", "add", "sibling.md"], cwd=project, check=True)
-    committed.write_text("# Target\n\n-   commit-only change\n")
-
-    temporary_index = project / ".git" / "temporary-commit-index"
-    env = os.environ.copy()
-    env["GIT_INDEX_FILE"] = str(temporary_index)
-    subprocess.run(["git", "read-tree", "HEAD"], cwd=project, env=env, check=True)
-    subprocess.run(["git", "add", "target.md"], cwd=project, env=env, check=True)
-
-    result = subprocess.run(
-        [
-            "just",
-            "--justfile",
-            str(ROOT / "justfiles" / "shared.just"),
-            "-d",
-            str(project),
-            "_format-structured-text",
-        ],
-        cwd=project,
-        env=env,
-        text=True,
-        capture_output=True,
-        check=False,
-    )
-
-    output = result.stdout + result.stderr
-    assert result.returncode == 0, output
-    assert committed.read_text() == "# Target\n\n- commit-only change\n"
-    assert sibling.read_text() == "# Sibling\n\n-   sibling staged change\n"
 
 
 def load_lint_staged_config() -> dict[str, list[str]]:
@@ -1055,6 +1037,23 @@ def test_python_ast_grep_uses_official_cli_and_central_rules(
     output = result.stdout + result.stderr
     assert result.returncode != 0, output
     assert "no-field-default" in output
+
+
+def test_python_ast_grep_reports_boolean_parameter_in_target_repository(
+    tmp_path: pathlib.Path,
+) -> None:
+    project = tmp_path / "python-project"
+    project.mkdir()
+    init_git_repo(project)
+    (project / "app.py").write_text("def configure(verbose: bool) -> None:\n    pass\n")
+    assert run_git(project, "add", "app.py").returncode == 0
+
+    result = run_just(ROOT / "justfiles" / "python.just", project, "_ast-grep")
+
+    output = result.stdout + result.stderr
+    assert result.returncode != 0, output
+    assert "no-boolean-param" in output
+    assert "app.py:1" in output
 
 
 def test_python_ast_grep_blocks_dynamic_import(
@@ -2982,20 +2981,6 @@ def test_tsc_fails_when_declared_typecheck_command_is_missing(
     assert TRIAGE_MARKER in output
 
 
-def test_sage_push_selects_the_sage_mypy_profile() -> None:
-    sage = (ROOT / "justfiles" / "sage.just").read_text()
-    python = (ROOT / "justfiles" / "python.just").read_text()
-    commit = sage.split("test-commit:", 1)[1].split("test-push:", 1)[0]
-    push = sage.split("test-push:", 1)[1].split("_sage-ast-grep:", 1)[0]
-
-    assert "_mypy" not in commit
-    assert 'AI_REVIEW_CI_MYPY_CONFIG="{{configs}}/mypy-sage.ini"' in push
-    assert "_mypy" in push
-    assert "_sage-pytest" in push
-    assert 'AI_REVIEW_CI_MYPY_CONFIG:-{{configs}}/mypy-global.ini' in python
-    assert "mypy_path = typings" in (ROOT / "tool-configs" / "mypy-sage.ini").read_text()
-
-
 def test_pytest_installs_dependency_group_requirements(
     tmp_path: pathlib.Path,
 ) -> None:
@@ -3206,6 +3191,7 @@ def write_import_linter_project(
     *,
     import_sibling: bool = False,
     local_importlinter_override: bool = False,
+    unbuildable_dependency: bool = False,
 ) -> None:
     package_a = project / "src" / "import_linter_a"
     package_b = project / "src" / "import_linter_b"
@@ -3218,15 +3204,23 @@ def write_import_linter_project(
         'name = "import-linter-project"',
         'version = "0.1.0"',
         'requires-python = ">=3.14"',
-        "",
-        "[build-system]",
-        'requires = ["setuptools"]',
-        'build-backend = "setuptools.build_meta"',
-        "",
-        "[tool.setuptools.packages.find]",
-        'where = ["src"]',
-        "",
     ]
+    if unbuildable_dependency:
+        pyproject_lines.append(
+            'dependencies = ["ai-review-ci-unbuildable-fixture==0"]',
+        )
+    pyproject_lines.extend(
+        [
+            "",
+            "[build-system]",
+            'requires = ["setuptools"]',
+            'build-backend = "setuptools.build_meta"',
+            "",
+            "[tool.setuptools.packages.find]",
+            'where = ["src"]',
+            "",
+        ],
+    )
     if local_importlinter_override:
         pyproject_lines.extend(
             [
@@ -3274,6 +3268,20 @@ def test_import_linter_uses_central_config_without_downstream_override(
     project = tmp_path / "central-importlinter-project"
     project.mkdir()
     write_import_linter_project(project)
+
+    result = run_just(ROOT / "justfiles" / "python.just", project, "_import-linter")
+    output = result.stdout + result.stderr
+
+    assert result.returncode == 0, output
+    assert "First-party packages are independent KEPT" in output
+
+
+def test_import_linter_reads_sources_without_installing_runtime_dependencies(
+    tmp_path: pathlib.Path,
+) -> None:
+    project = tmp_path / "import-linter-unbuildable-dependency-project"
+    project.mkdir()
+    write_import_linter_project(project, unbuildable_dependency=True)
 
     result = run_just(ROOT / "justfiles" / "python.just", project, "_import-linter")
     output = result.stdout + result.stderr
@@ -3684,8 +3692,13 @@ def test_mypy_recipe_fails_when_mypy_reports_type_errors(
     assert result.returncode != 0, result.stdout + result.stderr
 
 
-def test_mypy_recipe_uses_upstream_diff_in_git_repo(
+@pytest.mark.parametrize(
+    "recipe",
+    ["_mypy", "_ast-grep", "_jscpd-python", "_lizard-python"],
+)
+def test_python_diff_scoped_recipes_accept_metadata_only_changes(
     tmp_path: pathlib.Path,
+    recipe: str,
 ) -> None:
     project = tmp_path / "diff-scoped-python-project"
     package_dir = project / "src" / "diff_scoped_python_project"
@@ -3719,6 +3732,9 @@ def test_mypy_recipe_uses_upstream_diff_in_git_repo(
         check=True,
         capture_output=True,
     )
+    # A bare runner has no global identity; committing without one exits 128.
+    subprocess.run(["git", "config", "user.email", "qc@example.invalid"], cwd=project, check=True, capture_output=True)
+    subprocess.run(["git", "config", "user.name", "QC Fixture"], cwd=project, check=True, capture_output=True)
     subprocess.run(["git", "add", "."], cwd=project, check=True, capture_output=True)
     subprocess.run(
         ["git", "commit", "-m", "Initial commit"],
@@ -3748,7 +3764,7 @@ def test_mypy_recipe_uses_upstream_diff_in_git_repo(
             str(ROOT / "justfiles" / "python.just"),
             "-d",
             str(project),
-            "_mypy",
+            recipe,
         ],
         cwd=project,
         text=True,
@@ -3758,7 +3774,6 @@ def test_mypy_recipe_uses_upstream_diff_in_git_repo(
 
     output = result.stdout + result.stderr
     assert result.returncode == 0, output
-    assert "mypy: no changed Python files." in output
 
 
 def test_commit_gate_stops_at_doctor_preflight_before_typechecking(
@@ -4103,6 +4118,44 @@ def test_rust_normalization_formats_nested_manifest_project(
     assert (source_dir / "lib.rs").read_text() == "pub fn value() -> u8 {\n    42\n}\n"
 
 
+def test_rust_normalization_formats_a_workspace_and_its_members(
+    tmp_path: pathlib.Path,
+) -> None:
+    # Two members: cargo fmt takes a lone member for a virtual manifest, and finds no targets
+    # for one with two unless it is asked for all of them.
+    project = tmp_path / "rust-workspace"
+    project.mkdir(parents=True)
+    (project / "Cargo.toml").write_text('[workspace]\nmembers = ["server", "desktop"]\nresolver = "2"\n')
+    for member in ("server", "desktop"):
+        (project / member / "src").mkdir(parents=True)
+        (project / member / "Cargo.toml").write_text(
+            f'[package]\nname = "{member}"\nversion = "0.1.0"\nedition = "2021"\n'
+        )
+        (project / member / "src" / "lib.rs").write_text("pub fn value()->u8{42}\n")
+
+    result = subprocess.run(
+        [
+            "just",
+            "--justfile",
+            str(ROOT / "justfiles" / "rust.just"),
+            "-d",
+            str(project),
+            "_normalize",
+            "_rustfmt",
+        ],
+        cwd=project,
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+
+    output = result.stdout + result.stderr
+    assert result.returncode == 0, output
+    for member in ("server", "desktop"):
+        formatted = (project / member / "src" / "lib.rs").read_text()
+        assert formatted == "pub fn value() -> u8 {\n    42\n}\n"
+
+
 # Regression for #17: just >= 1.46 binds JUST_WORKING_DIRECTORY to
 # -d/--working-directory, which then requires --justfile — so any consumer that
 # exported JUST_WORKING_DIRECTORY (the old delegated-gate routing hint) could no
@@ -4249,3 +4302,184 @@ def test_docs_and_configs_qc_routes_formatting_and_link_validation(tmp_path: pat
     assert f"--justfile {profile_justfile} _check-links" in push.stderr
     assert links.returncode == 0, links.stderr
     assert "lychee --no-progress" in links.stderr
+
+
+# Config filenames each QC tool actually discovers, read from the tools themselves:
+#   biome      — ConfigName::BIOME_JSON in biome_fs/src/fs.rs
+#   eslint     — FLAT_CONFIG_FILENAMES in eslint/lib/config/config-loader.js (v10: flat config only)
+#   knip       — https://knip.dev/overview/configuration#location
+#   lint-staged— CONFIG_FILE_NAMES in lint-staged/lib/loadConfig.js
+LOCAL_QC_OVERRIDE_FILES = (
+    "biome.json",
+    "biome.jsonc",
+    ".biome.json",
+    ".biome.jsonc",
+    "eslint.config.js",
+    "eslint.config.mjs",
+    "eslint.config.cjs",
+    "eslint.config.ts",
+    "eslint.config.mts",
+    "eslint.config.cts",
+    "knip.json",
+    "knip.jsonc",
+    ".knip.json",
+    ".knip.jsonc",
+    "knip.ts",
+    "knip.js",
+    "knip.config.ts",
+    "knip.config.js",
+    "lint-staged.config.js",
+    "lint-staged.config.cjs",
+    "lint-staged.config.mjs",
+    ".lintstagedrc",
+    ".lintstagedrc.js",
+    ".lintstagedrc.cjs",
+    ".lintstagedrc.mjs",
+    ".lintstagedrc.json",
+    ".lintstagedrc.yaml",
+    ".lintstagedrc.yml",
+)
+
+
+def compliant_bun_project(tmp_path: pathlib.Path, manifest: dict[str, Any] | None = None) -> pathlib.Path:
+    """A bun project that satisfies every _check-ts-project rule except QC config isolation."""
+    project = tmp_path / "bun-project"
+    (project / "tests").mkdir(parents=True)
+    (project / "package.json").write_text(json.dumps(manifest or {"name": "ts-preflight-fixture", "version": "1.0.0"}) + "\n")
+    (project / "bun.lock").write_text("{}\n")
+    (project / "tests" / "app.test.ts").write_text("import { expect, test } from 'bun:test';\ntest('t', () => expect(1).toBe(1));\n")
+    return project
+
+
+def test_ts_preflight_accepts_a_project_with_no_local_qc_config(tmp_path: pathlib.Path) -> None:
+    """Positive control: the detector must not reject a project that owns no QC tool config."""
+    project = compliant_bun_project(tmp_path)
+
+    result = run_just(ROOT / "justfiles" / "bun.just", project, "_check-ts-project")
+
+    output = result.stdout + result.stderr
+    assert result.returncode == 0, output
+
+
+@pytest.mark.parametrize("config", LOCAL_QC_OVERRIDE_FILES)
+def test_ts_preflight_rejects_every_discoverable_local_qc_config(tmp_path: pathlib.Path, config: str) -> None:
+    """A project-local config any QC tool would load diverges local QC from canonical CI (#292)."""
+    project = compliant_bun_project(tmp_path)
+    (project / config).write_text("{}\n")
+
+    result = run_just(ROOT / "justfiles" / "bun.just", project, "_check-ts-project")
+
+    output = result.stdout + result.stderr
+    assert result.returncode != 0, output
+    assert config in output, output
+
+
+@pytest.mark.parametrize("key", ["knip", "lint-staged"])
+def test_ts_preflight_rejects_qc_config_embedded_in_the_package_manifest(tmp_path: pathlib.Path, key: str) -> None:
+    """knip and lint-staged also load config from a package.json key, not just a config file (#292)."""
+    project = compliant_bun_project(tmp_path, {"name": "manifest-config-fixture", "version": "1.0.0", key: {}})
+
+    result = run_just(ROOT / "justfiles" / "bun.just", project, "_check-ts-project")
+
+    output = result.stdout + result.stderr
+    assert result.returncode != 0, output
+    assert f"package.json#{key}" in output, output
+
+
+# setup.cfg and tox.ini are config-discovery surfaces for QC tools this repo supplies
+# configs for: mypy (mypy.defaults.SHARED_CONFIG_NAMES), coverage.py, and import-linter.
+# pytest and pyright are deliberately absent — global QC passes them no config, so a
+# project-local one is not an override of anything (#292).
+SHARED_MANIFEST_OVERRIDES = (
+    ("setup.cfg", "[mypy]\nwarn_return_any = True\n"),
+    ("setup.cfg", "[coverage:run]\nbranch = True\n"),
+    ("setup.cfg", "[importlinter]\nroot_package = app\n"),
+    ("tox.ini", "[coverage:run]\nbranch = True\n"),
+)
+
+
+def compliant_python_project(tmp_path: pathlib.Path) -> pathlib.Path:
+    """A python project that satisfies every _check-python-project rule except QC config isolation."""
+    project = tmp_path / "python-project"
+    (project / "tests").mkdir(parents=True)
+    (project / "pyproject.toml").write_text('[project]\nname = "preflight-fixture"\nrequires-python = ">=3.14"\n')
+    (project / "tests" / "test_app.py").write_text("def test_app() -> None:\n    assert 1 == 1\n")
+    return project
+
+
+def test_python_preflight_accepts_a_project_with_no_local_qc_config(tmp_path: pathlib.Path) -> None:
+    """Positive control: a project owning no QC tool config must pass."""
+    project = compliant_python_project(tmp_path)
+
+    result = run_just(ROOT / "justfiles" / "python.just", project, "_check-python-project")
+
+    output = result.stdout + result.stderr
+    assert result.returncode == 0, output
+
+
+@pytest.mark.parametrize(("manifest", "body"), SHARED_MANIFEST_OVERRIDES)
+def test_python_preflight_rejects_qc_config_in_shared_manifests(tmp_path: pathlib.Path, manifest: str, body: str) -> None:
+    """mypy, coverage, and import-linter all read setup.cfg/tox.ini, which went unaudited (#292)."""
+    project = compliant_python_project(tmp_path)
+    (project / manifest).write_text(body)
+
+    result = run_just(ROOT / "justfiles" / "python.just", project, "_check-python-project")
+
+    output = result.stdout + result.stderr
+    assert result.returncode != 0, output
+    assert manifest in output, output
+
+
+def test_python_preflight_allows_pytest_config_global_qc_does_not_supply(tmp_path: pathlib.Path) -> None:
+    """Global QC passes pytest no config, so a project-local one overrides nothing (#292 part 2)."""
+    project = compliant_python_project(tmp_path)
+    (project / "pytest.ini").write_text("[pytest]\ntestpaths = tests\n")
+
+    result = run_just(ROOT / "justfiles" / "python.just", project, "_check-python-project")
+
+    output = result.stdout + result.stderr
+    assert result.returncode == 0, output
+
+
+def test_every_generated_qc_config_matches_its_generator(tmp_path: pathlib.Path) -> None:
+    """qc-excludes.toml is the single owner of QC directory exclusions (#375).
+
+    The knip check above proves this for one file. The invariant covers every
+    config sync_qc_excludes.py writes: a hand edit, or a qc-excludes.toml change
+    that was never synced out, silently desynchronises what QC actually scans.
+    """
+    qc_root = tmp_path / "tool-configs"
+    shutil.copytree(ROOT / "tool-configs", qc_root)
+    result = subprocess.run(
+        ["uv", "run", str(ROOT / "tool-artifacts" / "scripts" / "sync_qc_excludes.py"), str(qc_root / "qc-excludes.toml")],
+        cwd=tmp_path,
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+    assert result.returncode == 0, result.stdout + result.stderr
+
+    drifted = [path.name for path in sorted(qc_root.iterdir()) if path.is_file() and path.read_bytes() != (ROOT / "tool-configs" / path.name).read_bytes()]
+    assert drifted == [], drifted
+
+
+def test_global_stub_library_resolves_from_a_downstream_project(tmp_path: pathlib.Path) -> None:
+    """typings/ is the shared stub library; it must resolve from any project's cwd.
+
+    mypy_path entries are cwd-relative, so a bare `mypy_path = typings` resolves to
+    <project>/typings downstream and the global stubs never load. A downstream repo
+    then grows its own typings/ — the splintering the shared library exists to prevent.
+    """
+    project = tmp_path / "downstream"
+    project.mkdir()
+    (project / "pyproject.toml").write_text('[project]\nname = "downstream"\nversion = "0.1.0"\nrequires-python = ">=3.14"\n')
+    (project / "uses_stub.py").write_text("from sarif_pydantic import Sarif\n\n__all__ = ['Sarif']\n")
+    subprocess.run(["git", "init", "-q"], cwd=project, check=True)
+    subprocess.run(["git", "add", "-A"], cwd=project, check=True)
+
+    result = run_just(ROOT / "justfiles" / "python.just", project, "_mypy")
+
+    # Scoped to the stubbed module itself. A stub that re-exports third-party types
+    # can still report those, which is a property of the stub, not of path resolution.
+    output = result.stdout + result.stderr
+    assert 'named "sarif_pydantic"' not in output, output

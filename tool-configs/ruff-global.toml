@@ -39,7 +39,7 @@ target-version = "py314"
 
 [lint]
 # Enable standard rules
-select = ["E", "F", "I", "UP"]
+select = ["E", "F", "I", "UP", "BLE"]
 # F401 (unused import) is off: its autofix deletes re-exports and registration imports.
 # The commit gate fixes the working tree without restaging, so on 2026-09-25 it stripped
 # ~435 import lines from research's preamble re-export surface (preamble/all.py and 36

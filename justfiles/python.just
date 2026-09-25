@@ -10,12 +10,14 @@
 # Python-specific recipes:
 #   _python-qc-files, _python-syntax, _mypy, _normalize (ruff),
 #   _pytest_with_coverage, _diff-cover, _vulture, _deptry,
-#   _import-linter, _grain, _ast-grep, _jscpd, _lizard, _codeql
+#   _import-linter, _ast-grep, _jscpd, _lizard, _codeql
 #
 # WORKFLOW (three-tier):
 #   just test-commit — preflight, normalization, syntax, mypy, bypass check.
-#   just test-push   — commit checks plus the full pytest suite.
-#   just test-ci     — push checks plus coverage and policy-sensitive gates.
+#   just test-push   — commit checks, the full pytest suite, and the cheap
+#                      deterministic gates (deptry, ast-grep).
+#   just test-ci     — push checks plus the threshold metrics (coverage,
+#                      duplication) and the minutes-long import graph.
 #
 # HOOKS: pre-commit blocks on `just test-commit`; pre-push blocks on `just test-push`.
 #   Run `just install-global-hooks` from ~/ai-review-ci to activate them globally.
@@ -50,7 +52,8 @@ setup:
 	@echo "4. Tests must exist (test_*.py / *_test.py / tests/*.py)."
 	@echo ""
 	@echo "5. Gates: pre-commit runs 'just test-commit' (syntax and mypy);"
-	@echo "   pre-push runs 'just test-push' (adds pytest); CI runs 'just test-ci'."
+	@echo "   pre-push runs 'just test-push' (adds pytest and the cheap"
+	@echo "   deterministic gates); CI runs 'just test-ci' (threshold metrics)."
 	@echo "   Commit/push failures are direct repair; CI policy findings are triaged."
 	@echo ""
 	@echo "Sage projects: use sage.just instead ('just -f ~/ai-review-ci/justfiles/sage.just setup')."
@@ -74,7 +77,7 @@ _python-qc-files:
 		for exclude_dir in "${exclude_dirs[@]}"; do
 			[ -n "$exclude_dir" ] || continue
 			exclude_dir="${exclude_dir%/}"
-			[[ "$file" == "$exclude_dir" || "$file" == "$exclude_dir"/* ]] && return 0
+			[[ "$file" == "$exclude_dir" || "$file" == "$exclude_dir"/* || "$file" == *"/$exclude_dir/"* ]] && return 0
 		done
 		return 1
 	}
@@ -231,6 +234,8 @@ _mypy: _install-tools
 		exit 0
 	fi
 	effective_config="${AI_REVIEW_CI_MYPY_CONFIG:-{{configs}}/mypy-global.ini}"
+	# Shared stub library, owned here so downstream repos never grow their own.
+	export MYPYPATH="{{infra}}/typings${MYPYPATH:+:$MYPYPATH}"
 	with_args=(--with-editable .)
 	dependency_requirements_output="$(uv run --no-project python "{{artifacts}}/scripts/python_qc_metadata.py" dependency-group-requirements .)"
 	if [ -n "$dependency_requirements_output" ]; then
@@ -299,7 +304,7 @@ _check-python-project:
 		done
 	fi
 	# 4. Check for standalone Python tool config files (also QC overrides)
-	for config in ruff.toml .ruff.toml mypy.ini .mypy.ini grain.toml .coveragerc .importlinter; do
+	for config in ruff.toml .ruff.toml mypy.ini .mypy.ini .coveragerc .importlinter; do
 		if [ -f "$config" ]; then
 			echo "ERROR: Local QC override detected: $config — global QC owns this tool config."
 			echo "       DELETE this file. The global config for this tool already exists in"
@@ -310,7 +315,30 @@ _check-python-project:
 			failed=1
 		fi
 	done
-	# 5. Tests must exist
+	# 5. setup.cfg and tox.ini are config-discovery surfaces too, and went unaudited.
+	#    Each tool's own rules decide which sections count here: mypy reads setup.cfg
+	#    (mypy.defaults.SHARED_CONFIG_NAMES), import-linter reads setup.cfg, coverage.py
+	#    reads both. pytest and pyright are absent on purpose — global QC passes them no
+	#    config, so a project-local one overrides nothing.
+	audit_shared_manifest() {
+		manifest="$1"
+		shift
+		[ -f "$manifest" ] || return 0
+		for section in "$@"; do
+			if grep -qP "$section" "$manifest"; then
+				echo "ERROR: $manifest contains section matching '$section' — global QC owns this tool config."
+				echo "       DELETE this section from $manifest. The global config for this tool"
+				echo "       already exists in ~/ai-review-ci/ and is authoritative for all projects."
+				echo "       Do NOT copy the section contents to ~/ai-review-ci/ — that violates"
+				echo "       QC isolation policy. If the global config needs to change, contact"
+				echo "       the QC owner (dzack) to update it centrally."
+				failed=1
+			fi
+		done
+	}
+	audit_shared_manifest setup.cfg '\[mypy\]' '\[coverage:' '\[importlinter\]'
+	audit_shared_manifest tox.ini '\[coverage:'
+	# 6. Tests must exist
 	if ! rg --files -g 'test_*.py' -g '*_test.py' -g 'tests/*.py' -g '!*.sage.py' >/dev/null 2>&1; then
 		echo "ERROR: Python project must have tests. No test files found with patterns: test_*.py, *_test.py, tests/*.py"
 		"{{artifacts}}/scripts/emit-test-writing-directive.sh"
@@ -489,7 +517,24 @@ _diff-cover: _pytest_with_coverage
 		"{{artifacts}}/scripts/emit-triage-directive.sh"
 		exit 1
 	fi
-	if uvx --from diff-cover diff-cover "$coverage_xml" --compare-branch ${DIFF_COVER_BASE:-main}; then
+	base="${DIFF_COVER_BASE:-main}"
+	# A clone that checked out a feature branch directly has no local `main`, only
+	# the remote-tracking ref. Both spellings name the same base branch; try each and
+	# name every one tried when none resolves, rather than reporting only the first.
+	compare=""
+	for candidate in "$base" "origin/$base"; do
+		if git rev-parse --verify "$candidate^{commit}" >/dev/null 2>&1; then
+			compare="$candidate"
+			break
+		fi
+	done
+	if [ -z "$compare" ]; then
+		echo "ERROR: diff-cover: no comparison ref resolves; tried '$base' and 'origin/$base'." >&2
+		"{{artifacts}}/scripts/emit-triage-directive.sh"
+		exit 1
+	fi
+	echo "# Comparing against $compare"
+	if uvx --from diff-cover diff-cover "$coverage_xml" --compare-branch "$compare"; then
 		:
 	else
 		ec=$?
@@ -504,12 +549,16 @@ _vulture: _install-tools
 	echo "============================="
 	echo "=== Running: vulture dead code detection ==="
 	echo "# Finds unused code (functions, classes, variables) that can be safely removed"
-	all_python_files_output="$(just --justfile {{justfile()}} -d . _python-qc-files)"
+	# Whole tree, never the diff. A symbol is dead only if nothing anywhere
+	# calls it, so a file subset cannot answer the question: every definition
+	# whose callers sit in an unchanged file reads as unused, and the false
+	# positives grow as the diff shrinks.
+	all_python_files_output="$(QC_TIER=ambient just --justfile {{justfile()}} -d . _python-qc-files)"
 	all_python_files=()
 	if [ -n "$all_python_files_output" ]; then
 		mapfile -t all_python_files <<<"$all_python_files_output"
 	fi
-	python_files_output="$(just --justfile {{justfile()}} -d . _python-vulture-files)"
+	python_files_output="$(QC_TIER=ambient just --justfile {{justfile()}} -d . _python-vulture-files)"
 	python_files=()
 	if [ -n "$python_files_output" ]; then
 		mapfile -t python_files <<<"$python_files_output"
@@ -525,7 +574,7 @@ _vulture: _install-tools
 		exit 0
 	fi
 
-	if uvx --from vulture vulture \
+	if uvx --python 3.14 --from vulture vulture \
 		--config {{configs}}/pyproject.toml \
 		"${python_files[@]}" \
 		"$whitelist_file"; then
@@ -557,8 +606,11 @@ _deptry: _install-tools
 	# DEP001 sage/fpylll: provided by the Sage interpreter environment, not pip
 	# dependency definitions (sage.just wiring contract runs projects under
 	# SAGE_BIN; fpylll ships inside the Sage distribution — extend on first use).
+	# tree_sitter_sage: first-party inside the tree-sitter-sage repo itself
+	# (the binding module lives in the QC-excluded generated bindings/ tree);
+	# consumers declaring tree-sitter-sage resolve it via the module map.
 	# Harmless for pure-Python repos, which do not import them.
-	deptry_args=(. --package-module-name-map "$package_module_name_map" --ignore DEP002 --per-rule-ignores "DEP001=sage|fpylll")
+	deptry_args=(. --package-module-name-map "$package_module_name_map" --ignore DEP002 --per-rule-ignores "DEP001=sage|fpylll|tree_sitter_sage")
 	# qc-excludes.toml is the single source of truth for never-scanned
 	# directories; deptry takes path regexes, so literal dots are escaped
 	# and glob stars widen to `.*`.
@@ -578,7 +630,10 @@ _deptry: _install-tools
 			deptry_args+=(--known-first-party "$first_party_module")
 		done
 	fi
-	pep723_scripts_output="$(uv run --no-project python "{{artifacts}}/scripts/python_qc_metadata.py" pep723-scripts "${python_files[@]}")"
+	pep723_scripts_output=""
+	if [ "${#python_files[@]}" -gt 0 ]; then
+		pep723_scripts_output="$(uv run --no-project python "{{artifacts}}/scripts/python_qc_metadata.py" pep723-scripts "${python_files[@]}")"
+	fi
 	if [ -n "$pep723_scripts_output" ]; then
 		mapfile -t pep723_scripts <<<"$pep723_scripts_output"
 		for script in "${pep723_scripts[@]}"; do
@@ -606,9 +661,14 @@ _ast-grep: _install-tools
 		mapfile -t python_files <<<"$python_files_output"
 	fi
 	if [ "${#python_files[@]}" -eq 0 ]; then
-		echo "ERROR: ast-grep: no Python files found in a Python project."
-		"{{artifacts}}/scripts/emit-triage-directive.sh"
-		exit 1
+		project_files_output="$(QC_TIER=ambient just --justfile {{justfile()}} -d . _python-qc-files)"
+		if [ -z "$project_files_output" ]; then
+			echo "ERROR: ast-grep: no Python files found in a Python project."
+			"{{artifacts}}/scripts/emit-triage-directive.sh"
+			exit 1
+		fi
+		echo "ast-grep: no changed Python files."
+		exit 0
 	fi
 	findings_file=$(mktemp)
 	trap 'if [ -e "$findings_file" ]; then rm -f "$findings_file"; fi' EXIT
@@ -639,9 +699,14 @@ _jscpd-python:
 		mapfile -t python_files <<<"$python_files_output"
 	fi
 	if [ "${#python_files[@]}" -eq 0 ]; then
-		echo "ERROR: jscpd: no Python files found in a Python project."
-		"{{artifacts}}/scripts/emit-triage-directive.sh"
-		exit 1
+		project_files_output="$(QC_TIER=ambient just --justfile {{justfile()}} -d . _python-qc-files)"
+		if [ -z "$project_files_output" ]; then
+			echo "ERROR: jscpd: no Python files found in a Python project."
+			"{{artifacts}}/scripts/emit-triage-directive.sh"
+			exit 1
+		fi
+		echo "jscpd: no changed Python files."
+		exit 0
 	fi
 	if ! npx -y jscpd \
 		--config {{configs}}/jscpd.json \
@@ -668,9 +733,14 @@ _lizard-python ccn="7": _install-tools
 		mapfile -t python_files <<<"$python_files_output"
 	fi
 	if [ "${#python_files[@]}" -eq 0 ]; then
-		echo "ERROR: lizard: no Python files found in a Python project."
-		"{{artifacts}}/scripts/emit-triage-directive.sh"
-		exit 1
+		project_files_output="$(QC_TIER=ambient just --justfile {{justfile()}} -d . _python-qc-files)"
+		if [ -z "$project_files_output" ]; then
+			echo "ERROR: lizard: no Python files found in a Python project."
+			"{{artifacts}}/scripts/emit-triage-directive.sh"
+			exit 1
+		fi
+		echo "lizard: no changed Python files."
+		exit 0
 	fi
 	# lexicon subtrees are declared Sage reflection boundaries; their stub
 	# verifiers are recursive AST dispatch (dev tooling), not product code.
@@ -711,7 +781,11 @@ _import-linter: _install-tools
 		"{{artifacts}}/scripts/emit-triage-directive.sh"
 		exit 1
 	fi
-	if uvx --python 3.14 --from import-linter --with-editable . lint-imports --config "$config"; then
+	source_path="$(uv run --no-project python "{{artifacts}}/scripts/python_qc_metadata.py" first-party-source-roots . | paste -sd ':' -)"
+	if [ -n "${PYTHONPATH:-}" ]; then
+		source_path="${source_path}:${PYTHONPATH}"
+	fi
+	if PYTHONPATH="$source_path" uvx --python 3.14 --from import-linter lint-imports --config "$config"; then
 		:
 	else
 		ec=$?
@@ -719,28 +793,6 @@ _import-linter: _install-tools
 		"{{artifacts}}/scripts/emit-triage-directive.sh"
 		exit $ec
 	fi
-
-_grain:
-	#!/usr/bin/env bash
-	set -euo pipefail
-	# Strip git env vars the pre-commit hook inherits from `git commit`; left
-	# set, they redirect uvx's git-sourced tool fetch (grain) at the host
-	# project's .git and it fails with "Git operation failed".
-	unset GIT_DIR GIT_INDEX_FILE GIT_WORK_TREE GIT_PREFIX GIT_OBJECT_DIRECTORY GIT_ALTERNATE_OBJECT_DIRECTORIES GIT_COMMON_DIR
-	echo "============================="
-	echo "=== Running: grain unused code detection ==="
-	echo "# Finds unused imports and variables that can be safely removed"
-	cp {{configs}}/grain.toml .grain.toml
-	if uvx --from git+https://github.com/mmartoccia/grain grain check --all; then
-		:
-	else
-		ec=$?
-		[ -e .grain.toml ] && rm -f -- .grain.toml
-		echo "ERROR: grain found unused code in project."
-		"{{artifacts}}/scripts/emit-triage-directive.sh"
-		exit $ec
-	fi
-	[ -e .grain.toml ] && rm -f -- .grain.toml
 
 _codeql:
 	#!/usr/bin/env bash
@@ -820,22 +872,33 @@ test-commit:
 	just -f {{justfiles}}/shared.just -d . _no-bypass
 	echo "Commit quality checks completed"
 
-# public: PUSH gate — commit checks plus the full project-owned test suite
+# public: PUSH gate — commit checks, the project-owned test suite, and the
+# deterministic checks a developer can answer without leaving the local loop.
+#
+# A gate belongs here when it names a specific defect at a specific location and
+# costs about a second: banned patterns, missing dependencies, dead code and
+# prose rules. Each reports the same verdict locally and in CI, so discovering
+# it here costs one edit and discovering it there costs a CI round trip.
 test-push:
 	#!/usr/bin/env bash
 	set -euo pipefail
 	export AI_REVIEW_CI_FAILURE_MODE=direct
-	just --justfile {{justfile()}} -d . test-commit _pytest
+	just --justfile {{justfile()}} -d . test-commit _pytest _deptry _ast-grep
 	echo "Push quality checks completed"
 
 # private: ambient broad-debt audit — not push-blocking for unrelated diffs
-_ambient-python-debt: _lizard-python _vulture _grain
+_ambient-python-debt: _lizard-python _vulture
 
 # public: CI gate — push checks plus gameable and long-running acceptance gates
+#
+# What remains here earns it on one of two counts. Coverage, duplication and
+# complexity are threshold metrics: run them in the local loop and they become
+# a number to golf rather than a defect to fix. `_import-linter` builds the
+# whole import graph and takes minutes, which no push gate can carry.
 test-ci:
 	#!/usr/bin/env bash
 	set -euo pipefail
 	export AI_REVIEW_CI_FAILURE_MODE=triage
-	just --justfile {{justfile()}} -d . test-push _pytest_with_coverage _diff-cover _deptry _import-linter _ast-grep _jscpd-python
+	just --justfile {{justfile()}} -d . test-push _pytest_with_coverage _diff-cover _import-linter _jscpd-python
 	just -f {{justfiles}}/shared.just -d . _global-qc
 	echo "CI quality checks completed"

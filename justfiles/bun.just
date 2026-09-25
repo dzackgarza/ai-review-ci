@@ -27,6 +27,19 @@ configs := infra / "tool-configs"
 artifacts := infra / "tool-artifacts"
 justfiles := infra / "justfiles"
 
+# Every config filename these QC tools discover on their own. A project that carries any
+# of them diverges its local run from canonical CI (#292). Each list is the tool's own
+# resolution order: biome ConfigName::BIOME_JSON (biome_fs/src/fs.rs), eslint
+# FLAT_CONFIG_FILENAMES (lib/config/config-loader.js), knip.dev/overview/configuration,
+# lint-staged CONFIG_FILE_NAMES (lib/loadConfig.js).
+local_qc_config_files := "biome.json biome.jsonc .biome.json .biome.jsonc " + \
+	"eslint.config.js eslint.config.mjs eslint.config.cjs eslint.config.ts eslint.config.mts eslint.config.cts " + \
+	"knip.json knip.jsonc .knip.json .knip.jsonc knip.ts knip.js knip.config.ts knip.config.js " + \
+	"lint-staged.config.js lint-staged.config.cjs lint-staged.config.mjs " + \
+	".lintstagedrc .lintstagedrc.js .lintstagedrc.cjs .lintstagedrc.mjs .lintstagedrc.json .lintstagedrc.yaml .lintstagedrc.yml"
+# knip and lint-staged also load config from a package.json key, with no config file present.
+local_qc_manifest_keys := "knip lint-staged"
+
 # private recipes (prefix with _ — never run individually)
 
 # QC file-scope excludes (directories to skip), sourced from qc-excludes.toml.
@@ -155,7 +168,7 @@ _biome:
 	[ -d src ] && dirs+=(src)
 	[ -d tests ] && dirs+=(tests)
 	[ ${#dirs[@]} -eq 0 ] && dirs=(.)
-	bun x biome check --config-path {{configs}}/biome.json "${dirs[@]}"
+	bun x --package @biomejs/biome biome check --config-path {{configs}}/biome.json "${dirs[@]}"
 
 _ast-grep:
 	#!/usr/bin/env bash
@@ -539,17 +552,32 @@ _check-ts-project:
 	fi
 	# 3. Check for local QC tool config overrides.
 	#    Global QC owns these tool configs — projects must not set them locally.
-	for config in biome.json eslint.config.js knip.json .lintstagedrc.json .lintstagedrc.mjs; do
+	report_local_qc_override() {
+		echo "ERROR: Local QC override detected: $1 — global QC owns this tool config."
+		echo "       $2 The global config for this tool already exists in"
+		echo "       ~/ai-review-ci/ and is authoritative for all projects."
+		echo "       Do NOT copy or move this config to ~/ai-review-ci/ — that violates"
+		echo "       QC isolation policy. If the global config needs to change, contact"
+		echo "       the QC owner (dzack) to update it centrally."
+		failed=1
+	}
+	for config in {{local_qc_config_files}}; do
 		if [ -f "$config" ]; then
-			echo "ERROR: Local QC override detected: $config — global QC owns this tool config."
-			echo "       DELETE this file. The global config for this tool already exists in"
-			echo "       ~/ai-review-ci/ and is authoritative for all projects."
-			echo "       Do NOT copy or move this file to ~/ai-review-ci/ — that violates"
-			echo "       QC isolation policy. If the global config needs to change, contact"
-			echo "       the QC owner (dzack) to update it centrally."
-			failed=1
+			report_local_qc_override "$config" "DELETE this file."
 		fi
 	done
+	if [ -f "package.json" ]; then
+		if ! jq -e 'type == "object"' package.json >/dev/null; then
+			echo "ERROR: package.json is not a JSON object — cannot audit it for local QC config."
+			failed=1
+		else
+			for key in {{local_qc_manifest_keys}}; do
+				if jq -e --arg key "$key" 'has($key)' package.json >/dev/null; then
+					report_local_qc_override "package.json#$key" "REMOVE this key."
+				fi
+			done
+		fi
+	fi
 	# 4. tsconfig.json must not disable strict mode
 	if [ -f "tsconfig.json" ]; then
 		if grep -qP '"strict"\s*:\s*false' tsconfig.json 2>/dev/null; then
@@ -585,7 +613,7 @@ _normalize: _eslint-deps
 		echo "No staged JavaScript, TypeScript, or Vue files found"
 		exit 0
 	fi
-	if bun x biome check --write --unsafe --config-path {{configs}}/biome.json "${files[@]}"; then
+	if bun x --package @biomejs/biome biome check --write --unsafe --config-path {{configs}}/biome.json "${files[@]}"; then
 		:
 	else
 		ec=$?
@@ -636,3 +664,18 @@ test-ci:
 	just --justfile {{justfile()}} -d . test-push _coverage _diff-cover _knip _biome _ast-grep _eslint _jscpd-bun _lizard-bun _slop-scan
 	just -f {{justfiles}}/shared.just -d . _global-qc
 	echo "CI quality checks completed"
+
+# `_qc.yml` accepts `tier: ambient` and dispatches `just ambient`, so a profile
+# that does not define it fails every scheduled run before any tool starts.
+# QC_TIER=ambient is what the diff-scoped recipes read to widen from the
+# changed files to the whole tree, so the debt surfaces run here unscoped
+# rather than against a base ref a schedule does not have.
+
+# public: AMBIENT audit — full-repo deferred-debt scan, not a PR gate
+ambient:
+	#!/usr/bin/env bash
+	set -euo pipefail
+	export AI_REVIEW_CI_FAILURE_MODE=triage
+	export QC_TIER=ambient
+	just --justfile {{justfile()}} -d . _knip _jscpd-bun _lizard-bun _slop-scan
+	echo "Bun ambient debt audit completed"

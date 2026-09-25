@@ -12,8 +12,10 @@
 #
 # WORKFLOW (three-tier):
 #   just test-commit — Sage/Python syntax, normalization, bypass check.
-#   just test-push   — commit checks plus mypy and the full Sage test suite.
-#   just test-ci     — push checks plus coverage and policy-sensitive gates.
+#   just test-push   — commit checks, mypy, the full Sage test suite, and the
+#                      cheap deterministic gates (vulture, ast-grep, deptry).
+#   just test-ci     — push checks plus the threshold metrics (coverage,
+#                      duplication) and the minutes-long import graph.
 
 infra := justfile_directory() / ".."
 configs := infra / "tool-configs"
@@ -22,6 +24,53 @@ justfiles := infra / "justfiles"
 
 default:
 	@just test-commit
+
+_sage-run-check check_name check_justfile check_recipe check_arg="":
+	#!/usr/bin/env bash
+	set -euo pipefail
+	output_root=".ai-review-ci/sage"
+	log_path="$output_root/{{check_name}}.log"
+	diagnostics_path="$output_root/{{check_name}}.diagnostics.log"
+	status_path="$output_root/{{check_name}}.json"
+	mkdir -p "$output_root"
+	printf '*\n' >"${output_root%/sage}/.gitignore"
+	jq -n \
+		--arg check "{{check_name}}" \
+		--arg diagnostics "$diagnostics_path" \
+		--arg log "$log_path" \
+		'{check: $check, diagnostics: $diagnostics, log: $log, status: "running"}' \
+		>"$status_path"
+	check_args=()
+	if [ -n "{{check_arg}}" ]; then
+		check_args+=("{{check_arg}}")
+	fi
+	set +e
+	just --justfile "{{check_justfile}}" -d . "{{check_recipe}}" "${check_args[@]}" 2>&1 | tee "$log_path"
+	pipeline_status=("${PIPESTATUS[@]}")
+	set -e
+	status=${pipeline_status[0]}
+	log_status=${pipeline_status[1]}
+	if [ "$log_status" -ne 0 ]; then
+		exit "$log_status"
+	fi
+	if rg --line-number --ignore-case '\b(error|warning|failed|failure)\b' "$log_path" >"$diagnostics_path"; then
+		:
+	else
+		search_status=$?
+		if [ "$search_status" -ne 1 ]; then
+			exit "$search_status"
+		fi
+	fi
+	status_temp="$status_path.tmp"
+	jq -n \
+		--arg check "{{check_name}}" \
+		--arg diagnostics "$diagnostics_path" \
+		--arg log "$log_path" \
+		--argjson status "$status" \
+		'{check: $check, diagnostics: $diagnostics, log: $log, status: $status}' \
+		>"$status_temp"
+	mv "$status_temp" "$status_path"
+	exit "$status"
 
 # public: print the wiring contract for putting a Sage project on this QC
 setup:
@@ -36,7 +85,7 @@ setup:
 	@echo "         @just -f ~/ai-review-ci/justfiles/sage.just -d . test-ci"
 	@echo ""
 	@echo "2. Export the Sage executable from a tracked .envrc (path, not a secret):"
-	@echo "     export SAGE_BIN=\"\${SAGE_BIN:-\$(command -v sage)}\""
+	@echo "     export SAGE_BIN=\"\${SAGE_BIN:-/path/to/sage-venv/bin/sage}\""
 	@echo "   then: direnv allow"
 	@echo ""
 	@echo "3. Provide a pyproject.toml (mypy installs the project editable):"
@@ -51,12 +100,13 @@ setup:
 	@echo "   '*.sage.py' to .gitignore. QC preparses into a tempdir itself."
 	@echo ""
 	@echo "5. Tests run under the Sage interpreter's own Python. It needs pytest:"
-	@echo "     \"\$SAGE_BIN\" -pip install pytest"
+	@echo "     \"\$(dirname \"\$SAGE_BIN\")/python\" -m pip install pytest"
 	@echo "   The package must be importable there (PYTHONPATH via .envrc, or"
 	@echo "   installed into Sage's python)."
 	@echo ""
 	@echo "6. Gates: pre-commit runs 'just test-commit' (syntax and normalization);"
-	@echo "   pre-push runs 'just test-push' (adds mypy and Sage tests); CI runs 'just test-ci'."
+	@echo "   pre-push runs 'just test-push' (adds mypy, Sage tests and the cheap"
+	@echo "   deterministic gates); CI runs 'just test-ci' (threshold metrics)."
 	@echo "   Commit/push failures are direct repair; CI policy findings are triaged."
 
 _sage-qc-files:
@@ -113,16 +163,31 @@ _sage-test-files:
 _sage-python-test-files:
 	#!/usr/bin/env bash
 	set -euo pipefail
-	python_files_output="$(just -f {{justfiles}}/python.just -d . _python-qc-files)"
-	python_files=()
-	if [ -n "$python_files_output" ]; then
-		mapfile -t python_files <<<"$python_files_output"
+	# Repo-wide, like _sage-test-files beside it.  This read _python-qc-files,
+	# which is diff-scoped by design — right for batching mypy over changed
+	# files, wrong for deciding which tests exist.  On a clean tree it returned
+	# nothing, so _sage-pytest saw no tests: a Sage project whose suite is all
+	# .py ran pytest only when a test file happened to be in the diff, and
+	# reported success when it ran nothing at all.
+	exclude_dirs_output="$(uv run {{artifacts}}/scripts/read_qc_excludes.py {{configs}}/qc-excludes.toml)"
+	exclude_dirs=()
+	if [ -n "$exclude_dirs_output" ]; then
+		mapfile -t exclude_dirs <<<"$exclude_dirs_output"
 	fi
-	for python_file in "${python_files[@]}"; do
-		case "$python_file" in
-			tests/test_*.py|tests/*_test.py|tests/*/test_*.py|tests/*/*_test.py) printf '%s\n' "$python_file" ;;
-		esac
+	exclude_args=()
+	for dir in "${exclude_dirs[@]}"; do
+		exclude_args+=(-g "!**/$dir/**")
 	done
+	if rg --files \
+		-g 'tests/**/test_*.py' \
+		-g 'tests/**/*_test.py' \
+		-g '!*.sage.py' \
+		"${exclude_args[@]}"; then
+		:
+	else
+		status=$?
+		[ "$status" -eq 1 ] || exit "$status"
+	fi
 
 # Wiring preflight: every failure prints the exact remediation so a
 # misconfigured repo converges to correct QC wiring instead of guessing.
@@ -136,7 +201,7 @@ _sage-preflight:
 	if [ "${SAGE_BIN+x}" != x ] || [ ! -x "${SAGE_BIN:-}" ]; then
 		echo "ERROR: SAGE_BIN is unset or not executable (current: '${SAGE_BIN:-<unset>}')."
 		echo "       FIX: export it from the repo's tracked .envrc (it is a path, not a secret):"
-		echo "         export SAGE_BIN=\"\${SAGE_BIN:-\$(command -v sage)}\""
+		echo "         export SAGE_BIN=\"\${SAGE_BIN:-/path/to/sage-venv/bin/sage}\""
 		echo "       then run: direnv allow"
 		failed=1
 	fi
@@ -152,7 +217,7 @@ _sage-preflight:
 	tracked_generated="$(git ls-files -- '*.sage.py' 2>/dev/null || true)"
 	if [ -n "$tracked_generated" ]; then
 		echo "ERROR: git-tracked *.sage.py preparse artifacts found. These are generated from"
-		echo "       .sage sources by 'sage --preparse'; QC preparses into a tempdir itself, so"
+		echo "       .sage sources with the Sage environment's preparser; QC uses a tempdir, so"
 		echo "       committed copies are duplicate state that pollutes Python QC."
 		echo "       FIX: git rm --cached -- '*.sage.py'  and add '*.sage.py' to .gitignore"
 		printf '%s\n' "$tracked_generated" | sed 's/^/         /'
@@ -184,6 +249,30 @@ _sage-bin:
 	fi
 	printf '%s\n' "$SAGE_BIN"
 
+_sage-python:
+	#!/usr/bin/env bash
+	set -euo pipefail
+	sage_bin="$(just --justfile {{justfile()}} -d . _sage-bin)"
+	sage_python="$(dirname "$sage_bin")/python"
+	if [ ! -x "$sage_python" ]; then
+		echo "ERROR: Sage virtual-environment Python is not executable: $sage_python" >&2
+		"{{artifacts}}/scripts/emit-triage-directive.sh" >&2
+		exit 1
+	fi
+	printf '%s\n' "$sage_python"
+
+_sage-preparse-bin:
+	#!/usr/bin/env bash
+	set -euo pipefail
+	sage_bin="$(just --justfile {{justfile()}} -d . _sage-bin)"
+	sage_preparse="$(dirname "$sage_bin")/sage-preparse"
+	if [ ! -x "$sage_preparse" ]; then
+		echo "ERROR: Sage virtual-environment preparser is not executable: $sage_preparse" >&2
+		"{{artifacts}}/scripts/emit-triage-directive.sh" >&2
+		exit 1
+	fi
+	printf '%s\n' "$sage_preparse"
+
 _sage-syntax:
 	#!/usr/bin/env bash
 	set -euo pipefail
@@ -202,7 +291,8 @@ _sage-syntax:
 		exit 1
 	fi
 
-	sage_bin="$(just --justfile {{justfile()}} -d . _sage-bin)"
+	sage_python="$(just --justfile {{justfile()}} -d . _sage-python)"
+	sage_preparse="$(just --justfile {{justfile()}} -d . _sage-preparse-bin)"
 
 	sage_preparse_dir="$(mktemp -d "${TMPDIR:-/tmp}/qc-sage-syntax.XXXXXX")"
 	trap 'if [ -e "$sage_preparse_dir" ]; then rm -rf -- "$sage_preparse_dir"; fi' EXIT
@@ -221,7 +311,7 @@ _sage-syntax:
 
 	(
 		cd "$sage_preparse_dir"
-		"$SAGE_BIN" --preparse "${copied_sage_files[@]}" >/dev/null
+		"$sage_python" "$sage_preparse" "${copied_sage_files[@]}" >/dev/null
 	)
 
 	for sage_file in "${sage_files[@]}"; do
@@ -236,7 +326,7 @@ _sage-syntax:
 		exit 1
 	fi
 
-	if ! "$SAGE_BIN" -python - "${compile_args[@]}" <<'PY'
+	if ! "$sage_python" - "${compile_args[@]}" <<'PY'
 	import py_compile
 	import sys
 
@@ -270,22 +360,26 @@ _vulture: _sage-qc-files
 	echo "============================="
 	echo "=== Running: vulture dead code detection (Sage-aware) ==="
 	echo "# Finds unused code in Python and Sage files"
-	all_python_files_output="$(just -f {{justfiles}}/python.just -d . _python-qc-files)"
+	# Whole tree, never the diff. A symbol is dead only if nothing anywhere
+	# calls it, so a file subset cannot answer the question: every definition
+	# whose callers sit in an unchanged file reads as unused, and the false
+	# positives grow as the diff shrinks.
+	all_python_files_output="$(QC_TIER=ambient just -f {{justfiles}}/python.just -d . _python-qc-files)"
 	all_python_files=()
 	if [ -n "$all_python_files_output" ]; then
 		mapfile -t all_python_files <<<"$all_python_files_output"
 	fi
-	all_sage_files_output="$(just --justfile {{justfile()}} -d . _sage-qc-files)"
+	all_sage_files_output="$(QC_TIER=ambient just --justfile {{justfile()}} -d . _sage-qc-files)"
 	all_sage_files=()
 	if [ -n "$all_sage_files_output" ]; then
 		mapfile -t all_sage_files <<<"$all_sage_files_output"
 	fi
-	python_files_output="$(just -f {{justfiles}}/python.just -d . _python-vulture-files)"
+	python_files_output="$(QC_TIER=ambient just -f {{justfiles}}/python.just -d . _python-vulture-files)"
 	python_files=()
 	if [ -n "$python_files_output" ]; then
 		mapfile -t python_files <<<"$python_files_output"
 	fi
-	sage_files_output="$(just --justfile {{justfile()}} -d . _sage-vulture-files)"
+	sage_files_output="$(QC_TIER=ambient just --justfile {{justfile()}} -d . _sage-vulture-files)"
 	sage_files=()
 	if [ -n "$sage_files_output" ]; then
 		mapfile -t sage_files <<<"$sage_files_output"
@@ -303,7 +397,8 @@ _vulture: _sage-qc-files
 	fi
 
 	if [ "${#sage_files[@]}" -gt 0 ]; then
-		sage_bin="$(just --justfile {{justfile()}} -d . _sage-bin)"
+		sage_python="$(just --justfile {{justfile()}} -d . _sage-python)"
+		sage_preparse="$(just --justfile {{justfile()}} -d . _sage-preparse-bin)"
 
 		sage_preparse_dir="$(mktemp -d "${TMPDIR:-/tmp}/qc-vulture-sage.XXXXXX")"
 		trap 'if [ -e "$sage_preparse_dir" ]; then rm -rf -- "$sage_preparse_dir"; fi' EXIT
@@ -318,7 +413,7 @@ _vulture: _sage-qc-files
 		done
 		(
 			cd "$sage_preparse_dir"
-			"$SAGE_BIN" --preparse "${copied_sage_files[@]}" >/dev/null
+			"$sage_python" "$sage_preparse" "${copied_sage_files[@]}" >/dev/null
 		)
 		for generated_file in "${generated_sage_python_files[@]}"; do
 			if [ ! -f "$generated_file" ]; then
@@ -329,7 +424,7 @@ _vulture: _sage-qc-files
 		done
 	fi
 
-	uvx --from vulture vulture \
+	uvx --python 3.14 --from vulture vulture \
 		--config {{configs}}/pyproject.toml \
 		"${python_files[@]}" \
 		"${generated_sage_python_files[@]}" \
@@ -340,10 +435,10 @@ _sage-pytest:
 	set -euo pipefail
 	source "{{artifacts}}/scripts/heavy-gate-lock.sh"
 	echo "============================="
-	echo "=== Running: pytest on Sage test files (preparsed) ==="
-	echo "# Preparses .sage test files so integer literals become Sage Integer/Rational,"
-	echo "# then runs pytest on the generated .py files."
-	sage_bin="$(just --justfile {{justfile()}} -d . _sage-bin)"
+	echo "=== Running: pytest on Sage test files ==="
+	echo "# Collects .sage tests in place as Sage scripts (qc_sage_session), so the"
+	echo "# project's conftests and pytest configuration apply."
+	sage_python="$(just --justfile {{justfile()}} -d . _sage-python)"
 
 	# Collect only files owned by this repository; the shared discovery boundary
 	# excludes gitlinks and independently initialized nested repositories.
@@ -367,50 +462,29 @@ _sage-pytest:
 	# Sage tests can only run under the Sage interpreter: sage.* is not
 	# pip-installable into a uvx CPython environment. The project must be
 	# importable there (PYTHONPATH via envrc, or installed into Sage's python).
-	if ! "$sage_bin" -python -m pytest --version >/dev/null 2>&1; then
+	if ! "$sage_python" -m pytest --version >/dev/null 2>&1; then
 		echo "ERROR: pytest is not available in the Sage interpreter's Python."
-		echo "       FIX: \"$sage_bin\" -pip install pytest"
+		echo "       FIX: \"$sage_python\" -m pip install pytest"
 		"{{artifacts}}/scripts/emit-triage-directive.sh"
 		exit 1
 	fi
 
-	pytest_args=()
-
-	if [ "${#sage_test_files[@]}" -gt 0 ]; then
-		sage_preparse_dir="$(mktemp -d "${TMPDIR:-/tmp}/qc-sage-pytest.XXXXXX")"
-		trap 'if [ -e "$sage_preparse_dir" ]; then rm -rf -- "$sage_preparse_dir"; fi' EXIT
-
-		echo "# Preparsing ${#sage_test_files[@]} .sage test file(s)"
-		for sage_file in "${sage_test_files[@]}"; do
-			target="$sage_preparse_dir/$sage_file"
-			mkdir -p "$(dirname "$target")"
-			cp "$sage_file" "$target"
-		done
-		(
-			cd "$sage_preparse_dir"
-			"$sage_bin" --preparse "${sage_test_files[@]}" >/dev/null
-		)
-		for sage_file in "${sage_test_files[@]}"; do
-			generated="$sage_preparse_dir/${sage_file}.py"
-			if [ ! -f "$generated" ]; then
-				echo "ERROR: sage --preparse did not produce $generated for $sage_file"
-				"{{artifacts}}/scripts/emit-triage-directive.sh"
-				exit 1
-			fi
-			# foo.sage.py is not an importable module name for pytest
-			# (the extra dot breaks module resolution); strip the .sage.
-			importable="${generated%.sage.py}.py"
-			mv "$generated" "$importable"
-			pytest_args+=("$importable")
-		done
-	fi
-
-	# Add .py test files directly
-	for py_file in "${py_test_files[@]:-}"; do
-		[ -n "$py_file" ] && pytest_args+=("$py_file")
+	# Both kinds are collected where they live, from the project root.
+	pytest_args=(-p qc_sage_session)
+	for test_file in "${sage_test_files[@]:-}" "${py_test_files[@]:-}"; do
+		[ -n "$test_file" ] && pytest_args+=("$test_file")
 	done
+	export PYTHONPATH="{{artifacts}}/pytest_plugins${PYTHONPATH:+:$PYTHONPATH}"
 
-	if "$sage_bin" -python -m pytest "${pytest_args[@]}"; then
+	# The Sage virtual environment's Python has `sage` importable, but it is not
+	# a Sage session: `sage.all` is absent from sys.modules there, while `sage -c`
+	# has it. Every way a person runs Sage code goes through that startup
+	# import, so a suite run without it is testing an environment no user
+	# has -- and cannot exercise anything that depends on startup wiring.
+	#
+	# `sage -c` cannot carry the arguments (it reads trailing words as more
+	# code), so do explicitly what a session does on startup.
+	if "$sage_python" -c "import sage.all, sys, pytest; sys.exit(pytest.main(sys.argv[1:]))" "${pytest_args[@]}"; then
 		:
 	else
 		ec=$?
@@ -425,9 +499,9 @@ _sage-pytest-coverage:
 	source "{{artifacts}}/scripts/heavy-gate-lock.sh"
 	echo "============================="
 	echo "=== Running: pytest with coverage under the Sage interpreter ==="
-	echo "# Same preparse flow as _sage-pytest, run under coverage.py inside Sage's"
+	echo "# Same in-place collection as _sage-pytest, run under coverage.py inside Sage's"
 	echo "# Python (uvx CPython cannot import sage.*); emits coverage.xml for diff-cover."
-	sage_bin="$(just --justfile {{justfile()}} -d . _sage-bin)"
+	sage_python="$(just --justfile {{justfile()}} -d . _sage-python)"
 	sage_test_files_output="$(just --justfile {{justfile()}} -d . _sage-test-files)"
 	sage_test_files=()
 	if [ -n "$sage_test_files_output" ]; then
@@ -443,54 +517,44 @@ _sage-pytest-coverage:
 		"{{artifacts}}/scripts/emit-test-writing-directive.sh"
 		exit 1
 	fi
-	if ! "$sage_bin" -python -m pytest --version >/dev/null 2>&1; then
+	if ! "$sage_python" -m pytest --version >/dev/null 2>&1; then
 		echo "ERROR: pytest is not available in the Sage interpreter's Python."
-		echo "       FIX: \"$sage_bin\" -pip install pytest"
+		echo "       FIX: \"$sage_python\" -m pip install pytest"
 		"{{artifacts}}/scripts/emit-triage-directive.sh"
 		exit 1
 	fi
-	if ! "$sage_bin" -python -m coverage --version >/dev/null 2>&1; then
+	if ! "$sage_python" -m coverage --version >/dev/null 2>&1; then
 		echo "ERROR: coverage is not available in the Sage interpreter's Python."
-		echo "       FIX: \"$sage_bin\" -pip install coverage"
+		echo "       FIX: \"$sage_python\" -m pip install coverage"
 		"{{artifacts}}/scripts/emit-triage-directive.sh"
 		exit 1
 	fi
-	pytest_args=()
-	if [ "${#sage_test_files[@]}" -gt 0 ]; then
-		sage_preparse_dir="$(mktemp -d "${TMPDIR:-/tmp}/qc-sage-cov.XXXXXX")"
-		trap 'if [ -e "$sage_preparse_dir" ]; then rm -rf -- "$sage_preparse_dir"; fi' EXIT
-		echo "# Preparsing ${#sage_test_files[@]} .sage test file(s)"
-		for sage_file in "${sage_test_files[@]}"; do
-			target="$sage_preparse_dir/$sage_file"
-			mkdir -p "$(dirname "$target")"
-			cp "$sage_file" "$target"
-		done
-		(
-			cd "$sage_preparse_dir"
-			"$sage_bin" --preparse "${sage_test_files[@]}" >/dev/null
-		)
-		for sage_file in "${sage_test_files[@]}"; do
-			generated="$sage_preparse_dir/${sage_file}.py"
-			if [ ! -f "$generated" ]; then
-				echo "ERROR: sage --preparse did not produce $generated for $sage_file"
-				"{{artifacts}}/scripts/emit-triage-directive.sh"
-				exit 1
-			fi
-			importable="${generated%.sage.py}.py"
-			mv "$generated" "$importable"
-			pytest_args+=("$importable")
-		done
-	fi
-	for py_file in "${py_test_files[@]:-}"; do
-		[ -n "$py_file" ] && pytest_args+=("$py_file")
+	pytest_args=(-p qc_sage_session)
+	for test_file in "${sage_test_files[@]:-}" "${py_test_files[@]:-}"; do
+		[ -n "$test_file" ] && pytest_args+=("$test_file")
 	done
+	export PYTHONPATH="{{artifacts}}/pytest_plugins${PYTHONPATH:+:$PYTHONPATH}"
 	project_root="$(pwd -P)"
 	project_slug="$(printf '%s' "$project_root" | sed 's#[^A-Za-z0-9._-]#_#g')"
 	coverage_root="${XDG_CACHE_HOME:-$HOME/.cache}/quality-control/coverage/$project_slug"
 	mkdir -p "$coverage_root"
 	export COVERAGE_FILE="$coverage_root/.coverage"
 	export COVERAGE_RCFILE="{{configs}}/coverage-sage.ini"
-	if "$sage_bin" -python -m coverage run -m pytest "${pytest_args[@]}"; then
+	# The tests need sage.all, for the reason spelled out in _sage-pytest.
+	# Importing it before `coverage run` would leave every module Sage's
+	# startup touches -- the installed preparser among them -- already
+	# imported when measurement begins, and reported as uncovered. So
+	# coverage starts first and a driver does the startup import inside it.
+	coverage_driver="$coverage_root/run-under-sage.py"
+	cat >"$coverage_driver" <<'DRIVER'
+	import sys
+
+	import sage.all  # noqa: F401  (Sage's startup wiring; see _sage-pytest)
+	import pytest
+
+	sys.exit(pytest.main(sys.argv[1:]))
+	DRIVER
+	if "$sage_python" -m coverage run "$coverage_driver" "${pytest_args[@]}"; then
 		:
 	else
 		ec=$?
@@ -498,7 +562,7 @@ _sage-pytest-coverage:
 		"{{artifacts}}/scripts/emit-triage-directive.sh"
 		exit $ec
 	fi
-	if "$sage_bin" -python -m coverage xml -o "$coverage_root/coverage.xml"; then
+	if "$sage_python" -m coverage xml -o "$coverage_root/coverage.xml"; then
 		:
 	else
 		ec=$?
@@ -531,26 +595,164 @@ _sage-diff-cover: _sage-pytest-coverage
 		exit $ec
 	fi
 
+_sage-mypy: _sage-qc-files
+	#!/usr/bin/env bash
+	set -euo pipefail
+	echo "============================="
+	echo "=== Running: mypy static type analysis (Sage-aware) ==="
+	echo "# Type checks Python and preparsed Sage files"
+	sage_python="$(just --justfile {{justfile()}} -d . _sage-python)"
+	export MYPYPATH="{{infra}}/typings${MYPYPATH:+:$MYPYPATH}"
+	python_files_output="$(just -f {{justfiles}}/python.just -d . _python-qc-files)"
+	python_files=()
+	if [ -n "$python_files_output" ]; then
+		mapfile -t python_files <<<"$python_files_output"
+	fi
+	sage_files_output="$(just --justfile {{justfile()}} -d . _sage-qc-files)"
+	sage_files=()
+	if [ -n "$sage_files_output" ]; then
+		mapfile -t sage_files <<<"$sage_files_output"
+	fi
+	mypy_targets=()
+	for pf in "${python_files[@]}"; do
+		[ -n "$pf" ] && mypy_targets+=("$pf")
+	done
+	if [ "${#sage_files[@]}" -gt 0 ]; then
+		sage_preparse="$(just --justfile {{justfile()}} -d . _sage-preparse-bin)"
+		sage_preparse_dir="$(mktemp -d "${TMPDIR:-/tmp}/qc-mypy-sage.XXXXXX")"
+		trap 'if [ -e "$sage_preparse_dir" ]; then gio trash "$sage_preparse_dir"; fi' EXIT
+		echo "# Preparsing ${#sage_files[@]} Sage file(s) for mypy"
+		# The preparsed modules import each other and the package's plain .py
+		# modules, and mypy resolves those imports statically: the tempdir must
+		# be one coherent snapshot. Copy every tracked Python source and stub
+		# (this also carries a repo's typings/ tree, keeping the config's
+		# relative mypy_path resolvable), and rename each preparsed X.sage.py
+		# to X.py -- the stem X.sage can never satisfy an import of pkg.X.
+		git ls-files -z -- '*.py' '*.pyi' | xargs -0 --no-run-if-empty cp --parents -t "$sage_preparse_dir"
+		copied_sage_files=()
+		for sage_file in "${sage_files[@]}"; do
+			target="$sage_preparse_dir/$sage_file"
+			mkdir -p "$(dirname "$target")"
+			cp "$sage_file" "$target"
+			copied_sage_files+=("$sage_file")
+		done
+		(
+			cd "$sage_preparse_dir"
+			"$sage_python" "$sage_preparse" "${copied_sage_files[@]}" >/dev/null
+		)
+		for sage_file in "${copied_sage_files[@]}"; do
+			mv "$sage_preparse_dir/$sage_file.py" "$sage_preparse_dir/${sage_file%.sage}.py"
+			mypy_targets+=("${sage_file%.sage}.py")
+		done
+		# Excluded directories are not targets, but mypy still checks any
+		# module it reaches by import. Mark each snapshot copy with mypy's
+		# per-file inline option so it supplies types without reporting errors.
+		exclude_dirs_output="$(uv run {{artifacts}}/scripts/read_qc_excludes.py {{configs}}/qc-excludes.toml)"
+		exclude_dirs=()
+		if [ -n "$exclude_dirs_output" ]; then
+			mapfile -t exclude_dirs <<<"$exclude_dirs_output"
+		fi
+		for dir in "${exclude_dirs[@]}"; do
+			while IFS= read -r -d '' excluded_file; do
+				sed -i '1i # mypy: ignore-errors' "$excluded_file"
+			done < <(find "$sage_preparse_dir" -path "*/$dir/*" -name '*.py' -print0)
+		done
+	fi
+	if [ "${#mypy_targets[@]}" -eq 0 ]; then
+		echo "mypy: no Python or Sage files to check."
+		exit 0
+	fi
+	effective_config="{{configs}}/mypy-sage.ini"
+	# The category plugin projects the category packages a project declares in
+	# pyproject.toml ([tool.sage-mypy-category-plugin] packages); they replace
+	# the shared default. The plugin selects one oracle per configuration, so
+	# the list is replaced, not extended.
+	plugin_packages="$(yq -p toml -oy '.tool."sage-mypy-category-plugin".packages[]' pyproject.toml)"
+	if [ -n "$plugin_packages" ]; then
+		plugin_config_dir="$(mktemp -d "${TMPDIR:-/tmp}/qc-mypy-config.XXXXXX")"
+		trap 'for d in "${sage_preparse_dir:-}" "$plugin_config_dir"; do if [ -n "$d" ] && [ -e "$d" ]; then gio trash "$d"; fi; done' EXIT
+		effective_config="$plugin_config_dir/mypy-sage.ini"
+		awk -v packages="$plugin_packages" '
+			/^packages =$/ { print; n = split(packages, p, "\n"); for (i = 1; i <= n; i++) print "    " p[i]; skip = 1; next }
+			skip && /^[ \t]/ { next }
+			{ skip = 0; print }
+		' "{{configs}}/mypy-sage.ini" >"$effective_config"
+	fi
+	mypy_run_dir="."
+	mypy_flags=()
+	if [ -n "${sage_preparse_dir:-}" ]; then
+		# Run from the snapshot so targets and every intra-package import
+		# resolve inside it, ahead of the site-packages editable install.
+		# The packages are namespace packages, so bases must be explicit.
+		mypy_run_dir="$sage_preparse_dir"
+		mypy_flags+=(--explicit-package-bases)
+		if [ -d "$sage_preparse_dir/src" ]; then
+			export MYPYPATH="$sage_preparse_dir/src${MYPYPATH:+:$MYPYPATH}"
+		fi
+		if [ -d "$sage_preparse_dir/typings" ]; then
+			export MYPYPATH="$sage_preparse_dir/typings${MYPYPATH:+:$MYPYPATH}"
+		fi
+	fi
+	if (cd "$mypy_run_dir" && "$sage_python" -m mypy \
+		--config-file "$effective_config" \
+		"${mypy_flags[@]}" \
+		"${mypy_targets[@]}"); then
+		:
+	else
+		ec=$?
+		echo "ERROR: mypy found type errors in project code."
+		"{{artifacts}}/scripts/emit-triage-directive.sh"
+		exit $ec
+	fi
+
 # public: COMMIT gate — immediate, directly repairable feedback
 test-commit:
 	#!/usr/bin/env bash
 	set -euo pipefail
 	export AI_REVIEW_CI_FAILURE_MODE=direct
-	just --justfile {{justfile()}} -d . _doctor-preflight _sage-preflight _normalize-common _sage-syntax
-	python_qc_repo="{{justfiles}}/python.just"
-	python_qc_recipes=(_normalize _python-syntax)
-	just -f "$python_qc_repo" -d . "${python_qc_recipes[@]}"
-	just -f {{justfiles}}/shared.just -d . _no-bypass
+	just --justfile {{justfile()}} -d . _sage-run-check doctor-preflight {{justfile()}} _doctor-preflight
+	just --justfile {{justfile()}} -d . _sage-run-check sage-preflight {{justfile()}} _sage-preflight
+	just --justfile {{justfile()}} -d . _sage-run-check normalize-common {{justfile()}} _normalize-common
+	just --justfile {{justfile()}} -d . _sage-run-check sage-syntax {{justfile()}} _sage-syntax
+	just --justfile {{justfile()}} -d . _sage-run-check python-normalize {{justfiles}}/python.just _normalize
+	just --justfile {{justfile()}} -d . _sage-run-check python-syntax {{justfiles}}/python.just _python-syntax
+	just --justfile {{justfile()}} -d . _sage-run-check no-bypass {{justfiles}}/shared.just _no-bypass
 	echo "Sage commit quality checks completed"
 
-# public: PUSH gate — commit checks plus the full project-owned test suite
+# public: PUSH gate — commit checks, the project-owned test suite, and the
+# deterministic checks a developer can answer without leaving the local loop.
+#
+# A gate belongs here when it names a specific defect at a specific location and
+# costs about a second: the duck-typing audit, banned patterns, missing
+# dependencies, dead code and prose rules. Each reports the same verdict locally
+# and in CI, so discovering it here costs one edit and discovering it there
+# costs a CI round trip.
+_sage-file-length:
+	#!/usr/bin/env bash
+	set -euo pipefail
+	echo "============================="
+	echo "=== Running: repository file length ==="
+	linecheck_root="${XDG_CACHE_HOME:-$HOME/.cache}/ai-review-ci/linecheck-1.2.1"
+	linecheck_bin="$linecheck_root/bin/linecheck"
+	if [ ! -x "$linecheck_bin" ]; then
+		cargo install --locked --version 1.2.1 --root "$linecheck_root" linecheck
+	fi
+	repo_files=()
+	mapfile -d '' -t repo_files < <(git ls-files -z --cached --others --exclude-standard)
+	"$linecheck_bin" --config {{configs}}/linecheck.yml "${repo_files[@]}"
+
 test-push:
 	#!/usr/bin/env bash
 	set -euo pipefail
 	export AI_REVIEW_CI_FAILURE_MODE=direct
-	just --justfile {{justfile()}} -d . test-commit
-	AI_REVIEW_CI_MYPY_CONFIG="{{configs}}/mypy-sage.ini" just -f {{justfiles}}/python.just -d . _mypy
-	just --justfile {{justfile()}} -d . _sage-pytest
+	just --justfile {{justfile()}} -d . _sage-run-check test-commit {{justfile()}} test-commit
+	just --justfile {{justfile()}} -d . _sage-run-check sage-mypy {{justfile()}} _sage-mypy
+	just --justfile {{justfile()}} -d . _sage-run-check sage-pytest {{justfile()}} _sage-pytest
+	just --justfile {{justfile()}} -d . _sage-run-check vulture {{justfile()}} _vulture
+	just --justfile {{justfile()}} -d . _sage-run-check sage-ast-grep {{justfile()}} _sage-ast-grep
+	just --justfile {{justfile()}} -d . _sage-run-check sage-file-length {{justfile()}} _sage-file-length
+	just --justfile {{justfile()}} -d . _sage-run-check deptry {{justfiles}}/python.just _deptry
+	just --justfile {{justfile()}} -d . _sage-run-check python-ast-grep {{justfiles}}/python.just _ast-grep
 	echo "Sage push quality checks completed"
 
 _sage-ast-grep:
@@ -579,7 +781,8 @@ _sage-ast-grep:
 	fi
 
 	if [ "${#sage_files[@]}" -gt 0 ]; then
-		sage_bin="$(just --justfile {{justfile()}} -d . _sage-bin)"
+		sage_python="$(just --justfile {{justfile()}} -d . _sage-python)"
+		sage_preparse="$(just --justfile {{justfile()}} -d . _sage-preparse-bin)"
 
 		sage_preparse_dir="$(mktemp -d "${TMPDIR:-/tmp}/qc-astgrep-sage.XXXXXX")"
 		trap 'if [ -e "$sage_preparse_dir" ]; then rm -rf -- "$sage_preparse_dir"; fi' EXIT
@@ -593,7 +796,7 @@ _sage-ast-grep:
 		done
 		(
 			cd "$sage_preparse_dir"
-			"$SAGE_BIN" --preparse "${copied_sage_files[@]}" >/dev/null
+			"$sage_python" "$sage_preparse" "${copied_sage_files[@]}" >/dev/null
 		)
 		for sage_file in "${sage_files[@]}"; do
 			generated_file="$sage_preparse_dir/$sage_file.py"
@@ -619,19 +822,23 @@ _sage-ast-grep:
 	fi
 
 # public: CI gate — push checks plus gameable and long-running acceptance gates
+#
+# What remains here earns it on one of two counts. Coverage, duplication and
+# complexity are threshold metrics: run them in the local loop and they become
+# a number to golf rather than a defect to fix. `_import-linter` builds the
+# whole import graph and takes minutes, which no push gate can carry.
 test-ci:
 	#!/usr/bin/env bash
 	set -euo pipefail
 	export AI_REVIEW_CI_FAILURE_MODE=triage
-	just --justfile {{justfile()}} -d . test-push _vulture _sage-ast-grep
-	python_qc_repo="{{justfiles}}/python.just"
-	python_qc_recipes=(_deptry _import-linter _ast-grep _jscpd-python _grain)
-	just -f "$python_qc_repo" -d . "${python_qc_recipes[@]}"
+	just --justfile {{justfile()}} -d . _sage-run-check test-push {{justfile()}} test-push
+	just --justfile {{justfile()}} -d . _sage-run-check import-linter {{justfiles}}/python.just _import-linter
+	just --justfile {{justfile()}} -d . _sage-run-check jscpd-python {{justfiles}}/python.just _jscpd-python
 	# CCN 15 (lizard's own default) for Sage projects: mathematical case
 	# analysis is irreducibly branchy; see _lizard-python in python.just.
-	just -f "$python_qc_repo" -d . _lizard-python 15
+	just --justfile {{justfile()}} -d . _sage-run-check lizard-python {{justfiles}}/python.just _lizard-python 15
 	# Coverage runs under the Sage interpreter (python-flavor coverage cannot
 	# import sage.* or see preparsed .sage tests).
-	just --justfile {{justfile()}} -d . _sage-diff-cover
-	just -f {{justfiles}}/shared.just -d . _global-qc
+	just --justfile {{justfile()}} -d . _sage-run-check sage-diff-cover {{justfile()}} _sage-diff-cover
+	just --justfile {{justfile()}} -d . _sage-run-check global-qc {{justfiles}}/shared.just _global-qc
 	echo "Sage CI quality checks completed"

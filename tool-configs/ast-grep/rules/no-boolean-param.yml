@@ -1,8 +1,123 @@
 id: no-boolean-param
 language: python
+utils:
+  boolean-type:
+    any:
+      - all:
+          - pattern: bool
+          - not:
+              inside:
+                kind: attribute
+      - pattern: builtins.bool
+      - pattern: '"bool"'
+  parameter-node:
+    any:
+      - kind: typed_parameter
+      - kind: typed_default_parameter
+  parameter-type:
+    inside:
+      matches: parameter-node
+      field: type
+      stopBy: end
 rule:
-  kind: function_definition
-  regex: def\s+\w+\s*\([^)]*\b(bool)\b[^)]*\)
+  any:
+    - pattern:
+        context: 'def f($P: bool): pass'
+        selector: typed_parameter
+    - pattern:
+        context: 'def f($P: builtins.bool): pass'
+        selector: typed_parameter
+    - pattern:
+        context: 'def f($P: "bool"): pass'
+        selector: typed_parameter
+    - pattern:
+        context: 'def f($P: bool = $D): pass'
+        selector: typed_default_parameter
+    - pattern:
+        context: 'def f($P: builtins.bool = $D): pass'
+        selector: typed_default_parameter
+    - pattern:
+        context: 'def f($P: "bool" = $D): pass'
+        selector: typed_default_parameter
+    - all:
+        - matches: boolean-type
+        - inside:
+            kind: binary_operator
+        - matches: parameter-type
+        - not:
+            inside:
+              not:
+                any:
+                  - kind: binary_operator
+                  - kind: parenthesized_expression
+                  - kind: type
+                  - kind: typed_parameter
+                  - kind: typed_default_parameter
+              stopBy:
+                matches: parameter-node
+    - all:
+        - matches: boolean-type
+        - inside:
+            all:
+              - any:
+                  - kind: generic_type
+                  - kind: subscript
+              - regex: '^(typing\.)?(Annotated|Optional|Union)\[.*\]$'
+            stopBy: end
+        - matches: parameter-type
+        - not:
+            inside:
+              all:
+                - any:
+                    - kind: generic_type
+                    - kind: subscript
+                - inside:
+                    any:
+                      - kind: generic_type
+                      - kind: subscript
+                    stopBy:
+                      matches: parameter-node
+              stopBy:
+                matches: parameter-node
+    - all:
+        - matches: boolean-type
+        - inside:
+            kind: parenthesized_expression
+        - matches: parameter-type
+        - not:
+            inside:
+              not:
+                any:
+                  - kind: parenthesized_expression
+                  - kind: type
+                  - kind: typed_parameter
+                  - kind: typed_default_parameter
+              stopBy:
+                matches: parameter-node
+    - pattern:
+        context: 'def f($P: "bool | None"): pass'
+        selector: typed_parameter
+    - pattern:
+        context: 'def f($P: "None | bool"): pass'
+        selector: typed_parameter
+    - pattern:
+        context: 'def f($P: "bool | None" = $D): pass'
+        selector: typed_default_parameter
+    - pattern:
+        context: 'def f($P: "None | bool" = $D): pass'
+        selector: typed_default_parameter
+    - pattern:
+        context: 'def f($P = True): pass'
+        selector: default_parameter
+    - pattern:
+        context: 'def f($P = False): pass'
+        selector: default_parameter
+    - pattern:
+        context: 'def f($P: $T = True): pass'
+        selector: typed_default_parameter
+    - pattern:
+        context: 'def f($P: $T = False): pass'
+        selector: typed_default_parameter
 message: POLICY.NO_BOOLEAN_MODE
 severity: error
 metadata:

@@ -1,6 +1,9 @@
 ---
 name: tool-provisioning-and-environment-hygiene
-description: Cross-cutting policy for tool installation. Covers when to use uvx/npx/bunx vs uv add/npm install vs uv tool install vs OS package managers. Bans pip install --break-system-packages, system Python mutation, pipx, and installed-tool-first selection.
+description: Cross-cutting policy for tool installation. Covers when to use uvx/npx/bunx
+  vs uv add/npm install vs uv tool install vs OS package managers. Bans pip install
+  --break-system-packages, system Python mutation, pipx, and installed-tool-first
+  selection.
 ---
 
 # Tool Provisioning and Environment Hygiene
@@ -143,6 +146,6 @@ This must be checked in every review pass — code review, PR review, gate revie
 
 - [[reality-grounded-debugging/SKILL|reality-grounded-debugging]] — command-output discipline, stderr preservation, surface-classification matrix.
 
-- [[code-patterns/python/SKILL|code-patterns-python]] — uv-only, PEP 723 inline metadata for standalone scripts.
+- [[code-patterns/python/python|code-patterns-python]] — uv-only, PEP 723 inline metadata for standalone scripts.
 
 - [[writing-scripts-and-cli-interfaces/SKILL|writing-scripts-and-cli-interfaces]] — standalone script template, Cyclopts/Pydantic.

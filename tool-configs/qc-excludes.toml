@@ -14,7 +14,6 @@
 #   - knip.json                              (ignore)
 #   - .jscpd.json                            (ignore)
 #   - slop-scan.config.json                  (ignores)
-#   - grain.toml                             (exclude)
 #   - pyright-local.json                     (exclude)
 #
 # Each tool config references this file as its single source of truth.
@@ -26,6 +25,17 @@ directories = [
     # them, so normalizing them buys nothing and can invalidate the tests they
     # feed (#41 slop-torture, #219 ast-grep).
     "tests/fixtures",
+    # Tree-sitter grammar fixtures: highlight/tags assertion files and
+    # example corpora are parser inputs whose byte-level form (including
+    # deliberately non-current-Python syntax) is the contract; the grammar's
+    # own test harness owns them, generic Python QC must never touch them.
+    "test/highlight",
+    "test/tags",
+    "examples",
+    # Tree-sitter CLI-generated FFI bindings (node/python/rust/swift/go):
+    # regenerated wholesale by `tree-sitter init --update`; hand-edits
+    # diverge from the generator and are overwritten.
+    "bindings",
     "node_modules",
     ".venv",
     ".pytest_cache",
@@ -34,6 +44,7 @@ directories = [
     "dist",
     "build",
     "coverage",
+    ".nyc_output",
     "_ci-support",
     # Developer-only tooling (lint/benchmark scripts), never shipped in the wheel
     # and free to depend on untyped helper libs; not held to product QC.
@@ -62,7 +73,7 @@ directories = [
     # Archived source trees are preserved reference material, not active code.
     "archives",
     "src.bak",
-    # Research scripts, notebooks, and preambles are user-authored exploratory
+    # Research scripts, notebooks, and preambles are user-authored research
     # artifacts, not QC-owned product code. Knip alone keeps project scripts
     # visible because JS build and task scripts own dependency edges.
     "scripts",

@@ -263,3 +263,11 @@ def test_gh_boundary_label_tests_are_deselected_by_default_and_marker_selectable
     for name in boundary_tests:
         assert name in marked_collection, f"{name} must be selectable via the gh_boundary marker"
     assert "test_gh_returns_output_on_real_success" not in marked_collection
+
+
+def test_taxonomy_description_cannot_exceed_the_github_limit() -> None:
+    """GitHub rejects a description over 100 characters, so the taxonomy cannot carry one."""
+    with pytest.raises(ValidationError):
+        Label(name="x", color="d93f0b", description="d" * 101, category="status")
+
+    assert Label(name="x", color="d93f0b", description="d" * 100, category="status").description
