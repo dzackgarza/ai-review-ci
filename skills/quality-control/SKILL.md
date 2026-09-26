@@ -1,8 +1,6 @@
 ---
 name: quality-control
-description: Use when implementing, understanding, or delegating to the global quality
-  control system in ~/ai-review-ci. Also use when setting up new projects with CI/CD,
-  or when a local [[justfile/SKILL|justfile]] needs to reference global QC recipes.
+description: "Use when implementing or wiring the global QC system in ~/ai-review-ci, or adding CI/CD and QC hooks to a project."
 ---
 
 # Quality Control System
