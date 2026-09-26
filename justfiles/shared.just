@@ -24,10 +24,10 @@ artifacts := infra / "tool-artifacts"
 _format-structured-text:
 	#!/usr/bin/env bash
 	set -euo pipefail
-	# Strip git env vars the pre-commit hook inherits from `git commit`; left
-	# set, they redirect uvx's git-sourced tool fetch (flowmark) at the host
-	# project's .git and it fails with "Git operation failed".
-	unset GIT_DIR GIT_INDEX_FILE GIT_WORK_TREE GIT_PREFIX GIT_OBJECT_DIRECTORY GIT_ALTERNATE_OBJECT_DIRECTORIES GIT_COMMON_DIR
+	# Keep GIT_INDEX_FILE through staged-file discovery: pathspec commits provide
+	# a temporary commit index, and selecting from the shared index would format
+	# unrelated sibling-staged files. Repository-location Git variables are
+	# cleared only after the commit input list has been captured below.
 	echo "============================="
 	echo "=== Running: structured text formatting ==="
 	echo "# Formats Markdown (flowmark), JSON, and YAML (prettier) before agents spend time on whitespace"
@@ -46,10 +46,15 @@ _format-structured-text:
 	while IFS= read -r -d '' file; do
 		case "$file" in
 			AGENTS.md|*/AGENTS.md) ;;
+			assets/attachments/extracted/*|assets/attachments/*_extracted.md) ;;
 			*.md|*.markdown) md_files+=("$file") ;;
 			*.json|*.jsonc|*.yaml|*.yml) data_files+=("$file") ;;
 		esac
 	done < <(git diff --cached --name-only --diff-filter=ACMR -z)
+	# git-sourced uvx tools must not inherit repository-location variables: they
+	# can otherwise redirect their own fetch at the host repository and fail.
+	# The selected file lists above already preserve the temporary commit index.
+	unset GIT_DIR GIT_INDEX_FILE GIT_WORK_TREE GIT_PREFIX GIT_OBJECT_DIRECTORY GIT_ALTERNATE_OBJECT_DIRECTORIES GIT_COMMON_DIR
 	if [ "${#md_files[@]}" -eq 0 ] && [ "${#data_files[@]}" -eq 0 ]; then
 		echo "No staged Markdown, JSON, or YAML files found"
 		exit 0
@@ -65,6 +70,7 @@ _format-structured-text:
 _semgrep-autofix:
 	#!/usr/bin/env bash
 	set -euo pipefail
+	source "{{artifacts}}/scripts/heavy-gate-lock.sh"
 	echo "============================="
 	echo "=== Running: semgrep auto-fix ==="
 	echo "# Applies Semgrep autofixes; CI-tier Semgrep verification owns remaining findings"
@@ -79,6 +85,13 @@ _semgrep-autofix:
 	done
 	exclude_args+=("--exclude=*.html")
 	exclude_args+=("--exclude=**/*.html")
+	# This gate applies autofixes; CI-tier verification owns the remaining findings, so
+	# printing them here is advisory output the caller cannot act on. Measured at 177 lines
+	# and 8.4 KB per run in one repository — on every commit, in every repository. Agent
+	# callers carry that into their conversation, so capture it and print a summary instead,
+	# replaying the whole thing only when the scan actually fails.
+	scan_log="$(mktemp -t semgrep-autofix.XXXXXX)"
+	trap 'rm -f -- "$scan_log"' EXIT
 	if "{{artifacts}}/scripts/semgrep-with-qc-ignores.sh" \
 		"{{artifacts}}/scripts/read_qc_excludes.py" \
 		"{{configs}}/qc-excludes.toml" \
@@ -89,14 +102,17 @@ _semgrep-autofix:
 		--exclude=codeql-db \
 		"${exclude_args[@]}" \
 		--scan-unknown-extensions \
-		--autofix; then
-		:
+		--autofix >"$scan_log" 2>&1; then
+		grep -E '^(Ran [0-9]+ rules|.*files? (modified|left unchanged) by autofix)' "$scan_log" || true
+		findings="$(grep -cE '^\s+❯❯❱ ' "$scan_log" || true)"
+		echo "semgrep autofix: ${findings:-0} advisory finding group(s); CI-tier verification owns them"
 	else
 		ec=$?
 		echo ""
 		echo "!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!"
 		echo "  ERROR: semgrep auto-fix failed to run."
 		echo "  Fix the QC tooling or Semgrep invocation before rerunning project checks."
+		cat "$scan_log"
 		echo "!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!"
 		"{{artifacts}}/scripts/emit-triage-directive.sh"
 		exit $ec
@@ -254,6 +270,7 @@ _ensure-qc-repo-current:
 _semgrep:
 	#!/usr/bin/env bash
 	set -euo pipefail
+	source "{{artifacts}}/scripts/heavy-gate-lock.sh"
 	echo "============================="
 	echo "=== Running: semgrep security pattern verification ==="
 	echo "# Static analysis for code quality and fraud patterns after normalization"
@@ -432,6 +449,7 @@ _ast-grep:
 _vibecheck:
 	#!/usr/bin/env bash
 	set -euo pipefail
+	source "{{artifacts}}/scripts/heavy-gate-lock.sh"
 	# Strip git env vars the pre-commit hook inherits from `git commit`; left
 	# set, they redirect uvx's git-sourced tool fetch (vibecheck) at the host
 	# project's .git and it fails with "Git operation failed".
@@ -543,6 +561,7 @@ _vibecheck:
 _slop:
 	#!/usr/bin/env bash
 	set -euo pipefail
+	source "{{artifacts}}/scripts/heavy-gate-lock.sh"
 	# Preflight: verify the ML model file exists (centrally owned artifact)
 	model_file="{{artifacts}}/models/slop_classifier.pkl"
 	if [ ! -f "$model_file" ]; then
@@ -581,6 +600,7 @@ _slop:
 _aislop:
 	#!/usr/bin/env bash
 	set -euo pipefail
+	source "{{artifacts}}/scripts/heavy-gate-lock.sh"
 	echo "============================="
 	echo "=== Running: aislop AI-slop quality scan ==="
 	echo "# Runs scanaislop.com's aislop scanner; blocks on error-severity findings (warnings surface but do not block)"

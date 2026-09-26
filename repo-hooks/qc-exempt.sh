@@ -6,7 +6,11 @@
 # Sets qc_repo_root and qc_hook_repo for the caller, and defines qc_should_gate: returns
 # 0 when the hook should run its gate, 1 when the repository is outside this system.
 
-unset GIT_DIR GIT_INDEX_FILE GIT_WORK_TREE GIT_PREFIX GIT_OBJECT_DIRECTORY GIT_ALTERNATE_OBJECT_DIRECTORIES GIT_COMMON_DIR
+# Keep GIT_INDEX_FILE: git commit --only supplies a temporary commit index,
+# and downstream pre-commit gates must inspect/mutate that snapshot rather than
+# unrelated staged work in the shared index. Repository-location variables are
+# still cleared so linked-worktree detection resolves from the caller cwd.
+unset GIT_DIR GIT_WORK_TREE GIT_PREFIX GIT_OBJECT_DIRECTORY GIT_ALTERNATE_OBJECT_DIRECTORIES GIT_COMMON_DIR
 
 qc_repo_root="$(git rev-parse --show-toplevel)"
 qc_hook_file="$(readlink -f "$0")"

@@ -133,6 +133,103 @@ def test_ai_review_ci_hooks_still_run_in_downstream_repos(
     assert result.stdout.strip() == "downstream-ran"
 
 
+@pytest.mark.parametrize("hook_dir", ["global-hooks", "repo-hooks"])
+def test_pre_commit_preserves_pathspec_temporary_index(
+    hook_source_repo: pathlib.Path, tmp_path: pathlib.Path, hook_dir: str
+) -> None:
+    downstream = tmp_path / "pathspec-downstream"
+    downstream.mkdir()
+    subprocess.run(["git", "init", "-q"], cwd=downstream, env=git_test_env(), check=True)
+    subprocess.run(["git", "config", "user.name", "Test"], cwd=downstream, env=git_test_env(), check=True)
+    subprocess.run(["git", "config", "user.email", "test@example.invalid"], cwd=downstream, env=git_test_env(), check=True)
+    subprocess.run(["git", "config", "commit.gpgsign", "false"], cwd=downstream, env=git_test_env(), check=True)
+    (downstream / "corpus").mkdir()
+    (downstream / "queues").mkdir()
+    (downstream / "corpus" / "sibling.md").write_text("base\n")
+    (downstream / "corpus" / "mine.md").write_text("base\n")
+    (downstream / "queues" / "C.md").write_text("base\n")
+    (downstream / "justfile").write_text(
+        "test-commit:\n"
+        "    #!/usr/bin/env sh\n"
+        "    set -eu\n"
+        "    if git diff --cached --quiet -- corpus; then\n"
+        "        echo no-corpus-change\n"
+        "    else\n"
+        "        printf 'generated\\n' >> queues/C.md\n"
+        "        git add queues/C.md\n"
+        "    fi\n"
+        "\n"
+        "test-push:\n    @true\n\n"
+        "test-ci:\n    @true\n"
+    )
+    subprocess.run(["git", "add", "."], cwd=downstream, env=git_test_env(), check=True)
+    subprocess.run(
+        ["git", "-c", "core.hooksPath=/dev/null", "commit", "-q", "-m", "base"],
+        cwd=downstream,
+        env=git_test_env(),
+        check=True,
+    )
+    subprocess.run(
+        ["git", "config", "core.hooksPath", str(hook_source_repo / hook_dir)],
+        cwd=downstream,
+        env=git_test_env(),
+        check=True,
+    )
+
+    # Another stream has corpus work staged in the shared index. A pathspec
+    # commit that touches only the queue must see its temporary commit index,
+    # not that shared staged corpus path.
+    with (downstream / "corpus" / "sibling.md").open("a") as handle:
+        handle.write("sibling staged\n")
+    subprocess.run(["git", "add", "corpus/sibling.md"], cwd=downstream, env=git_test_env(), check=True)
+    with (downstream / "queues" / "C.md").open("a") as handle:
+        handle.write("mine\n")
+    result = subprocess.run(
+        ["git", "commit", "--only", "queues/C.md", "-m", "pathspec queue update"],
+        cwd=downstream,
+        env=git_test_env(),
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert subprocess.run(
+        ["git", "show", "HEAD:queues/C.md"], cwd=downstream, env=git_test_env(), text=True, capture_output=True, check=True
+    ).stdout == "base\nmine\n"
+    assert subprocess.run(
+        ["git", "diff", "--cached", "--name-only"], cwd=downstream, env=git_test_env(), text=True, capture_output=True, check=True
+    ).stdout.splitlines() == ["corpus/sibling.md"]
+
+    # A corpus pathspec commit must take the other branch: regenerate/stage the
+    # queue into Git's temporary commit index, while the sibling's staged corpus
+    # path remains outside the commit.
+    with (downstream / "corpus" / "mine.md").open("a") as handle:
+        handle.write("mine corpus change\n")
+    result = subprocess.run(
+        ["git", "commit", "--only", "corpus/mine.md", "-m", "pathspec corpus update"],
+        cwd=downstream,
+        env=git_test_env(),
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert subprocess.run(
+        ["git", "show", "HEAD:queues/C.md"], cwd=downstream, env=git_test_env(), text=True, capture_output=True, check=True
+    ).stdout == "base\nmine\ngenerated\n"
+    assert subprocess.run(
+        ["git", "diff-tree", "--no-commit-id", "--name-only", "-r", "HEAD"],
+        cwd=downstream,
+        env=git_test_env(),
+        text=True,
+        capture_output=True,
+        check=True,
+    ).stdout.splitlines() == ["corpus/mine.md", "queues/C.md"]
+    assert "corpus/sibling.md" in subprocess.run(
+        ["git", "diff", "--cached", "--name-only"], cwd=downstream, env=git_test_env(), text=True, capture_output=True, check=True
+    ).stdout.splitlines()
+
+
 def path_with_only(tmp_path: pathlib.Path, *commands: str) -> str:
     bin_dir = tmp_path / "bin"
     bin_dir.mkdir()

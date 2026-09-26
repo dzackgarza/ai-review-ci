@@ -87,6 +87,36 @@ def test_dependency_group_requirements_dedupes_preserving_order(tmp_path: pathli
     assert result == ["pytest", "ruff"], result
 
 
+def test_dependency_group_requirements_resolves_workspace_sources(tmp_path: pathlib.Path) -> None:
+    member = tmp_path / "native" / "homotopy-python"
+    member.mkdir(parents=True)
+    (member / "pyproject.toml").write_text(
+        "[project]\nname = \"sage-categories-homotopy\"\nversion = \"0.1.0\"\n"
+    )
+    (tmp_path / "pyproject.toml").write_text(
+        "\n".join(
+            [
+                "[dependency-groups]",
+                'platform = ["sage-categories-homotopy", "juliacall"]',
+                "",
+                "[tool.uv.sources]",
+                'sage-categories-homotopy = { workspace = true }',
+                "",
+                "[tool.uv.workspace]",
+                'members = ["native/homotopy-python"]',
+                "",
+            ]
+        )
+    )
+
+    result = _MOD.dependency_group_requirements(tmp_path)
+
+    assert result == [
+        f"sage-categories-homotopy @ {member.resolve().as_uri()}",
+        "juliacall",
+    ]
+
+
 def test_pep723_requirements_dedupes_preserving_order(tmp_path: pathlib.Path) -> None:
     one = tmp_path / "one.py"
     two = tmp_path / "two.py"

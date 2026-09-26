@@ -11,9 +11,9 @@
 #   _sage-qc-files, _sage-syntax, _vulture, _sage-ast-grep (Sage-aware preparse)
 #
 # WORKFLOW (three-tier):
-#   just test-commit — Sage/Python syntax, normalization, mypy, bypass check.
-#   just test-push   — commit checks, the full Sage test suite, and the cheap
-#                      deterministic gates (vulture, ast-grep, deptry).
+#   just test-commit — Sage/Python syntax, normalization, bypass check.
+#   just test-push   — commit checks, mypy, the full Sage test suite, and the
+#                      cheap deterministic gates (vulture, ast-grep, deptry).
 #   just test-ci     — push checks plus the threshold metrics (coverage,
 #                      duplication) and the minutes-long import graph.
 
@@ -104,8 +104,8 @@ setup:
 	@echo "   The package must be importable there (PYTHONPATH via .envrc, or"
 	@echo "   installed into Sage's python)."
 	@echo ""
-	@echo "6. Gates: pre-commit runs 'just test-commit' (syntax and mypy);"
-	@echo "   pre-push runs 'just test-push' (adds Sage tests and the cheap"
+	@echo "6. Gates: pre-commit runs 'just test-commit' (syntax and normalization);"
+	@echo "   pre-push runs 'just test-push' (adds mypy, Sage tests and the cheap"
 	@echo "   deterministic gates); CI runs 'just test-ci' (threshold metrics)."
 	@echo "   Commit/push failures are direct repair; CI policy findings are triaged."
 
@@ -253,7 +253,9 @@ _sage-python:
 	#!/usr/bin/env bash
 	set -euo pipefail
 	sage_bin="$(just --justfile {{justfile()}} -d . _sage-bin)"
-	sage_python="$(dirname "$sage_bin")/python"
+	# Ask the launcher which interpreter it runs. SAGE_BIN may be a source-tree launcher that
+	# sets up GAP and friends before exec'ing its venv, so its own directory holds no python.
+	sage_python="$("$sage_bin" -python -c 'import sys; print(sys.executable)')"
 	if [ ! -x "$sage_python" ]; then
 		echo "ERROR: Sage virtual-environment Python is not executable: $sage_python" >&2
 		"{{artifacts}}/scripts/emit-triage-directive.sh" >&2
@@ -264,8 +266,8 @@ _sage-python:
 _sage-preparse-bin:
 	#!/usr/bin/env bash
 	set -euo pipefail
-	sage_bin="$(just --justfile {{justfile()}} -d . _sage-bin)"
-	sage_preparse="$(dirname "$sage_bin")/sage-preparse"
+	sage_python="$(just --justfile {{justfile()}} -d . _sage-python)"
+	sage_preparse="$(dirname "$sage_python")/sage-preparse"
 	if [ ! -x "$sage_preparse" ]; then
 		echo "ERROR: Sage virtual-environment preparser is not executable: $sage_preparse" >&2
 		"{{artifacts}}/scripts/emit-triage-directive.sh" >&2
@@ -276,6 +278,7 @@ _sage-preparse-bin:
 _sage-syntax:
 	#!/usr/bin/env bash
 	set -euo pipefail
+	source "{{artifacts}}/scripts/heavy-gate-lock.sh"
 	echo "============================="
 	echo "=== Running: Sage syntax validation ==="
 	echo "# Preparses .sage files and byte-compiles the generated Python to catch syntax errors early"
@@ -294,7 +297,7 @@ _sage-syntax:
 	sage_preparse="$(just --justfile {{justfile()}} -d . _sage-preparse-bin)"
 
 	sage_preparse_dir="$(mktemp -d "${TMPDIR:-/tmp}/qc-sage-syntax.XXXXXX")"
-	trap 'if [ -e "$sage_preparse_dir" ]; then gio trash "$sage_preparse_dir"; fi' EXIT
+	trap 'if [ -e "$sage_preparse_dir" ]; then rm -rf -- "$sage_preparse_dir"; fi' EXIT
 	echo "# Preparsing and compiling ${#sage_files[@]} Sage file(s)"
 	copied_sage_files=()
 	compile_args=()
@@ -400,7 +403,7 @@ _vulture: _sage-qc-files
 		sage_preparse="$(just --justfile {{justfile()}} -d . _sage-preparse-bin)"
 
 		sage_preparse_dir="$(mktemp -d "${TMPDIR:-/tmp}/qc-vulture-sage.XXXXXX")"
-		trap 'if [ -e "$sage_preparse_dir" ]; then gio trash "$sage_preparse_dir"; fi' EXIT
+		trap 'if [ -e "$sage_preparse_dir" ]; then rm -rf -- "$sage_preparse_dir"; fi' EXIT
 		echo "# Preparsing ${#sage_files[@]} Sage file(s) for vulture"
 		copied_sage_files=()
 		for sage_file in "${sage_files[@]}"; do
@@ -432,6 +435,7 @@ _vulture: _sage-qc-files
 _sage-pytest:
 	#!/usr/bin/env bash
 	set -euo pipefail
+	source "{{artifacts}}/scripts/heavy-gate-lock.sh"
 	echo "============================="
 	echo "=== Running: pytest on Sage test files ==="
 	echo "# Collects .sage tests in place as Sage scripts (qc_sage_session), so the"
@@ -494,6 +498,7 @@ _sage-pytest:
 _sage-pytest-coverage:
 	#!/usr/bin/env bash
 	set -euo pipefail
+	source "{{artifacts}}/scripts/heavy-gate-lock.sh"
 	echo "============================="
 	echo "=== Running: pytest with coverage under the Sage interpreter ==="
 	echo "# Same in-place collection as _sage-pytest, run under coverage.py inside Sage's"
@@ -711,7 +716,6 @@ test-commit:
 	just --justfile {{justfile()}} -d . _sage-run-check sage-preflight {{justfile()}} _sage-preflight
 	just --justfile {{justfile()}} -d . _sage-run-check normalize-common {{justfile()}} _normalize-common
 	just --justfile {{justfile()}} -d . _sage-run-check sage-syntax {{justfile()}} _sage-syntax
-	just --justfile {{justfile()}} -d . _sage-run-check sage-mypy {{justfile()}} _sage-mypy
 	just --justfile {{justfile()}} -d . _sage-run-check python-normalize {{justfiles}}/python.just _normalize
 	just --justfile {{justfile()}} -d . _sage-run-check python-syntax {{justfiles}}/python.just _python-syntax
 	just --justfile {{justfile()}} -d . _sage-run-check no-bypass {{justfiles}}/shared.just _no-bypass
@@ -744,6 +748,7 @@ test-push:
 	set -euo pipefail
 	export AI_REVIEW_CI_FAILURE_MODE=direct
 	just --justfile {{justfile()}} -d . _sage-run-check test-commit {{justfile()}} test-commit
+	just --justfile {{justfile()}} -d . _sage-run-check sage-mypy {{justfile()}} _sage-mypy
 	just --justfile {{justfile()}} -d . _sage-run-check sage-pytest {{justfile()}} _sage-pytest
 	just --justfile {{justfile()}} -d . _sage-run-check vulture {{justfile()}} _vulture
 	just --justfile {{justfile()}} -d . _sage-run-check sage-ast-grep {{justfile()}} _sage-ast-grep
@@ -782,7 +787,7 @@ _sage-ast-grep:
 		sage_preparse="$(just --justfile {{justfile()}} -d . _sage-preparse-bin)"
 
 		sage_preparse_dir="$(mktemp -d "${TMPDIR:-/tmp}/qc-astgrep-sage.XXXXXX")"
-		trap 'if [ -e "$sage_preparse_dir" ]; then gio trash "$sage_preparse_dir"; fi' EXIT
+		trap 'if [ -e "$sage_preparse_dir" ]; then rm -rf -- "$sage_preparse_dir"; fi' EXIT
 		echo "# Preparsing ${#sage_files[@]} Sage file(s) for ast-grep"
 		copied_sage_files=()
 		for sage_file in "${sage_files[@]}"; do
@@ -807,7 +812,7 @@ _sage-ast-grep:
 	fi
 
 	findings_file=$(mktemp)
-	trap 'if [ -e "$findings_file" ]; then rm -f "$findings_file"; fi; if [ -e "${sage_preparse_dir:-}" ]; then gio trash "$sage_preparse_dir"; fi' EXIT
+	trap 'if [ -e "$findings_file" ]; then rm -f "$findings_file"; fi; if [ -e "${sage_preparse_dir:-}" ]; then rm -rf -- "$sage_preparse_dir"; fi' EXIT
 	npx -y --package @ast-grep/cli ast-grep scan \
 		--config {{configs}}/sage-sgconfig.yml \
 		--report-style short \

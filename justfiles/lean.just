@@ -56,6 +56,7 @@ _lean-build:
 
 infra := justfile_directory() / ".."
 justfiles := infra / "justfiles"
+artifacts := infra / "tool-artifacts"
 
 # public: fail when any tracked Lean source contains sorry (quarantine excluded)
 lean-no-sorry:
@@ -87,6 +88,7 @@ lean-semgrep:
 lean-axiom-audit:
 	#!/usr/bin/env bash
 	set -euo pipefail
+	source "{{artifacts}}/scripts/heavy-gate-lock.sh"
 	if ! just --dry-run _lean-axiom-audit >/dev/null 2>&1; then
 		echo "ERROR: Lean QC requires a target-private _lean-axiom-audit recipe." >&2
 		exit 1

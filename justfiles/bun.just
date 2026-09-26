@@ -67,6 +67,7 @@ _normalize-common:
 _bun-test:
 	#!/usr/bin/env bash
 	set -euo pipefail
+	source "{{artifacts}}/scripts/heavy-gate-lock.sh"
 	echo "============================="
 	echo "=== Running: bun test (push tier — no coverage gate) ==="
 	echo "# Runs the project's own test suite; coverage is enforced in CI."
@@ -92,6 +93,7 @@ _bun-test:
 app-boot:
 	#!/usr/bin/env bash
 	set -euo pipefail
+	source "{{artifacts}}/scripts/heavy-gate-lock.sh"
 	export AI_REVIEW_CI_FAILURE_MODE=triage
 	if [ ! -f playwright.config.ts ]; then
 		echo "ERROR: bun-playwright projects must define playwright.config.ts at the repository root."
@@ -103,6 +105,7 @@ app-boot:
 _coverage:
 	#!/usr/bin/env bash
 	set -euo pipefail
+	source "{{artifacts}}/scripts/heavy-gate-lock.sh"
 	unset NODE_ENV
 	# Playwright (e2e-covered) projects prove coverage through the app-boot e2e run in
 	# test-ci, not a unit lcov. Unit-lcov diff-cover does not apply to them.
@@ -198,6 +201,7 @@ _eslint: _eslint-deps
 _tsc:
 	#!/usr/bin/env bash
 	set -euo pipefail
+	source "{{artifacts}}/scripts/heavy-gate-lock.sh"
 	if jq -e '.scripts.types // empty' package.json >/dev/null 2>&1; then
 		bun run types
 	elif [ -f tsconfig.json ] \
@@ -389,6 +393,7 @@ _js-qc-files:
 _slop-scan:
 	#!/usr/bin/env bash
 	set -euo pipefail
+	source "{{artifacts}}/scripts/heavy-gate-lock.sh"
 	echo "============================="
 	echo "=== Running: slop-scan JS/TS anti-pattern detection ==="
 	echo "# Scans JS/TS files for AI-associated slop patterns (error-swallowing, duplicate signatures, generic casts, etc.)"
@@ -518,6 +523,7 @@ _slop-scan:
 _codeql:
 	#!/usr/bin/env bash
 	set -euo pipefail
+	source "{{artifacts}}/scripts/heavy-gate-lock.sh"
 	trap 'if [ -e codeql-db ]; then gio trash codeql-db; fi; if [ -e codeql-report.sarif ]; then gio trash codeql-report.sarif; fi' EXIT
 	codeql database create codeql-db --overwrite --language=typescript --source-root=. --search-path=/dev/null
 	codeql database analyze codeql-db --format=sarif-latest --output=codeql-report.sarif
