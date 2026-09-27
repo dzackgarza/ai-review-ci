@@ -41,6 +41,10 @@ _test-sage-mypy-launch:
 _test-sage-mypy-snapshot:
     bash tests/sage-mypy-snapshot.sh
 
+[private]
+_test-sage-pytest-launch:
+    bash tests/sage-pytest-launch.sh
+
 # Commit gate: immediate, directly repairable feedback.
 test-commit:
     just -f {{repo}}/justfiles/qc-tooling.just -d . test-commit
