@@ -626,11 +626,15 @@ _sage-mypy: _sage-qc-files
 		echo "# Preparsing ${#sage_files[@]} Sage file(s) for mypy"
 		# The preparsed modules import each other and the package's plain .py
 		# modules, and mypy resolves those imports statically: the tempdir must
-		# be one coherent snapshot. Copy every tracked Python source and stub
-		# (this also carries a repo's typings/ tree, keeping the config's
-		# relative mypy_path resolvable), and rename each preparsed X.sage.py
-		# to X.py -- the stem X.sage can never satisfy an import of pkg.X.
-		git ls-files -z -- '*.py' '*.pyi' | xargs -0 --no-run-if-empty cp --parents -t "$sage_preparse_dir"
+		# be one coherent snapshot. Runtime projection also loads package data,
+		# so retain all tracked files rather than selecting source extensions.
+		# Gitlinks belong to their own repositories. Keep symlinks as links.
+		git ls-files --stage -z | while IFS=$'\t' read -r -d '' entry source; do
+			case "$entry" in 160000\ *) continue ;; esac
+			cp --no-dereference --parents -t "$sage_preparse_dir" -- "$source"
+		done
+		# Rename each preparsed X.sage.py to X.py: the stem X.sage cannot
+		# satisfy an import of pkg.X.
 		copied_sage_files=()
 		for sage_file in "${sage_files[@]}"; do
 			target="$sage_preparse_dir/$sage_file"
