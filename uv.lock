@@ -10,13 +10,13 @@ dependencies = [
     { name = "automated-reviews" },
     { name = "cyclopts" },
     { name = "pydantic" },
+    { name = "pytest" },
     { name = "pyyaml" },
     { name = "unidiff" },
 ]
 
 [package.dev-dependencies]
 dev = [
-    { name = "pytest" },
     { name = "pyyaml" },
     { name = "types-pyyaml" },
     { name = "types-unidiff" },
@@ -27,13 +27,13 @@ requires-dist = [
     { name = "automated-reviews", git = "https://github.com/dzackgarza/automated-reviews.git?rev=main" },
     { name = "cyclopts" },
     { name = "pydantic", specifier = ">=2" },
+    { name = "pytest" },
     { name = "pyyaml", specifier = ">=6.0.3" },
     { name = "unidiff", specifier = ">=0.7.5" },
 ]
 
 [package.metadata.requires-dev]
 dev = [
-    { name = "pytest" },
     { name = "pyyaml" },
     { name = "types-pyyaml" },
     { name = "types-unidiff", specifier = ">=0.7.0.20260518" },
