@@ -690,6 +690,8 @@ _sage-mypy: _sage-qc-files
 		mypy_flags+=(--explicit-package-bases)
 		if [ -d "$sage_preparse_dir/src" ]; then
 			export MYPYPATH="$sage_preparse_dir/src${MYPYPATH:+:$MYPYPATH}"
+			# The category plugin imports these same sources in the Sage runtime.
+			export PYTHONPATH="$sage_preparse_dir/src${PYTHONPATH:+:$PYTHONPATH}"
 		fi
 		if [ -d "$sage_preparse_dir/typings" ]; then
 			export MYPYPATH="$sage_preparse_dir/typings${MYPYPATH:+:$MYPYPATH}"
