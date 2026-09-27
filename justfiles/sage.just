@@ -603,7 +603,7 @@ _sage-mypy: _sage-qc-files
 	echo "============================="
 	echo "=== Running: mypy static type analysis (Sage-aware) ==="
 	echo "# Type checks Python and preparsed Sage files"
-	sage_python="$(just --justfile {{justfile()}} -d . _sage-python)"
+	sage_bin="$(just --justfile {{justfile()}} -d . _sage-bin)"
 	export MYPYPATH="{{infra}}/typings${MYPYPATH:+:$MYPYPATH}"
 	python_files_output="$(just -f {{justfiles}}/python.just -d . _python-qc-files)"
 	python_files=()
@@ -640,7 +640,7 @@ _sage-mypy: _sage-qc-files
 		done
 		(
 			cd "$sage_preparse_dir"
-			"$sage_python" "$sage_preparse" "${copied_sage_files[@]}" >/dev/null
+			"$sage_bin" -python "$sage_preparse" "${copied_sage_files[@]}" >/dev/null
 		)
 		for sage_file in "${copied_sage_files[@]}"; do
 			mv "$sage_preparse_dir/$sage_file.py" "$sage_preparse_dir/${sage_file%.sage}.py"
@@ -695,14 +695,16 @@ _sage-mypy: _sage-qc-files
 			export MYPYPATH="$sage_preparse_dir/typings${MYPYPATH:+:$MYPYPATH}"
 		fi
 	fi
-	if (cd "$mypy_run_dir" && "$sage_python" -m mypy \
+	# The plugin imports sage.all, whose engines need the launcher's environment.
+	# An extracted sys.executable preserves Python packages but loses that setup.
+	if (cd "$mypy_run_dir" && "$sage_bin" -python -m mypy \
 		--config-file "$effective_config" \
 		"${mypy_flags[@]}" \
 		"${mypy_targets[@]}"); then
 		:
 	else
 		ec=$?
-		echo "ERROR: mypy found type errors in project code."
+		echo "ERROR: Sage mypy failed (exit $ec); inspect the diagnostics above."
 		"{{artifacts}}/scripts/emit-triage-directive.sh"
 		exit $ec
 	fi
