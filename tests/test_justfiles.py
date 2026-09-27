@@ -328,7 +328,7 @@ def test_sage_recipes_require_configured_executable_sage_path(
     assert TRIAGE_MARKER in output
 
 
-def test_sage_syntax_uses_tools_from_the_sage_virtual_environment(
+def test_sage_syntax_propagates_configured_launcher_failure(
     tmp_path: pathlib.Path,
 ) -> None:
     project = project_with_sage_file(tmp_path)
@@ -336,24 +336,17 @@ def test_sage_syntax_uses_tools_from_the_sage_virtual_environment(
     assert run_git(project, "add", "example.sage").returncode == 0
     commit_without_hooks(project, "baseline")
 
-    sage_bin_dir = tmp_path / "sage-venv" / "bin"
-    sage_bin_dir.mkdir(parents=True)
-    sage = sage_bin_dir / "sage"
-    sage.write_text("#!/usr/bin/env bash\nexit 97\n")
-    sage.chmod(0o755)
-    (sage_bin_dir / "python").symlink_to(pathlib.Path(sys.executable))
-    sage_preparse = sage_bin_dir / "sage-preparse"
-    sage_preparse.write_text(
-        "from pathlib import Path\nimport sys\nfor source_name in sys.argv[1:]:\n    source = Path(source_name)\n    Path(f'{source}.py').write_text(source.read_text())\n"
-    )
-    sage_preparse.chmod(0o755)
-
+    # Real syntax acceptance is exercised by _test-sage-syntax-launch.
+    # An executable that fails must not be replaced by a guessed interpreter.
+    failing_executable = shutil.which("false")
+    assert failing_executable is not None
     env = os.environ.copy()
-    env["SAGE_BIN"] = str(sage)
+    env["SAGE_BIN"] = failing_executable
     result = run_just(ROOT / "justfiles" / "sage.just", project, "_sage-syntax", env=env)
 
     output = result.stdout + result.stderr
-    assert result.returncode == 0, output
+    assert result.returncode == 1, output
+    assert "recipe `_sage-python` failed with exit code 1" in output.lower()
 
 
 def test_sage_check_runner_replaces_only_the_reached_check_artifacts(
@@ -3379,6 +3372,31 @@ def test_deptry_accepts_declared_distributions_with_different_import_names(
     )
 
     assert result.returncode == 0, result.stdout + result.stderr
+
+
+def test_deptry_tracks_pytest_public_and_internal_modules(
+    tmp_path: pathlib.Path,
+) -> None:
+    project = tmp_path / "pytest-consumer"
+    project.mkdir()
+    manifest = project / "pyproject.toml"
+    manifest.write_text(
+        '[project]\nname = "pytest-consumer"\nversion = "0.1.0"\n'
+        'dependencies = ["pytest"]\n'
+    )
+    (project / "collector.py").write_text(
+        "import pytest\nfrom _pytest.assertion.rewrite import rewrite_asserts\n"
+    )
+
+    declared = run_just(ROOT / "justfiles" / "python.just", project, "_deptry")
+    assert declared.returncode == 0, declared.stdout + declared.stderr
+
+    manifest.write_text(manifest.read_text().replace('["pytest"]', "[]"))
+    undeclared = run_just(ROOT / "justfiles" / "python.just", project, "_deptry")
+    output = undeclared.stdout + undeclared.stderr
+    assert undeclared.returncode != 0, output
+    assert "DEP001" in output
+    assert "pytest" in output
 
 
 def test_deptry_allows_framework_required_import_invisible_dependencies(
