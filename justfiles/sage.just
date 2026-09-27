@@ -440,7 +440,7 @@ _sage-pytest:
 	echo "=== Running: pytest on Sage test files ==="
 	echo "# Collects .sage tests in place as Sage scripts (qc_sage_session), so the"
 	echo "# project's conftests and pytest configuration apply."
-	sage_python="$(just --justfile {{justfile()}} -d . _sage-python)"
+	sage_bin="$(just --justfile {{justfile()}} -d . _sage-bin)"
 
 	# Collect only files owned by this repository; the shared discovery boundary
 	# excludes gitlinks and independently initialized nested repositories.
@@ -464,9 +464,9 @@ _sage-pytest:
 	# Sage tests can only run under the Sage interpreter: sage.* is not
 	# pip-installable into a uvx CPython environment. The project must be
 	# importable there (PYTHONPATH via envrc, or installed into Sage's python).
-	if ! "$sage_python" -m pytest --version >/dev/null 2>&1; then
+	if ! "$sage_bin" -python -m pytest --version >/dev/null 2>&1; then
 		echo "ERROR: pytest is not available in the Sage interpreter's Python."
-		echo "       FIX: \"$sage_python\" -m pip install pytest"
+		echo "       FIX: \"$sage_bin\" -python -m pip install pytest"
 		"{{artifacts}}/scripts/emit-triage-directive.sh"
 		exit 1
 	fi
@@ -486,7 +486,7 @@ _sage-pytest:
 	#
 	# `sage -c` cannot carry the arguments (it reads trailing words as more
 	# code), so do explicitly what a session does on startup.
-	if "$sage_python" -c "import sage.all, sys, pytest; sys.exit(pytest.main(sys.argv[1:]))" "${pytest_args[@]}"; then
+	if "$sage_bin" -python -c "import sage.all, sys, pytest; sys.exit(pytest.main(sys.argv[1:]))" "${pytest_args[@]}"; then
 		:
 	else
 		ec=$?
@@ -503,7 +503,7 @@ _sage-pytest-coverage:
 	echo "=== Running: pytest with coverage under the Sage interpreter ==="
 	echo "# Same in-place collection as _sage-pytest, run under coverage.py inside Sage's"
 	echo "# Python (uvx CPython cannot import sage.*); emits coverage.xml for diff-cover."
-	sage_python="$(just --justfile {{justfile()}} -d . _sage-python)"
+	sage_bin="$(just --justfile {{justfile()}} -d . _sage-bin)"
 	sage_test_files_output="$(just --justfile {{justfile()}} -d . _sage-test-files)"
 	sage_test_files=()
 	if [ -n "$sage_test_files_output" ]; then
@@ -519,15 +519,15 @@ _sage-pytest-coverage:
 		"{{artifacts}}/scripts/emit-test-writing-directive.sh"
 		exit 1
 	fi
-	if ! "$sage_python" -m pytest --version >/dev/null 2>&1; then
+	if ! "$sage_bin" -python -m pytest --version >/dev/null 2>&1; then
 		echo "ERROR: pytest is not available in the Sage interpreter's Python."
-		echo "       FIX: \"$sage_python\" -m pip install pytest"
+		echo "       FIX: \"$sage_bin\" -python -m pip install pytest"
 		"{{artifacts}}/scripts/emit-triage-directive.sh"
 		exit 1
 	fi
-	if ! "$sage_python" -m coverage --version >/dev/null 2>&1; then
+	if ! "$sage_bin" -python -m coverage --version >/dev/null 2>&1; then
 		echo "ERROR: coverage is not available in the Sage interpreter's Python."
-		echo "       FIX: \"$sage_python\" -m pip install coverage"
+		echo "       FIX: \"$sage_bin\" -python -m pip install coverage"
 		"{{artifacts}}/scripts/emit-triage-directive.sh"
 		exit 1
 	fi
@@ -537,6 +537,8 @@ _sage-pytest-coverage:
 	done
 	export PYTHONPATH="{{artifacts}}/pytest_plugins${PYTHONPATH:+:$PYTHONPATH}"
 	project_root="$(pwd -P)"
+	# The coverage driver lives in the cache; imports still belong to the caller.
+	export PYTHONPATH="$project_root:$PYTHONPATH"
 	project_slug="$(printf '%s' "$project_root" | sed 's#[^A-Za-z0-9._-]#_#g')"
 	coverage_root="${XDG_CACHE_HOME:-$HOME/.cache}/quality-control/coverage/$project_slug"
 	mkdir -p "$coverage_root"
@@ -556,7 +558,7 @@ _sage-pytest-coverage:
 
 	sys.exit(pytest.main(sys.argv[1:]))
 	DRIVER
-	if "$sage_python" -m coverage run "$coverage_driver" "${pytest_args[@]}"; then
+	if "$sage_bin" -python -m coverage run "$coverage_driver" "${pytest_args[@]}"; then
 		:
 	else
 		ec=$?
@@ -564,7 +566,7 @@ _sage-pytest-coverage:
 		"{{artifacts}}/scripts/emit-triage-directive.sh"
 		exit $ec
 	fi
-	if "$sage_python" -m coverage xml -o "$coverage_root/coverage.xml"; then
+	if "$sage_bin" -python -m coverage xml -o "$coverage_root/coverage.xml"; then
 		:
 	else
 		ec=$?
@@ -603,7 +605,7 @@ _sage-mypy: _sage-qc-files
 	echo "============================="
 	echo "=== Running: mypy static type analysis (Sage-aware) ==="
 	echo "# Type checks Python and preparsed Sage files"
-	sage_python="$(just --justfile {{justfile()}} -d . _sage-python)"
+	sage_bin="$(just --justfile {{justfile()}} -d . _sage-bin)"
 	export MYPYPATH="{{infra}}/typings${MYPYPATH:+:$MYPYPATH}"
 	python_files_output="$(just -f {{justfiles}}/python.just -d . _python-qc-files)"
 	python_files=()
@@ -640,7 +642,7 @@ _sage-mypy: _sage-qc-files
 		done
 		(
 			cd "$sage_preparse_dir"
-			"$sage_python" "$sage_preparse" "${copied_sage_files[@]}" >/dev/null
+			"$sage_bin" -python "$sage_preparse" "${copied_sage_files[@]}" >/dev/null
 		)
 		for sage_file in "${copied_sage_files[@]}"; do
 			mv "$sage_preparse_dir/$sage_file.py" "$sage_preparse_dir/${sage_file%.sage}.py"
@@ -695,14 +697,16 @@ _sage-mypy: _sage-qc-files
 			export MYPYPATH="$sage_preparse_dir/typings${MYPYPATH:+:$MYPYPATH}"
 		fi
 	fi
-	if (cd "$mypy_run_dir" && "$sage_python" -m mypy \
+	# The plugin imports sage.all, whose engines need the launcher's environment.
+	# An extracted sys.executable preserves Python packages but loses that setup.
+	if (cd "$mypy_run_dir" && "$sage_bin" -python -m mypy \
 		--config-file "$effective_config" \
 		"${mypy_flags[@]}" \
 		"${mypy_targets[@]}"); then
 		:
 	else
 		ec=$?
-		echo "ERROR: mypy found type errors in project code."
+		echo "ERROR: Sage mypy failed (exit $ec); inspect the diagnostics above."
 		"{{artifacts}}/scripts/emit-triage-directive.sh"
 		exit $ec
 	fi

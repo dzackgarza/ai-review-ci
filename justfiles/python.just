@@ -630,9 +630,16 @@ _deptry: _install-tools
 			deptry_args+=(--known-first-party "$first_party_module")
 		done
 	fi
+	# deptry scans the whole tree, so every PEP 723 script in it must be excluded, not only the
+	# ones in this change set: an untouched uv script with inline dependencies otherwise fails
+	# DEP001 as soon as any other Python file changes.
+	pep723_candidates=("${python_files[@]}")
+	if git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+		mapfile -t pep723_candidates < <(git ls-files -- '*.py' | while IFS= read -r file; do [[ -f "$file" ]] && printf '%s\n' "$file"; done)
+	fi
 	pep723_scripts_output=""
-	if [ "${#python_files[@]}" -gt 0 ]; then
-		pep723_scripts_output="$(uv run --no-project python "{{artifacts}}/scripts/python_qc_metadata.py" pep723-scripts "${python_files[@]}")"
+	if [ "${#pep723_candidates[@]}" -gt 0 ]; then
+		pep723_scripts_output="$(uv run --no-project python "{{artifacts}}/scripts/python_qc_metadata.py" pep723-scripts "${pep723_candidates[@]}")"
 	fi
 	if [ -n "$pep723_scripts_output" ]; then
 		mapfile -t pep723_scripts <<<"$pep723_scripts_output"

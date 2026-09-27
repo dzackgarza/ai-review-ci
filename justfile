@@ -32,6 +32,15 @@ check: _normalize
 check-skill-links:
     uv run tool-artifacts/scripts/check_skill_links.py
 
+# Exercise the Sage checker with its real configured launcher and plugin.
+[private]
+_test-sage-mypy-launch:
+    bash tests/sage-mypy-launch.sh
+
+[private]
+_test-sage-pytest-launch:
+    bash tests/sage-pytest-launch.sh
+
 # Commit gate: immediate, directly repairable feedback.
 test-commit:
     just -f {{repo}}/justfiles/qc-tooling.just -d . test-commit
