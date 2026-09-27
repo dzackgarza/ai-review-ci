@@ -3374,6 +3374,31 @@ def test_deptry_accepts_declared_distributions_with_different_import_names(
     assert result.returncode == 0, result.stdout + result.stderr
 
 
+def test_deptry_tracks_pytest_public_and_internal_modules(
+    tmp_path: pathlib.Path,
+) -> None:
+    project = tmp_path / "pytest-consumer"
+    project.mkdir()
+    manifest = project / "pyproject.toml"
+    manifest.write_text(
+        '[project]\nname = "pytest-consumer"\nversion = "0.1.0"\n'
+        'dependencies = ["pytest"]\n'
+    )
+    (project / "collector.py").write_text(
+        "import pytest\nfrom _pytest.assertion.rewrite import rewrite_asserts\n"
+    )
+
+    declared = run_just(ROOT / "justfiles" / "python.just", project, "_deptry")
+    assert declared.returncode == 0, declared.stdout + declared.stderr
+
+    manifest.write_text(manifest.read_text().replace('["pytest"]', "[]"))
+    undeclared = run_just(ROOT / "justfiles" / "python.just", project, "_deptry")
+    output = undeclared.stdout + undeclared.stderr
+    assert undeclared.returncode != 0, output
+    assert "DEP001" in output
+    assert "pytest" in output
+
+
 def test_deptry_allows_framework_required_import_invisible_dependencies(
     tmp_path: pathlib.Path,
 ) -> None:
