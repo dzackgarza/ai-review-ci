@@ -537,6 +537,8 @@ _sage-pytest-coverage:
 	done
 	export PYTHONPATH="{{artifacts}}/pytest_plugins${PYTHONPATH:+:$PYTHONPATH}"
 	project_root="$(pwd -P)"
+	# The coverage driver lives in the cache; imports still belong to the caller.
+	export PYTHONPATH="$project_root:$PYTHONPATH"
 	project_slug="$(printf '%s' "$project_root" | sed 's#[^A-Za-z0-9._-]#_#g')"
 	coverage_root="${XDG_CACHE_HOME:-$HOME/.cache}/quality-control/coverage/$project_slug"
 	mkdir -p "$coverage_root"
