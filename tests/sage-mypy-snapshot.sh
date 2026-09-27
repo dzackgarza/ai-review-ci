@@ -8,12 +8,18 @@ trap 'gio trash "$target"' EXIT
 git -C "$target" init --quiet
 mkdir -p "$target/src/snapshot_category"
 cat >"$target/src/snapshot_category/__init__.py" <<'PY'
+from importlib.resources import files
+
 from sage.categories.sets_cat import Sets
+
+UNIT = files(__package__).joinpath("units.txt").read_text().strip()
 
 
 class SnapshotSets(Sets):
-    pass
+    def _repr_object_names(self) -> str:
+        return UNIT
 PY
+printf 'snapshot sets\n' >"$target/src/snapshot_category/units.txt"
 cat >"$target/pyproject.toml" <<'TOML'
 [project]
 name = "sage-snapshot-proof"
