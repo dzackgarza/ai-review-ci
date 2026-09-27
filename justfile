@@ -38,6 +38,10 @@ _test-sage-mypy-launch:
     bash tests/sage-mypy-launch.sh
 
 [private]
+_test-sage-mypy-snapshot:
+    bash tests/sage-mypy-snapshot.sh
+
+[private]
 _test-sage-pytest-launch:
     bash tests/sage-pytest-launch.sh
 
