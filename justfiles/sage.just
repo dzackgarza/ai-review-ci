@@ -255,7 +255,7 @@ _sage-python:
 	sage_bin="$(just --justfile {{justfile()}} -d . _sage-bin)"
 	# Ask the launcher which interpreter it runs. SAGE_BIN may be a source-tree launcher that
 	# sets up GAP and friends before exec'ing its venv, so its own directory holds no python.
-	sage_python="$("$sage_bin" -python -c 'import sys; print(sys.executable)')"
+	sage_python="$("$sage_bin" -c 'import sys; print(sys.executable)')"
 	if [ ! -x "$sage_python" ]; then
 		echo "ERROR: Sage virtual-environment Python is not executable: $sage_python" >&2
 		"{{artifacts}}/scripts/emit-triage-directive.sh" >&2
