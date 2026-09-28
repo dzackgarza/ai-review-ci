@@ -1,14 +1,10 @@
-"""Installer for deterministic QC and published LLM slop-review workflows.
+"""Installer for the deterministic QC trigger workflow and branch protection.
 
-``automated-reviews`` publishes the slop-review workflows. ``ai-review-ci`` installs
-them with its deterministic QC scaffold and branch protection contract.
-Installing into a repo writes two minimally-correct trigger workflows —
-plain configuration files (triggers, crons, thresholds) that the repo owns and
-edits directly afterward:
+Installing into a repo writes one minimally-correct trigger workflow, a plain
+configuration file that the repo owns and edits directly afterward:
 
-- review-slop.yml     — repo-wide slop review (cron, push to main, dispatch)
-- review-pr.yml       — required test-ci plus the diff-scoped slop review on
-                        every pull request, rendered for the declared profile
+- review-pr.yml       — the required deterministic QC gates on every pull
+                        request, rendered for the declared profile
 
 Existing files are never overwritten: once installed they are repo-owned
 configuration. Installation also applies the GitHub-side required-check
@@ -19,12 +15,11 @@ import pathlib
 import sys
 from importlib.resources import files
 
-from automated_reviews.publication import WORKFLOW_NAMES, workflow_text
-
 from ai_review_ci.gates import SUPPORTED_PROFILES, protect_branch
 
 SCAFFOLD_FILES = ("justfile",)
 PR_TEMPLATE = "pull_request_template.md"
+PR_WORKFLOW = "review-pr.yml"
 # The canonical aislop policy, distributed into every governed repo (#228).
 # aislop has no --config flag; it reads .aislop/config.yml from the scanned
 # directory root, so distribution means writing the file into the target repo.
@@ -55,8 +50,12 @@ def _git_repo_root(target: pathlib.Path) -> pathlib.Path:
     return target
 
 
-def _template_text(name: str, profile: str, ref: str = DEFAULT_INFRA_REF) -> str:
-    return workflow_text(name, profile=profile, review_ref=ref, qc_ref=ref)
+def _template_text(profile: str, ref: str = DEFAULT_INFRA_REF) -> str:
+    """Render the PR QC trigger workflow for a profile and an ai-review-ci ref."""
+    _validate_profile(profile)
+    source = "review-pr-bun-playwright.yml" if profile == "bun-playwright" else PR_WORKFLOW
+    text = (files("ai_review_ci") / "templates" / source).read_text(encoding="utf-8")
+    return text.replace("{{ profile }}", profile).replace("{{ ref }}", ref)
 
 
 def _replace_just_variable(text: str, variable: str, value: str) -> str:
@@ -112,23 +111,21 @@ def _write_scaffold(
 
 
 def _write_trigger_workflows(target: pathlib.Path, profile: str, ref: str = DEFAULT_INFRA_REF) -> None:
-    """Write the repo-owned trigger workflow files."""
+    """Write the repo-owned PR QC trigger workflow."""
     _validate_profile(profile)
     target = _git_repo_root(target)
 
-    wf_dir = target / ".github" / "workflows"
-    existing = [n for n in WORKFLOW_NAMES if (wf_dir / n).exists()]
-    if existing:
+    dest = target / ".github" / "workflows" / PR_WORKFLOW
+    if dest.exists():
         print(
-            f"FATAL: already installed in {target}: {', '.join(existing)} — these are repo-owned configuration; edit them directly, or remove them first to re-initialize.",
+            f"FATAL: already installed in {target}: {PR_WORKFLOW} — this is repo-owned configuration; edit it directly, or remove it first to re-initialize.",
             file=sys.stderr,
         )
         sys.exit(1)
 
-    wf_dir.mkdir(parents=True, exist_ok=True)
-    for name in WORKFLOW_NAMES:
-        (wf_dir / name).write_text(_template_text(name, profile, ref))
-        print(f"installed .github/workflows/{name}")
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    dest.write_text(_template_text(profile, ref))
+    print(f"installed .github/workflows/{PR_WORKFLOW}")
 
 
 def _write_pr_template(target: pathlib.Path) -> None:
@@ -235,7 +232,7 @@ def install(
     release_channel: str = DEFAULT_INFRA_REF,
     skip_scaffold: bool = False,
 ) -> None:
-    """Install the slop-review triggers and required branch protection.
+    """Install the PR QC trigger workflow and required branch protection.
 
     Args:
         target: Target repository root (default: current directory).
@@ -270,7 +267,7 @@ def install(
 
     print(
         "\nDone. Commit the installed files; they are now repo-owned "
-        "configuration — edit crons, branches, and upstream refs directly.\n"
-        "Requirements: GitHub code scanning enabled and branch protection "
+        "configuration — edit branches and upstream refs directly.\n"
+        "Requirement: branch protection "
         f"requiring the ai-review-ci deterministic gates for {profile}."
     )

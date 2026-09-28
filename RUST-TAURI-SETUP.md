@@ -128,10 +128,6 @@ These pass or are silent locally at commit and push tier, then fail the PR.
   eslint: set `imports: false` in `wxt.config.ts` and import
   `defineBackground` from `wxt/utils/define-background`.
 - **knip** blocks on unused devDependencies and unused exports.
-- **The slop-review job uploads SARIF to GitHub code scanning.** A private repository
-  without Advanced Security rejects the upload ("Code scanning is not enabled for this
-  repository") and the required `slop / review` check fails. The code repositories under
-  this account are public for that reason.
 - **The scan-ai-slop bot** posts one "skipped, no paid plan" comment per PR. It is not a
   required check; ignore it.
 
@@ -159,15 +155,3 @@ before `git add`, or expect a second formatting-only commit.
 regardless of extension, so a tracked `.tsbuildinfo` reports Rust-rule findings such as
 `rs-no-result-ok` on its JSON. Ignore `*.tsbuildinfo`, `coverage/`, `lcov.info`, `dist/`,
 `.output/` and `.wxt/` before the first commit, and stage files by name.
-
-## 9. The slop reviewer files threads on stubs
-
-The `slop / review` check posts inline review threads, and the `thread-resolution` check
-fails while any thread is unresolved. On a scaffold PR the reviewer flags every stub
-entrypoint as a "hollow facade". Each thread needs a visible reply carrying the
-disposition fields (claim disposition, remediation disposition, policy basis, action
-taken, audit anchor), then `resolveReviewThread` through the GraphQL API, and a top-level
-PR comment titled `Review feedback disposition ledger` for every rejected or modified
-thread. Silent resolution is banned by the review guidelines and the gate does not accept
-it. `gh pr checks` cannot read these repos with the personal token; use
-`gh api graphql` to list `reviewThreads` and `gh run view --log-failed` for the gate text.

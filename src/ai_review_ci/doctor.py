@@ -15,7 +15,7 @@ from cyclopts import Parameter
 from pydantic import BaseModel, ConfigDict, Field, TypeAdapter, ValidationError
 
 from ai_review_ci.gates import PROJECT_PROFILES, SUPPORTED_PROFILES, ProjectProfile, delegates_to_global_qc, required_check_contexts
-from automated_reviews.publication import WORKFLOW_NAMES
+from ai_review_ci.install import PR_WORKFLOW
 from ai_review_ci.labels import Label, RemoteLabel, compute_label_actions, load_taxonomy
 from ai_review_ci.review_guidelines import classify_review_guidelines, load_canonical_review_guidelines
 
@@ -446,39 +446,35 @@ def _profile_proofs(target: Path) -> dict[str, ProfileProofObservation]:
 
 
 def _workflow_refs(target: Path, contract: JustfileContractDeclaration, profile: ProfileName) -> dict[str, WorkflowRefObservation]:
-    workflows: dict[str, WorkflowRefObservation] = {}
     required_ref = contract.installed_ref if isinstance(contract, QcJustfileContract) else ""
-    for name in WORKFLOW_NAMES:
-        path = target / ".github" / "workflows" / name
-        refs: set[str] = set()
-        gates: set[str] = set()
-        if path.is_file():
-            data = _yaml_mapping(path)
-            jobs = TypeAdapter(dict[str, dict[str, Any]]).validate_python(data["jobs"] if "jobs" in data else {})
-            for job_name, job in jobs.items():
-                uses = str(job["uses"]) if "uses" in job else ""
-                if (
-                    "dzackgarza/ai-review-ci/.github/workflows/" in uses
-                    or "dzackgarza/automated-reviews/.github/workflows/" in uses
-                ) and "@" in uses:
-                    refs.add(uses.rsplit("@", 1)[1])
-                if job_name == "qc-ci" and "dzackgarza/ai-review-ci/.github/workflows/_qc.yml" in uses:
-                    with_block = TypeAdapter(dict[str, Any]).validate_python(job["with"]) if "with" in job else {}
-                    if with_block.get("tier") == "test-ci":
-                        gates.add(job_name)
-                if "dzackgarza/ai-review-ci/.github/workflows/_gates.yml" in uses:
-                    with_block = TypeAdapter(dict[str, Any]).validate_python(job["with"]) if "with" in job else {}
-                    gate = with_block["gate"] if "gate" in with_block else ""
-                    if isinstance(gate, str):
-                        gates.add(gate)
-        workflows[name] = WorkflowRefObservation(
+    path = target / ".github" / "workflows" / PR_WORKFLOW
+    refs: set[str] = set()
+    gates: set[str] = set()
+    if path.is_file():
+        data = _yaml_mapping(path)
+        jobs = TypeAdapter(dict[str, dict[str, Any]]).validate_python(data["jobs"] if "jobs" in data else {})
+        for job_name, job in jobs.items():
+            uses = str(job["uses"]) if "uses" in job else ""
+            if "dzackgarza/ai-review-ci/.github/workflows/" in uses and "@" in uses:
+                refs.add(uses.rsplit("@", 1)[1])
+            if job_name == "qc-ci" and "dzackgarza/ai-review-ci/.github/workflows/_qc.yml" in uses:
+                with_block = TypeAdapter(dict[str, Any]).validate_python(job["with"]) if "with" in job else {}
+                if with_block.get("tier") == "test-ci":
+                    gates.add(job_name)
+            if "dzackgarza/ai-review-ci/.github/workflows/_gates.yml" in uses:
+                with_block = TypeAdapter(dict[str, Any]).validate_python(job["with"]) if "with" in job else {}
+                gate = with_block["gate"] if "gate" in with_block else ""
+                if isinstance(gate, str):
+                    gates.add(gate)
+    return {
+        PR_WORKFLOW: WorkflowRefObservation(
             path=str(path),
             required_ref=required_ref,
             observed_ref=next(iter(refs)) if len(refs) == 1 else "",
-            required_gates=_required_workflow_gates(name, profile),
+            required_gates=_required_workflow_gates(profile),
             observed_gates=tuple(sorted(gates)),
         )
-    return workflows
+    }
 
 
 def _yaml_mapping(path: Path) -> Mapping[object, object]:
@@ -488,9 +484,7 @@ def _yaml_mapping(path: Path) -> Mapping[object, object]:
     return data
 
 
-def _required_workflow_gates(name: str, profile: ProfileName) -> tuple[str, ...]:
-    if name != "review-pr.yml":
-        return ()
+def _required_workflow_gates(profile: ProfileName) -> tuple[str, ...]:
     gates = (
         "qc-ci",
         "deterministic-diff",
@@ -755,7 +749,7 @@ def _findings(
                     surface="workflow_ref",
                     evidence=f"{workflow.path} uses {workflow.observed_ref}; justfile contract requires {workflow.required_ref}",
                     remediation_commands=(
-                        f"edit {workflow.path} to use automated-reviews and ai-review-ci reusable workflows at @{workflow.required_ref}",
+                        f"edit {workflow.path} to use ai-review-ci reusable workflows at @{workflow.required_ref}",
                     ),
                 )
             )
@@ -949,7 +943,7 @@ def _invalidation_inputs(target: Path, declaration_hash: str) -> tuple[str, ...]
     for path in [
         target / "justfile",
         target / "Justfile",
-        *(target / ".github" / "workflows" / name for name in WORKFLOW_NAMES),
+        target / ".github" / "workflows" / PR_WORKFLOW,
     ]:
         if path.is_file():
             inputs.append(f"{path.relative_to(target)}:{_sha256(path)}")

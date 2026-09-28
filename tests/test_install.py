@@ -5,13 +5,13 @@ from typing import Any
 
 import pytest
 import yaml
-from automated_reviews.publication import WORKFLOW_NAMES
 
 from ai_review_ci.doctor import _review_guidelines_findings
 from ai_review_ci.gates import POLICY_GATE_MARKER, SUPPORTED_PROFILES
 from ai_review_ci.install import (
     AISLOP_CONFIG,
     PR_TEMPLATE,
+    PR_WORKFLOW,
     _prove_installation,
     _template_text,
     _write_aislop_config,
@@ -146,17 +146,14 @@ def test_install_writes_trigger_workflows(tmp_path: pathlib.Path) -> None:
     repo = _git_repo(tmp_path)
     _write_trigger_workflows(repo, "bun")
     wf = repo / ".github" / "workflows"
-    assert sorted(p.name for p in wf.iterdir()) == sorted(WORKFLOW_NAMES)
-    for name in WORKFLOW_NAMES:
-        text = (wf / name).read_text()
-        assert "uses: dzackgarza/automated-reviews/.github/workflows/_slop-review.yml@main" in text
-    sweep = (wf / "review-slop.yml").read_text()
-    assert "name: Slop Review" in sweep
-    assert "scope: repo" in sweep
-    pr = (wf / "review-pr.yml").read_text()
+    assert [p.name for p in wf.iterdir()] == [PR_WORKFLOW]
+    pr = (wf / PR_WORKFLOW).read_text()
+    jobs = yaml.safe_load(pr)["jobs"]
+    assert set(jobs) == {"qc-ci", "deterministic-diff", "delegation-conformance", "qc-doctor", "pr-description-checklist", "thread-resolution"}
+    assert all(job["uses"].startswith("dzackgarza/ai-review-ci/.github/workflows/") for job in jobs.values())
+    assert all("needs" not in job for job in jobs.values())
     assert "uses: dzackgarza/ai-review-ci/.github/workflows/_qc.yml@main" in pr
     assert "tier: test-ci" in pr
-    assert "scope: diff" in pr
     assert "gate: deterministic-diff" in pr
     assert "gate: delegation-conformance" in pr
     assert "gate: qc-doctor" in pr
@@ -348,7 +345,7 @@ def test_install_refuses_overwriting_repo_owned_config(
 ) -> None:
     repo = _git_repo(tmp_path)
     _write_trigger_workflows(repo, "bun")
-    customized = repo / ".github" / "workflows" / "review-slop.yml"
+    customized = repo / ".github" / "workflows" / PR_WORKFLOW
     customized.write_text("# locally customized\n")
     with pytest.raises(SystemExit):
         _write_trigger_workflows(repo, "bun")
@@ -425,7 +422,7 @@ def test_rendered_pr_qc_doctor_grants_labels_read_scope(profile: str) -> None:
     rendered `review-pr.yml` caller must also grant it, or the intersection
     strips the scope and the qc-doctor label check false-REDs.
     """
-    workflow = yaml.safe_load(_template_text("review-pr.yml", profile, "main"))
+    workflow = yaml.safe_load(_template_text(profile, "main"))
     perms = workflow["jobs"]["qc-doctor"].get("permissions")
     assert isinstance(perms, dict), f"review-pr.yml (profile={profile}) qc-doctor job must declare permissions"
     assert perms.get("issues") == "read", f"review-pr.yml (profile={profile}) qc-doctor caller must grant issues: read; got {perms!r}"
@@ -485,8 +482,7 @@ def test_skip_scaffold_final_proof_adopts_brownfield_non_delegating_justfile(
     # Success end state: adoption completed and the brownfield justfile is intact.
     assert existing.read_text() == brownfield_justfile
     assert not (repo / ".ai-review-ci.toml").exists()
-    for name in WORKFLOW_NAMES:
-        assert (repo / ".github" / "workflows" / name).is_file()
+    assert (repo / ".github" / "workflows" / PR_WORKFLOW).is_file()
 
 
 def test_skip_scaffold_final_proof_still_aborts_on_non_justfile_fault(
@@ -631,16 +627,6 @@ def test_qc_workflow_accepts_only_remote_acceptance_tiers() -> None:
 
     assert "test-ci|ambient" in validation["run"]
     assert "test|test-ci|ambient" not in validation["run"]
-
-
-@pytest.mark.parametrize("profile", ["python", "bun-playwright"])
-def test_pr_qc_and_slop_review_start_in_parallel(profile: str) -> None:
-    workflow = yaml.safe_load(_template_text("review-pr.yml", profile, "main"))
-    jobs = workflow["jobs"]
-
-    assert jobs["qc-ci"]["with"]["tier"] == "test-ci"
-    assert "needs" not in jobs["qc-ci"]
-    assert "needs" not in jobs["slop-review"]
 
 
 def test_qc_scopes_gh_token_to_explicitly_opted_in_gh_boundary_step() -> None:

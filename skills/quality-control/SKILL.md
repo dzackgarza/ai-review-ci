@@ -45,7 +45,7 @@ The recipes are tiered:
 - **`test-push` (pre-push)** — includes `test-commit` and runs the full project-owned test suite. Ordinary build and test failures remain direct implementation work.
 - **`test-ci` (required PR context)** — includes `test-push` and adds coverage, dependency/import boundaries, dead-code, duplication, complexity, policy/slop, security, and hosted checks. Policy-sensitive findings retain independent triage because their evaluator surface is gameable.
 
-General and slop review start on the first coherent push in parallel with `test-ci`. Do not postpone the review loop until the branch has spent hours optimizing around an unreviewed architecture.
+PR QC starts on the first coherent push. Do not postpone it until the branch has spent hours optimizing around an unchecked architecture.
 
 ### Auto-Fix Enforcement: Always Apply All Available Fixes
 
@@ -767,7 +767,7 @@ This preserves "delegate, never reimplement" while letting projects layer on the
 
 ## Hooks
 
-Pre-commit blocks on `just test-commit`; pre-push blocks on `just test-push`. Required pull-request CI runs `just test-ci` in parallel with slop review. Install the centralized global hook collection from `~/ai-review-ci/global-hooks/`:
+Pre-commit blocks on `just test-commit`; pre-push blocks on `just test-push`. Required pull-request CI runs `just test-ci`. Install the centralized global hook collection from `~/ai-review-ci/global-hooks/`:
 
 ```bash
 just --justfile ~/ai-review-ci/justfile install-global-hooks
