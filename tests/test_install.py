@@ -6,7 +6,6 @@ from typing import Any
 import pytest
 import yaml
 
-from ai_review_ci.doctor import _review_guidelines_findings
 from ai_review_ci.gates import POLICY_GATE_MARKER, SUPPORTED_PROFILES
 from ai_review_ci.install import (
     AISLOP_CONFIG,
@@ -16,14 +15,8 @@ from ai_review_ci.install import (
     _template_text,
     _write_aislop_config,
     _write_pr_template,
-    _write_review_guidelines,
     _write_scaffold,
     _write_trigger_workflows,
-)
-from ai_review_ci.review_guidelines import (
-    classify_review_guidelines,
-    extract_review_guidelines_sections,
-    load_canonical_review_guidelines,
 )
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
@@ -111,8 +104,7 @@ def test_install_writes_canonical_aislop_config(tmp_path: pathlib.Path) -> None:
 def test_distributed_aislop_config_matches_repo_own_config() -> None:
     # #228: the config install distributes MUST be identical to the one governing
     # ai-review-ci's own scan — otherwise the fleet standard and the head repo's
-    # own gate silently diverge (the false-green class the review-guidelines gate
-    # guards against). The packaged canonical is the single source; the repo-root
+    # own gate silently diverge. The packaged canonical is the single source; the repo-root
     # copy that aislop reads for the self-scan must stay byte-identical to it.
     packaged = (ROOT / "src" / "ai_review_ci" / "data" / "aislop-config.yml").read_text()
     repo_own = (ROOT / ".aislop" / "config.yml").read_text()
@@ -149,7 +141,7 @@ def test_install_writes_trigger_workflows(tmp_path: pathlib.Path) -> None:
     assert [p.name for p in wf.iterdir()] == [PR_WORKFLOW]
     pr = (wf / PR_WORKFLOW).read_text()
     jobs = yaml.safe_load(pr)["jobs"]
-    assert set(jobs) == {"qc-ci", "deterministic-diff", "delegation-conformance", "qc-doctor", "pr-description-checklist", "thread-resolution"}
+    assert set(jobs) == {"qc-ci", "deterministic-diff", "delegation-conformance", "qc-doctor", "pr-description-checklist"}
     assert all(job["uses"].startswith("dzackgarza/ai-review-ci/.github/workflows/") for job in jobs.values())
     assert all("needs" not in job for job in jobs.values())
     assert "uses: dzackgarza/ai-review-ci/.github/workflows/_qc.yml@main" in pr
@@ -158,7 +150,6 @@ def test_install_writes_trigger_workflows(tmp_path: pathlib.Path) -> None:
     assert "gate: delegation-conformance" in pr
     assert "gate: qc-doctor" in pr
     assert "gate: app-boot" not in pr
-    assert "gate: thread-resolution" in pr
     assert "profile: 'bun'" in pr
     assert "fail_below" not in pr
     assert "pull_request" in pr
@@ -204,61 +195,9 @@ def test_install_writes_profile_scaffold(tmp_path: pathlib.Path) -> None:
     assert (repo / "justfile").read_text() == (ROOT / "scaffolds" / "rust" / "justfile").read_text()
 
 
-def test_install_review_guidelines_creates_passing_section_without_existing_agents_md(
-    tmp_path: pathlib.Path,
-) -> None:
-    # #232: a repo with no AGENTS.md must not fail its own review-guidelines gate after
-    # install. The writer creates the file; the REAL doctor gate must then pass.
-    repo = _git_repo(tmp_path)
-    assert not (repo / "AGENTS.md").exists()
-
-    _write_review_guidelines(repo)
-
-    assert _review_guidelines_findings(repo) == []
-    assert len(extract_review_guidelines_sections((repo / "AGENTS.md").read_text())) == 1
-
-
-def test_install_review_guidelines_upserts_into_existing_agents_md_without_clobbering(
-    tmp_path: pathlib.Path,
-) -> None:
-    # #232: an existing AGENTS.md (here carrying unrelated content plus a STALE section)
-    # must keep its other content and get the section refreshed to current — proven at the
-    # real doctor boundary, not by string-matching the writer's own output.
-    repo = _git_repo(tmp_path)
-    (repo / "AGENTS.md").write_text("# Project\n\nKeep me.\n\n# Review Guidelines\n\nold stale guidance\n\n# Conventions\n\nAlso keep me.\n")
-
-    _write_review_guidelines(repo)
-
-    text = (repo / "AGENTS.md").read_text()
-    assert "Keep me." in text
-    assert "Also keep me." in text
-    assert "old stale guidance" not in text
-    assert len(extract_review_guidelines_sections(text)) == 1
-    assert _review_guidelines_findings(repo) == []
-
-
-def test_install_review_guidelines_is_idempotent(tmp_path: pathlib.Path) -> None:
-    # #232 acceptance: re-running install neither duplicates nor drifts the section.
-    repo = _git_repo(tmp_path)
-    _write_review_guidelines(repo)
-    first = (repo / "AGENTS.md").read_text()
-
-    _write_review_guidelines(repo)
-    second = (repo / "AGENTS.md").read_text()
-
-    assert first == second
-    assert len(extract_review_guidelines_sections(second)) == 1
-    assert classify_review_guidelines(second, load_canonical_review_guidelines()).state == "current"
-    assert _review_guidelines_findings(repo) == []
-
-
 def test_install_local_files_finalize_with_doctor(tmp_path: pathlib.Path) -> None:
     repo = _git_repo(tmp_path)
     (repo / "pyproject.toml").write_text('[project]\nname = "target"\nversion = "0.1.0"\n')
-    # The final doctor proof now requires a current review-guidelines section, so a
-    # conformant target carries one before finalize (the gate the doctor enforces).
-    (repo / "AGENTS.md").write_text(f"# target\n\nIntro.\n\n{load_canonical_review_guidelines()}\n")
-
     _write_scaffold(repo, "python")
     _write_trigger_workflows(repo, "python")
     _prove_installation(repo)
@@ -367,17 +306,6 @@ def test_reusable_workflows_use_maintained_just_installer(workflow_file: str) ->
     assert "VERSION=$(curl -sL" not in text
 
 
-def test_thread_resolution_checks_out_target_repository() -> None:
-    job = _workflow_jobs("_gates.yml")["thread-resolution"]
-    steps = job.get("steps")
-
-    assert isinstance(steps, list)
-    assert any(
-        isinstance(step, dict) and step.get("uses") == "actions/checkout@v4"
-        for step in steps
-    )
-
-
 @pytest.mark.parametrize(
     "workflow_file,job_name",
     [(wf, job) for wf in ("_qc.yml", "_gates.yml") for job in _workflow_jobs(wf)],
@@ -469,11 +397,6 @@ def test_skip_scaffold_final_proof_adopts_brownfield_non_delegating_justfile(
     # Everything install writes under --skip-scaffold (the scaffold itself is skipped):
     _write_trigger_workflows(repo, "python")
     _write_pr_template(repo)
-    # A conformant adopted repo carries the current review-guidelines section
-    # (the doctor gate requires it; #232 tracks install writing it). Only the
-    # justfile delegation/conformance findings then remain, deferred by design.
-    (repo / "AGENTS.md").write_text(f"# target\n\nIntro.\n\n{load_canonical_review_guidelines()}\n")
-
     # Must NOT abort: the only outstanding doctor findings are the deferred
     # justfile delegation/conformance ones. A regressed (strict) proof step
     # raises SystemExit here.

@@ -32,16 +32,14 @@
         "deterministic-diff",
         "delegation-conformance",
         "qc-doctor",
-        "pr-description-checklist",
-        "thread-resolution"
+        "pr-description-checklist"
       ],
       "observed_gates": [
         "qc-ci",
         "delegation-conformance",
         "deterministic-diff",
         "qc-doctor",
-        "pr-description-checklist",
-        "thread-resolution"
+        "pr-description-checklist"
       ]
     }
   },
@@ -86,8 +84,7 @@
       "deterministic-diff / deterministic-diff",
       "delegation-conformance / delegation-conformance",
       "qc-doctor / qc-doctor",
-      "pr-description-checklist / pr-description-checklist",
-      "thread-resolution / thread-resolution"
+      "pr-description-checklist / pr-description-checklist"
     ],
     "observed_contexts": [
       "qc-ci / qc"
