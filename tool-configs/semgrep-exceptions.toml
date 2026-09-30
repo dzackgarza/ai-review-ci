@@ -1,0 +1,10 @@
+# Owner-granted semgrep exceptions (CONTRIBUTING.md, "Sanctioned exceptions exist, and this is
+# their shape"). Each entry drops the findings of one rule on one path of one repository (its
+# `origin` on GitHub) while the cited issue of dzackgarza/ai-review-ci is open. Closing the issue
+# ends the exception. Only the owner adds an entry, interactively.
+
+[[exception]]
+repository = "dzackgarza/lean-cas-dsl"
+path = ".github/workflows/custodian-review.yml"
+rule = "yaml.github-actions.security.pull-request-target-code-checkout.pull-request-target-code-checkout"
+issue = 450
