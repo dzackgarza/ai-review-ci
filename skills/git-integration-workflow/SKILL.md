@@ -52,7 +52,6 @@ Each arrow is a gate, not a suggestion.
 4. **Mark ready.** Only after every in-scope issue and proof obligation is complete and evidenced: push the branch, ensure the issue body/comments are current, publish the PR body, then request review.
 
 5. **Trigger review.** Explicitly start the automated review loop: `gh pr comment <PR_NUMBER> --body '@codex review'` (or the repo's documented equivalent).
-   Before tagging reviewers, ensure the target repo's local `AGENTS.md` carries the canonical `# Review Guidelines` section.
 
 6. **Disposition feedback.** Route every returned item through [[pr-feedback-triage/SKILL|pr-feedback-triage]]. That skill exclusively owns collection, policy/factual disposition, first-principles remediation, thread-local replies, resolution, and convergence.
    This lifecycle owns only the PR and issue-state handoff: if triage reopens required work, update the work-unit issue first and mark the PR not ready if it had already been submitted for review.

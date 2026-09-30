@@ -20,14 +20,13 @@ creates. Out of order, each refuses with a message that names only its own preco
 2. Lay the repository out as in section 2 and make `just test-commit` pass locally.
 3. Create the GitHub repository **public** (section 5 explains why) and push `main`.
 4. Run `ai-review-ci install --skip-scaffold --target . --repo <owner>/<name> --branch
-   main --profile bun-python`. It writes the two review workflows, `.aislop/config.yml`,
-   the PR template, and the canonical `# Review Guidelines` section of `AGENTS.md`
-   (`doctor` fails without that section). It also applies branch protection, which fails
+   main --profile bun-python`. It writes the PR workflow `review-pr.yml`,
+   `.aislop/config.yml` and the PR template. It also applies branch protection, which fails
    with `Branch not found` if `main` is not on GitHub yet. Once the workflows exist the
    installer refuses to run again (`already installed`), so any later protection or label
    work goes through `ai-review-ci protect-branch` and `ai-review-ci install-labels`.
 5. Commit the installed files and push. From this point `main` accepts only pull requests
-   with the seven required checks green; `enforce_admins` is on, so direct pushes are
+   with the five required checks green; `enforce_admins` is on, so direct pushes are
    refused for everyone. The PR template requires a linked issue, so file the issue first.
    On a scaffold with no real code to review this is ceremony without a reviewer: remove
    the protection (`gh api -X DELETE repos/<owner>/<name>/branches/main/protection`), land
