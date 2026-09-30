@@ -79,6 +79,7 @@
     "**/archives/**",
     "**/src.bak/**",
     "**/notebooks/**",
+    "**/preamble/**",
     "**/notes/**",
     "**/.webpack/**",
     "**/out/**",

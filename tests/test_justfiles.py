@@ -378,10 +378,15 @@ def test_sage_syntax_uses_tools_from_the_sage_virtual_environment(
 
     sage_bin_dir = tmp_path / "sage-venv" / "bin"
     sage_bin_dir.mkdir(parents=True)
-    sage = sage_bin_dir / "sage"
-    sage.write_text("#!/usr/bin/env bash\nexit 97\n")
-    sage.chmod(0o755)
     (sage_bin_dir / "python").symlink_to(pathlib.Path(sys.executable))
+    # A source-tree launcher: it lives outside the venv, answers `-c` by
+    # running the venv interpreter, and fails any other invocation, so the
+    # gate must preparse and compile with the venv tools, not through sage.
+    launcher_dir = tmp_path / "sage-src"
+    launcher_dir.mkdir()
+    sage = launcher_dir / "sage"
+    sage.write_text(f'#!/usr/bin/env bash\nif [ "$1" = -c ]; then exec "{sage_bin_dir / "python"}" "$@"; fi\nexit 97\n')
+    sage.chmod(0o755)
     sage_preparse = sage_bin_dir / "sage-preparse"
     sage_preparse.write_text(
         "from pathlib import Path\nimport sys\nfor source_name in sys.argv[1:]:\n    source = Path(source_name)\n    Path(f'{source}.py').write_text(source.read_text())\n"

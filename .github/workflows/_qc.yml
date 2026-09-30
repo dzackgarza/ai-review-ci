@@ -103,6 +103,20 @@ jobs:
         # explicitly — same contract for downstream consumers of this workflow.
         run: sudo apt-get update && sudo apt-get install -y pandoc ripgrep
 
+      # The Markdown formatter (flowmark, run by _format-structured-text) parses
+      # only with pandoc-flowmark, a static build of the Pandoc fork
+      # dzackgarza/pandoc (branch flowmark-sourcepos). Same pinned tag and
+      # SHA-256 as flowmark's own CI (.github/workflows/ci.yml there); the two
+      # change together.
+      - name: Install pandoc-flowmark (pinned)
+        run: |
+          tag=flowmark-3.10.2-4
+          curl -sSL -o /tmp/pandoc-flowmark.tar.gz "https://github.com/dzackgarza/pandoc/releases/download/$tag/$tag-linux-amd64.tar.gz"
+          echo "50ce56aa651ce19e94a7c9f2d0376f3b09510396659f5e39a56fff9f3a83d2a9  /tmp/pandoc-flowmark.tar.gz" | sha256sum -c -
+          tar xzf /tmp/pandoc-flowmark.tar.gz -C /tmp
+          sudo install -m755 "/tmp/$tag-linux-amd64/pandoc-flowmark" /usr/local/bin/pandoc-flowmark
+          pandoc-flowmark --version | head -1
+
       - name: Install bun
         # Some QC profiles (and ai-review-ci's own suite) drive JS tooling
         # configs through bun; node ships on the runner, bun does not.
