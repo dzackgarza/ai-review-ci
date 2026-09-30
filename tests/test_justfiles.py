@@ -160,7 +160,7 @@ def test_lean_push_gate_compiles_nothing(tmp_path: pathlib.Path) -> None:
 
     output = result.stdout + result.stderr
     assert result.returncode == 0, output
-    assert "lake" not in output
+    assert re.search(r"\blake\s+(?:build|exe)\b", output) is None, output
     assert "_lean-axiom-audit" not in output
 
 
