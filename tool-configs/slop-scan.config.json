@@ -39,6 +39,7 @@
     "**/src.bak/**",
     "**/scripts/**",
     "**/notebooks/**",
+    "**/preamble/**",
     "**/notes/**",
     "**/.webpack/**",
     "**/out/**",
