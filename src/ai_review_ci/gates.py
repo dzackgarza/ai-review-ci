@@ -268,10 +268,13 @@ def _dry_run_recipe(target: Path, justfile: Path, recipe: str) -> str:
 
 
 def delegates_to_global_qc(output: str, project_profile: ProjectProfile, recipe: str) -> bool:
-    """Require the declared profile delegation, plus Lean auditing only at push/CI tiers."""
+    """Require the declared profile delegation, plus Lean scans at push/CI tiers and Lean
+    compilation (a build, or the axiom audit of a built environment) at the CI tier only."""
     observed = set(re.findall(r"ai-review-ci/justfiles/([a-z-]+\.just)", output))
     expected = set(project_profile.justfile_names)
     allowed = expected | ({"lean.just"} if recipe in {"test-push", "test-ci"} else set())
+    if recipe != "test-ci" and re.search(r"\blake\s+(?:build|exe)\b|\blean-axiom-audit\b|\blean\.just\b.*\btest-ci\b", output):
+        return False
     command_lines = output.splitlines()
     return expected <= observed <= allowed and all(
         any(f"ai-review-ci/justfiles/{justfile_name}" in line and re.search(r"(?:-d|--working-directory)\s+\.", line) is not None for line in command_lines)

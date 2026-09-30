@@ -147,7 +147,24 @@ def project_with_sage_file(tmp_path: pathlib.Path) -> pathlib.Path:
     return project
 
 
-def test_lean_push_gate_propagates_target_axiom_audit_failure(tmp_path: pathlib.Path) -> None:
+def test_lean_push_gate_compiles_nothing(tmp_path: pathlib.Path) -> None:
+    """Lean compilation belongs to CI; the push tier only scans sources."""
+    project = tmp_path / "lean-project"
+    project.mkdir()
+
+    result = subprocess.run(
+        ["just", "--dry-run", "--justfile", str(ROOT / "justfiles" / "lean.just"), "-d", str(project), "test-push"],
+        capture_output=True,
+        text=True,
+    )
+
+    output = result.stdout + result.stderr
+    assert result.returncode == 0, output
+    assert "lake" not in output
+    assert "_lean-axiom-audit" not in output
+
+
+def test_lean_ci_gate_propagates_target_axiom_audit_failure(tmp_path: pathlib.Path) -> None:
     """The shared gate must run the target's explicit audit command at its root."""
     project = tmp_path / "lean-project"
     project.mkdir()
@@ -169,7 +186,7 @@ def test_lean_push_gate_propagates_target_axiom_audit_failure(tmp_path: pathlib.
     assert "target axiom audit rejected a nonstandard dependency" in output
 
 
-def test_lean_push_gate_runs_target_axiom_audit_at_target_root(tmp_path: pathlib.Path) -> None:
+def test_lean_ci_gate_runs_target_axiom_audit_at_target_root(tmp_path: pathlib.Path) -> None:
     project = tmp_path / "lean-project"
     project.mkdir()
     (project / "justfile").write_text('_lean-axiom-audit:\n    #!/usr/bin/env bash\n    set -euo pipefail\n    test "$(pwd -P)" = "$PWD"\n    echo target axiom audit passed\n')

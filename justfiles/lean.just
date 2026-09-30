@@ -16,15 +16,19 @@
 # `*.conjecture*` files are the sanctioned quarantine for statements exceeding
 # the kernel axiom set (never imported or compiled into the library); the
 # no-sorry scan excludes them like the semgrep axiom rule does.
+#
+# Lean compilation runs in CI only: the commit and push tiers are static scans.
+# `test-ci` builds after fetching Mathlib's prebuilt cache, which Mathlib's
+# `cache` tool keeps machine-wide in ~/.cache/mathlib, keyed by file hash.
 
 # public: scan staged Lean source without compiling the project
 test-commit: _lean-staged-check
 
-# public: build the project and run the full Lean gate before push
-test-push: _lean-build lean-qc
+# public: static Lean scans before push; no compilation
+test-push: lean-no-sorry lean-semgrep
 
-# public: run the full Lean push gate in CI
-test-ci: test-push
+# public: build the project and run the full Lean gate in CI
+test-ci: _lean-build lean-qc
 
 [private]
 _lean-staged-check:
@@ -52,6 +56,12 @@ _lean-staged-check:
 
 [private]
 _lean-build:
+	#!/usr/bin/env bash
+	set -euo pipefail
+	source "{{artifacts}}/scripts/heavy-gate-lock.sh"
+	if jq -e '.packages[] | select(.name == "mathlib")' lake-manifest.json >/dev/null; then
+		lake exe cache get
+	fi
 	lake build
 
 infra := justfile_directory() / ".."
