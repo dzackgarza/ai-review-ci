@@ -133,10 +133,18 @@ def test_ai_review_ci_hooks_still_run_in_downstream_repos(
     assert result.stdout.strip() == "downstream-ran"
 
 
-@pytest.mark.parametrize("hook_dir", ["global-hooks", "repo-hooks"])
+@pytest.mark.parametrize("installation", ["global", "repo"])
 def test_pre_commit_preserves_pathspec_temporary_index(
-    hook_source_repo: pathlib.Path, tmp_path: pathlib.Path, hook_dir: str
+    hook_source_repo: pathlib.Path, tmp_path: pathlib.Path, installation: str
 ) -> None:
+    # install-global-hooks points core.hooksPath at a directory of symlinks into
+    # repo-hooks/; a repo installation runs repo-hooks/ itself.
+    hooks_path = hook_source_repo / "repo-hooks"
+    if installation == "global":
+        hooks_path = tmp_path / "global-hooks-dir"
+        hooks_path.mkdir()
+        for hook in ("pre-commit", "pre-push"):
+            (hooks_path / hook).symlink_to(hook_source_repo / "repo-hooks" / hook)
     downstream = tmp_path / "pathspec-downstream"
     downstream.mkdir()
     subprocess.run(["git", "init", "-q"], cwd=downstream, env=git_test_env(), check=True)
@@ -170,7 +178,7 @@ def test_pre_commit_preserves_pathspec_temporary_index(
         check=True,
     )
     subprocess.run(
-        ["git", "config", "core.hooksPath", str(hook_source_repo / hook_dir)],
+        ["git", "config", "core.hooksPath", str(hooks_path)],
         cwd=downstream,
         env=git_test_env(),
         check=True,
