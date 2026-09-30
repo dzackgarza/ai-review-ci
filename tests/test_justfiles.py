@@ -147,7 +147,24 @@ def project_with_sage_file(tmp_path: pathlib.Path) -> pathlib.Path:
     return project
 
 
-def test_lean_push_gate_propagates_target_axiom_audit_failure(tmp_path: pathlib.Path) -> None:
+def test_lean_push_gate_compiles_nothing(tmp_path: pathlib.Path) -> None:
+    """Lean compilation belongs to CI; the push tier only scans sources."""
+    project = tmp_path / "lean-project"
+    project.mkdir()
+
+    result = subprocess.run(
+        ["just", "--dry-run", "--justfile", str(ROOT / "justfiles" / "lean.just"), "-d", str(project), "test-push"],
+        capture_output=True,
+        text=True,
+    )
+
+    output = result.stdout + result.stderr
+    assert result.returncode == 0, output
+    assert re.search(r"\blake\s+(?:build|exe)\b", output) is None, output
+    assert "_lean-axiom-audit" not in output
+
+
+def test_lean_ci_gate_propagates_target_axiom_audit_failure(tmp_path: pathlib.Path) -> None:
     """The shared gate must run the target's explicit audit command at its root."""
     project = tmp_path / "lean-project"
     project.mkdir()
@@ -169,7 +186,7 @@ def test_lean_push_gate_propagates_target_axiom_audit_failure(tmp_path: pathlib.
     assert "target axiom audit rejected a nonstandard dependency" in output
 
 
-def test_lean_push_gate_runs_target_axiom_audit_at_target_root(tmp_path: pathlib.Path) -> None:
+def test_lean_ci_gate_runs_target_axiom_audit_at_target_root(tmp_path: pathlib.Path) -> None:
     project = tmp_path / "lean-project"
     project.mkdir()
     (project / "justfile").write_text('_lean-axiom-audit:\n    #!/usr/bin/env bash\n    set -euo pipefail\n    test "$(pwd -P)" = "$PWD"\n    echo target axiom audit passed\n')
@@ -205,6 +222,29 @@ def test_lean_no_sorry_passes_clean_sources_and_excludes_quarantine(tmp_path: pa
     output = result.stdout + result.stderr
     assert result.returncode == 0, output
     assert "No sorry declarations" in output
+
+
+def test_lean_no_sorry_ignores_comments_and_strings_but_not_terms(tmp_path: pathlib.Path) -> None:
+    """A `sorry` in a docstring, comment, or message string is not a proof term."""
+    project = tmp_path / "lean-project"
+    project.mkdir()
+    (project / "Words.lean").write_text(
+        "/-- Fails on a proof with `sorry`. /- nested sorry -/ -/\n"
+        "def check : IO Unit := throw (IO.userError \"proved with `sorry` \\\" sorry\")\n"
+        "def quote : Char := '\"'  -- sorry\n"
+        "def raw : String := r#\"sorry \" sorry\"#\n"
+        "def sorry' : Nat := 0\n"
+    )
+
+    clean = run_just(ROOT / "justfiles" / "lean.just", project, "lean-no-sorry")
+    assert clean.returncode == 0, clean.stdout + clean.stderr
+
+    (project / "Term.lean").write_text("def quote : Char := '\"'\ntheorem t : True := by sorry\n")
+    dirty = run_just(ROOT / "justfiles" / "lean.just", project, "lean-no-sorry")
+    output = dirty.stdout + dirty.stderr
+    assert dirty.returncode != 0, output
+    assert "Term.lean:2:" in output
+    assert "Words.lean" not in output
 
 
 def test_lean_no_sorry_fails_when_rg_cannot_run(tmp_path: pathlib.Path) -> None:
