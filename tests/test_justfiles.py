@@ -224,6 +224,29 @@ def test_lean_no_sorry_passes_clean_sources_and_excludes_quarantine(tmp_path: pa
     assert "No sorry declarations" in output
 
 
+def test_lean_no_sorry_ignores_comments_and_strings_but_not_terms(tmp_path: pathlib.Path) -> None:
+    """A `sorry` in a docstring, comment, or message string is not a proof term."""
+    project = tmp_path / "lean-project"
+    project.mkdir()
+    (project / "Words.lean").write_text(
+        "/-- Fails on a proof with `sorry`. /- nested sorry -/ -/\n"
+        "def check : IO Unit := throw (IO.userError \"proved with `sorry` \\\" sorry\")\n"
+        "def quote : Char := '\"'  -- sorry\n"
+        "def raw : String := r#\"sorry \" sorry\"#\n"
+        "def sorry' : Nat := 0\n"
+    )
+
+    clean = run_just(ROOT / "justfiles" / "lean.just", project, "lean-no-sorry")
+    assert clean.returncode == 0, clean.stdout + clean.stderr
+
+    (project / "Term.lean").write_text("def quote : Char := '\"'\ntheorem t : True := by sorry\n")
+    dirty = run_just(ROOT / "justfiles" / "lean.just", project, "lean-no-sorry")
+    output = dirty.stdout + dirty.stderr
+    assert dirty.returncode != 0, output
+    assert "Term.lean:2:" in output
+    assert "Words.lean" not in output
+
+
 def test_lean_no_sorry_fails_when_rg_cannot_run(tmp_path: pathlib.Path) -> None:
     """A clean tree must not be reported clean by a scan that never ran (#361)."""
     project = tmp_path / "lean-project"
