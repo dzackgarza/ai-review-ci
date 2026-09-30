@@ -12,9 +12,8 @@ def test_gate_recipes_use_the_target_checkout() -> None:
     runner = (ROOT / "ci" / "runner.just").read_text()
 
     assert 'control_repo := env_var("GITHUB_WORKSPACE")' in runner
-    for recipe_name in ("check-pr-description pr_number:", "check-review-threads pr_number:"):
-        recipe = runner.split(recipe_name, 1)[1].split("\n\n", 1)[0]
-        assert '--repo-root "{{control_repo}}"' in recipe
+    recipe = runner.split("check-pr-description pr_number:", 1)[1].split("\n\n", 1)[0]
+    assert '--repo-root "{{control_repo}}"' in recipe
 
 
 def test_qc_doctor_recipe_emits_its_machine_readable_result(tmp_path: Path) -> None:

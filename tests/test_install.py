@@ -149,7 +149,7 @@ def test_install_writes_trigger_workflows(tmp_path: pathlib.Path) -> None:
     assert [p.name for p in wf.iterdir()] == [PR_WORKFLOW]
     pr = (wf / PR_WORKFLOW).read_text()
     jobs = yaml.safe_load(pr)["jobs"]
-    assert set(jobs) == {"qc-ci", "deterministic-diff", "delegation-conformance", "qc-doctor", "pr-description-checklist", "thread-resolution"}
+    assert set(jobs) == {"qc-ci", "deterministic-diff", "delegation-conformance", "qc-doctor", "pr-description-checklist"}
     assert all(job["uses"].startswith("dzackgarza/ai-review-ci/.github/workflows/") for job in jobs.values())
     assert all("needs" not in job for job in jobs.values())
     assert "uses: dzackgarza/ai-review-ci/.github/workflows/_qc.yml@main" in pr
@@ -158,7 +158,6 @@ def test_install_writes_trigger_workflows(tmp_path: pathlib.Path) -> None:
     assert "gate: delegation-conformance" in pr
     assert "gate: qc-doctor" in pr
     assert "gate: app-boot" not in pr
-    assert "gate: thread-resolution" in pr
     assert "profile: 'bun'" in pr
     assert "fail_below" not in pr
     assert "pull_request" in pr
@@ -365,17 +364,6 @@ def test_reusable_workflows_use_maintained_just_installer(workflow_file: str) ->
     assert "https://api.github.com/repos/casey/just/releases/latest" not in text
     assert "tar -xzf" not in text
     assert "VERSION=$(curl -sL" not in text
-
-
-def test_thread_resolution_checks_out_target_repository() -> None:
-    job = _workflow_jobs("_gates.yml")["thread-resolution"]
-    steps = job.get("steps")
-
-    assert isinstance(steps, list)
-    assert any(
-        isinstance(step, dict) and step.get("uses") == "actions/checkout@v4"
-        for step in steps
-    )
 
 
 @pytest.mark.parametrize(

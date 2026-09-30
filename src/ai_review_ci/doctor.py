@@ -491,7 +491,6 @@ def _required_workflow_gates(profile: ProfileName) -> tuple[str, ...]:
         "delegation-conformance",
         "qc-doctor",
         "pr-description-checklist",
-        "thread-resolution",
     )
     if PROJECT_PROFILES[profile].requires_app_boot:
         return gates[:3] + ("app-boot",) + gates[3:]
