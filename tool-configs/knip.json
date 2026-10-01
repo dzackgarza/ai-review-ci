@@ -115,7 +115,9 @@
     "gsettings",
     "pandoc",
     "pgrep",
-    "just"
+    "just",
+    "kitty",
+    "notify-send"
   ],
   "ignoreExportsUsedInFile": true,
   "ignoreUnresolved": [
