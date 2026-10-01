@@ -886,6 +886,15 @@ test-push:
 	just --justfile {{justfile()}} -d . test-commit _pytest _deptry _ast-grep
 	echo "Push quality checks completed"
 
+# private: the Python CI gates without the cross-language stack, which a profile
+# that composes several languages runs once (bun-python.just). The coverage run is
+# the suite's one run: the push tier's `_pytest` would repeat it.
+_ci-checks:
+	#!/usr/bin/env bash
+	set -euo pipefail
+	export AI_REVIEW_CI_FAILURE_MODE=triage
+	just --justfile {{justfile()}} -d . test-commit _pytest_with_coverage _deptry _ast-grep _diff-cover _import-linter _jscpd-python
+
 # private: ambient broad-debt audit — not push-blocking for unrelated diffs
 _ambient-python-debt: _lizard-python _vulture
 
@@ -899,6 +908,6 @@ test-ci:
 	#!/usr/bin/env bash
 	set -euo pipefail
 	export AI_REVIEW_CI_FAILURE_MODE=triage
-	just --justfile {{justfile()}} -d . test-push _pytest_with_coverage _diff-cover _import-linter _jscpd-python
+	just --justfile {{justfile()}} -d . _ci-checks
 	just -f {{justfiles}}/shared.just -d . _global-qc
 	echo "CI quality checks completed"

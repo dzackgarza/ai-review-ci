@@ -34,12 +34,11 @@ creates. Out of order, each refuses with a message that names only its own preco
    code worth gating.
    `gh pr checks` fails with the personal-token scope on these repos; read status with
    `gh run list --branch <branch>` and `gh run view <id> --log-failed`.
-6. Before every push, run both CI-tier gates locally against the base branch. They are
-   the same recipes CI runs and they take minutes, not a CI round trip:
+6. Before every push, run the CI-tier gate locally against the base branch. It is the
+   same recipe CI runs and it takes minutes, not a CI round trip:
 
    ```bash
-   DIFF_COVER_BASE=origin/main just -f ~/ai-review-ci/justfiles/python.just -d . test-ci
-   DIFF_COVER_BASE=origin/main just -f ~/ai-review-ci/justfiles/bun.just -d . test-ci
+   DIFF_COVER_BASE=origin/main just test-ci
    ```
 
 ## 2. Layout the gates can see

@@ -54,7 +54,7 @@ PROJECT_PROFILES = {
     ),
     "bun-python": ProjectProfile(
         name="bun-python",
-        justfile_names=("python.just", "bun.just"),
+        justfile_names=("bun-python.just",),
         required_paths=("pyproject.toml", "package.json"),
         requires_bun_lock=True,
     ),
