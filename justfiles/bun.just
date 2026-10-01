@@ -15,7 +15,7 @@
 # WORKFLOW (three-tier):
 #   just test-commit — preflight, normalization, tsc, bypass check.
 #   just test-push   — commit checks plus the full Bun test suite.
-#   just test-ci     — push checks plus coverage and policy-sensitive gates.
+#   just test-ci     — commit checks, the suite under coverage, and policy-sensitive gates.
 #
 # HOOKS: pre-commit blocks on `just test-commit`; pre-push blocks on `just test-push`.
 #   Run `just install-global-hooks` from ~/ai-review-ci to activate them globally.
@@ -109,9 +109,10 @@ _coverage:
 	unset NODE_ENV
 	# Playwright (e2e-covered) projects prove coverage through the app-boot e2e run in
 	# test-ci, not a unit lcov. Unit-lcov diff-cover does not apply to them.
+	# The suite still runs here once: CI runs no `_bun-test`.
 	if [ -f playwright.config.ts ]; then
 		echo "Playwright project: coverage is proven by the app-boot e2e run; unit lcov is not applicable."
-		exit 0
+		exec just --justfile {{justfile()}} -d . _bun-test
 	fi
 	# A repo that split its suite into push/CI tiers runs the full suite here.
 	# The script owns its coverage flags and must leave lcov.info at the repo root.
@@ -656,12 +657,21 @@ test-push:
 	just --justfile {{justfile()}} -d . test-commit _bun-test
 	echo "Push quality checks completed"
 
+# private: the Bun CI gates without the cross-language stack, which a profile that
+# composes several languages runs once (bun-python.just). `_coverage` is the
+# suite's one run: the push tier's `_bun-test` would repeat it.
+_ci-checks:
+	#!/usr/bin/env bash
+	set -euo pipefail
+	export AI_REVIEW_CI_FAILURE_MODE=triage
+	just --justfile {{justfile()}} -d . test-commit _coverage _diff-cover _knip _biome _ast-grep _eslint _jscpd-bun _lizard-bun _slop-scan
+
 # public: CI gate — push checks plus gameable and long-running acceptance gates
 test-ci:
 	#!/usr/bin/env bash
 	set -euo pipefail
 	export AI_REVIEW_CI_FAILURE_MODE=triage
-	just --justfile {{justfile()}} -d . test-push _coverage _diff-cover _knip _biome _ast-grep _eslint _jscpd-bun _lizard-bun _slop-scan
+	just --justfile {{justfile()}} -d . _ci-checks
 	just -f {{justfiles}}/shared.just -d . _global-qc
 	echo "CI quality checks completed"
 

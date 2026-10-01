@@ -2965,7 +2965,59 @@ def test_public_gate_composition_separates_immediate_checks_from_full_suite(
     assert ci is not None
     assert full_suite_recipe not in commit.group("body")
     assert full_suite_recipe in push.group("body")
-    assert "test-push" in ci.group("body")
+    assert "test-push" in ci.group("body") or "_ci-checks" in ci.group("body")
+
+
+def recipe_body(text: str, recipe: str) -> str:
+    match = re.search(rf"(?ms)^{re.escape(recipe)}:\n(?P<body>.*?)(?=^\S|\Z)", text)
+    assert match is not None, recipe
+    return match.group("body")
+
+
+@pytest.mark.parametrize(
+    ("justfile_name", "push_suite_recipe", "coverage_recipe"),
+    [
+        ("python.just", "_pytest", "_pytest_with_coverage"),
+        ("bun.just", "_bun-test", "_coverage"),
+    ],
+)
+def test_ci_tier_runs_the_suite_once_under_coverage(
+    justfile_name: str,
+    push_suite_recipe: str,
+    coverage_recipe: str,
+) -> None:
+    text = (ROOT / "justfiles" / justfile_name).read_text()
+    checks = recipe_body(text, "_ci-checks")
+    ci = recipe_body(text, "test-ci")
+
+    assert "test-commit" in checks
+    assert coverage_recipe in checks
+    assert push_suite_recipe not in checks.replace(coverage_recipe, "")
+    assert "test-push" not in checks
+    assert "_global-qc" not in checks
+    assert "_ci-checks" in ci
+    assert ci.count("_global-qc") == 1
+
+
+def test_bun_python_ci_runs_the_cross_language_stack_once() -> None:
+    ci = recipe_body((ROOT / "justfiles" / "bun-python.just").read_text(), "test-ci")
+
+    assert "python.just -d . _ci-checks" in ci
+    assert "bun.just -d . _ci-checks" in ci
+    assert "test-ci" not in ci
+    assert ci.count("_global-qc") == 1
+
+
+def test_bun_coverage_runs_a_playwright_projects_suite(tmp_path: pathlib.Path) -> None:
+    project = tmp_path / "bun-playwright-project"
+    project.mkdir()
+    (project / "playwright.config.ts").write_text("export default {};\n")
+    (project / "package.json").write_text(json.dumps({"scripts": {"test": "touch suite-ran"}}))
+
+    result = run_just(ROOT / "justfiles" / "bun.just", project, "_coverage")
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert (project / "suite-ran").exists()
 
 
 @pytest.mark.parametrize(
@@ -4213,7 +4265,7 @@ SCAFFOLD_DELEGATES = {
     "rust": ("rust.just",),
     "bun": ("bun.just",),
     "bun-playwright": ("bun.just",),
-    "bun-python": ("python.just", "bun.just"),
+    "bun-python": ("bun-python.just",),
     "sage": ("sage.just",),
 }
 

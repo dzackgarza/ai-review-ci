@@ -1,6 +1,6 @@
 # ai-review-ci Bun + Python QC delegation justfile.
 # The central implementation lives in ~/ai-review-ci/justfiles/.
-# Public recipes delegate to both central gates while preserving this repo as the caller root.
+# Public recipes delegate to the central bun-python gates while preserving this repo as the caller root.
 
 # ai-review-ci contract variables consumed by doctor and workflow installers.
 ai_review_ci_schema_version := "1"
@@ -16,15 +16,12 @@ default:
 
 # Run commit-tier Python and Bun QC through the central implementation.
 test-commit:
-    @just -f ~/ai-review-ci/justfiles/python.just -d . test-commit
-    @just -f ~/ai-review-ci/justfiles/bun.just -d . test-commit
+    @just -f ~/ai-review-ci/justfiles/bun-python.just -d . test-commit
 
 # Run the full Python and Bun test suites before pushing.
 test-push:
-    @just -f ~/ai-review-ci/justfiles/python.just -d . test-push
-    @just -f ~/ai-review-ci/justfiles/bun.just -d . test-push
+    @just -f ~/ai-review-ci/justfiles/bun-python.just -d . test-push
 
-# Run CI acceptance QC through both central implementations.
+# Run CI acceptance QC: both languages' CI gates, then the cross-language checks once.
 test-ci:
-    @just -f ~/ai-review-ci/justfiles/python.just -d . test-ci
-    @just -f ~/ai-review-ci/justfiles/bun.just -d . test-ci
+    @just -f ~/ai-review-ci/justfiles/bun-python.just -d . test-ci
