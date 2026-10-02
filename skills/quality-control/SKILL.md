@@ -466,6 +466,8 @@ Shared recipe composition: calls `shared.just` explicitly.
 
 Recipes: `_normalize-common` wrapper, `_python-syntax`, `_mypy`, `_normalize` (ruff), `_pytest_with_coverage`, `_diff-cover`, `_vulture`, `_deptry`, `_import-linter`, `_ast-grep`, `_jscpd-python`, `_lizard-python`, `_codeql` plus shared recipe calls.
 
+Test files are never mypy targets. `_mypy` here and `_sage-mypy` in `sage.just` drop every path that `tool-artifacts/scripts/test-file-paths.sh` classifies as a test file: a path under a `tests/` or `test/` directory, or a file named `test_*.py`, `*_test.py`, `conftest.py`, `test_*.sage` or `*_test.sage`. In the Sage preparse snapshot each test file carries `# mypy: ignore-errors`, so a module that imports one still gets its types.
+
 Invocations:
 
 - `just -f ~/ai-review-ci/justfiles/python.just -d . test`
@@ -780,7 +782,7 @@ The QC system uses these configs (all stored in `~/ai-review-ci/tool-configs/`):
 | Config | Tool | Purpose |
 | --- | --- | --- |
 | `ruff-global.toml` | Ruff | Python linting (E, F, I, UP, BLE), Python 3.14, strict |
-| `mypy-global.ini` | Mypy | Python type checking, strict mode |
+| `mypy-global.ini` | Mypy | Python type checking of non-test code, strict mode |
 | `pytest-local.ini` | pytest | Python test configuration |
 | `pyproject.toml` | Various | Python project metadata |
 | `biome.json` | Biome | TypeScript/JS formatting and linting |

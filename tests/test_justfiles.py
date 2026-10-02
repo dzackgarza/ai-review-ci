@@ -3942,6 +3942,34 @@ def test_mypy_private_recipe_does_not_apply_python_project_preflight_to_sage_pas
     assert "Python project preflight check" not in output
 
 
+def test_mypy_checks_project_code_and_never_a_test_file(
+    tmp_path: pathlib.Path,
+) -> None:
+    """Test files are never mypy targets (#456); project code still is."""
+    project = tmp_path / "typed-project"
+    project.mkdir()
+    (project / "pyproject.toml").write_text('[project]\nname = "typed-project"\nversion = "0.1.0"\nrequires-python = ">=3.14"\n')
+    type_error = 'VALUE: int = "not an int"\n'
+    test_files = [
+        "tests/helpers.py",
+        "pkg/test/support.py",
+        "test_top.py",
+        "pkg/parser_test.py",
+        "conftest.py",
+    ]
+    for relative in ["pkg/module.py", *test_files]:
+        path = project / relative
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(type_error)
+
+    result = run_just(ROOT / "justfiles" / "python.just", project, "_mypy")
+    output = result.stdout + result.stderr
+
+    assert result.returncode != 0, output
+    assert "pkg/module.py:1: error" in output, output
+    assert [relative for relative in test_files if relative in output] == [], output
+
+
 def test_mypy_uses_declared_dependency_group_type_stubs(
     tmp_path: pathlib.Path,
 ) -> None:

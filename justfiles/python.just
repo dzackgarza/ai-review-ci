@@ -221,13 +221,18 @@ _mypy: _install-tools
 	#!/usr/bin/env bash
 	set -euo pipefail
 	source "{{artifacts}}/scripts/heavy-gate-lock.sh"
+	source "{{artifacts}}/scripts/test-file-paths.sh"
 	echo "============================="
 	echo "=== Running: mypy type checking ==="
 	echo "# Checks static typing after syntax validation and before lint/style normalization"
+	echo "# Test files are never mypy targets"
 	python_files_output="$(just --justfile {{justfile()}} -d . _python-qc-files)"
 	python_files=()
 	if [ -n "$python_files_output" ]; then
-		mapfile -t python_files <<<"$python_files_output"
+		while IFS= read -r python_file; do
+			is_test_file "$python_file" && continue
+			python_files+=("$python_file")
+		done <<<"$python_files_output"
 	fi
 	if [ "${#python_files[@]}" -eq 0 ]; then
 		echo "mypy: no changed Python files."

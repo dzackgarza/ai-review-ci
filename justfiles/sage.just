@@ -602,7 +602,8 @@ _sage-mypy: _sage-qc-files
 	set -euo pipefail
 	echo "============================="
 	echo "=== Running: mypy static type analysis (Sage-aware) ==="
-	echo "# Type checks Python and preparsed Sage files"
+	echo "# Type checks Python and preparsed Sage files; test files are never targets"
+	source "{{artifacts}}/scripts/test-file-paths.sh"
 	sage_python="$(just --justfile {{justfile()}} -d . _sage-python)"
 	export MYPYPATH="{{infra}}/typings${MYPYPATH:+:$MYPYPATH}"
 	python_files_output="$(just -f {{justfiles}}/python.just -d . _python-qc-files)"
@@ -617,7 +618,9 @@ _sage-mypy: _sage-qc-files
 	fi
 	mypy_targets=()
 	for pf in "${python_files[@]}"; do
-		[ -n "$pf" ] && mypy_targets+=("$pf")
+		[ -n "$pf" ] || continue
+		is_test_file "$pf" && continue
+		mypy_targets+=("$pf")
 	done
 	if [ "${#sage_files[@]}" -gt 0 ]; then
 		sage_preparse="$(just --justfile {{justfile()}} -d . _sage-preparse-bin)"
@@ -644,8 +647,18 @@ _sage-mypy: _sage-qc-files
 		)
 		for sage_file in "${copied_sage_files[@]}"; do
 			mv "$sage_preparse_dir/$sage_file.py" "$sage_preparse_dir/${sage_file%.sage}.py"
+			if is_test_file "$sage_file"; then
+				# Preparsed so an importing module resolves it; never a target.
+				sed -i '1i # mypy: ignore-errors' "$sage_preparse_dir/${sage_file%.sage}.py"
+				continue
+			fi
 			mypy_targets+=("${sage_file%.sage}.py")
 		done
+		# Plain-Python test files are in the snapshot for the same reason.
+		while IFS= read -r -d '' python_file; do
+			is_test_file "$python_file" || continue
+			sed -i '1i # mypy: ignore-errors' "$sage_preparse_dir/$python_file"
+		done < <(git ls-files -z -- '*.py')
 		# Excluded directories are not targets, but mypy still checks any
 		# module it reaches by import. Mark each snapshot copy with mypy's
 		# per-file inline option so it supplies types without reporting errors.
