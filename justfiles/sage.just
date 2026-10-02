@@ -635,16 +635,28 @@ _sage-mypy: _sage-qc-files
 		# to X.py -- the stem X.sage can never satisfy an import of pkg.X.
 		git ls-files -z -- '*.py' '*.pyi' | xargs -0 --no-run-if-empty cp --parents -t "$sage_preparse_dir"
 		copied_sage_files=()
+		cli_sage_files=()
+		startup_source="$("$sage_python" -c 'from pathlib import Path; from sage.env import SAGE_STARTUP_FILE; print(Path(SAGE_STARTUP_FILE).resolve() if SAGE_STARTUP_FILE else "")')"
 		for sage_file in "${sage_files[@]}"; do
 			target="$sage_preparse_dir/$sage_file"
 			mkdir -p "$(dirname "$target")"
 			cp "$sage_file" "$target"
 			copied_sage_files+=("$sage_file")
+			if [ "$(realpath "$sage_file")" = "$startup_source" ]; then
+				# Sage's IPython extension loads init.sage with run_cell, whose
+				# transformer calls preparse; sage-preparse instead injects an
+				# all_cmdline import that is absent from the startup cell.
+				"$sage_python" -c 'from pathlib import Path; from sage.repl.preparse import preparse; import sys; source = Path(sys.argv[1]); Path(f"{source}.py").write_text(preparse(source.read_text()))' "$target"
+			else
+				cli_sage_files+=("$sage_file")
+			fi
 		done
-		(
-			cd "$sage_preparse_dir"
-			"$sage_python" "$sage_preparse" "${copied_sage_files[@]}" >/dev/null
-		)
+		if [ "${#cli_sage_files[@]}" -gt 0 ]; then
+			(
+				cd "$sage_preparse_dir"
+				"$sage_python" "$sage_preparse" "${cli_sage_files[@]}" >/dev/null
+			)
+		fi
 		for sage_file in "${copied_sage_files[@]}"; do
 			mv "$sage_preparse_dir/$sage_file.py" "$sage_preparse_dir/${sage_file%.sage}.py"
 			if is_test_file "$sage_file"; then
