@@ -544,6 +544,46 @@ def test_qc_workflow_runs_validated_project_setup_before_acceptance() -> None:
     assert setup["run"] == 'just "$QC_SETUP_RECIPE"'
 
 
+def test_qc_workflow_caches_project_setup_around_the_recipe(tmp_path: pathlib.Path) -> None:
+    # #459: the cache is restored before the setup recipe and saved right after
+    # it, before the QC tier, under a key that follows the caller's key files.
+    job = _workflow_jobs("_qc.yml")["qc"]
+    names = [step.get("name") for step in job["steps"]]
+    key_step = job["steps"][names.index("Key the project CI environment cache")]
+    restore = job["steps"][names.index("Restore the project CI environment")]
+    save = job["steps"][names.index("Save the project CI environment")]
+
+    assert names.index("Restore the project CI environment") < names.index("Provision project CI environment")
+    assert names.index("Provision project CI environment") < names.index("Save the project CI environment")
+    assert names.index("Save the project CI environment") < names.index("Run QC tier")
+    for step in (key_step, restore):
+        assert step["if"] == "inputs.setup_cache_paths != ''"
+    assert save["if"] == "inputs.setup_cache_paths != '' && steps.setup-cache.outputs.cache-hit != 'true'"
+    assert restore["with"] == save["with"]
+
+    (tmp_path / "setup.sh").write_text("install v1\n")
+    (tmp_path / "pins.json").write_text("{}\n")
+
+    def cache_key() -> str:
+        output = tmp_path / "github-output"
+        output.write_text("")
+        env = {
+            "PATH": "/usr/bin:/bin",
+            "RUNNER_OS": "Linux",
+            "QC_SETUP_RECIPE": "setup-ci",
+            "QC_SETUP_CACHE_KEY_FILES": "setup.sh\npins.json\n",
+            "GITHUB_OUTPUT": str(output),
+        }
+        subprocess.run(["bash", "-euo", "pipefail", "-c", key_step["run"]], cwd=tmp_path, env=env, check=True)
+        return output.read_text().removeprefix("key=").strip()
+
+    first = cache_key()
+    assert first.startswith("qc-setup-Linux-setup-ci-")
+    assert cache_key() == first
+    (tmp_path / "setup.sh").write_text("install v2\n")
+    assert cache_key() != first
+
+
 def test_qc_workflow_accepts_only_remote_acceptance_tiers() -> None:
     job = _workflow_jobs("_qc.yml")["qc"]
     validation = next(step for step in job["steps"] if isinstance(step, dict) and step.get("name") == "Validate inputs")

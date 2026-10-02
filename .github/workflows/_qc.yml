@@ -32,6 +32,16 @@ on:
         required: false
         type: boolean
         default: false
+      setup_cache_paths:
+        description: Optional newline-separated paths that setup_recipe fills; cached across runs
+        required: false
+        type: string
+        default: ""
+      setup_cache_key_files:
+        description: Newline-separated repository files whose content decides what setup_recipe fills; their hash keys the setup_cache_paths cache
+        required: false
+        type: string
+        default: ""
 
 jobs:
   qc:
@@ -51,6 +61,8 @@ jobs:
       # detached merge ref with no local `main`, so point at the remote-tracking
       # base branch (the PR base on PRs, the default branch on pushes).
       DIFF_COVER_BASE: origin/${{ github.base_ref || github.event.repository.default_branch }}
+      QC_SETUP_CACHE_PATHS: ${{ inputs.setup_cache_paths }}
+      QC_SETUP_CACHE_KEY_FILES: ${{ inputs.setup_cache_key_files }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -72,6 +84,14 @@ jobs:
           fi
           if [[ -z "$QC_INFRA_REF" || "$QC_INFRA_REF" =~ [^A-Za-z0-9._/-] ]]; then
             echo "invalid infra_ref: $QC_INFRA_REF" >&2
+            exit 1
+          fi
+          if [[ -n "$QC_SETUP_CACHE_PATHS" && ( -z "$QC_SETUP_RECIPE" || -z "$QC_SETUP_CACHE_KEY_FILES" ) ]]; then
+            echo "setup_cache_paths needs setup_recipe and setup_cache_key_files" >&2
+            exit 1
+          fi
+          if [[ -z "$QC_SETUP_CACHE_PATHS" && -n "$QC_SETUP_CACHE_KEY_FILES" ]]; then
+            echo "setup_cache_key_files needs setup_cache_paths" >&2
             exit 1
           fi
 
@@ -122,6 +142,22 @@ jobs:
         # configs through bun; node ships on the runner, bun does not.
         uses: oven-sh/setup-bun@v2
 
+      - name: Key the project CI environment cache
+        id: setup-cache-key
+        if: inputs.setup_cache_paths != ''
+        run: |
+          mapfile -t key_files < <(grep --invert-match "^[[:space:]]*$" <<< "$QC_SETUP_CACHE_KEY_FILES")
+          digest="$(sha256sum -- "${key_files[@]}" | sha256sum | cut --delimiter " " --fields 1)"
+          echo "key=qc-setup-${RUNNER_OS}-${QC_SETUP_RECIPE}-${digest}" >> "$GITHUB_OUTPUT"
+
+      - name: Restore the project CI environment
+        id: setup-cache
+        if: inputs.setup_cache_paths != ''
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ inputs.setup_cache_paths }}
+          key: ${{ steps.setup-cache-key.outputs.key }}
+
       - name: Provision project CI environment
         # Ahead of setup-profile, because that step validates the toolchain
         # this one installs. The sage profile asserts SAGE_BIN is executable
@@ -132,6 +168,14 @@ jobs:
         # what the image already happened to carry.
         if: inputs.setup_recipe != ''
         run: just "$QC_SETUP_RECIPE"
+
+      # Saved before the QC tier runs, so a failed tier keeps the cache.
+      - name: Save the project CI environment
+        if: inputs.setup_cache_paths != '' && steps.setup-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ inputs.setup_cache_paths }}
+          key: ${{ steps.setup-cache-key.outputs.key }}
 
       - name: Install project dependencies
         run: just -f "$HOME/ai-review-ci/ci/runner.just" setup-profile "$QC_PROFILE"
