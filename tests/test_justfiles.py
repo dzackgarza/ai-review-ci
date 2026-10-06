@@ -515,6 +515,29 @@ def test_sage_vulture_files_ignore_scripts_and_global_notebooks_directories(
     assert result.stdout.splitlines() == ["src/app.sage"]
 
 
+def test_python_normalize_honors_project_ruff_target_version(
+    tmp_path: pathlib.Path,
+) -> None:
+    project = tmp_path / "project"
+    project.mkdir()
+    init_git_repo(project)
+    (project / "pyproject.toml").write_text(
+        '[project]\nname = "fixture"\nversion = "0.0.0"\nrequires-python = ">=3.12"\n'
+        '[tool.ruff]\ntarget-version = "py312"\n'
+    )
+    source = project / "app.py"
+    source.write_text(
+        "try:\n    pass\nexcept (ValueError, TypeError):\n    pass\n"
+    )
+    assert run_git(project, "add", "pyproject.toml", "app.py").returncode == 0
+
+    result = run_just(ROOT / "justfiles" / "python.just", project, "_normalize")
+
+    output = result.stdout + result.stderr
+    assert result.returncode == 0, output
+    assert "except (ValueError, TypeError):" in source.read_text()
+
+
 @pytest.mark.parametrize("justfile_name", ["python.just", "sage.just"])
 def test_vulture_parses_pep758_in_target_repository(
     tmp_path: pathlib.Path,
