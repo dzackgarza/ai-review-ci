@@ -370,17 +370,21 @@ _normalize: _install-tools
 		echo "ruff normalization: no changed Python files."
 		exit 0
 	fi
-	if ! uvx --from ruff ruff check --fix \
+	if uvx --from ruff ruff check --fix \
 		--config {{configs}}/ruff-global.toml \
 		"${python_files[@]}"; then
+		:
+	else
 		ec=$?
 		echo "ERROR: ruff check found issues in project code."
 		"{{artifacts}}/scripts/emit-triage-directive.sh"
 		exit $ec
 	fi
-	if ! uvx --from ruff ruff format \
+	if uvx --from ruff ruff format \
 		--config {{configs}}/ruff-global.toml \
 		"${python_files[@]}"; then
+		:
+	else
 		ec=$?
 		echo "ERROR: ruff format found issues in project code."
 		"{{artifacts}}/scripts/emit-triage-directive.sh"
@@ -720,10 +724,12 @@ _jscpd-python:
 		echo "jscpd: no changed Python files."
 		exit 0
 	fi
-	if ! npx -y jscpd \
+	if npx -y jscpd \
 		--config {{configs}}/jscpd.json \
 		--format python \
 		"${python_files[@]}"; then
+		:
+	else
 		ec=$?
 		echo "ERROR: jscpd found code duplication in project."
 		"{{artifacts}}/scripts/emit-triage-directive.sh"
