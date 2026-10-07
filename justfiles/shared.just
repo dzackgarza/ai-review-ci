@@ -41,6 +41,15 @@ _format-structured-text:
 	# very bytes a test asserts on -- corrupting the suite -- so it is never
 	# normalized. This is by artifact kind and applies to every project; the test
 	# directory's own source (e.g. .py) is still linted/type-checked as normal.
+	# Vendored, generated, and fixture trees (qc-excludes.toml) hold bytes another
+	# party owns -- a cited source, a golden input -- and are never formatted.
+	exclude_dirs_output="$(uv run {{artifacts}}/scripts/read_qc_excludes.py {{configs}}/qc-excludes.toml)"
+	exclude_pathspecs=()
+	if [ -n "$exclude_dirs_output" ]; then
+		while IFS= read -r dir; do
+			exclude_pathspecs+=(":(exclude,glob)**/$dir/**")
+		done <<<"$exclude_dirs_output"
+	fi
 	md_files=()
 	data_files=()
 	while IFS= read -r -d '' file; do
@@ -50,7 +59,7 @@ _format-structured-text:
 			*.md|*.markdown) md_files+=("$file") ;;
 			*.json|*.jsonc|*.yaml|*.yml) data_files+=("$file") ;;
 		esac
-	done < <(git diff --cached --name-only --diff-filter=ACMR -z)
+	done < <(git diff --cached --name-only --diff-filter=ACMR -z -- . "${exclude_pathspecs[@]}")
 	# git-sourced uvx tools must not inherit repository-location variables: they
 	# can otherwise redirect their own fetch at the host repository and fail.
 	# The selected file lists above already preserve the temporary commit index.
