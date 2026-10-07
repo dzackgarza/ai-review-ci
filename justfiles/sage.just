@@ -485,6 +485,9 @@ _sage-pytest-run +pytest_args:
 	set -euo pipefail
 	source "{{artifacts}}/scripts/heavy-gate-lock.sh"
 	sage_python="$(just --justfile {{justfile()}} -d . _sage-python)"
+	# `import sage.all` runs the venv's own gap binary; the launcher puts the venv's
+	# bin/ on PATH before exec'ing this interpreter, so do the same here.
+	export PATH="$(dirname "$sage_python"):$PATH"
 	# Sage tests can only run under the Sage interpreter: sage.* is not
 	# pip-installable into a uvx CPython environment. The project must be
 	# importable there (PYTHONPATH via envrc, or installed into Sage's python).
@@ -525,6 +528,8 @@ _sage-pytest-coverage:
 	echo "# Same in-place collection as _sage-pytest, run under coverage.py inside Sage's"
 	echo "# Python (uvx CPython cannot import sage.*); emits coverage.xml for diff-cover."
 	sage_python="$(just --justfile {{justfile()}} -d . _sage-python)"
+	# The venv's bin/ goes on PATH for the same reason as in _sage-pytest-run.
+	export PATH="$(dirname "$sage_python"):$PATH"
 	sage_test_files_output="$(just --justfile {{justfile()}} -d . _sage-test-files)"
 	sage_test_files=()
 	if [ -n "$sage_test_files_output" ]; then
