@@ -7,7 +7,6 @@ docstrings.
 Subcommands:
 - install          — write trigger workflows and apply required branch protection
 - red-commit        — sanctioned, auditable route to commit an intentionally hook-failing red proof
-- red-push          — sanctioned, auditable route to push while the push gate is intentionally red
 - install-labels    — create/update the canonical label taxonomy on a target repo
 - check-profile    — fail if a target repo does not match its curated profile
 - check-staged-bypass — fail if staged added lines introduce validator bypasses
@@ -37,7 +36,6 @@ from ai_review_ci.gates import (
 from ai_review_ci.install import install
 from ai_review_ci.labels import install_labels
 from ai_review_ci.red_commit import red_commit
-from ai_review_ci.red_push import red_push
 from ai_review_ci.tripwire_index import check_tripwire_index, tripwire_index
 
 app = App(
@@ -47,7 +45,6 @@ app = App(
 
 app.command(install)
 app.command(red_commit, name="red-commit")
-app.command(red_push, name="red-push")
 app.command(install_labels)
 app.command(version_command, name="version")
 app.command(doctor)

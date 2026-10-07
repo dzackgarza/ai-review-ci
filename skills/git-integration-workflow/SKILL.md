@@ -42,12 +42,7 @@ Each arrow is a gate, not a suggestion.
    It runs the same gate, refuses unless the gate genuinely fails (a passing gate is not a red proof), stamps an auditable `Red-Proof: #<issue>` trailer, and bypasses the gate for that one commit only — ordinary hooks stay active.
    This is the same route named by the pre-commit hook's rejection message and by the `test-guidelines` skill (Red-Green Evidence).
 
-   **Red-gate push route.** When the push gate (`just test-push`) is red by design — red proofs landed before their fixes, or an acceptance suite written up front that stays red until its work units land — do NOT reach for `git push --no-verify`.
-   Use:
-   ```bash
-   ai-review-ci red-push --issue <owning-issue>
-   ```
-   It runs the same gate, refuses if the gate passes, records a `Red-Push: #<issue>` note on the pushed commit under `refs/notes/red-push`, and pushes the branch and that notes ref with the gate bypassed for that push only.
+   **Red-by-design tests at push time.** A test that is red by design (a red proof awaiting its fix, or an acceptance case whose capability is still being built) carries `@pytest.mark.xfail(reason="... #N", strict=True)` citing the open issue that owns it, so the push gate stays green on everything else. The marker clears when the case passes (strict XPASS fails the gate) and the gate rejects it once #N closes. Do not use `git push --no-verify`.
 
 3. **PR review synthesis.** Open or update the PR from the current work-unit issue: summarize the issue scope, close/reference split, proof obligations addressed, evidence, and reviewer checklist.
    The PR body is a review submission derived from the issue, not a second planning tracker.

@@ -21,16 +21,13 @@ cat >&2 <<'MSG'
 ────────────────────────────────────────────────────────────────
 ai-review-ci push gate FAILED (just test-push).
 
-If the gate is red by design — a red proof landed before its fix, or an
-acceptance suite written up front that stays red until its work units land —
-use the sanctioned, auditable route instead of `git push --no-verify`:
-
-    ai-review-ci red-push --issue <owning-issue>
-
-It runs the same gate, refuses if the gate passes, notes `Red-Push: #<issue>`
-on the pushed commit (refs/notes/red-push), and bypasses the gate for that one
-push only. Wiki repositories, repositories not under the dzackgarza account, and
-forks of third-party projects are auto-detected and skipped above.
+A failing test that is red by design — a red proof landed before its fix, or
+an acceptance case whose capability is still being built — carries
+`@pytest.mark.xfail(reason="... #N", strict=True)` citing the open issue that
+owns it. The marker clears when the case passes (strict XPASS fails) and is
+rejected once #N closes. Do not use `git push --no-verify`. Wiki repositories,
+repositories not under the dzackgarza account, and forks of third-party
+projects are auto-detected and skipped above.
 
 Any other failure is direct project/test repair work. Fix the reported object
 and push again; do not start a PR disposition or subagent remediation workflow.
