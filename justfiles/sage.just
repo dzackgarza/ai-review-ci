@@ -653,7 +653,7 @@ _sage-mypy: _sage-qc-files
 	if [ "${#sage_files[@]}" -gt 0 ]; then
 		sage_preparse="$(just --justfile {{justfile()}} -d . _sage-preparse-bin)"
 		sage_preparse_dir="$(mktemp -d "${TMPDIR:-/tmp}/qc-mypy-sage.XXXXXX")"
-		trap 'if [ -e "$sage_preparse_dir" ]; then gio trash "$sage_preparse_dir"; fi' EXIT
+		trap 'if [ -e "$sage_preparse_dir" ]; then rm -rf -- "$sage_preparse_dir"; fi' EXIT
 		echo "# Preparsing ${#sage_files[@]} Sage file(s) for mypy"
 		# The preparsed modules import each other and the package's plain .py
 		# modules, and mypy resolves those imports statically: the tempdir must
@@ -725,7 +725,6 @@ _sage-mypy: _sage-qc-files
 	plugin_packages="$(yq -p toml -oy '.tool."sage-mypy-category-plugin".packages[]' pyproject.toml)"
 	if [ -n "$plugin_packages" ]; then
 		plugin_config_dir="$(mktemp -d "${TMPDIR:-/tmp}/qc-mypy-config.XXXXXX")"
-		trap 'for d in "${sage_preparse_dir:-}" "$plugin_config_dir"; do if [ -n "$d" ] && [ -e "$d" ]; then gio trash "$d"; fi; done' EXIT
 		effective_config="$plugin_config_dir/mypy-sage.ini"
 		awk -v packages="$plugin_packages" '
 			/^packages =$/ { print; n = split(packages, p, "\n"); for (i = 1; i <= n; i++) print "    " p[i]; skip = 1; next }
@@ -748,7 +747,35 @@ _sage-mypy: _sage-qc-files
 			export MYPYPATH="$sage_preparse_dir/typings${MYPYPATH:+:$MYPYPATH}"
 		fi
 	fi
-	if (cd "$mypy_run_dir" && "$sage_python" -m mypy \
+	# mypy, its category plugin and the project's typing dependencies (sage-stubs among
+	# them) come from their declared sources: the project's dependency groups and the
+	# plugin's GitHub repository. They are installed into a throwaway environment layered
+	# over the Sage environment, which supplies Sage itself through a .pth entry placed
+	# after the overlay's own site-packages, so whatever development checkouts the Sage
+	# environment carries never decide what is type-checked.
+	mypy_env="$(mktemp -d "${TMPDIR:-/tmp}/qc-mypy-env.XXXXXX")"
+	# These are this recipe's own mktemp scratch directories, removed like the other
+	# recipes' scratch: trashing them on the same filesystem freed nothing, and every run
+	# left up to 150 MB behind.
+	cleanup_mypy() {
+		for d in "${sage_preparse_dir:-}" "${plugin_config_dir:-}" "$mypy_env"; do
+			if [ -n "$d" ] && [ -e "$d" ]; then rm -rf -- "$d"; fi
+		done
+	}
+	trap cleanup_mypy EXIT
+	uv venv --quiet --allow-existing --python "$sage_python" "$mypy_env"
+	sage_site="$("$sage_python" -c 'import sysconfig; print(sysconfig.get_paths()["purelib"])')"
+	overlay_site="$("$mypy_env/bin/python" -c 'import sysconfig; print(sysconfig.get_paths()["purelib"])')"
+	printf '%s\n' "$sage_site" >"$overlay_site/zz-sage-environment.pth"
+	typing_requirements=()
+	typing_requirements_output="$(uv run --no-project python "{{artifacts}}/scripts/python_qc_metadata.py" dependency-group-requirements .)"
+	if [ -n "$typing_requirements_output" ]; then
+		mapfile -t typing_requirements <<<"$typing_requirements_output"
+	fi
+	uv pip install --quiet --python "$mypy_env/bin/python" mypy \
+		"sage-mypy-category-plugin @ git+https://github.com/dzackgarza/sagemath-mypy-plugin@main" \
+		"${typing_requirements[@]}"
+	if (cd "$mypy_run_dir" && "$mypy_env/bin/python" -m mypy \
 		--config-file "$effective_config" \
 		"${mypy_flags[@]}" \
 		"${mypy_targets[@]}"); then
