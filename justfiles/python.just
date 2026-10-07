@@ -416,7 +416,8 @@ _pytest: _install-tools
 			with_args+=(--with "$requirement")
 		done
 	fi
-	if uvx --python 3.14 --from pytest "${with_args[@]}" pytest; then
+	export PYTHONPATH="{{artifacts}}/pytest_plugins${PYTHONPATH:+:$PYTHONPATH}"
+	if uvx --python 3.14 --from pytest "${with_args[@]}" pytest -p qc_xfail_issues; then
 		:
 	else
 		ec=$?
@@ -451,7 +452,8 @@ test-gh-boundary: _install-tools
 			with_args+=(--with "$requirement")
 		done
 	fi
-	if uvx --python 3.14 --from pytest "${with_args[@]}" pytest -m gh_boundary; then
+	export PYTHONPATH="{{artifacts}}/pytest_plugins${PYTHONPATH:+:$PYTHONPATH}"
+	if uvx --python 3.14 --from pytest "${with_args[@]}" pytest -p qc_xfail_issues -m gh_boundary; then
 		:
 	else
 		ec=$?
@@ -494,7 +496,8 @@ _pytest_with_coverage: _install-tools
 			with_args+=(--with "$requirement")
 		done
 	fi
-	if uvx --python 3.14 --from coverage "${with_args[@]}" coverage run -m pytest; then
+	export PYTHONPATH="{{artifacts}}/pytest_plugins${PYTHONPATH:+:$PYTHONPATH}"
+	if uvx --python 3.14 --from coverage "${with_args[@]}" coverage run -m pytest -p qc_xfail_issues; then
 		:
 	else
 		ec=$?

@@ -152,7 +152,8 @@ Both halves are recorded as enforceable policy — `POLICY.GLOBAL_QC_AUTHORITY` 
 
 The worked example is the issue-linked `xfail`: a red proof test may carry
 `@pytest.mark.xfail(reason="... #N", strict=True)` while issue N is open, and the gate
-rejects the marker once N closes.
+rejects the marker once N closes (`tool-artifacts/pytest_plugins/qc_xfail_issues.py`, loaded
+by every pytest recipe, checks every collected case, `.sage` included).
 
 Note every property. The owner granted it interactively. The runner enforces it. The
 citation is checkable. It expires on its own. A repository cannot grant itself one, and

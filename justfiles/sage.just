@@ -499,7 +499,7 @@ _sage-pytest-run +pytest_args:
 	fi
 	mkdir -p .ai-review-ci/sage/pytest-history
 	printf '*\n' >.ai-review-ci/.gitignore
-	pytest_args=(-p qc_sage_session -p qc_test_history --qc-history-dir .ai-review-ci/sage/pytest-history --durations=20 "$@")
+	pytest_args=(-p qc_sage_session -p qc_xfail_issues -p qc_test_history --qc-history-dir .ai-review-ci/sage/pytest-history --durations=20 "$@")
 	export PYTHONPATH="{{artifacts}}/pytest_plugins${PYTHONPATH:+:$PYTHONPATH}"
 
 	# The Sage virtual environment's Python has `sage` importable, but it is not
@@ -557,7 +557,7 @@ _sage-pytest-coverage:
 		"{{artifacts}}/scripts/emit-triage-directive.sh"
 		exit 1
 	fi
-	pytest_args=(-p qc_sage_session)
+	pytest_args=(-p qc_sage_session -p qc_xfail_issues)
 	for test_file in "${sage_test_files[@]:-}" "${py_test_files[@]:-}"; do
 		[ -n "$test_file" ] && pytest_args+=("$test_file")
 	done

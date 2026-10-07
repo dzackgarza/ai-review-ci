@@ -315,7 +315,8 @@ rules:
   - id: py-xfail-without-open-issue-gate
     # POLICY.NO_SKIP_MASK exception (user grant 2026-07-09): xfail is
     # sanctioned ONLY as an open-issue red proof gate — strict=True and a
-    # reason citing the tracked issue (#N; reviewers audit that it is open).
+    # reason citing the tracked issue (#N; qc_xfail_issues fails collection
+    # once that issue is closed).
     # Everything else (bare xfail, non-strict xfail, no issue citation)
     # remains a violation.
     patterns:

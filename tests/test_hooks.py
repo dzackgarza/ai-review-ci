@@ -297,13 +297,14 @@ def test_hooks_still_gate_dzackgarza_repos(hook_source_repo: pathlib.Path, tmp_p
 
 @pytest.mark.parametrize(("hook_dir", "hook", "recipe"), BYPASS_HOOKS)
 def test_hooks_print_red_proof_sanction_on_gated_failure(hook_source_repo: pathlib.Path, tmp_path: pathlib.Path, hook_dir: str, hook: str, recipe: str) -> None:
-    # A genuine QC failure in a gated repo blocks (exit 1) and names the only
-    # bypass reachable here — the TDD red-proof --no-verify route.
+    # A genuine QC failure in a gated repo blocks (exit 1) and names the sanctioned
+    # route for red-by-design work: red-commit at commit time, the strict issue-linked
+    # xfail at push time.
     gated = _init_downstream(tmp_path / "gated", recipe, "@exit 1", remote="https://github.com/dzackgarza/foo.git")
     result = subprocess.run([str(hook_source_repo / hook_dir / hook)], cwd=gated, env=git_test_env(), text=True, capture_output=True, check=False)
     assert result.returncode == 1, result.stdout + result.stderr
-    assert "--no-verify" in result.stderr
-    assert "red-proof" in result.stderr
+    sanctioned = {"pre-commit": "ai-review-ci red-commit --issue", "pre-push": 'xfail(reason="... #N", strict=True)'}[hook]
+    assert sanctioned in result.stderr
 
 
 def _cache_upstream_owner(repo: pathlib.Path, owner: str) -> None:
