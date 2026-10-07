@@ -631,6 +631,8 @@ _sage-mypy: _sage-qc-files
 	echo "# Type checks Python and preparsed Sage files; test files are never targets"
 	source "{{artifacts}}/scripts/test-file-paths.sh"
 	sage_python="$(just --justfile {{justfile()}} -d . _sage-python)"
+	# The category plugin imports sage.all, which runs the venv's gap; see _sage-pytest-run.
+	export PATH="$(dirname "$sage_python"):$PATH"
 	export MYPYPATH="{{infra}}/typings${MYPYPATH:+:$MYPYPATH}"
 	python_files_output="$(just -f {{justfiles}}/python.just -d . _python-qc-files)"
 	python_files=()

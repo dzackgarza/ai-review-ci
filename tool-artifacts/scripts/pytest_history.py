@@ -8,11 +8,13 @@ Usage:
   uv run pytest_history.py HISTORY_DIR [SUBSTRING ...]
 
 Every test whose node id contains any SUBSTRING (all tests when none is given)
-is printed with one row per recorded run, oldest first:
+is printed with one row per recorded run, oldest first. A test that started but
+never finished (the run was killed or is still going) is shown as unfinished,
+and a run that never reached its finish line is marked interrupted:
 
   tests/test_x.sage::test_y
-    20261007T120000123456Z  0123456789ab        passed    1.234s
-    20261007T130000654321Z  0123456789ab+dirty  failed    0.987s
+    20261007T120000123456Z  0123456789ab        passed      1.234s
+    20261007T130000654321Z  0123456789ab+dirty  unfinished  -  (interrupted)
 """
 
 import json
@@ -25,20 +27,30 @@ def main() -> None:
         sys.exit("usage: pytest_history.py HISTORY_DIR [SUBSTRING ...]")
     history = Path(sys.argv[1])
     substrings = sys.argv[2:]
-    paths = sorted(history.glob("*.json"))
+    paths = sorted(history.glob("*.jsonl"))
     if not paths:
         sys.exit(f"ERROR: no pytest history records in {history}")
 
     rows: dict[str, list[str]] = {}
     for path in paths:
-        record = json.loads(path.read_text())
+        events = [json.loads(line) for line in path.read_text().splitlines()]
+        session = events[0]
+        if session["type"] != "session":
+            sys.exit(f"ERROR: {path} does not begin with a session line")
         run = path.stem.split("-", 1)[0]
-        commit = record["commit"][:12] + ("+dirty" if record["dirty"] else "")
-        for test in record["tests"]:
-            nodeid = test["nodeid"]
+        commit = session["commit"][:12] + ("+dirty" if session["dirty"] else "")
+        interrupted = "" if events[-1]["type"] == "finish" else "  (interrupted)"
+        finished = {event["nodeid"]: event for event in events if event["type"] == "test"}
+        started = [event["nodeid"] for event in events if event["type"] == "start"]
+        for nodeid in started:
             if substrings and not any(substring in nodeid for substring in substrings):
                 continue
-            rows.setdefault(nodeid, []).append(f"  {run}  {commit:<18}  {test['outcome']:<8}  {test['duration']:.3f}s")
+            match finished.get(nodeid):
+                case None:
+                    cell = f"{'unfinished':<10}  -"
+                case test:
+                    cell = f"{test['outcome']:<10}  {test['duration']:.3f}s"
+            rows.setdefault(nodeid, []).append(f"  {run}  {commit:<18}  {cell}{interrupted}")
     if not rows:
         sys.exit(f"ERROR: no recorded test matches {substrings}")
 
