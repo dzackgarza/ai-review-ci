@@ -365,8 +365,14 @@ _normalize: _install-tools
 		echo "ruff normalization: no changed Python files."
 		exit 0
 	fi
+	ruff_project_args=()
+	project_ruff_target="$(yq -p toml -r '.tool.ruff."target-version" // ""' pyproject.toml 2>/dev/null || true)"
+	if [ -n "$project_ruff_target" ] && [ "$project_ruff_target" != "null" ]; then
+		ruff_project_args+=(--target-version "$project_ruff_target")
+	fi
 	if ! uvx --from ruff ruff check --fix \
 		--config {{configs}}/ruff-global.toml \
+		"${ruff_project_args[@]}" \
 		"${python_files[@]}"; then
 		ec=$?
 		echo "ERROR: ruff check found issues in project code."
@@ -375,6 +381,7 @@ _normalize: _install-tools
 	fi
 	if ! uvx --from ruff ruff format \
 		--config {{configs}}/ruff-global.toml \
+		"${ruff_project_args[@]}" \
 		"${python_files[@]}"; then
 		ec=$?
 		echo "ERROR: ruff format found issues in project code."

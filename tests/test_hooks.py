@@ -169,6 +169,24 @@ def test_pre_commit_preserves_pathspec_temporary_index(
         env=git_test_env(),
         check=True,
     )
+    if hook_dir == "global-hooks":
+        subprocess.run(
+            [
+                "just",
+                "--justfile",
+                str(ROOT / "justfile"),
+                "--set",
+                "repo",
+                str(hook_source_repo),
+                "install-global-hooks",
+            ],
+            cwd=downstream,
+            env=git_test_env(
+                GIT_GLOBAL_HOOKS_DIR=str(hook_source_repo / hook_dir),
+                GIT_CONFIG_GLOBAL=str(tmp_path / "isolated.gitconfig"),
+            ),
+            check=True,
+        )
     subprocess.run(
         ["git", "config", "core.hooksPath", str(hook_source_repo / hook_dir)],
         cwd=downstream,

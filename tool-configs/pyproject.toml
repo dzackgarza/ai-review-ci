@@ -32,6 +32,7 @@ python-dotenv = "dotenv"
 python-frontmatter = "frontmatter"
 python-slugify = "slugify"
 pyguitarpro = "guitarpro"
+pytest = ["pytest", "_pytest"]
 pyyaml = "yaml"
 PyYAML = "yaml"
 pyzmq = "zmq"
