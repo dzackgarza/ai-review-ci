@@ -435,12 +435,10 @@ _vulture: _sage-qc-files
 _sage-pytest:
 	#!/usr/bin/env bash
 	set -euo pipefail
-	source "{{artifacts}}/scripts/heavy-gate-lock.sh"
 	echo "============================="
 	echo "=== Running: pytest on Sage test files ==="
 	echo "# Collects .sage tests in place as Sage scripts (qc_sage_session), so the"
 	echo "# project's conftests and pytest configuration apply."
-	sage_python="$(just --justfile {{justfile()}} -d . _sage-python)"
 
 	# Collect only files owned by this repository; the shared discovery boundary
 	# excludes gitlinks and independently initialized nested repositories.
@@ -461,6 +459,32 @@ _sage-pytest:
 		"{{artifacts}}/scripts/emit-test-writing-directive.sh"
 		exit 1
 	fi
+
+	# Both kinds are collected where they live, from the project root.
+	test_paths=()
+	for test_file in "${sage_test_files[@]:-}" "${py_test_files[@]:-}"; do
+		[ -n "$test_file" ] && test_paths+=("$test_file")
+	done
+	just --justfile {{justfile()}} -d . _sage-pytest-run "${test_paths[@]}"
+
+# public: run selected Sage tests (paths, node ids, -k) exactly as the PUSH gate does, recording timings
+[positional-arguments]
+sage-pytest-focus +pytest_args:
+	@just --justfile {{justfile()}} -d . _sage-pytest-run "$@"
+
+# public: per-test durations across recorded Sage pytest runs by commit, optionally filtered by node-id substrings
+[positional-arguments]
+sage-pytest-history *substrings:
+	@uv run {{artifacts}}/scripts/pytest_history.py .ai-review-ci/sage/pytest-history "$@"
+
+# Runs pytest under the Sage interpreter and appends a per-test timing record to
+# .ai-review-ci/sage/pytest-history/ (qc_test_history).
+[positional-arguments]
+_sage-pytest-run +pytest_args:
+	#!/usr/bin/env bash
+	set -euo pipefail
+	source "{{artifacts}}/scripts/heavy-gate-lock.sh"
+	sage_python="$(just --justfile {{justfile()}} -d . _sage-python)"
 	# Sage tests can only run under the Sage interpreter: sage.* is not
 	# pip-installable into a uvx CPython environment. The project must be
 	# importable there (PYTHONPATH via envrc, or installed into Sage's python).
@@ -470,12 +494,9 @@ _sage-pytest:
 		"{{artifacts}}/scripts/emit-triage-directive.sh"
 		exit 1
 	fi
-
-	# Both kinds are collected where they live, from the project root.
-	pytest_args=(-p qc_sage_session)
-	for test_file in "${sage_test_files[@]:-}" "${py_test_files[@]:-}"; do
-		[ -n "$test_file" ] && pytest_args+=("$test_file")
-	done
+	mkdir -p .ai-review-ci/sage/pytest-history
+	printf '*\n' >.ai-review-ci/.gitignore
+	pytest_args=(-p qc_sage_session -p qc_test_history --qc-history-dir .ai-review-ci/sage/pytest-history --durations=20 "$@")
 	export PYTHONPATH="{{artifacts}}/pytest_plugins${PYTHONPATH:+:$PYTHONPATH}"
 
 	# The Sage virtual environment's Python has `sage` importable, but it is not
