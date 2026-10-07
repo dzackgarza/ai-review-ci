@@ -7,7 +7,8 @@ A test may be red by design only as ``@pytest.mark.xfail(reason="... #N", strict
 (or the same mark on a ``pytest.param``), where ``#N`` is an issue of this repository's own
 GitHub tracker that is open. The marker therefore clears itself: a case that starts passing
 fails the run (strict XPASS), and once issue N closes every marker citing it fails
-collection. ``skip`` and ``skipif`` are never sanctioned.
+collection. ``skip`` and ``skipif`` are never sanctioned. The failure report of an xfail
+case is its exception's one-line message (see ``_one_line_failure``).
 
 Issue state comes from the public GitHub REST API without a token, as for the Semgrep
 exceptions; an unreadable state fails the run.
@@ -42,6 +43,17 @@ def _issue_open(repository: str, number: int) -> bool:
         raise pytest.UsageError(f"qc_xfail_issues: cannot read the state of {repository}#{number}: {error}") from error
 
 
+def _one_line_failure(excinfo) -> str:
+    """The failure of an xfail case as one line.
+
+    Any exception an xfail case raises is its expected failure, and pytest never displays
+    that report. Building the default traceback costs about 0.1 s per case in a Sage session
+    (``inspect.getmodule`` scans every loaded module, then the source is parsed), which made a
+    suite of fail-fast cases take hours. Other failures keep their full tracebacks.
+    """
+    return f"{excinfo.typename}: {excinfo.value}"
+
+
 def pytest_collection_modifyitems(session, config, items) -> None:
     violations: list[str] = []
     cited: dict[int, list[str]] = {}
@@ -49,6 +61,8 @@ def pytest_collection_modifyitems(session, config, items) -> None:
         for name in ("skip", "skipif"):
             if item.get_closest_marker(name) is not None:
                 violations.append(f"{item.nodeid}: {name} is never sanctioned (POLICY.NO_SKIP_MASK)")
+        if item.get_closest_marker("xfail") is not None:
+            item.repr_failure = _one_line_failure
         for mark in item.iter_markers("xfail"):
             reason = mark.kwargs.get("reason", mark.args[1] if len(mark.args) > 1 else "")
             numbers = ISSUE.findall(reason)

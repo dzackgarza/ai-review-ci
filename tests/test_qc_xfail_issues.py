@@ -83,3 +83,16 @@ def test_skip_is_never_sanctioned(project: pathlib.Path) -> None:
 
     assert result.returncode != 0
     assert "skip is never sanctioned" in result.stderr
+
+
+def test_xfail_cases_report_one_line_and_ordinary_failures_keep_their_tracebacks(project: pathlib.Path) -> None:
+    body = (
+        '@pytest.mark.xfail(reason="owned by #188", strict=True)\ndef test_red():\n    raise ValueError("capability unfinished")\n\n'
+        "def test_regression():\n    left = 1\n    assert left == 2\n"
+    )
+
+    result = _run(project, body)
+
+    assert result.returncode != 0
+    assert "1 failed, 1 xfailed" in result.stdout
+    assert "assert left == 2" in result.stdout
