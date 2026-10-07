@@ -3,10 +3,6 @@
 `ai-review-ci` owns deterministic quality control for the repositories it governs.
 It supplies QC recipes, profile checks, Git hooks, branch protection, and repository diagnostics.
 
-[`automated-reviews`](https://github.com/dzackgarza/automated-reviews) owns all LLM slop-review behavior.
-It publishes the slop-review workflows, prompts, schemas, runner, delivery code, policy material, and model metadata.
-This package consumes those published workflows during installation.
-
 Read [CONTRIBUTING.md](./CONTRIBUTING.md) before you change a rule or open a pull request.
 
 ## Install into a repository
@@ -27,12 +23,10 @@ The installer writes these repository-owned files:
 
 - a root `justfile` with the QC contract;
 - `.github/workflows/review-pr.yml`;
-- `.github/workflows/review-slop.yml`;
 - `.github/pull_request_template.md`;
 - `.aislop/config.yml`.
 
-The review jobs call reusable workflows from `automated-reviews`.
-The deterministic jobs call reusable workflows from `ai-review-ci`.
+The PR QC jobs call reusable workflows from `ai-review-ci`.
 
 Existing repository-owned files are not overwritten.
 Use `--skip-scaffold` when a repository already has a root `justfile`.
@@ -113,8 +107,6 @@ ai-review-ci tripwire-index
 ai-review-ci check-tripwire-index
 ```
 
-Run slop reviews, replay frozen slop-review environments, or change the active model with `automated-reviews`.
-
 ## Repository layout
 
 ```text
@@ -128,7 +120,7 @@ tool-configs/                   central deterministic tool configuration
 tool-artifacts/                 scripts and rules used by QC recipes
 ```
 
-Review resources and reusable LLM workflows live in
+The policy index lives in
 [`automated-reviews`](https://github.com/dzackgarza/automated-reviews).
 
 ## Development

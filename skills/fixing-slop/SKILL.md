@@ -1,10 +1,6 @@
 ---
 name: fixing-slop
-description: "Use when fixing slop identified by [[anti-slop/SKILL|anti-slop]] or\
-  \ [[reviewing-llm-code/SKILL|reviewing-llm-code]] \u2014 converting fraudulent artifacts\
-  \ back into correct implementations without laundering. Also use when an agent proposes\
-  \ \"renaming to be honest,\" \"deleting the dead code,\" or any label-only remediation\
-  \ of a slop finding."
+description: "Use when remediating a finding from anti-slop or reviewing-llm-code, including any proposed rename-only or delete-only fix."
 ---
 
 # Fixing Slop
@@ -202,7 +198,7 @@ Do not skip to step 3 by handing an agent the old artifact and asking it to "rew
 That is brownfield work wearing a greenfield label, and it reinfects.
 
 This protocol is the correct disposition for the **mold-on-bread** case in the Blast Radius Rule: when the visible artifact is a sample of a contaminated production process, you throw out the loaf and rebake from sound ingredients — you do not scrape the mold off.
-The delegation mechanics (two fresh subagents, no shared contaminated context) live in [[subagent-delegation/SKILL|subagent-delegation]].
+Dispatch two fresh subagents with no shared contaminated context.
 
 ## Cross-References
 

@@ -15,9 +15,8 @@ from cyclopts import Parameter
 from pydantic import BaseModel, ConfigDict, Field, TypeAdapter, ValidationError
 
 from ai_review_ci.gates import PROJECT_PROFILES, SUPPORTED_PROFILES, ProjectProfile, delegates_to_global_qc, required_check_contexts
-from automated_reviews.publication import WORKFLOW_NAMES
+from ai_review_ci.install import PR_WORKFLOW
 from ai_review_ci.labels import Label, RemoteLabel, compute_label_actions, load_taxonomy
-from ai_review_ci.review_guidelines import classify_review_guidelines, load_canonical_review_guidelines
 
 SCHEMA_VERSION: Literal[1] = 1
 MISSING_JUSTFILE_NAME = ".ai-review-ci-missing-justfile"
@@ -45,7 +44,6 @@ FindingSurface = Literal[
     "justfile_conformance",
     "branch_protection",
     "label_alignment",
-    "review_guidelines",
 ]
 BranchProtectionState = Literal["not_applicable", "compliant", "missing", "missing_contexts", "unverifiable"]
 LabelAlignmentState = Literal["not_applicable", "compliant", "misaligned", "unverifiable"]
@@ -446,39 +444,35 @@ def _profile_proofs(target: Path) -> dict[str, ProfileProofObservation]:
 
 
 def _workflow_refs(target: Path, contract: JustfileContractDeclaration, profile: ProfileName) -> dict[str, WorkflowRefObservation]:
-    workflows: dict[str, WorkflowRefObservation] = {}
     required_ref = contract.installed_ref if isinstance(contract, QcJustfileContract) else ""
-    for name in WORKFLOW_NAMES:
-        path = target / ".github" / "workflows" / name
-        refs: set[str] = set()
-        gates: set[str] = set()
-        if path.is_file():
-            data = _yaml_mapping(path)
-            jobs = TypeAdapter(dict[str, dict[str, Any]]).validate_python(data["jobs"] if "jobs" in data else {})
-            for job_name, job in jobs.items():
-                uses = str(job["uses"]) if "uses" in job else ""
-                if (
-                    "dzackgarza/ai-review-ci/.github/workflows/" in uses
-                    or "dzackgarza/automated-reviews/.github/workflows/" in uses
-                ) and "@" in uses:
-                    refs.add(uses.rsplit("@", 1)[1])
-                if job_name == "qc-ci" and "dzackgarza/ai-review-ci/.github/workflows/_qc.yml" in uses:
-                    with_block = TypeAdapter(dict[str, Any]).validate_python(job["with"]) if "with" in job else {}
-                    if with_block.get("tier") == "test-ci":
-                        gates.add(job_name)
-                if "dzackgarza/ai-review-ci/.github/workflows/_gates.yml" in uses:
-                    with_block = TypeAdapter(dict[str, Any]).validate_python(job["with"]) if "with" in job else {}
-                    gate = with_block["gate"] if "gate" in with_block else ""
-                    if isinstance(gate, str):
-                        gates.add(gate)
-        workflows[name] = WorkflowRefObservation(
+    path = target / ".github" / "workflows" / PR_WORKFLOW
+    refs: set[str] = set()
+    gates: set[str] = set()
+    if path.is_file():
+        data = _yaml_mapping(path)
+        jobs = TypeAdapter(dict[str, dict[str, Any]]).validate_python(data["jobs"] if "jobs" in data else {})
+        for job_name, job in jobs.items():
+            uses = str(job["uses"]) if "uses" in job else ""
+            if "dzackgarza/ai-review-ci/.github/workflows/" in uses and "@" in uses:
+                refs.add(uses.rsplit("@", 1)[1])
+            if job_name == "qc-ci" and "dzackgarza/ai-review-ci/.github/workflows/_qc.yml" in uses:
+                with_block = TypeAdapter(dict[str, Any]).validate_python(job["with"]) if "with" in job else {}
+                if with_block.get("tier") == "test-ci":
+                    gates.add(job_name)
+            if "dzackgarza/ai-review-ci/.github/workflows/_gates.yml" in uses:
+                with_block = TypeAdapter(dict[str, Any]).validate_python(job["with"]) if "with" in job else {}
+                gate = with_block["gate"] if "gate" in with_block else ""
+                if isinstance(gate, str):
+                    gates.add(gate)
+    return {
+        PR_WORKFLOW: WorkflowRefObservation(
             path=str(path),
             required_ref=required_ref,
             observed_ref=next(iter(refs)) if len(refs) == 1 else "",
-            required_gates=_required_workflow_gates(name, profile),
+            required_gates=_required_workflow_gates(profile),
             observed_gates=tuple(sorted(gates)),
         )
-    return workflows
+    }
 
 
 def _yaml_mapping(path: Path) -> Mapping[object, object]:
@@ -488,16 +482,13 @@ def _yaml_mapping(path: Path) -> Mapping[object, object]:
     return data
 
 
-def _required_workflow_gates(name: str, profile: ProfileName) -> tuple[str, ...]:
-    if name != "review-pr.yml":
-        return ()
+def _required_workflow_gates(profile: ProfileName) -> tuple[str, ...]:
     gates = (
         "qc-ci",
         "deterministic-diff",
         "delegation-conformance",
         "qc-doctor",
         "pr-description-checklist",
-        "thread-resolution",
     )
     if PROJECT_PROFILES[profile].requires_app_boot:
         return gates[:3] + ("app-boot",) + gates[3:]
@@ -703,7 +694,6 @@ def _findings(
     profile_proof: dict[str, ProfileProofObservation],
 ) -> list[DoctorFinding]:
     findings: list[DoctorFinding] = []
-    findings.extend(_review_guidelines_findings(target_root))
     if not isinstance(contract, QcJustfileContract):
         findings.append(
             DoctorFinding(
@@ -755,7 +745,7 @@ def _findings(
                     surface="workflow_ref",
                     evidence=f"{workflow.path} uses {workflow.observed_ref}; justfile contract requires {workflow.required_ref}",
                     remediation_commands=(
-                        f"edit {workflow.path} to use automated-reviews and ai-review-ci reusable workflows at @{workflow.required_ref}",
+                        f"edit {workflow.path} to use ai-review-ci reusable workflows at @{workflow.required_ref}",
                     ),
                 )
             )
@@ -792,32 +782,6 @@ def _findings(
         )
     findings.extend(_label_alignment_findings(label_alignment))
     return findings
-
-
-def _review_guidelines_findings(target_root: Path) -> list[DoctorFinding]:
-    """Flag a head repo whose local AGENTS.md carries stale/missing/duplicated review guidance.
-
-    Reviewers read the target repo's local AGENTS.md ``# Review Guidelines`` section; a PR
-    that goes out for review without the current canonical copy is a false-green (#215).
-
-    A repo with no AGENTS.md carries zero review guidance for the agents that read it, so it
-    is the strongest false-green, not an out-of-scope case: the missing file is itself the
-    ``missing`` state and MUST fail the gate. ``classify_review_guidelines(None, ...)`` owns
-    that verdict, so the doctor reports it exactly like a stale or duplicated section.
-    """
-    agents_path = target_root / "AGENTS.md"
-    agents_md = agents_path.read_text(encoding="utf-8") if agents_path.is_file() else None
-    status = classify_review_guidelines(agents_md, load_canonical_review_guidelines())
-    if status.state == "current":
-        return []
-    return [
-        DoctorFinding(
-            severity="error",
-            surface="review_guidelines",
-            evidence=f"{agents_path}: {status.state}: {status.detail}",
-            remediation_commands=(status.remediation,),
-        )
-    ]
 
 
 def _justfile_conformance_findings(target: Path, profile: ProfileName) -> list[DoctorFinding]:
@@ -949,7 +913,7 @@ def _invalidation_inputs(target: Path, declaration_hash: str) -> tuple[str, ...]
     for path in [
         target / "justfile",
         target / "Justfile",
-        *(target / ".github" / "workflows" / name for name in WORKFLOW_NAMES),
+        target / ".github" / "workflows" / PR_WORKFLOW,
     ]:
         if path.is_file():
             inputs.append(f"{path.relative_to(target)}:{_sha256(path)}")

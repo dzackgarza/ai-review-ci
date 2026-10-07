@@ -23,13 +23,6 @@
   "declared_profile": "python",
   "effective_profile": "python",
   "workflow_refs": {
-    "review-slop.yml": {
-      "path": "/example/python-target/.github/workflows/review-slop.yml",
-      "required_ref": "main",
-      "observed_ref": "main",
-      "required_gates": [],
-      "observed_gates": []
-    },
     "review-pr.yml": {
       "path": "/example/python-target/.github/workflows/review-pr.yml",
       "required_ref": "main",
@@ -39,16 +32,14 @@
         "deterministic-diff",
         "delegation-conformance",
         "qc-doctor",
-        "pr-description-checklist",
-        "thread-resolution"
+        "pr-description-checklist"
       ],
       "observed_gates": [
         "qc-ci",
         "delegation-conformance",
         "deterministic-diff",
         "qc-doctor",
-        "pr-description-checklist",
-        "thread-resolution"
+        "pr-description-checklist"
       ]
     }
   },
@@ -93,9 +84,7 @@
       "deterministic-diff / deterministic-diff",
       "delegation-conformance / delegation-conformance",
       "qc-doctor / qc-doctor",
-      "pr-description-checklist / pr-description-checklist",
-      "slop / review",
-      "thread-resolution / thread-resolution"
+      "pr-description-checklist / pr-description-checklist"
     ],
     "observed_contexts": [
       "qc-ci / qc"
@@ -162,7 +151,6 @@
     "target_head:0000000000000000000000000000000000000000",
     "justfile_contract_sha256:098ccd89f37e1ff7474701c27925a02c74e094d3ce1a9b392704d94415ae6ed4",
     "justfile:057c325c857b467d56dcd952fd026801a7aa94b0ba7bf95b63eb5189f97d8f6f",
-    ".github/workflows/review-slop.yml:cf467e20b6e95722a1d1bce9f13284f2dc9bbb638367981b6a105257a1ec194f",
     ".github/workflows/review-pr.yml:510b96871022e2a45efcd8465e598000136c1e1dcebeaca9aa3207cf39038165"
   ],
   "installation_state": "compliant",

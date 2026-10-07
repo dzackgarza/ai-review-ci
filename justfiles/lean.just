@@ -16,15 +16,19 @@
 # `*.conjecture*` files are the sanctioned quarantine for statements exceeding
 # the kernel axiom set (never imported or compiled into the library); the
 # no-sorry scan excludes them like the semgrep axiom rule does.
+#
+# Lean compilation runs in CI only: the commit and push tiers are static scans.
+# `test-ci` builds after fetching Mathlib's prebuilt cache, which Mathlib's
+# `cache` tool keeps machine-wide in ~/.cache/mathlib, keyed by file hash.
 
 # public: scan staged Lean source without compiling the project
 test-commit: _lean-staged-check
 
-# public: build the project and run the full Lean gate before push
-test-push: _lean-build lean-qc
+# public: static Lean scans before push; no compilation
+test-push: lean-no-sorry lean-semgrep
 
-# public: run the full Lean push gate in CI
-test-ci: test-push
+# public: build the project and run the full Lean gate in CI
+test-ci: _lean-build lean-qc
 
 [private]
 _lean-staged-check:
@@ -36,14 +40,7 @@ _lean-staged-check:
 		exit 0
 	}
 	for file in "${lean_files[@]}"; do
-		rg_status=0
-		matches="$(git show ":$file" | rg -n '\bsorry\b')" || rg_status=$?
-		if [ "$rg_status" -gt 1 ]; then
-			echo "ERROR: rg exited $rg_status; the sorry scan did not run." >&2
-			exit "$rg_status"
-		fi
-		[ -z "$matches" ] || {
-			echo "$file:$matches"
+		git show ":$file" | python3 "{{artifacts}}/scripts/lean_sorry_scan.py" --stdin "$file" || {
 			echo "ERROR: staged Lean source contains sorry declarations." >&2
 			exit 1
 		}
@@ -52,6 +49,12 @@ _lean-staged-check:
 
 [private]
 _lean-build:
+	#!/usr/bin/env bash
+	set -euo pipefail
+	source "{{artifacts}}/scripts/heavy-gate-lock.sh"
+	if jq -e '.packages[] | select(.name == "mathlib")' lake-manifest.json >/dev/null; then
+		lake exe cache get
+	fi
 	lake build
 
 infra := justfile_directory() / ".."
@@ -67,16 +70,19 @@ lean-no-sorry:
 	# manipulates the `sorry` syntax; it carries no unproved proof. Consumers get it
 	# under `.lake` (already unscanned); this glob also covers ai-review-ci's own tree
 	# and any in-tree vendoring.
+	# Comments and string literals are not proof terms: lean_sorry_scan.py skips them.
 	rg_status=0
-	matches="$(rg -n --glob '*.lean' --glob '!*.conjecture*' --glob '!**/AiReviewCi/Answer.lean' '\bsorry\b' .)" || rg_status=$?
+	files="$(rg --files --glob '*.lean' --glob '!*.conjecture*' --glob '!**/AiReviewCi/Answer.lean' .)" || rg_status=$?
 	if [ "$rg_status" -gt 1 ]; then
 		echo "ERROR: rg exited $rg_status; the sorry scan did not run." >&2
 		exit "$rg_status"
 	fi
-	if [ -n "$matches" ]; then
-		echo "$matches"
-		echo "ERROR: Lean source contains sorry declarations." >&2
-		exit 1
+	if [ -n "$files" ]; then
+		mapfile -t lean_files <<<"$files"
+		python3 "{{artifacts}}/scripts/lean_sorry_scan.py" "${lean_files[@]}" || {
+			echo "ERROR: Lean source contains sorry declarations." >&2
+			exit 1
+		}
 	fi
 	echo "No sorry declarations in tracked Lean sources."
 

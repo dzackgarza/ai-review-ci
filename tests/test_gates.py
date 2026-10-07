@@ -1,6 +1,5 @@
 import pathlib
 import re
-import subprocess
 
 import pytest
 from pydantic import ValidationError
@@ -86,7 +85,7 @@ def test_delegation_accepts_central_bun_python_composite_profile(tmp_path: pathl
     gates.check_delegation(project, "bun-python")
 
 
-def test_delegation_accepts_shared_lean_audit_at_push_and_ci_tiers(tmp_path: pathlib.Path) -> None:
+def test_delegation_accepts_lean_scans_at_push_and_lean_audit_at_ci(tmp_path: pathlib.Path) -> None:
     project = tmp_path / "project"
     project.mkdir()
     (project / "package.json").write_text('{"scripts": {}}\n')
@@ -96,13 +95,40 @@ def test_delegation_accepts_shared_lean_audit_at_push_and_ci_tiers(tmp_path: pat
         "    @just -f ~/ai-review-ci/justfiles/bun.just -d . test-commit\n\n"
         "test-push:\n"
         "    @just -f ~/ai-review-ci/justfiles/bun.just -d . test-push\n"
-        "    @just -f ~/ai-review-ci/justfiles/lean.just -d . lean-axiom-audit\n\n"
+        "    @just -f ~/ai-review-ci/justfiles/lean.just -d . test-push\n\n"
         "test-ci:\n"
         "    @just -f ~/ai-review-ci/justfiles/bun.just -d . test-ci\n"
         "    @just -f ~/ai-review-ci/justfiles/lean.just -d . lean-axiom-audit\n"
     )
 
     gates.check_delegation(project, "bun")
+
+
+@pytest.mark.parametrize(
+    "push_line",
+    [
+        "    @just -f ~/ai-review-ci/justfiles/lean.just -d . lean-axiom-audit\n",
+        "    @just -f ~/ai-review-ci/justfiles/lean.just -d . test-ci\n",
+        "    lake build\n",
+    ],
+)
+def test_delegation_rejects_lean_compilation_at_push_tier(tmp_path: pathlib.Path, push_line: str) -> None:
+    project = tmp_path / "project"
+    project.mkdir()
+    (project / "package.json").write_text('{"scripts": {}}\n')
+    (project / "bun.lock").write_text("")
+    (project / "justfile").write_text(
+        "test-commit:\n"
+        "    @just -f ~/ai-review-ci/justfiles/bun.just -d . test-commit\n\n"
+        "test-push:\n"
+        "    @just -f ~/ai-review-ci/justfiles/bun.just -d . test-push\n"
+        f"{push_line}\n"
+        "test-ci:\n"
+        "    @just -f ~/ai-review-ci/justfiles/bun.just -d . test-ci\n"
+    )
+
+    with pytest.raises(SystemExit):
+        gates.check_delegation(project, "bun")
 
 
 def test_delegation_rejects_shared_lean_audit_at_commit_tier(tmp_path: pathlib.Path) -> None:
@@ -259,8 +285,6 @@ def test_branch_protection_payload_uses_profile_check_contexts() -> None:
         {"context": "delegation-conformance / delegation-conformance"},
         {"context": "qc-doctor / qc-doctor"},
         {"context": "pr-description-checklist / pr-description-checklist"},
-        {"context": "slop / review"},
-        {"context": "thread-resolution / thread-resolution"},
     ]
 
 
@@ -268,278 +292,6 @@ def test_branch_protection_payload_requires_app_boot_for_bun_playwright() -> Non
     checks = gates.branch_protection_payload("bun-playwright")["required_status_checks"]["checks"]
 
     assert {"context": "app-boot / app-boot"} in checks
-
-
-def test_thread_resolution_evidence_requires_a_thread_local_disposition() -> None:
-    def node(reply: str) -> dict[str, object]:
-        return {
-            "comments": {
-                "nodes": [
-                    {"body": "<!-- ai-review-fingerprint: " + "a" * 64 + " -->"},
-                    {"body": reply},
-                ]
-            }
-        }
-
-    accepted = """\
-Disposition: Accepted as written
-Policy basis: POLICY.NO_ERROR_DISCARD
-Pre-filter: Gate 1 correctness defect -> current-PR remediation
-Claim: Read failures are discarded as partial success.
-Remediation: Propagate the failure with path context.
-Code/action taken or explicit non-change: Propagate the read error with path context.
-Proof: The boundary test proves a failed read cannot return partial success.
-Commit: 123456789abc
-Audit anchor: tests/test_reader.py::test_read_failure_is_visible
-Deleted artifact: None
-"""
-    rejected = """\
-Disposition: Rejected
-Factual/contract basis: The requested fixture is present in the reviewed tree.
-Pre-filter: Gate 1 factual premise false -> no change
-Claim: The review says the fixture is absent.
-Code/action taken or explicit non-change: No code change.
-Audit anchor: tests/fixtures/extract_link.pdf
-"""
-    duplicate = """\
-Disposition: Duplicate
-Policy basis: POLICY.NO_MOCK_PROOF
-Pre-filter: Same semantic finding -> inherit canonical disposition
-Claim: This repeats the canonical proof concern.
-Canonical thread: https://github.com/owner/repo/pull/7#discussion_r123
-Code/action taken or explicit non-change: No additional code change.
-Audit anchor: https://github.com/owner/repo/pull/7#discussion_r123
-"""
-    outdated = """\
-Disposition: Outdated
-Policy basis: POLICY.NO_ERROR_DISCARD
-Pre-filter: Finding targets replaced code -> superseded
-Claim: The former branch discarded read errors.
-Superseding commit: abcdef123456
-Code/action taken or explicit non-change: No additional code change.
-Audit anchor: abcdef123456
-"""
-
-    assert gates._has_resolution_evidence(node(accepted))
-    assert gates._has_resolution_evidence(node(rejected))
-    assert gates._has_resolution_evidence(node(duplicate))
-    assert gates._has_resolution_evidence(node(outdated))
-    assert not gates._has_resolution_evidence(node(accepted.replace("Commit: 123456789abc", "Commit: 123456789abc trailing junk")))
-    assert not gates._has_resolution_evidence(node(accepted.replace("Pre-filter: Gate 1 correctness defect -> current-PR remediation", "Pre-filter: <gate>")))
-    assert not gates._has_resolution_evidence(node(accepted.replace("Deleted artifact: None\n", "")))
-    deleted = accepted.replace(
-        "Deleted artifact: None",
-        "Deleted artifact: tests/test_legacy.py\n"
-        "Original burden: Prove read failures remain visible.\n"
-        "Burden disposition: solved by tests/test_reader.py::test_read_failure_is_visible\n"
-        "Verification: Focused boundary test passes.",
-    )
-    assert gates._has_resolution_evidence(node(deleted))
-    assert not gates._has_resolution_evidence(node("Resolved by commit 123456789abc."))
-    assert not gates._has_resolution_evidence(node("Disposition-ledger: accepted in PR body."))
-    assert not gates._has_resolution_evidence(
-        node(
-            """\
-Disposition: Accepted as written
-Policy basis: POLICY.NO_ERROR_DISCARD
-Pre-filter: Gate 1 correctness defect -> current-PR remediation
-Claim: Read failures are discarded.
-Remediation: Propagate the read error.
-Code/action taken or explicit non-change: Propagate the read error.
-Proof: Focused boundary test.
-Audit anchor: tests/test_reader.py
-"""
-        )
-    )
-    assert not gates._has_resolution_evidence(
-        {
-            "comments": {
-                "nodes": [
-                    {
-                        "body": accepted,
-                    }
-                ]
-            }
-        }
-    )
-
-
-def test_thread_resolution_gate_blocks_unresolved_non_ai_review_threads(
-    monkeypatch: pytest.MonkeyPatch,
-    capsys: pytest.CaptureFixture[str],
-) -> None:
-    monkeypatch.setattr(
-        gates,
-        "_thread_nodes",
-        lambda repo, pr_number: [
-            {
-                "path": "src/app.py",
-                "isResolved": False,
-                "comments": {"nodes": [{"body": "Human reviewer concern without ai-review fingerprint."}]},
-            }
-        ],
-    )
-
-    with pytest.raises(SystemExit):
-        gates.check_review_threads("owner/repo", 7)
-
-    assert "src/app.py: unresolved review thread" in capsys.readouterr().err
-
-
-def test_thread_resolution_gate_requires_evidence_for_resolved_non_ai_review_threads(
-    monkeypatch: pytest.MonkeyPatch,
-    capsys: pytest.CaptureFixture[str],
-) -> None:
-    monkeypatch.setattr(
-        gates,
-        "_thread_nodes",
-        lambda repo, pr_number: [
-            {
-                "path": "src/app.py",
-                "isResolved": True,
-                "comments": {"nodes": [{"body": "Resolved in the UI without a thread-local disposition."}]},
-            }
-        ],
-    )
-
-    with pytest.raises(SystemExit):
-        gates.check_review_threads("owner/repo", 7)
-
-    assert "src/app.py: resolved review thread lacks a thread-local evidenced disposition" in capsys.readouterr().err
-
-
-def test_thread_resolution_does_not_auto_resolve_stale_ai_review_proof(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    node = {
-        "id": "THREAD_1",
-        "path": "src/app.py",
-        "isResolved": False,
-        "comments": {
-            "nodes": [
-                {
-                    "body": "\n".join(
-                        [
-                            "<!-- ai-review-fingerprint: " + "a" * 64 + " -->",
-                            "**Proof:** `grep -n 'stderr.*pipe' src/pandoc-config.ts`",
-                        ]
-                    )
-                }
-            ]
-        },
-    }
-
-    monkeypatch.setattr(gates, "_thread_nodes", lambda repo, pr_number: [node])
-    monkeypatch.setattr(gates, "_pr_commit_shas", lambda repo, pr_number: set(), raising=False)
-
-    def reject_mutation(*args: object, **kwargs: object) -> gates.JsonDict:
-        raise AssertionError("an unresolved thread must never be auto-resolved")
-
-    monkeypatch.setattr(gates, "_gh_json", reject_mutation)
-
-    with pytest.raises(SystemExit):
-        gates.check_review_threads("owner/repo", 7)
-
-
-def test_thread_resolution_does_not_auto_resolve_reproducing_proof(
-    monkeypatch: pytest.MonkeyPatch,
-    capsys: pytest.CaptureFixture[str],
-) -> None:
-    node = {
-        "id": "THREAD_1",
-        "path": "src/app.py",
-        "isResolved": False,
-        "comments": {
-            "nodes": [
-                {
-                    "body": "\n".join(
-                        [
-                            "<!-- ai-review-fingerprint: " + "a" * 64 + " -->",
-                            "**Proof:** `rg 'still-present' src/app.ts`",
-                        ]
-                    )
-                }
-            ]
-        },
-    }
-
-    monkeypatch.setattr(gates, "_thread_nodes", lambda repo, pr_number: [node])
-    monkeypatch.setattr(
-        gates.subprocess,
-        "run",
-        lambda args, **kwargs: subprocess.CompletedProcess(args, 0, "still-present", ""),
-    )
-
-    with pytest.raises(SystemExit):
-        gates.check_review_threads("owner/repo", 7)
-
-    assert "src/app.py: unresolved review thread" in capsys.readouterr().err
-
-
-def test_thread_resolution_gate_rejects_legacy_root_only_evidence(
-    monkeypatch: pytest.MonkeyPatch,
-    capsys: pytest.CaptureFixture[str],
-) -> None:
-    monkeypatch.setattr(
-        gates,
-        "_thread_nodes",
-        lambda repo, pr_number: [
-            {
-                "path": "src/app.py",
-                "isResolved": True,
-                "comments": {"nodes": [{"body": "Resolved by commit 123456789abc."}]},
-            }
-        ],
-    )
-    monkeypatch.setattr(gates, "_pr_commit_shas", lambda repo, pr_number: set(), raising=False)
-
-    with pytest.raises(SystemExit):
-        gates.check_review_threads("owner/repo", 7)
-
-    assert "resolved review thread lacks a thread-local evidenced disposition" in capsys.readouterr().err
-
-
-def test_thread_resolution_gate_rejects_fabricated_commit_and_uncheckable_proof(
-    monkeypatch: pytest.MonkeyPatch,
-    tmp_path: pathlib.Path,
-    capsys: pytest.CaptureFixture[str],
-) -> None:
-    accepted = """\
-Disposition: Accepted as written
-Policy basis: POLICY.NO_ADMIN_COMPLETION
-Pre-filter: Gate 1 proof defect -> current-PR remediation
-Claim: The resolution gate accepts syntax instead of evidence.
-Remediation: Verify the commit and proof witness.
-Code/action taken or explicit non-change: Added semantic evidence validation.
-Proof: Focused gate test rejects fabricated evidence.
-Commit: 123456789abc
-Audit anchor: tests/test_missing.py::test_evidence
-Deleted artifact: None
-"""
-    monkeypatch.setattr(
-        gates,
-        "_thread_nodes",
-        lambda repo, pr_number: [
-            {
-                "path": "src/app.py",
-                "isResolved": True,
-                "comments": {"nodes": [{"body": "finding"}, {"body": accepted}]},
-            }
-        ],
-    )
-    monkeypatch.setattr(
-        gates,
-        "_pr_commit_shas",
-        lambda repo, pr_number: {"f" * 40},
-        raising=False,
-    )
-
-    with pytest.raises(SystemExit):
-        gates.check_review_threads("owner/repo", 7, repo_root=tmp_path)
-
-    error = capsys.readouterr().err
-    assert "cited commit 123456789abc is not on this PR" in error
-    assert "proof anchor tests/test_missing.py::test_evidence does not exist" in error
 
 
 def test_delegation_accepts_docs_and_configs_profile(tmp_path: pathlib.Path) -> None:

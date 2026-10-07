@@ -366,6 +366,9 @@ _semgrep:
 			--exclude=codeql-db \
 			--scan-unknown-extensions \
 			"${changed_files[@]}" > "$head_json"
+		exceptions_rc=0
+		uv run {{artifacts}}/scripts/semgrep_exceptions.py {{configs}}/semgrep-exceptions.toml "$head_json" || exceptions_rc=$?
+		[ "$exceptions_rc" -le 1 ] || exit "$exceptions_rc"
 		git worktree add --detach "$base_tree" "$DIFF_COVER_BASE" >/dev/null
 		base_files=()
 		for file in "${changed_files[@]}"; do
@@ -388,12 +391,15 @@ _semgrep:
 		uv run {{artifacts}}/scripts/semgrep_diff_gate.py --base-json "$base_json" --head-json "$head_json"
 		exit 0
 	fi
-	if uvx --from semgrep semgrep scan \
+	findings_json="$(mktemp)"
+	trap 'rm -f "$findings_json"; restore_semgrepignore' EXIT
+	uvx --from semgrep semgrep scan \
 		--config={{configs}}/semgrep.yml \
 		--config=p/ci \
 		--exclude=codeql-db \
 		--scan-unknown-extensions \
-		--error; then
+		--json-output="$findings_json"
+	if uv run {{artifacts}}/scripts/semgrep_exceptions.py {{configs}}/semgrep-exceptions.toml "$findings_json"; then
 		:
 	else
 		ec=$?

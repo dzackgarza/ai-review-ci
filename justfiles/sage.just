@@ -255,7 +255,7 @@ _sage-python:
 	sage_bin="$(just --justfile {{justfile()}} -d . _sage-bin)"
 	# Ask the launcher which interpreter it runs. SAGE_BIN may be a source-tree launcher that
 	# sets up GAP and friends before exec'ing its venv, so its own directory holds no python.
-	sage_python="$("$sage_bin" -python -c 'import sys; print(sys.executable)')"
+	sage_python="$("$sage_bin" -c 'import sys; print(sys.executable)')"
 	if [ ! -x "$sage_python" ]; then
 		echo "ERROR: Sage virtual-environment Python is not executable: $sage_python" >&2
 		"{{artifacts}}/scripts/emit-triage-directive.sh" >&2
@@ -435,12 +435,10 @@ _vulture: _sage-qc-files
 _sage-pytest:
 	#!/usr/bin/env bash
 	set -euo pipefail
-	source "{{artifacts}}/scripts/heavy-gate-lock.sh"
 	echo "============================="
 	echo "=== Running: pytest on Sage test files ==="
 	echo "# Collects .sage tests in place as Sage scripts (qc_sage_session), so the"
 	echo "# project's conftests and pytest configuration apply."
-	sage_python="$(just --justfile {{justfile()}} -d . _sage-python)"
 
 	# Collect only files owned by this repository; the shared discovery boundary
 	# excludes gitlinks and independently initialized nested repositories.
@@ -461,6 +459,35 @@ _sage-pytest:
 		"{{artifacts}}/scripts/emit-test-writing-directive.sh"
 		exit 1
 	fi
+
+	# Both kinds are collected where they live, from the project root.
+	test_paths=()
+	for test_file in "${sage_test_files[@]:-}" "${py_test_files[@]:-}"; do
+		[ -n "$test_file" ] && test_paths+=("$test_file")
+	done
+	just --justfile {{justfile()}} -d . _sage-pytest-run "${test_paths[@]}"
+
+# public: run selected Sage tests (paths, node ids, -k) exactly as the PUSH gate does, recording timings
+[positional-arguments]
+sage-pytest-focus +pytest_args:
+	@just --justfile {{justfile()}} -d . _sage-pytest-run "$@"
+
+# public: per-test durations across recorded Sage pytest runs by commit, optionally filtered by node-id substrings
+[positional-arguments]
+sage-pytest-history *substrings:
+	@uv run {{artifacts}}/scripts/pytest_history.py .ai-review-ci/sage/pytest-history "$@"
+
+# Runs pytest under the Sage interpreter and appends a per-test timing record to
+# .ai-review-ci/sage/pytest-history/ (qc_test_history).
+[positional-arguments]
+_sage-pytest-run +pytest_args:
+	#!/usr/bin/env bash
+	set -euo pipefail
+	source "{{artifacts}}/scripts/heavy-gate-lock.sh"
+	sage_python="$(just --justfile {{justfile()}} -d . _sage-python)"
+	# `import sage.all` runs the venv's own gap binary; the launcher puts the venv's
+	# bin/ on PATH before exec'ing this interpreter, so do the same here.
+	export PATH="$(dirname "$sage_python"):$PATH"
 	# Sage tests can only run under the Sage interpreter: sage.* is not
 	# pip-installable into a uvx CPython environment. The project must be
 	# importable there (PYTHONPATH via envrc, or installed into Sage's python).
@@ -470,12 +497,9 @@ _sage-pytest:
 		"{{artifacts}}/scripts/emit-triage-directive.sh"
 		exit 1
 	fi
-
-	# Both kinds are collected where they live, from the project root.
-	pytest_args=(-p qc_sage_session)
-	for test_file in "${sage_test_files[@]:-}" "${py_test_files[@]:-}"; do
-		[ -n "$test_file" ] && pytest_args+=("$test_file")
-	done
+	mkdir -p .ai-review-ci/sage/pytest-history
+	printf '*\n' >.ai-review-ci/.gitignore
+	pytest_args=(-p qc_sage_session -p qc_test_history --qc-history-dir .ai-review-ci/sage/pytest-history --durations=20 "$@")
 	export PYTHONPATH="{{artifacts}}/pytest_plugins${PYTHONPATH:+:$PYTHONPATH}"
 
 	# The Sage virtual environment's Python has `sage` importable, but it is not
@@ -504,6 +528,8 @@ _sage-pytest-coverage:
 	echo "# Same in-place collection as _sage-pytest, run under coverage.py inside Sage's"
 	echo "# Python (uvx CPython cannot import sage.*); emits coverage.xml for diff-cover."
 	sage_python="$(just --justfile {{justfile()}} -d . _sage-python)"
+	# The venv's bin/ goes on PATH for the same reason as in _sage-pytest-run.
+	export PATH="$(dirname "$sage_python"):$PATH"
 	sage_test_files_output="$(just --justfile {{justfile()}} -d . _sage-test-files)"
 	sage_test_files=()
 	if [ -n "$sage_test_files_output" ]; then
@@ -602,7 +628,8 @@ _sage-mypy: _sage-qc-files
 	set -euo pipefail
 	echo "============================="
 	echo "=== Running: mypy static type analysis (Sage-aware) ==="
-	echo "# Type checks Python and preparsed Sage files"
+	echo "# Type checks Python and preparsed Sage files; test files are never targets"
+	source "{{artifacts}}/scripts/test-file-paths.sh"
 	sage_python="$(just --justfile {{justfile()}} -d . _sage-python)"
 	export MYPYPATH="{{infra}}/typings${MYPYPATH:+:$MYPYPATH}"
 	python_files_output="$(just -f {{justfiles}}/python.just -d . _python-qc-files)"
@@ -617,7 +644,9 @@ _sage-mypy: _sage-qc-files
 	fi
 	mypy_targets=()
 	for pf in "${python_files[@]}"; do
-		[ -n "$pf" ] && mypy_targets+=("$pf")
+		[ -n "$pf" ] || continue
+		is_test_file "$pf" && continue
+		mypy_targets+=("$pf")
 	done
 	if [ "${#sage_files[@]}" -gt 0 ]; then
 		sage_preparse="$(just --justfile {{justfile()}} -d . _sage-preparse-bin)"
@@ -632,20 +661,42 @@ _sage-mypy: _sage-qc-files
 		# to X.py -- the stem X.sage can never satisfy an import of pkg.X.
 		git ls-files -z -- '*.py' '*.pyi' | xargs -0 --no-run-if-empty cp --parents -t "$sage_preparse_dir"
 		copied_sage_files=()
+		cli_sage_files=()
+		startup_source="$("$sage_python" -c 'from pathlib import Path; from sage.env import SAGE_STARTUP_FILE; print(Path(SAGE_STARTUP_FILE).resolve() if SAGE_STARTUP_FILE else "")')"
 		for sage_file in "${sage_files[@]}"; do
 			target="$sage_preparse_dir/$sage_file"
 			mkdir -p "$(dirname "$target")"
 			cp "$sage_file" "$target"
 			copied_sage_files+=("$sage_file")
+			if [ "$(realpath "$sage_file")" = "$startup_source" ]; then
+				# Sage's IPython extension loads init.sage with run_cell, whose
+				# transformer calls preparse; sage-preparse instead injects an
+				# all_cmdline import that is absent from the startup cell.
+				"$sage_python" -c 'from pathlib import Path; from sage.repl.preparse import preparse; import sys; source = Path(sys.argv[1]); Path(f"{source}.py").write_text(preparse(source.read_text()))' "$target"
+			else
+				cli_sage_files+=("$sage_file")
+			fi
 		done
-		(
-			cd "$sage_preparse_dir"
-			"$sage_python" "$sage_preparse" "${copied_sage_files[@]}" >/dev/null
-		)
+		if [ "${#cli_sage_files[@]}" -gt 0 ]; then
+			(
+				cd "$sage_preparse_dir"
+				"$sage_python" "$sage_preparse" "${cli_sage_files[@]}" >/dev/null
+			)
+		fi
 		for sage_file in "${copied_sage_files[@]}"; do
 			mv "$sage_preparse_dir/$sage_file.py" "$sage_preparse_dir/${sage_file%.sage}.py"
+			if is_test_file "$sage_file"; then
+				# Preparsed so an importing module resolves it; never a target.
+				sed -i '1i # mypy: ignore-errors' "$sage_preparse_dir/${sage_file%.sage}.py"
+				continue
+			fi
 			mypy_targets+=("${sage_file%.sage}.py")
 		done
+		# Plain-Python test files are in the snapshot for the same reason.
+		while IFS= read -r -d '' python_file; do
+			is_test_file "$python_file" || continue
+			sed -i '1i # mypy: ignore-errors' "$sage_preparse_dir/$python_file"
+		done < <(git ls-files -z -- '*.py')
 		# Excluded directories are not targets, but mypy still checks any
 		# module it reaches by import. Mark each snapshot copy with mypy's
 		# per-file inline option so it supplies types without reporting errors.

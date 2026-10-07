@@ -5,25 +5,18 @@ from typing import Any
 
 import pytest
 import yaml
-from automated_reviews.publication import WORKFLOW_NAMES
 
-from ai_review_ci.doctor import _review_guidelines_findings
 from ai_review_ci.gates import POLICY_GATE_MARKER, SUPPORTED_PROFILES
 from ai_review_ci.install import (
     AISLOP_CONFIG,
     PR_TEMPLATE,
+    PR_WORKFLOW,
     _prove_installation,
     _template_text,
     _write_aislop_config,
     _write_pr_template,
-    _write_review_guidelines,
     _write_scaffold,
     _write_trigger_workflows,
-)
-from ai_review_ci.review_guidelines import (
-    classify_review_guidelines,
-    extract_review_guidelines_sections,
-    load_canonical_review_guidelines,
 )
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
@@ -111,8 +104,7 @@ def test_install_writes_canonical_aislop_config(tmp_path: pathlib.Path) -> None:
 def test_distributed_aislop_config_matches_repo_own_config() -> None:
     # #228: the config install distributes MUST be identical to the one governing
     # ai-review-ci's own scan — otherwise the fleet standard and the head repo's
-    # own gate silently diverge (the false-green class the review-guidelines gate
-    # guards against). The packaged canonical is the single source; the repo-root
+    # own gate silently diverge. The packaged canonical is the single source; the repo-root
     # copy that aislop reads for the self-scan must stay byte-identical to it.
     packaged = (ROOT / "src" / "ai_review_ci" / "data" / "aislop-config.yml").read_text()
     repo_own = (ROOT / ".aislop" / "config.yml").read_text()
@@ -146,22 +138,18 @@ def test_install_writes_trigger_workflows(tmp_path: pathlib.Path) -> None:
     repo = _git_repo(tmp_path)
     _write_trigger_workflows(repo, "bun")
     wf = repo / ".github" / "workflows"
-    assert sorted(p.name for p in wf.iterdir()) == sorted(WORKFLOW_NAMES)
-    for name in WORKFLOW_NAMES:
-        text = (wf / name).read_text()
-        assert "uses: dzackgarza/automated-reviews/.github/workflows/_slop-review.yml@main" in text
-    sweep = (wf / "review-slop.yml").read_text()
-    assert "name: Slop Review" in sweep
-    assert "scope: repo" in sweep
-    pr = (wf / "review-pr.yml").read_text()
+    assert [p.name for p in wf.iterdir()] == [PR_WORKFLOW]
+    pr = (wf / PR_WORKFLOW).read_text()
+    jobs = yaml.safe_load(pr)["jobs"]
+    assert set(jobs) == {"qc-ci", "deterministic-diff", "delegation-conformance", "qc-doctor", "pr-description-checklist"}
+    assert all(job["uses"].startswith("dzackgarza/ai-review-ci/.github/workflows/") for job in jobs.values())
+    assert all("needs" not in job for job in jobs.values())
     assert "uses: dzackgarza/ai-review-ci/.github/workflows/_qc.yml@main" in pr
     assert "tier: test-ci" in pr
-    assert "scope: diff" in pr
     assert "gate: deterministic-diff" in pr
     assert "gate: delegation-conformance" in pr
     assert "gate: qc-doctor" in pr
     assert "gate: app-boot" not in pr
-    assert "gate: thread-resolution" in pr
     assert "profile: 'bun'" in pr
     assert "fail_below" not in pr
     assert "pull_request" in pr
@@ -207,61 +195,9 @@ def test_install_writes_profile_scaffold(tmp_path: pathlib.Path) -> None:
     assert (repo / "justfile").read_text() == (ROOT / "scaffolds" / "rust" / "justfile").read_text()
 
 
-def test_install_review_guidelines_creates_passing_section_without_existing_agents_md(
-    tmp_path: pathlib.Path,
-) -> None:
-    # #232: a repo with no AGENTS.md must not fail its own review-guidelines gate after
-    # install. The writer creates the file; the REAL doctor gate must then pass.
-    repo = _git_repo(tmp_path)
-    assert not (repo / "AGENTS.md").exists()
-
-    _write_review_guidelines(repo)
-
-    assert _review_guidelines_findings(repo) == []
-    assert len(extract_review_guidelines_sections((repo / "AGENTS.md").read_text())) == 1
-
-
-def test_install_review_guidelines_upserts_into_existing_agents_md_without_clobbering(
-    tmp_path: pathlib.Path,
-) -> None:
-    # #232: an existing AGENTS.md (here carrying unrelated content plus a STALE section)
-    # must keep its other content and get the section refreshed to current — proven at the
-    # real doctor boundary, not by string-matching the writer's own output.
-    repo = _git_repo(tmp_path)
-    (repo / "AGENTS.md").write_text("# Project\n\nKeep me.\n\n# Review Guidelines\n\nold stale guidance\n\n# Conventions\n\nAlso keep me.\n")
-
-    _write_review_guidelines(repo)
-
-    text = (repo / "AGENTS.md").read_text()
-    assert "Keep me." in text
-    assert "Also keep me." in text
-    assert "old stale guidance" not in text
-    assert len(extract_review_guidelines_sections(text)) == 1
-    assert _review_guidelines_findings(repo) == []
-
-
-def test_install_review_guidelines_is_idempotent(tmp_path: pathlib.Path) -> None:
-    # #232 acceptance: re-running install neither duplicates nor drifts the section.
-    repo = _git_repo(tmp_path)
-    _write_review_guidelines(repo)
-    first = (repo / "AGENTS.md").read_text()
-
-    _write_review_guidelines(repo)
-    second = (repo / "AGENTS.md").read_text()
-
-    assert first == second
-    assert len(extract_review_guidelines_sections(second)) == 1
-    assert classify_review_guidelines(second, load_canonical_review_guidelines()).state == "current"
-    assert _review_guidelines_findings(repo) == []
-
-
 def test_install_local_files_finalize_with_doctor(tmp_path: pathlib.Path) -> None:
     repo = _git_repo(tmp_path)
     (repo / "pyproject.toml").write_text('[project]\nname = "target"\nversion = "0.1.0"\n')
-    # The final doctor proof now requires a current review-guidelines section, so a
-    # conformant target carries one before finalize (the gate the doctor enforces).
-    (repo / "AGENTS.md").write_text(f"# target\n\nIntro.\n\n{load_canonical_review_guidelines()}\n")
-
     _write_scaffold(repo, "python")
     _write_trigger_workflows(repo, "python")
     _prove_installation(repo)
@@ -348,7 +284,7 @@ def test_install_refuses_overwriting_repo_owned_config(
 ) -> None:
     repo = _git_repo(tmp_path)
     _write_trigger_workflows(repo, "bun")
-    customized = repo / ".github" / "workflows" / "review-slop.yml"
+    customized = repo / ".github" / "workflows" / PR_WORKFLOW
     customized.write_text("# locally customized\n")
     with pytest.raises(SystemExit):
         _write_trigger_workflows(repo, "bun")
@@ -368,17 +304,6 @@ def test_reusable_workflows_use_maintained_just_installer(workflow_file: str) ->
     assert "https://api.github.com/repos/casey/just/releases/latest" not in text
     assert "tar -xzf" not in text
     assert "VERSION=$(curl -sL" not in text
-
-
-def test_thread_resolution_checks_out_target_repository() -> None:
-    job = _workflow_jobs("_gates.yml")["thread-resolution"]
-    steps = job.get("steps")
-
-    assert isinstance(steps, list)
-    assert any(
-        isinstance(step, dict) and step.get("uses") == "actions/checkout@v4"
-        for step in steps
-    )
 
 
 @pytest.mark.parametrize(
@@ -425,7 +350,7 @@ def test_rendered_pr_qc_doctor_grants_labels_read_scope(profile: str) -> None:
     rendered `review-pr.yml` caller must also grant it, or the intersection
     strips the scope and the qc-doctor label check false-REDs.
     """
-    workflow = yaml.safe_load(_template_text("review-pr.yml", profile, "main"))
+    workflow = yaml.safe_load(_template_text(profile, "main"))
     perms = workflow["jobs"]["qc-doctor"].get("permissions")
     assert isinstance(perms, dict), f"review-pr.yml (profile={profile}) qc-doctor job must declare permissions"
     assert perms.get("issues") == "read", f"review-pr.yml (profile={profile}) qc-doctor caller must grant issues: read; got {perms!r}"
@@ -472,11 +397,6 @@ def test_skip_scaffold_final_proof_adopts_brownfield_non_delegating_justfile(
     # Everything install writes under --skip-scaffold (the scaffold itself is skipped):
     _write_trigger_workflows(repo, "python")
     _write_pr_template(repo)
-    # A conformant adopted repo carries the current review-guidelines section
-    # (the doctor gate requires it; #232 tracks install writing it). Only the
-    # justfile delegation/conformance findings then remain, deferred by design.
-    (repo / "AGENTS.md").write_text(f"# target\n\nIntro.\n\n{load_canonical_review_guidelines()}\n")
-
     # Must NOT abort: the only outstanding doctor findings are the deferred
     # justfile delegation/conformance ones. A regressed (strict) proof step
     # raises SystemExit here.
@@ -485,8 +405,7 @@ def test_skip_scaffold_final_proof_adopts_brownfield_non_delegating_justfile(
     # Success end state: adoption completed and the brownfield justfile is intact.
     assert existing.read_text() == brownfield_justfile
     assert not (repo / ".ai-review-ci.toml").exists()
-    for name in WORKFLOW_NAMES:
-        assert (repo / ".github" / "workflows" / name).is_file()
+    assert (repo / ".github" / "workflows" / PR_WORKFLOW).is_file()
 
 
 def test_skip_scaffold_final_proof_still_aborts_on_non_justfile_fault(
@@ -625,22 +544,52 @@ def test_qc_workflow_runs_validated_project_setup_before_acceptance() -> None:
     assert setup["run"] == 'just "$QC_SETUP_RECIPE"'
 
 
+def test_qc_workflow_caches_project_setup_around_the_recipe(tmp_path: pathlib.Path) -> None:
+    # #459: the cache is restored before the setup recipe and saved right after
+    # it, before the QC tier, under a key that follows the caller's key files.
+    job = _workflow_jobs("_qc.yml")["qc"]
+    names = [step.get("name") for step in job["steps"]]
+    key_step = job["steps"][names.index("Key the project CI environment cache")]
+    restore = job["steps"][names.index("Restore the project CI environment")]
+    save = job["steps"][names.index("Save the project CI environment")]
+
+    assert names.index("Restore the project CI environment") < names.index("Provision project CI environment")
+    assert names.index("Provision project CI environment") < names.index("Save the project CI environment")
+    assert names.index("Save the project CI environment") < names.index("Run QC tier")
+    for step in (key_step, restore):
+        assert step["if"] == "inputs.setup_cache_paths != ''"
+    assert save["if"] == "inputs.setup_cache_paths != '' && steps.setup-cache.outputs.cache-hit != 'true'"
+    assert restore["with"] == save["with"]
+
+    (tmp_path / "setup.sh").write_text("install v1\n")
+    (tmp_path / "pins.json").write_text("{}\n")
+
+    def cache_key() -> str:
+        output = tmp_path / "github-output"
+        output.write_text("")
+        env = {
+            "PATH": "/usr/bin:/bin",
+            "RUNNER_OS": "Linux",
+            "QC_SETUP_RECIPE": "setup-ci",
+            "QC_SETUP_CACHE_KEY_FILES": "setup.sh\npins.json\n",
+            "GITHUB_OUTPUT": str(output),
+        }
+        subprocess.run(["bash", "-euo", "pipefail", "-c", key_step["run"]], cwd=tmp_path, env=env, check=True)
+        return output.read_text().removeprefix("key=").strip()
+
+    first = cache_key()
+    assert first.startswith("qc-setup-Linux-setup-ci-")
+    assert cache_key() == first
+    (tmp_path / "setup.sh").write_text("install v2\n")
+    assert cache_key() != first
+
+
 def test_qc_workflow_accepts_only_remote_acceptance_tiers() -> None:
     job = _workflow_jobs("_qc.yml")["qc"]
     validation = next(step for step in job["steps"] if isinstance(step, dict) and step.get("name") == "Validate inputs")
 
     assert "test-ci|ambient" in validation["run"]
     assert "test|test-ci|ambient" not in validation["run"]
-
-
-@pytest.mark.parametrize("profile", ["python", "bun-playwright"])
-def test_pr_qc_and_slop_review_start_in_parallel(profile: str) -> None:
-    workflow = yaml.safe_load(_template_text("review-pr.yml", profile, "main"))
-    jobs = workflow["jobs"]
-
-    assert jobs["qc-ci"]["with"]["tier"] == "test-ci"
-    assert "needs" not in jobs["qc-ci"]
-    assert "needs" not in jobs["slop-review"]
 
 
 def test_qc_scopes_gh_token_to_explicitly_opted_in_gh_boundary_step() -> None:

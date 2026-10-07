@@ -79,6 +79,7 @@
     "**/archives/**",
     "**/src.bak/**",
     "**/notebooks/**",
+    "**/preamble/**",
     "**/notes/**",
     "**/.webpack/**",
     "**/out/**",
@@ -114,7 +115,9 @@
     "gsettings",
     "pandoc",
     "pgrep",
-    "just"
+    "just",
+    "kitty",
+    "notify-send"
   ],
   "ignoreExportsUsedInFile": true,
   "ignoreUnresolved": [

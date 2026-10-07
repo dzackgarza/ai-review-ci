@@ -52,7 +52,7 @@ Integration guides, AGENTS fragments, PR templates, and reviewer guidance should
 
 ## Optional review producer
 
-When the user explicitly asks Jules to generate review feedback, load [[jules/SKILL|jules]] and [[jules/references/anti-slop-report-review|its anti-slop review reference]] together with [[reviewing-llm-code/SKILL|reviewing-llm-code]], [[anti-slop/SKILL|anti-slop]], [[reviewing-subagent-work/SKILL|reviewing-subagent-work]], and [[test-guidelines/SKILL|test-guidelines]] when proof surfaces are in scope.
+When the user explicitly asks Jules to generate review feedback, load [[jules/SKILL|jules]] and [[jules/references/anti-slop-report-review|its anti-slop review reference]] together with [[reviewing-llm-code/SKILL|reviewing-llm-code]], [[anti-slop/SKILL|anti-slop]], and [[test-guidelines/SKILL|test-guidelines]] when proof surfaces are in scope.
 Jules produces raw findings only.
 Every returned finding still enters this workflow at [[pr-feedback-triage/references/collect|collection]]; Jules does not disposition or resolve its own output.
 

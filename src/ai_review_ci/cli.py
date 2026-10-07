@@ -14,8 +14,6 @@ Subcommands:
 - check-justfile   — fail if a target justfile violates the baseline contract
 - check-pr-description — fail on unchecked checklist items, or (where the gate template is installed) a missing policy-alignment section
 - check-app-boot   — run the target repo's delegated bun-playwright gate
-- check-review-threads — require evidence-backed ai-review thread resolution
-- check-review-guidelines — fail if the head repo's AGENTS.md lacks the current canonical # Review Guidelines section
 - tripwire-index — print the derived maintainer-only tripwire inventory
 - check-tripwire-index — validate tripwire/policy/remediation index integrity
 - protect-branch   — apply required branch protection contexts
@@ -32,14 +30,12 @@ from ai_review_ci.gates import (
     check_delegation,
     check_pr_description,
     check_profile,
-    check_review_threads,
     check_staged_bypass,
     protect_branch,
 )
 from ai_review_ci.install import install
 from ai_review_ci.labels import install_labels
 from ai_review_ci.red_commit import red_commit
-from ai_review_ci.review_guidelines import check_review_guidelines
 from ai_review_ci.tripwire_index import check_tripwire_index, tripwire_index
 
 app = App(
@@ -61,8 +57,6 @@ app.command(check_delegation)
 app.command(check_justfile)
 app.command(check_pr_description)
 app.command(check_app_boot)
-app.command(check_review_threads)
-app.command(check_review_guidelines)
 app.command(tripwire_index, name="tripwire-index")
 app.command(check_tripwire_index, name="check-tripwire-index")
 app.command(protect_branch)

@@ -1,9 +1,6 @@
 ---
 name: tool-provisioning-and-environment-hygiene
-description: Cross-cutting policy for tool installation. Covers when to use uvx/npx/bunx
-  vs uv add/npm install vs uv tool install vs OS package managers. Bans pip install
-  --break-system-packages, system Python mutation, pipx, and installed-tool-first
-  selection.
+description: "Use when installing a tool or dependency: uvx, bunx, uv add, uv tool install, or an OS package manager."
 ---
 
 # Tool Provisioning and Environment Hygiene

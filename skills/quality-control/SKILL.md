@@ -1,8 +1,6 @@
 ---
 name: quality-control
-description: Use when implementing, understanding, or delegating to the global quality
-  control system in ~/ai-review-ci. Also use when setting up new projects with CI/CD,
-  or when a local [[justfile/SKILL|justfile]] needs to reference global QC recipes.
+description: "Use when implementing or wiring the global QC system in ~/ai-review-ci, or adding CI/CD and QC hooks to a project."
 ---
 
 # Quality Control System
@@ -47,7 +45,7 @@ The recipes are tiered:
 - **`test-push` (pre-push)** — includes `test-commit` and runs the full project-owned test suite. Ordinary build and test failures remain direct implementation work.
 - **`test-ci` (required PR context)** — includes `test-push` and adds coverage, dependency/import boundaries, dead-code, duplication, complexity, policy/slop, security, and hosted checks. Policy-sensitive findings retain independent triage because their evaluator surface is gameable.
 
-General and slop review start on the first coherent push in parallel with `test-ci`. Do not postpone the review loop until the branch has spent hours optimizing around an unreviewed architecture.
+PR QC starts on the first coherent push. Do not postpone it until the branch has spent hours optimizing around an unchecked architecture.
 
 ### Auto-Fix Enforcement: Always Apply All Available Fixes
 
@@ -468,6 +466,8 @@ Shared recipe composition: calls `shared.just` explicitly.
 
 Recipes: `_normalize-common` wrapper, `_python-syntax`, `_mypy`, `_normalize` (ruff), `_pytest_with_coverage`, `_diff-cover`, `_vulture`, `_deptry`, `_import-linter`, `_ast-grep`, `_jscpd-python`, `_lizard-python`, `_codeql` plus shared recipe calls.
 
+Test files are never mypy targets. `_mypy` here and `_sage-mypy` in `sage.just` drop every path that `tool-artifacts/scripts/test-file-paths.sh` classifies as a test file: a path under a `tests/` or `test/` directory, or a file named `test_*.py`, `*_test.py`, `conftest.py`, `test_*.sage` or `*_test.sage`. In the Sage preparse snapshot each test file carries `# mypy: ignore-errors`, so a module that imports one still gets its types.
+
 Invocations:
 
 - `just -f ~/ai-review-ci/justfiles/python.just -d . test`
@@ -769,7 +769,7 @@ This preserves "delegate, never reimplement" while letting projects layer on the
 
 ## Hooks
 
-Pre-commit blocks on `just test-commit`; pre-push blocks on `just test-push`. Required pull-request CI runs `just test-ci` in parallel with slop review. Install the centralized global hook collection from `~/ai-review-ci/global-hooks/`:
+Pre-commit blocks on `just test-commit`; pre-push blocks on `just test-push`. Required pull-request CI runs `just test-ci`. Install the centralized global hook collection from `~/ai-review-ci/global-hooks/`:
 
 ```bash
 just --justfile ~/ai-review-ci/justfile install-global-hooks
@@ -782,7 +782,7 @@ The QC system uses these configs (all stored in `~/ai-review-ci/tool-configs/`):
 | Config | Tool | Purpose |
 | --- | --- | --- |
 | `ruff-global.toml` | Ruff | Python linting (E, F, I, UP, BLE), Python 3.14, strict |
-| `mypy-global.ini` | Mypy | Python type checking, strict mode |
+| `mypy-global.ini` | Mypy | Python type checking of non-test code, strict mode |
 | `pytest-local.ini` | pytest | Python test configuration |
 | `pyproject.toml` | Various | Python project metadata |
 | `biome.json` | Biome | TypeScript/JS formatting and linting |

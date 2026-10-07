@@ -21,6 +21,7 @@ root = ["src"]
 [tool.deptry.package_module_name_map]
 ai-slop-detector = "slop_detector"
 beautifulsoup4 = "bs4"
+google-genai = "google"
 markdown-it-py = "markdown_it"
 opencv-contrib-python = "cv2"
 opencv-python = "cv2"
@@ -31,7 +32,12 @@ python-lsp-server = "pylsp"
 python-dotenv = "dotenv"
 python-frontmatter = "frontmatter"
 python-slugify = "slugify"
+pydantic-ai-slim = "pydantic_ai"
 pyguitarpro = "guitarpro"
+# The pytest distribution ships the pytest API, its _pytest implementation
+# package (plugins import internals such as _pytest.assertion.rewrite), and
+# the py compatibility shim.
+pytest = ["pytest", "_pytest", "py"]
 pyyaml = "yaml"
 PyYAML = "yaml"
 pyzmq = "zmq"

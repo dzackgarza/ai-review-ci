@@ -20,14 +20,13 @@ creates. Out of order, each refuses with a message that names only its own preco
 2. Lay the repository out as in section 2 and make `just test-commit` pass locally.
 3. Create the GitHub repository **public** (section 5 explains why) and push `main`.
 4. Run `ai-review-ci install --skip-scaffold --target . --repo <owner>/<name> --branch
-   main --profile bun-python`. It writes the two review workflows, `.aislop/config.yml`,
-   the PR template, and the canonical `# Review Guidelines` section of `AGENTS.md`
-   (`doctor` fails without that section). It also applies branch protection, which fails
+   main --profile bun-python`. It writes the PR workflow `review-pr.yml`,
+   `.aislop/config.yml` and the PR template. It also applies branch protection, which fails
    with `Branch not found` if `main` is not on GitHub yet. Once the workflows exist the
    installer refuses to run again (`already installed`), so any later protection or label
    work goes through `ai-review-ci protect-branch` and `ai-review-ci install-labels`.
 5. Commit the installed files and push. From this point `main` accepts only pull requests
-   with the seven required checks green; `enforce_admins` is on, so direct pushes are
+   with the five required checks green; `enforce_admins` is on, so direct pushes are
    refused for everyone. The PR template requires a linked issue, so file the issue first.
    On a scaffold with no real code to review this is ceremony without a reviewer: remove
    the protection (`gh api -X DELETE repos/<owner>/<name>/branches/main/protection`), land
@@ -35,12 +34,11 @@ creates. Out of order, each refuses with a message that names only its own preco
    code worth gating.
    `gh pr checks` fails with the personal-token scope on these repos; read status with
    `gh run list --branch <branch>` and `gh run view <id> --log-failed`.
-6. Before every push, run both CI-tier gates locally against the base branch. They are
-   the same recipes CI runs and they take minutes, not a CI round trip:
+6. Before every push, run the CI-tier gate locally against the base branch. It is the
+   same recipe CI runs and it takes minutes, not a CI round trip:
 
    ```bash
-   DIFF_COVER_BASE=origin/main just -f ~/ai-review-ci/justfiles/python.just -d . test-ci
-   DIFF_COVER_BASE=origin/main just -f ~/ai-review-ci/justfiles/bun.just -d . test-ci
+   DIFF_COVER_BASE=origin/main just test-ci
    ```
 
 ## 2. Layout the gates can see
@@ -128,10 +126,6 @@ These pass or are silent locally at commit and push tier, then fail the PR.
   eslint: set `imports: false` in `wxt.config.ts` and import
   `defineBackground` from `wxt/utils/define-background`.
 - **knip** blocks on unused devDependencies and unused exports.
-- **The slop-review job uploads SARIF to GitHub code scanning.** A private repository
-  without Advanced Security rejects the upload ("Code scanning is not enabled for this
-  repository") and the required `slop / review` check fails. The code repositories under
-  this account are public for that reason.
 - **The scan-ai-slop bot** posts one "skipped, no paid plan" comment per PR. It is not a
   required check; ignore it.
 
@@ -159,15 +153,3 @@ before `git add`, or expect a second formatting-only commit.
 regardless of extension, so a tracked `.tsbuildinfo` reports Rust-rule findings such as
 `rs-no-result-ok` on its JSON. Ignore `*.tsbuildinfo`, `coverage/`, `lcov.info`, `dist/`,
 `.output/` and `.wxt/` before the first commit, and stage files by name.
-
-## 9. The slop reviewer files threads on stubs
-
-The `slop / review` check posts inline review threads, and the `thread-resolution` check
-fails while any thread is unresolved. On a scaffold PR the reviewer flags every stub
-entrypoint as a "hollow facade". Each thread needs a visible reply carrying the
-disposition fields (claim disposition, remediation disposition, policy basis, action
-taken, audit anchor), then `resolveReviewThread` through the GraphQL API, and a top-level
-PR comment titled `Review feedback disposition ledger` for every rejected or modified
-thread. Silent resolution is banned by the review guidelines and the gate does not accept
-it. `gh pr checks` cannot read these repos with the personal token; use
-`gh api graphql` to list `reviewThreads` and `gh run view --log-failed` for the gate text.

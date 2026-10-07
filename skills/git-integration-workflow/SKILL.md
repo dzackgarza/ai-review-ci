@@ -45,14 +45,13 @@ Each arrow is a gate, not a suggestion.
 3. **PR review synthesis.** Open or update the PR from the current work-unit issue: summarize the issue scope, close/reference split, proof obligations addressed, evidence, and reviewer checklist.
    The PR body is a review submission derived from the issue, not a second planning tracker.
    Open the PR on the first coherent push.
-   Deterministic `test-ci` and slop review start in parallel; do not spend hours polishing an unreviewed architecture before entering this loop.
+   Deterministic `test-ci` starts on that push; do not spend hours polishing an unchecked architecture before entering this loop.
    Use closing keywords (`Closes`) only for the work-unit issue this PR fully completes on merge; use `Refs` or prose for organizational parents and deferred work.
    A visible open checkbox in the PR body is a reviewer-facing blocker copied from the issue; if it is still open, the PR is not ready.
 
 4. **Mark ready.** Only after every in-scope issue and proof obligation is complete and evidenced: push the branch, ensure the issue body/comments are current, publish the PR body, then request review.
 
 5. **Trigger review.** Explicitly start the automated review loop: `gh pr comment <PR_NUMBER> --body '@codex review'` (or the repo's documented equivalent).
-   Before tagging reviewers, ensure the target repo's local `AGENTS.md` carries the canonical `# Review Guidelines` section.
 
 6. **Disposition feedback.** Route every returned item through [[pr-feedback-triage/SKILL|pr-feedback-triage]]. That skill exclusively owns collection, policy/factual disposition, first-principles remediation, thread-local replies, resolution, and convergence.
    This lifecycle owns only the PR and issue-state handoff: if triage reopens required work, update the work-unit issue first and mark the PR not ready if it had already been submitted for review.

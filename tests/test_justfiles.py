@@ -147,7 +147,24 @@ def project_with_sage_file(tmp_path: pathlib.Path) -> pathlib.Path:
     return project
 
 
-def test_lean_push_gate_propagates_target_axiom_audit_failure(tmp_path: pathlib.Path) -> None:
+def test_lean_push_gate_compiles_nothing(tmp_path: pathlib.Path) -> None:
+    """Lean compilation belongs to CI; the push tier only scans sources."""
+    project = tmp_path / "lean-project"
+    project.mkdir()
+
+    result = subprocess.run(
+        ["just", "--dry-run", "--justfile", str(ROOT / "justfiles" / "lean.just"), "-d", str(project), "test-push"],
+        capture_output=True,
+        text=True,
+    )
+
+    output = result.stdout + result.stderr
+    assert result.returncode == 0, output
+    assert re.search(r"\blake\s+(?:build|exe)\b", output) is None, output
+    assert "_lean-axiom-audit" not in output
+
+
+def test_lean_ci_gate_propagates_target_axiom_audit_failure(tmp_path: pathlib.Path) -> None:
     """The shared gate must run the target's explicit audit command at its root."""
     project = tmp_path / "lean-project"
     project.mkdir()
@@ -169,7 +186,7 @@ def test_lean_push_gate_propagates_target_axiom_audit_failure(tmp_path: pathlib.
     assert "target axiom audit rejected a nonstandard dependency" in output
 
 
-def test_lean_push_gate_runs_target_axiom_audit_at_target_root(tmp_path: pathlib.Path) -> None:
+def test_lean_ci_gate_runs_target_axiom_audit_at_target_root(tmp_path: pathlib.Path) -> None:
     project = tmp_path / "lean-project"
     project.mkdir()
     (project / "justfile").write_text('_lean-axiom-audit:\n    #!/usr/bin/env bash\n    set -euo pipefail\n    test "$(pwd -P)" = "$PWD"\n    echo target axiom audit passed\n')
@@ -205,6 +222,29 @@ def test_lean_no_sorry_passes_clean_sources_and_excludes_quarantine(tmp_path: pa
     output = result.stdout + result.stderr
     assert result.returncode == 0, output
     assert "No sorry declarations" in output
+
+
+def test_lean_no_sorry_ignores_comments_and_strings_but_not_terms(tmp_path: pathlib.Path) -> None:
+    """A `sorry` in a docstring, comment, or message string is not a proof term."""
+    project = tmp_path / "lean-project"
+    project.mkdir()
+    (project / "Words.lean").write_text(
+        "/-- Fails on a proof with `sorry`. /- nested sorry -/ -/\n"
+        "def check : IO Unit := throw (IO.userError \"proved with `sorry` \\\" sorry\")\n"
+        "def quote : Char := '\"'  -- sorry\n"
+        "def raw : String := r#\"sorry \" sorry\"#\n"
+        "def sorry' : Nat := 0\n"
+    )
+
+    clean = run_just(ROOT / "justfiles" / "lean.just", project, "lean-no-sorry")
+    assert clean.returncode == 0, clean.stdout + clean.stderr
+
+    (project / "Term.lean").write_text("def quote : Char := '\"'\ntheorem t : True := by sorry\n")
+    dirty = run_just(ROOT / "justfiles" / "lean.just", project, "lean-no-sorry")
+    output = dirty.stdout + dirty.stderr
+    assert dirty.returncode != 0, output
+    assert "Term.lean:2:" in output
+    assert "Words.lean" not in output
 
 
 def test_lean_no_sorry_fails_when_rg_cannot_run(tmp_path: pathlib.Path) -> None:
@@ -338,10 +378,15 @@ def test_sage_syntax_uses_tools_from_the_sage_virtual_environment(
 
     sage_bin_dir = tmp_path / "sage-venv" / "bin"
     sage_bin_dir.mkdir(parents=True)
-    sage = sage_bin_dir / "sage"
-    sage.write_text("#!/usr/bin/env bash\nexit 97\n")
-    sage.chmod(0o755)
     (sage_bin_dir / "python").symlink_to(pathlib.Path(sys.executable))
+    # A source-tree launcher: it lives outside the venv, answers `-c` by
+    # running the venv interpreter, and fails any other invocation, so the
+    # gate must preparse and compile with the venv tools, not through sage.
+    launcher_dir = tmp_path / "sage-src"
+    launcher_dir.mkdir()
+    sage = launcher_dir / "sage"
+    sage.write_text(f'#!/usr/bin/env bash\nif [ "$1" = -c ]; then exec "{sage_bin_dir / "python"}" "$@"; fi\nexit 97\n')
+    sage.chmod(0o755)
     sage_preparse = sage_bin_dir / "sage-preparse"
     sage_preparse.write_text(
         "from pathlib import Path\nimport sys\nfor source_name in sys.argv[1:]:\n    source = Path(source_name)\n    Path(f'{source}.py').write_text(source.read_text())\n"
@@ -2920,7 +2965,59 @@ def test_public_gate_composition_separates_immediate_checks_from_full_suite(
     assert ci is not None
     assert full_suite_recipe not in commit.group("body")
     assert full_suite_recipe in push.group("body")
-    assert "test-push" in ci.group("body")
+    assert "test-push" in ci.group("body") or "_ci-checks" in ci.group("body")
+
+
+def recipe_body(text: str, recipe: str) -> str:
+    match = re.search(rf"(?ms)^{re.escape(recipe)}:\n(?P<body>.*?)(?=^\S|\Z)", text)
+    assert match is not None, recipe
+    return match.group("body")
+
+
+@pytest.mark.parametrize(
+    ("justfile_name", "push_suite_recipe", "coverage_recipe"),
+    [
+        ("python.just", "_pytest", "_pytest_with_coverage"),
+        ("bun.just", "_bun-test", "_coverage"),
+    ],
+)
+def test_ci_tier_runs_the_suite_once_under_coverage(
+    justfile_name: str,
+    push_suite_recipe: str,
+    coverage_recipe: str,
+) -> None:
+    text = (ROOT / "justfiles" / justfile_name).read_text()
+    checks = recipe_body(text, "_ci-checks")
+    ci = recipe_body(text, "test-ci")
+
+    assert "test-commit" in checks
+    assert coverage_recipe in checks
+    assert push_suite_recipe not in checks.replace(coverage_recipe, "")
+    assert "test-push" not in checks
+    assert "_global-qc" not in checks
+    assert "_ci-checks" in ci
+    assert ci.count("_global-qc") == 1
+
+
+def test_bun_python_ci_runs_the_cross_language_stack_once() -> None:
+    ci = recipe_body((ROOT / "justfiles" / "bun-python.just").read_text(), "test-ci")
+
+    assert "python.just -d . _ci-checks" in ci
+    assert "bun.just -d . _ci-checks" in ci
+    assert "test-ci" not in ci
+    assert ci.count("_global-qc") == 1
+
+
+def test_bun_coverage_runs_a_playwright_projects_suite(tmp_path: pathlib.Path) -> None:
+    project = tmp_path / "bun-playwright-project"
+    project.mkdir()
+    (project / "playwright.config.ts").write_text("export default {};\n")
+    (project / "package.json").write_text(json.dumps({"scripts": {"test": "touch suite-ran"}}))
+
+    result = run_just(ROOT / "justfiles" / "bun.just", project, "_coverage")
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert (project / "suite-ran").exists()
 
 
 @pytest.mark.parametrize(
@@ -3845,6 +3942,34 @@ def test_mypy_private_recipe_does_not_apply_python_project_preflight_to_sage_pas
     assert "Python project preflight check" not in output
 
 
+def test_mypy_checks_project_code_and_never_a_test_file(
+    tmp_path: pathlib.Path,
+) -> None:
+    """Test files are never mypy targets (#456); project code still is."""
+    project = tmp_path / "typed-project"
+    project.mkdir()
+    (project / "pyproject.toml").write_text('[project]\nname = "typed-project"\nversion = "0.1.0"\nrequires-python = ">=3.14"\n')
+    type_error = 'VALUE: int = "not an int"\n'
+    test_files = [
+        "tests/helpers.py",
+        "pkg/test/support.py",
+        "test_top.py",
+        "pkg/parser_test.py",
+        "conftest.py",
+    ]
+    for relative in ["pkg/module.py", *test_files]:
+        path = project / relative
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(type_error)
+
+    result = run_just(ROOT / "justfiles" / "python.just", project, "_mypy")
+    output = result.stdout + result.stderr
+
+    assert result.returncode != 0, output
+    assert "pkg/module.py:1: error" in output, output
+    assert [relative for relative in test_files if relative in output] == [], output
+
+
 def test_mypy_uses_declared_dependency_group_type_stubs(
     tmp_path: pathlib.Path,
 ) -> None:
@@ -4168,7 +4293,7 @@ SCAFFOLD_DELEGATES = {
     "rust": ("rust.just",),
     "bun": ("bun.just",),
     "bun-playwright": ("bun.just",),
-    "bun-python": ("python.just", "bun.just"),
+    "bun-python": ("bun-python.just",),
     "sage": ("sage.just",),
 }
 
