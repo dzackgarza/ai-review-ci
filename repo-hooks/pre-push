@@ -21,12 +21,16 @@ cat >&2 <<'MSG'
 ────────────────────────────────────────────────────────────────
 ai-review-ci push gate FAILED (just test-push).
 
-`git push --no-verify` is a SANCTIONED bypass ONLY for these pushes:
-  • a TDD red-proof audit commit — a deliberately failing test landed
-    before the fix that makes it pass (the failing test IS the artifact).
-Wiki repositories, repositories not under the dzackgarza account, and forks of
-third-party projects are auto-detected and skipped above, so if you see this
-message the repo IS gated and only the TDD red-proof exception applies.
+If the gate is red by design — a red proof landed before its fix, or an
+acceptance suite written up front that stays red until its work units land —
+use the sanctioned, auditable route instead of `git push --no-verify`:
+
+    ai-review-ci red-push --issue <owning-issue>
+
+It runs the same gate, refuses if the gate passes, notes `Red-Push: #<issue>`
+on the pushed commit (refs/notes/red-push), and bypasses the gate for that one
+push only. Wiki repositories, repositories not under the dzackgarza account, and
+forks of third-party projects are auto-detected and skipped above.
 
 Any other failure is direct project/test repair work. Fix the reported object
 and push again; do not start a PR disposition or subagent remediation workflow.
