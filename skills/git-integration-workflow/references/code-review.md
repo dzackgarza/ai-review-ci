@@ -181,6 +181,21 @@ gh pr diff 123 --name-only
 gh pr checks 123
 ```
 
+Retrieve the `semgrep-review-<run revision>` artifact from the QC run associated with
+the current PR head. Check the run's `headSha` and, for a PR merge checkout, its
+head parent against the current PR head; inspect the report directory's revision.
+An old run or absent required report is missing review input, not a clean scan.
+For local review, the scanner prints its report directory under the caller's Git
+metadata; verify its revision against the source being reviewed.
+
+Read every WARNING/INFO finding in `head.json` and its source context before
+completing review. Apply the finding's canonical policy through `policy-index` and
+record its semantic disposition in the PR review: a demonstrated defect, an
+inapplicable heuristic with source evidence, or missing evidence. A suffix match
+alone does not establish a mathematical shim. A policy code on a warning does not
+turn it into a hard-failure remediation request. Unresolved warning dispositions
+leave the independent review incomplete, even when deterministic checks pass.
+
 ### Step 3: Check out PR locally
 
 ```bash

@@ -283,6 +283,9 @@ _semgrep:
 	echo "============================="
 	echo "=== Running: semgrep security pattern verification ==="
 	echo "# Static analysis for code quality and fraud patterns after normalization"
+	report_dir="$(git rev-parse --git-path ai-review-ci/semgrep)/$(git rev-parse HEAD)"
+	mkdir -p "$report_dir"
+	echo "semgrep review reports: $report_dir"
 	# #214: with no project .semgrepignore, semgrep falls back to its bundled
 	# default template, which excludes tests/ — silently killing the
 	# test-antipattern rules (py-no-monkeypatch and its NO_MOCK_PROOF /
@@ -375,8 +378,10 @@ _semgrep:
 			--exclude=codeql-db \
 			--scan-unknown-extensions \
 			"${changed_files[@]}" > "$head_json"
+		cp "$head_json" "$report_dir/head.raw.json"
 		exceptions_rc=0
 		uv run {{artifacts}}/scripts/semgrep_exceptions.py {{configs}}/semgrep-exceptions.toml "$head_json" || exceptions_rc=$?
+		cp "$head_json" "$report_dir/head.json"
 		[ "$exceptions_rc" -le 1 ] || exit "$exceptions_rc"
 		git worktree add --detach "$base_tree" "$DIFF_COVER_BASE" >/dev/null
 		base_files=()
@@ -408,6 +413,9 @@ _semgrep:
 		--exclude=codeql-db \
 		--scan-unknown-extensions \
 		--json-output="$findings_json"
+	cp "$findings_json" "$report_dir/head.raw.json"
+	# Preserve both raw and exception-filtered findings, including WARNING/INFO.
+	trap 'cp "$findings_json" "$report_dir/head.json"; rm -f "$findings_json"; restore_semgrepignore' EXIT
 	if uv run {{artifacts}}/scripts/semgrep_exceptions.py {{configs}}/semgrep-exceptions.toml "$findings_json"; then
 		:
 	else

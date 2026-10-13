@@ -203,6 +203,14 @@ jobs:
           set +a
           just "$QC_TIER"
 
+      - name: Retain exact-revision Semgrep review input
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: semgrep-review-${{ github.sha }}
+          path: .git/ai-review-ci/semgrep/
+          include-hidden-files: true
+          if-no-files-found: warn
       - name: Run gh-boundary tests
         # Least privilege (#218): an explicit downstream opt-in scopes the
         # token to this step alone. The canonical Python profile recipe runs

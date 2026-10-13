@@ -136,6 +136,11 @@ same path, found by running the gate and reading its output, is `#409`.
   Neither enters the PR-feedback triage workflow or requires an independent remediation role.
 
 - Slop/style/coverage findings during commit or push indicate a gate-tier or delegation problem.
+
+  Lean push also runs Semgrep to expose defects before publication; explicit ERROR
+  findings block it. Heuristic WARNING/INFO findings are retained as review input
+  and do not block publication. Independent PR review consumes and disposes them
+  through the code-review guide; successful publication is not review acceptance.
   Policy-sensitive findings belong in `test-ci`, where independent anti-golfing triage and PR review run as separate acceptance channels.
   Do not reinstall hooks or weaken QC until the active hook path, hook contents, and delegated cwd have been verified.
 
