@@ -26,7 +26,9 @@ def _gate(tmp_path: Path, origin: str, issue: int, path: str) -> tuple[int, list
         f'rule = "{RULE}"\nissue = {issue}\n'
     )
     findings = tmp_path / "semgrep.json"
-    findings.write_text(json.dumps({"results": [{"check_id": RULE, "path": path, "start": {"line": 27}}]}))
+    findings.write_text(json.dumps({"results": [{"check_id": RULE, "path": path,
+                                               "start": {"line": 27},
+                                               "extra": {"severity": "ERROR"}}]}))
     proc = subprocess.run([str(SCRIPT), str(exceptions), str(findings)], cwd=project, capture_output=True, text=True)
     return proc.returncode, json.loads(findings.read_text())["results"]
 

@@ -1,23 +1,31 @@
 #!/usr/bin/env python3
-"""Compare Semgrep JSON output and fail only on new finding signatures."""
+"""Compare Semgrep JSON output and fail only on new ERROR finding signatures."""
 
 from __future__ import annotations
 
 import argparse
 import collections
+from collections.abc import Mapping
 import json
 from pathlib import Path
-from typing import Any
 
 
-def _result_signature(result: dict[str, Any]) -> str:
-    extra = result.get("extra") if isinstance(result.get("extra"), dict) else {}
-    lines = str(extra.get("lines", "")).strip()
-    message = str(extra.get("message", "")).strip()
+def _string(value: object) -> str:
+    if not isinstance(value, str):
+        raise ValueError("Semgrep signature fields must be strings")
+    return value
+
+
+def _result_signature(result: Mapping[str, object]) -> str:
+    extra = result["extra"]
+    if not isinstance(extra, dict):
+        raise ValueError("Semgrep finding metadata must be an object")
+    lines = _string(extra["lines"]).strip()
+    message = _string(extra["message"]).strip()
     return "\0".join(
         [
-            str(result.get("check_id", "")),
-            str(result.get("path", "")),
+            _string(result["check_id"]),
+            _string(result["path"]),
             message,
             lines,
         ]
@@ -26,16 +34,21 @@ def _result_signature(result: dict[str, Any]) -> str:
 
 def finding_signatures(path: Path) -> collections.Counter[str]:
     """Return comparable finding signatures from Semgrep JSON output."""
-    if not path.exists() or path.stat().st_size == 0:
-        return collections.Counter()
     payload = json.loads(path.read_text())
-    results = payload.get("results", [])
+    results = payload["results"]
     if not isinstance(results, list):
-        return collections.Counter()
+        raise ValueError("Semgrep results must be a list")
     signatures: collections.Counter[str] = collections.Counter()
     for result in results:
-        if isinstance(result, dict):
+        if not isinstance(result, dict):
+            raise ValueError("Semgrep finding must be an object")
+        severity = result["extra"]["severity"]
+        if severity not in ("ERROR", "WARNING", "INFO"):
+            raise ValueError(f"unknown Semgrep finding severity: {severity}")
+        if severity == "ERROR":
             signatures[_result_signature(result)] += 1
+        else:
+            print(f"semgrep review tripwire ({severity}): {_display_signature(_result_signature(result))}")
     return signatures
 
 

@@ -10,7 +10,8 @@ Rewrites <semgrep.json> in place without each finding whose rule, path and repos
 GitHub slug of `origin` in the working directory) match an entry whose issue of
 dzackgarza/ai-review-ci is open, and prints each dropped finding. The issue state comes from
 the public GitHub REST API with no token (the QC tier runs without one, #218); if it cannot be
-read, the gate fails. Exit 0 with no findings left, 1 with findings left,
+read, the gate fails. Warning and informational findings remain in the report
+for review. Exit 0 with no ERROR findings left, 1 with ERROR findings left,
 2 when an issue state cannot be read.
 """
 
@@ -62,7 +63,10 @@ def main() -> int:
         kept.append(result)
     payload["results"] = kept
     output.write_text(json.dumps(payload))
-    return 1 if kept else 0
+    severities = {result["extra"]["severity"] for result in kept}
+    if not severities.issubset({"ERROR", "WARNING", "INFO"}):
+        raise ValueError(f"unknown Semgrep finding severity: {severities}")
+    return 1 if "ERROR" in severities else 0
 
 
 if __name__ == "__main__":

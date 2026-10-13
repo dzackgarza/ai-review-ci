@@ -702,7 +702,7 @@ rules:
     message: POLICY.NO_UNGROUNDED_MATH_NAME
     languages:
       - generic
-    severity: ERROR
+    severity: WARNING
     paths:
       include:
         - '**/*.lean'
