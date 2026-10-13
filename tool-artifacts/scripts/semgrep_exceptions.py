@@ -49,6 +49,18 @@ def main() -> int:
     exceptions = tomllib.loads(Path(sys.argv[1]).read_text())["exception"]
     output = Path(sys.argv[2])
     payload = json.loads(output.read_text())
+    if not isinstance(payload, dict) or not isinstance(payload['results'], list):
+        raise ValueError('Semgrep results must be a list')
+    for result in payload['results']:
+        if not isinstance(result, dict):
+            raise ValueError('Semgrep finding must be an object')
+        for field in ('check_id', 'path'):
+            if not isinstance(result[field], str) or not result[field]:
+                raise ValueError(f'Semgrep {field} must be a nonempty string')
+        if not isinstance(result['start']['line'], int):
+            raise ValueError('Semgrep start line must be an integer')
+        if result['extra']['severity'] not in {'ERROR', 'WARNING', 'INFO'}:
+            raise ValueError('unknown Semgrep finding severity')
     here = repository()
     kept, open_issues = [], {}
     for result in payload["results"]:
