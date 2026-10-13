@@ -1288,49 +1288,56 @@ def test_semgrep_blocks_typescript_value_defaults(tmp_path: pathlib.Path) -> Non
     assert "Route POLICY.RUNTIME_DEFAULT and other POLICY.* findings" in output
 
 
-def test_semgrep_scans_only_changed_files_in_ci(
-    tmp_path: pathlib.Path,
-) -> None:
+def test_semgrep_scans_only_changed_files_in_ci(tmp_path: pathlib.Path) -> None:
     project = tmp_path / "downstream"
     source = project / "source"
-    fake_bin = tmp_path / "bin"
-    calls = tmp_path / "semgrep-calls"
     source.mkdir(parents=True)
-    fake_bin.mkdir()
-    (source / "legacy.ts").write_text("export const legacy = 'ambient'\n")
-    run_git(project, "init")
-    run_git(project, "config", "user.email", "test@example.com")
-    run_git(project, "config", "user.name", "Test")
-    run_git(project, "add", ".")
-    base_commit = run_git(project, "-c", "core.hooksPath=/dev/null", "commit", "-m", "base")
-    assert base_commit.returncode == 0, base_commit.stdout + base_commit.stderr
+    # A real ERROR in an unchanged file must not enter differential scans.
+    (source / "legacy.ts").write_text("export const legacy = incoming || 'ambient'\n")
+    existing_violation = "export const retained = incoming || 'retained'\n"
+    changed = source / "changed.ts"
+    changed.write_text(existing_violation)
+    init_git_repo(project)
+    assert run_git(project, "add", ".").returncode == 0
+    commit_without_hooks(project, "base")
     base_result = run_git(project, "rev-parse", "HEAD")
     assert base_result.returncode == 0, base_result.stdout + base_result.stderr
     base = base_result.stdout.strip()
-    (source / "changed.ts").write_text("export const changed = 'new'\n")
-    run_git(project, "add", ".")
-    change_commit = run_git(project, "-c", "core.hooksPath=/dev/null", "commit", "-m", "change")
-    assert change_commit.returncode == 0, change_commit.stdout + change_commit.stderr
-    (fake_bin / "uvx").write_text('#!/usr/bin/env bash\nprintf \'%s\\n\' "$*" >> "$SEMGREP_CALLS"\nprintf \'{"results":[]}\\n\'\n')
-    (fake_bin / "uvx").chmod(0o755)
-
-    result = run_just(
-        ROOT / "justfiles" / "shared.just",
-        project,
-        "_semgrep",
-        env={
-            **os.environ,
-            "DIFF_COVER_BASE": base,
-            "PATH": f"{fake_bin}:{os.environ['PATH']}",
-            "QC_TIER": "test-ci",
-            "SEMGREP_CALLS": str(calls),
-        },
-    )
-
+    changed.write_text(existing_violation + "export const changed = 'new'\n")
+    assert run_git(project, "add", ".").returncode == 0
+    commit_without_hooks(project, "change")
+    revision = run_git(project, "rev-parse", "HEAD").stdout.strip()
+    command = ["just", "--justfile", str(ROOT / "justfiles/shared.just"), "-d", ".", "_semgrep"]
+    # The fixture supplies its own baseline, never the hosted outer repo's ref.
+    environment = {**os.environ, "DIFF_COVER_BASE": base, "QC_TIER": "test-ci"}
+    result = subprocess.run(command, cwd=project, env=environment, text=True, capture_output=True)
     assert result.returncode == 0, result.stdout + result.stderr
-    invocation = calls.read_text()
-    assert "source/changed.ts" in invocation
-    assert "source/legacy.ts" not in invocation
+    reports = project / ".git/ai-review-ci/semgrep" / revision
+    head = json.loads((reports / "head.raw.json").read_text())
+    baseline = json.loads((reports / "base.raw.json").read_text())
+    for report in (head, baseline):
+        assert report["errors"] == []
+        assert report["paths"]["scanned"] == ["source/changed.ts"]
+        finding = next(r for r in report["results"] if r["check_id"].endswith("ts-no-or-default"))
+        assert finding["extra"]["severity"] == "ERROR"
+        assert finding["start"]["line"] == 1
+
+    # New ERROR findings still block despite the existing baseline violation.
+    changed.write_text(changed.read_text() + "export const added = incoming || 'added'\n")
+    assert run_git(project, "add", ".").returncode == 0
+    commit_without_hooks(project, "new violation")
+    revision = run_git(project, "rev-parse", "HEAD").stdout.strip()
+    result = subprocess.run(command, cwd=project, env=environment, text=True, capture_output=True)
+    assert result.returncode != 0, result.stdout + result.stderr
+    report_path = project / ".git/ai-review-ci/semgrep" / revision / "head.raw.json"
+    report = json.loads(report_path.read_text())
+    assert report["paths"]["scanned"] == ["source/changed.ts"]
+    assert any(r["check_id"].endswith("ts-no-or-default") and r["start"]["line"] == 3 for r in report["results"])
+
+    result = subprocess.run(command, cwd=project, env={**environment, "DIFF_COVER_BASE": "nonexistent-fixture-ref"}, text=True, capture_output=True)
+    assert result.returncode != 0, result.stdout + result.stderr
+    assert "DIFF_COVER_BASE does not resolve" in result.stderr
+    assert not report_path.exists()
 
 
 def test_semgrep_allows_fail_loud_typescript_guards(tmp_path: pathlib.Path) -> None:
@@ -4253,9 +4260,7 @@ def test_rust_normalization_formats_a_workspace_and_its_members(
     (project / "Cargo.toml").write_text('[workspace]\nmembers = ["server", "desktop"]\nresolver = "2"\n')
     for member in ("server", "desktop"):
         (project / member / "src").mkdir(parents=True)
-        (project / member / "Cargo.toml").write_text(
-            f'[package]\nname = "{member}"\nversion = "0.1.0"\nedition = "2021"\n'
-        )
+        (project / member / "Cargo.toml").write_text(f'[package]\nname = "{member}"\nversion = "0.1.0"\nedition = "2021"\n')
         (project / member / "src" / "lib.rs").write_text("pub fn value()->u8{42}\n")
 
     result = subprocess.run(

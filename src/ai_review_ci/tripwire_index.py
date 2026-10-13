@@ -74,7 +74,7 @@ class _SemgrepRule(BaseModel):
     id: str
     message: str
     languages: tuple[str, ...] = Field(min_length=1)
-    severity: Literal["ERROR"]
+    severity: Literal["ERROR", "WARNING", "INFO"]
     metadata: _RuleMetadata
 
 

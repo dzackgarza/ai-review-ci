@@ -10,11 +10,7 @@ check-semantic-diff base_ref:
     #!/usr/bin/env bash
     set -euo pipefail
     cd {{control_repo}}
-    uvx --from semgrep semgrep scan \
-      --config={{infra}}/tool-configs/semgrep.yml \
-      --baseline-commit="origin/{{base_ref}}" \
-      --scan-unknown-extensions \
-      --error
+    DIFF_COVER_BASE="origin/{{base_ref}}" just -f "{{infra}}/justfiles/shared.just" -d . _semgrep
 
 setup-profile profile:
     #!/usr/bin/env bash
