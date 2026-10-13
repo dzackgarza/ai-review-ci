@@ -287,7 +287,11 @@ _semgrep:
 		report_dir="$(git rev-parse --git-path ai-review-ci/semgrep)/$revision"
 	else
 		# Uncommitted callers remain supported; this report claims no committed identity.
-		report_dir="$(mktemp -d -t ai-review-ci-semgrep.XXXXXX)"
+		if ! report_dir="$(mktemp -d -t ai-review-ci-semgrep.XXXXXX)"; then
+			echo "ERROR: semgrep cannot allocate its required review report directory" >&2
+			"{{artifacts}}/scripts/emit-triage-directive.sh"
+			exit 1
+		fi
 	fi
 	mkdir -p "$report_dir"
 	echo "semgrep review reports: $report_dir"
