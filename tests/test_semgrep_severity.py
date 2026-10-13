@@ -68,3 +68,22 @@ def test_real_suffix_tripwire_and_hard_errors(tmp_path: Path) -> None:
     report.write_text(json.dumps(hard_error))
     assert full_gate().returncode != 0
     assert diff_gate().returncode != 0
+
+
+def test_full_consumer_rejects_malformed_reports_without_rewriting(tmp_path: Path) -> None:
+    exceptions = tmp_path / 'exceptions.toml'
+    exceptions.write_text('exception = []\n')
+    report = tmp_path / 'scan.json'
+    malformed = [
+        {'results': {}},
+        {'results': ''},
+        {'results': [{'extra': {'severity': 'WARNING'}}]},
+    ]
+    for payload in malformed:
+        original = json.dumps(payload)
+        report.write_text(original)
+        result = subprocess.run(
+            ['python3', str(ROOT / 'tool-artifacts/scripts/semgrep_exceptions.py'),
+             str(exceptions), str(report)], cwd=tmp_path, capture_output=True, text=True)
+        assert result.returncode != 0, result.stdout
+        assert report.read_text() == original
