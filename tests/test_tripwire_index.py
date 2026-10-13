@@ -13,6 +13,24 @@ from ai_review_ci.tripwire_index import (
 ROOT = Path(__file__).parent.parent
 
 
+def test_warning_tripwire_retains_canonical_policy_route(tmp_path: Path) -> None:
+    config = tmp_path / "semgrep.yml"
+    config.write_text("""rules:
+  - id: referent-tripwire
+    message: POLICY.NO_UNGROUNDED_MATH_NAME
+    languages: [generic]
+    severity: WARNING
+    pattern-regex: DiscrepancyData
+    metadata:
+      policy_code: POLICY.NO_UNGROUNDED_MATH_NAME
+""")
+    records = collect_semgrep_rules(config, ROOT)
+    assert len(records) == 1
+    assert records[0].policy_code == "POLICY.NO_UNGROUNDED_MATH_NAME"
+    assert records[0].remediation_code == canonical_route("POLICY.NO_UNGROUNDED_MATH_NAME").remediation_code
+    assert records[0].signal_keys == ("referent-tripwire",)
+
+
 def test_inventory_uses_semantic_engine_as_single_runtime_default_owner() -> None:
     inventory = build_tripwire_index(ROOT)
 
