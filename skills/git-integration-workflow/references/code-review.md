@@ -186,7 +186,9 @@ the current PR head. Check the run's `headSha` and, for a PR merge checkout, its
 head parent against the current PR head; inspect the report directory's revision.
 An old run or absent required report is missing review input, not a clean scan.
 For local review, the scanner prints its report directory under the caller's Git
-metadata; verify its revision against the source being reviewed.
+metadata for a clean committed caller. An uncommitted caller prints a separate
+temporary report directory and claims no committed identity: rerun against the
+source being reviewed, and never use that report as evidence about a PR head.
 
 Read every WARNING/INFO finding in `head.json` and its source context before
 completing review. Apply the finding's canonical policy through `policy-index` and

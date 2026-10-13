@@ -283,7 +283,12 @@ _semgrep:
 	echo "============================="
 	echo "=== Running: semgrep security pattern verification ==="
 	echo "# Static analysis for code quality and fraud patterns after normalization"
-	report_dir="$(git rev-parse --git-path ai-review-ci/semgrep)/$(git rev-parse HEAD)"
+	if revision="$(git rev-parse --verify HEAD 2>/dev/null)" && [ -z "$(git status --porcelain)" ]; then
+		report_dir="$(git rev-parse --git-path ai-review-ci/semgrep)/$revision"
+	else
+		# Uncommitted callers remain supported; this report claims no committed identity.
+		report_dir="$(mktemp -d -t ai-review-ci-semgrep.XXXXXX)"
+	fi
 	mkdir -p "$report_dir"
 	echo "semgrep review reports: $report_dir"
 	# #214: with no project .semgrepignore, semgrep falls back to its bundled
