@@ -24,6 +24,8 @@ import urllib.error
 import urllib.request
 from pathlib import Path
 
+from semgrep_report import load_report
+
 ISSUES = "dzackgarza/ai-review-ci"
 GITHUB_REMOTE = re.compile(r"github\.com[:/]([\w.-]+/[\w.-]+?)(?:\.git)?/?$")
 
@@ -48,19 +50,7 @@ def issue_open(number: int) -> bool:
 def main() -> int:
     exceptions = tomllib.loads(Path(sys.argv[1]).read_text())["exception"]
     output = Path(sys.argv[2])
-    payload = json.loads(output.read_text())
-    if not isinstance(payload, dict) or not isinstance(payload['results'], list):
-        raise ValueError('Semgrep results must be a list')
-    for result in payload['results']:
-        if not isinstance(result, dict):
-            raise ValueError('Semgrep finding must be an object')
-        for field in ('check_id', 'path'):
-            if not isinstance(result[field], str) or not result[field]:
-                raise ValueError(f'Semgrep {field} must be a nonempty string')
-        if not isinstance(result['start']['line'], int):
-            raise ValueError('Semgrep start line must be an integer')
-        if result['extra']['severity'] not in {'ERROR', 'WARNING', 'INFO'}:
-            raise ValueError('unknown Semgrep finding severity')
+    payload = load_report(output)
     here = repository()
     kept, open_issues = [], {}
     for result in payload["results"]:
@@ -73,6 +63,11 @@ def main() -> int:
                   f"{result['path']}:{result['start']['line']} {result['check_id']}")
             continue
         kept.append(result)
+    for result in kept:
+        severity = result["extra"]["severity"]
+        if severity in {"WARNING", "INFO"}:
+            print(f"semgrep: independent review required ({severity}): "
+                  f"{result['path']}:{result['start']['line']} {result['check_id']}")
     payload["results"] = kept
     output.write_text(json.dumps(payload))
     severities = {result["extra"]["severity"] for result in kept}

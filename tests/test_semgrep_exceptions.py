@@ -21,14 +21,9 @@ def _gate(tmp_path: Path, origin: str, issue: int, path: str) -> tuple[int, list
     subprocess.run(["git", "init", "-q"], cwd=project, check=True)
     subprocess.run(["git", "remote", "add", "origin", origin], cwd=project, check=True)
     exceptions = tmp_path / "semgrep-exceptions.toml"
-    exceptions.write_text(
-        f'[[exception]]\nrepository = "dzackgarza/lean-cas-dsl"\npath = "{PATH}"\n'
-        f'rule = "{RULE}"\nissue = {issue}\n'
-    )
+    exceptions.write_text(f'[[exception]]\nrepository = "dzackgarza/lean-cas-dsl"\npath = "{PATH}"\nrule = "{RULE}"\nissue = {issue}\n')
     findings = tmp_path / "semgrep.json"
-    findings.write_text(json.dumps({"results": [{"check_id": RULE, "path": path,
-                                               "start": {"line": 27},
-                                               "extra": {"severity": "ERROR"}}]}))
+    findings.write_text(json.dumps({"errors": [], "results": [{"check_id": RULE, "path": path, "start": {"line": 27}, "extra": {"severity": "ERROR"}}]}))
     proc = subprocess.run([str(SCRIPT), str(exceptions), str(findings)], cwd=project, capture_output=True, text=True)
     return proc.returncode, json.loads(findings.read_text())["results"]
 

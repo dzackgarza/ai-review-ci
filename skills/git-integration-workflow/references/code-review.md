@@ -146,7 +146,9 @@ gh pr review 123 --comment --body "Some suggestions, nothing blocking."
 All code evaluation rules, anti-slop guidelines, and validation-evasion auditing are delegated to canonical policy skills:
 
 - **Code Review Policy & Bridge-Burning**: `reviewing-llm-code` and its red-flag catalogs
+
 - **PR Guidance & Triage**: `pr-feedback-triage`
+
 - **Proof & Test Obligations**: `test-guidelines`
 
 Always consult `policy-index` to find the canonical skill for any code review, testing, or remediation question.
@@ -159,10 +161,15 @@ Load [[reviewing-llm-code/SKILL|reviewing-llm-code]] and [[anti-slop/SKILL|anti-
 ## 4. Pre-Push Review Workflow
 
 1. `git diff main...HEAD --stat` — see scope of changes
+
 2. `git diff main...HEAD` — read the full diff
+
 3. For each changed file, use `read_file` for context
+
 4. Apply the review checklist
+
 5. Present findings (Critical / Warnings / Suggestions / Looks Good)
+
 6. If critical issues found, offer to fix before push
 
 * * *
@@ -181,22 +188,24 @@ gh pr diff 123 --name-only
 gh pr checks 123
 ```
 
-Retrieve the `semgrep-review-<run revision>` artifact from the QC run associated with
-the current PR head. Check the run's `headSha` and, for a PR merge checkout, its
-head parent against the current PR head; inspect the report directory's revision.
+Retrieve the `semgrep-review-<run revision>` artifact from the QC run associated with the current PR head.
+Check the run's `headSha` and, for a PR merge checkout, its head parent against the current PR head; inspect the report directory's revision.
 An old run or absent required report is missing review input, not a clean scan.
-For local review, the scanner prints its report directory under the caller's Git
-metadata for a clean committed caller. An uncommitted caller prints a separate
-temporary report directory and claims no committed identity: rerun against the
-source being reviewed, and never use that report as evidence about a PR head.
+For local review, the scanner prints its report directory under the caller's Git metadata for a clean committed caller.
+An uncommitted caller prints a separate temporary report directory and claims no committed identity: rerun against the source being reviewed, and never use that report as evidence about a PR head.
 
-Read every WARNING/INFO finding in `head.json` and its source context before
-completing review. Apply the finding's canonical policy through `policy-index` and
-record its semantic disposition in the PR review: a demonstrated defect, an
-inapplicable heuristic with source evidence, or missing evidence. A suffix match
-alone does not establish a mathematical shim. A policy code on a warning does not
-turn it into a hard-failure remediation request. Unresolved warning dispositions
-leave the independent review incomplete, even when deterministic checks pass.
+Read every WARNING/INFO finding in `head.json`'s `results` and every scanner `warn`/`info` diagnostic in its `errors` before completing review.
+Preserve and inspect the raw report's complete diagnostic type, message, path and spans.
+For each scanner diagnostic, identify the affected source and rule, the analysis that did not complete, and the independent evidence needed to assess that gap; record its semantic disposition in the PR review.
+A native nonfatal diagnostic allows publication but does not establish that the affected analysis succeeded.
+A report explicitly marked `ai_review_ci.evaluation = "empty-domain"` records a successful selection of zero targets; a missing report, malformed report or failed evaluation supplies no such evidence.
+Unresolved diagnostic dispositions leave independent review incomplete.
+
+Read each finding's source context.
+Apply the finding's canonical policy through `policy-index` and record its semantic disposition in the PR review: a demonstrated defect, an inapplicable heuristic with source evidence, or missing evidence.
+A suffix match alone does not establish a mathematical shim.
+A policy code on a warning does not turn it into a hard-failure remediation request.
+Unresolved warning dispositions leave the independent review incomplete, even when deterministic checks pass.
 
 ### Step 3: Check out PR locally
 
@@ -263,5 +272,7 @@ git branch -D pr-<PR_NUMBER>
 ### Decision: Approve vs Request Changes vs Comment
 
 - **Approve** — no critical or warning-level issues
+
 - **Request Changes** — any critical or warning-level issue that should be fixed before merge
+
 - **Comment** — observations and suggestions, nothing blocking

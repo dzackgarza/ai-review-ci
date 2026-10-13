@@ -6,8 +6,10 @@ from __future__ import annotations
 import argparse
 import collections
 from collections.abc import Mapping
-import json
 from pathlib import Path
+
+
+from semgrep_report import load_report
 
 
 def _string(value: object) -> str:
@@ -34,7 +36,7 @@ def _result_signature(result: Mapping[str, object]) -> str:
 
 def finding_signatures(path: Path) -> collections.Counter[str]:
     """Return comparable finding signatures from Semgrep JSON output."""
-    payload = json.loads(path.read_text())
+    payload = load_report(path)
     results = payload["results"]
     if not isinstance(results, list):
         raise ValueError("Semgrep results must be a list")

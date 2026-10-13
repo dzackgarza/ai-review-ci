@@ -294,6 +294,9 @@ _semgrep:
 		fi
 	fi
 	mkdir -p "$report_dir"
+	report_dir="$(cd "$report_dir" && pwd -P)"
+	# Never reuse a prior successful report for an evaluation that now fails.
+	rm -f "$report_dir/head.raw.json" "$report_dir/head.json" "$report_dir/base.raw.json"
 	echo "semgrep review reports: $report_dir"
 	# #214: with no project .semgrepignore, semgrep falls back to its bundled
 	# default template, which excludes tests/ — silently killing the
@@ -360,15 +363,21 @@ _semgrep:
 			esac
 			return 0
 		}
+		changed_manifest="$(mktemp)"
+		trap 'rm -f "$changed_manifest"; restore_semgrepignore' EXIT
+		git diff --name-only --diff-filter=ACMR -z "${DIFF_COVER_BASE}...HEAD" -- . > "$changed_manifest"
 		changed_files=()
 		while IFS= read -r -d '' file; do
 			[[ -f "$file" ]] || continue
 			is_excluded_qc_path "$file" && continue
 			is_semgrep_pr_target "$file" || continue
 			changed_files+=("$file")
-		done < <(git diff --name-only --diff-filter=ACMR -z "${DIFF_COVER_BASE}...HEAD" -- .)
+		done < "$changed_manifest"
+		rm -f "$changed_manifest"
 		if [ ${#changed_files[@]} -eq 0 ]; then
 			echo "semgrep: no changed authored files."
+			uv run {{artifacts}}/scripts/semgrep_report.py --empty-output "$report_dir/head.raw.json" --base "$DIFF_COVER_BASE"
+			cp "$report_dir/head.raw.json" "$report_dir/head.json"
 			exit 0
 		fi
 		head_json="$(mktemp)"
@@ -380,14 +389,18 @@ _semgrep:
 			restore_semgrepignore
 		}
 		trap cleanup_semgrep_diff EXIT
+		scan_rc=0
+		# Explicit filenames retain normal language dispatch: generic Lean rules
+		# still apply, while unrelated parsers do not reinterpret Lean as Python.
 		uvx --from semgrep semgrep scan \
 			--json \
 			--config={{configs}}/semgrep.yml \
 			--config=p/ci \
 			--exclude=codeql-db \
-			--scan-unknown-extensions \
-			"${changed_files[@]}" > "$head_json"
+			--skip-unknown-extensions \
+			"${changed_files[@]}" > "$head_json" || scan_rc=$?
 		cp "$head_json" "$report_dir/head.raw.json"
+		[ "$scan_rc" -eq 0 ] || exit "$scan_rc"
 		exceptions_rc=0
 		uv run {{artifacts}}/scripts/semgrep_exceptions.py {{configs}}/semgrep-exceptions.toml "$head_json" || exceptions_rc=$?
 		cp "$head_json" "$report_dir/head.json"
@@ -400,20 +413,25 @@ _semgrep:
 		if [ ${#base_files[@]} -gt 0 ]; then
 			(
 				cd "$base_tree"
+				scan_rc=0
 				uvx --from semgrep semgrep scan \
 					--json \
 					--config={{configs}}/semgrep.yml \
 					--config=p/ci \
 					--exclude=codeql-db \
-					--scan-unknown-extensions \
-					"${base_files[@]}" > "$base_json"
+					--skip-unknown-extensions \
+					"${base_files[@]}" > "$base_json" || scan_rc=$?
+				cp "$base_json" "$report_dir/base.raw.json"
+				exit "$scan_rc"
 			)
 		else
-			printf '{"results":[]}\n' > "$base_json"
+			uv run {{artifacts}}/scripts/semgrep_report.py --empty-output "$base_json" --base "$DIFF_COVER_BASE"
 		fi
+		cp "$base_json" "$report_dir/base.raw.json"
 		uv run {{artifacts}}/scripts/semgrep_diff_gate.py --base-json "$base_json" --head-json "$head_json"
 		exit 0
 	fi
+	scan_rc=0
 	findings_json="$(mktemp)"
 	trap 'rm -f "$findings_json"; restore_semgrepignore' EXIT
 	uvx --from semgrep semgrep scan \
@@ -421,8 +439,9 @@ _semgrep:
 		--config=p/ci \
 		--exclude=codeql-db \
 		--scan-unknown-extensions \
-		--json-output="$findings_json"
+		--json-output="$findings_json" || scan_rc=$?
 	cp "$findings_json" "$report_dir/head.raw.json"
+	[ "$scan_rc" -eq 0 ] || exit "$scan_rc"
 	# Preserve both raw and exception-filtered findings, including WARNING/INFO.
 	trap 'cp "$findings_json" "$report_dir/head.json"; rm -f "$findings_json"; restore_semgrepignore' EXIT
 	if uv run {{artifacts}}/scripts/semgrep_exceptions.py {{configs}}/semgrep-exceptions.toml "$findings_json"; then
