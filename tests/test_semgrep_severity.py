@@ -1,5 +1,6 @@
 """Real scanner output keeps heuristic findings visible without declaring a defect."""
 import json
+import os
 import subprocess
 from pathlib import Path
 
@@ -100,7 +101,8 @@ def test_real_caller_retains_exact_revision_warning_report(tmp_path: Path) -> No
                     'commit', '-qm', 'caller'], cwd=project, check=True)
     revision = subprocess.check_output(['git', 'rev-parse', 'HEAD'], cwd=project, text=True).strip()
     result = subprocess.run(['just', '-f', str(ROOT / 'justfiles/shared.just'), '-d', '.',
-                             '_semgrep'], cwd=project, capture_output=True, text=True)
+                             '_semgrep'], cwd=project, capture_output=True, text=True,
+                            env={k: v for k, v in os.environ.items() if k != 'DIFF_COVER_BASE'})
     assert result.returncode == 0, result.stdout + result.stderr
     report = project / '.git/ai-review-ci/semgrep' / revision / 'head.json'
     payload = json.loads(report.read_text())
@@ -118,6 +120,7 @@ def test_real_caller_without_commit_still_scans(tmp_path: Path) -> None:
             subprocess.run(['git', 'init', '-q', str(project)], check=True)
         (project / 'unsafe.lean').write_text('axiom fabricated : True\n')
         result = subprocess.run(['just', '-f', str(ROOT / 'justfiles/shared.just'), '-d', '.',
-                                 '_semgrep'], cwd=project, capture_output=True, text=True)
+                                 '_semgrep'], cwd=project, capture_output=True, text=True,
+                                env={k: v for k, v in os.environ.items() if k != 'DIFF_COVER_BASE'})
         assert 'lean-no-axiom' in result.stdout + result.stderr
         assert result.returncode != 0
