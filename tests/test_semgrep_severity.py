@@ -87,3 +87,24 @@ def test_full_consumer_rejects_malformed_reports_without_rewriting(tmp_path: Pat
              str(exceptions), str(report)], cwd=tmp_path, capture_output=True, text=True)
         assert result.returncode != 0, result.stdout
         assert report.read_text() == original
+
+
+def test_real_caller_retains_exact_revision_warning_report(tmp_path: Path) -> None:
+    project = tmp_path / 'caller'
+    project.mkdir()
+    subprocess.run(['git', 'init', '-q', str(project)], check=True)
+    (project / 'packet.lean').write_text('structure ComputationData where\n  encoded : String\n')
+    subprocess.run(['git', 'add', '.'], cwd=project, check=True)
+    subprocess.run(['git', '-c', 'core.hooksPath=/dev/null', '-c', 'commit.gpgsign=false',
+                    '-c', 'user.name=Fixture', '-c', 'user.email=fixture@example.invalid',
+                    'commit', '-qm', 'caller'], cwd=project, check=True)
+    revision = subprocess.check_output(['git', 'rev-parse', 'HEAD'], cwd=project, text=True).strip()
+    result = subprocess.run(['just', '-f', str(ROOT / 'justfiles/shared.just'), '-d', '.',
+                             '_semgrep'], cwd=project, capture_output=True, text=True)
+    assert result.returncode == 0, result.stdout + result.stderr
+    report = project / '.git/ai-review-ci/semgrep' / revision / 'head.json'
+    payload = json.loads(report.read_text())
+    finding = next(r for r in payload['results'] if r['check_id'].endswith('lean-shim-suffix-decl'))
+    assert finding['path'] == 'packet.lean'
+    assert finding['extra']['severity'] == 'WARNING'
+    assert subprocess.check_output(['git', 'status', '--porcelain'], cwd=project, text=True) == ''
