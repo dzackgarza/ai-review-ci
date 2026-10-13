@@ -44,7 +44,18 @@ def test_real_suffix_tripwire_and_hard_errors(tmp_path: Path) -> None:
 
     def diff_gate() -> subprocess.CompletedProcess:
         return subprocess.run(
-            ["python3", str(ROOT / "tool-artifacts/scripts/semgrep_diff_gate.py"), "--base-json", str(base), "--head-json", str(report)],
+            [
+                "python3",
+                str(ROOT / "tool-artifacts/scripts/semgrep_diff_gate.py"),
+                "--base-json",
+                str(base),
+                "--head-json",
+                str(report),
+                "--base-root",
+                str(project),
+                "--head-root",
+                str(project),
+            ],
             cwd=project,
             capture_output=True,
             text=True,
@@ -236,12 +247,23 @@ def test_empty_diff_scan_has_report_but_invalid_base_fails(tmp_path: Path) -> No
 
 def test_consumers_reject_failed_scan_even_without_findings(tmp_path: Path) -> None:
     report = tmp_path / "failed.json"
-    report.write_text(json.dumps({"results": [], "errors": [{"message": "scan failed"}]}))
+    report.write_text(json.dumps({"results": [], "errors": [{"level": "error", "message": "scan failed"}]}))
     base = tmp_path / "base.json"
     base.write_text('{"results": [], "errors": []}')
     commands = [
         ["python3", str(ROOT / "tool-artifacts/scripts/semgrep_exceptions.py"), str(ROOT / "tool-configs/semgrep-exceptions.toml"), str(report)],
-        ["python3", str(ROOT / "tool-artifacts/scripts/semgrep_diff_gate.py"), "--base-json", str(base), "--head-json", str(report)],
+        [
+            "python3",
+            str(ROOT / "tool-artifacts/scripts/semgrep_diff_gate.py"),
+            "--base-json",
+            str(base),
+            "--head-json",
+            str(report),
+            "--base-root",
+            str(tmp_path),
+            "--head-root",
+            str(tmp_path),
+        ],
     ]
     for command in commands:
         result = subprocess.run(command, cwd=tmp_path, capture_output=True, text=True)
@@ -297,3 +319,29 @@ jobs:
     assert reviewed["errors"] == raw["errors"]
     for diagnostic in reviewed["errors"]:
         assert json.dumps(diagnostic, sort_keys=True) in result.stdout
+
+
+def test_ci_diff_distinguishes_replaced_hard_error_with_equal_counts(tmp_path: Path) -> None:
+    project = tmp_path / "caller"
+    _committed_caller(project)
+    source = project / "law.lean"
+    source.write_text("axiom existing : True\n")
+    base = _commit_fixture(project)
+    subprocess.run(["git", "update-ref", "refs/remotes/origin/main", base], cwd=project, check=True)
+    command = ["just", "-f", str(ROOT / "ci/runner.just"), "-d", ".", "check-semantic-diff", "main"]
+    environment = {**os.environ, "GITHUB_WORKSPACE": str(project), "QC_TIER": "test-ci"}
+    source.write_text("-- Shift unchanged source\naxiom existing : True\n")
+    _commit_fixture(project)
+    unchanged = subprocess.run(command, cwd=project, env=environment, capture_output=True, text=True)
+    assert unchanged.returncode == 0, unchanged.stdout + unchanged.stderr
+    source.write_text("-- Shift unchanged source\naxiom newlyInvented : False\n")
+    revision = _commit_fixture(project)
+    replaced = subprocess.run(command, cwd=project, env=environment, capture_output=True, text=True)
+    reports = project / ".git/ai-review-ci/semgrep" / revision
+    old = json.loads((reports / "base.raw.json").read_text())["results"]
+    new = json.loads((reports / "head.raw.json").read_text())["results"]
+    assert len(old) == len(new) == 1
+    assert old[0]["check_id"] == new[0]["check_id"]
+    assert old[0]["path"] == new[0]["path"] == "law.lean"
+    assert old[0]["extra"]["message"] == new[0]["extra"]["message"]
+    assert replaced.returncode != 0, replaced.stdout + replaced.stderr

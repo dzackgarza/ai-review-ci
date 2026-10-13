@@ -6,7 +6,7 @@
 
     semgrep_exceptions.py <semgrep-exceptions.toml> <semgrep.json>
 
-Rewrites <semgrep.json> in place without each finding whose rule, path and repository (the
+Rewrites <semgrep.json> in place without each ERROR finding whose rule, path and repository (the
 GitHub slug of `origin` in the working directory) match an entry whose issue of
 dzackgarza/ai-review-ci is open, and prints each dropped finding. The issue state comes from
 the public GitHub REST API with no token (the QC tier runs without one, #218); if it cannot be
@@ -54,6 +54,9 @@ def main() -> int:
     here = repository()
     kept, open_issues = [], {}
     for result in payload["results"]:
+        if result["extra"]["severity"] != "ERROR":
+            kept.append(result)
+            continue
         match = next((e for e in exceptions if e["repository"] == here and e["path"] == result["path"]
                       and e["rule"] == result["check_id"]), None)
         if match is not None and match["issue"] not in open_issues:

@@ -188,7 +188,14 @@ gh pr diff 123 --name-only
 gh pr checks 123
 ```
 
-Retrieve the `semgrep-review-<run revision>` artifact from the QC run associated with the current PR head.
+Determine the analysis required by the consuming repository's actual delegated profile and selected tier before requiring scanner reports.
+The workflow's `profile` input installs dependencies; the consuming `just` recipe selects the analysis.
+Product profiles running `_semgrep` require its exact-revision review input.
+The `qc-tooling` profile deliberately does not apply product scanners to the checker implementation: its correctness tests use downstream fixtures.
+Scanner nonapplication under that profile is not a successful empty-domain scan and requires no manufactured Semgrep report or self-scan.
+Check the actual recipe delegation against its existing profile contract; absence of required product-profile input still leaves review incomplete.
+
+For a profile and tier requiring Semgrep, retrieve the `semgrep-review-<run revision>` artifact from the QC run associated with the current PR head.
 Check the run's `headSha` and, for a PR merge checkout, its head parent against the current PR head; inspect the report directory's revision.
 An old run or absent required report is missing review input, not a clean scan.
 For local review, the scanner prints its report directory under the caller's Git metadata for a clean committed caller.

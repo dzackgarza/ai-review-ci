@@ -428,7 +428,7 @@ _semgrep:
 			uv run {{artifacts}}/scripts/semgrep_report.py --empty-output "$base_json" --base "$DIFF_COVER_BASE"
 		fi
 		cp "$base_json" "$report_dir/base.raw.json"
-		uv run {{artifacts}}/scripts/semgrep_diff_gate.py --base-json "$base_json" --head-json "$head_json"
+		uv run {{artifacts}}/scripts/semgrep_diff_gate.py --base-json "$base_json" --base-root "$base_tree" --head-json "$head_json" --head-root .
 		exit 0
 	fi
 	scan_rc=0

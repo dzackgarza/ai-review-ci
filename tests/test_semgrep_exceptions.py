@@ -45,3 +45,33 @@ def test_the_finding_stays_otherwise(tmp_path: Path, origin: str, issue: int, pa
     rc, results = _gate(tmp_path, origin, issue, path)
     assert rc == 1
     assert [r["path"] for r in results] == [path]
+
+
+@pytest.mark.parametrize("severity", ["WARNING", "INFO"])
+def test_open_error_exception_preserves_native_advisory_report(tmp_path: Path, severity: str) -> None:
+    import yaml
+
+    project = tmp_path / "project"
+    project.mkdir()
+    subprocess.run(["git", "init", "-q"], cwd=project, check=True)
+    subprocess.run(["git", "remote", "add", "origin", "git@github.com:dzackgarza/lean-cas-dsl.git"], cwd=project, check=True)
+    (project / "packet.lean").write_text("structure TransportData where\n  bytes : String\n")
+    rule = next(r for r in yaml.safe_load((ROOT / "tool-configs/semgrep.yml").read_text())["rules"] if r["id"] == "lean-shim-suffix-decl")
+    rule["severity"] = severity
+    config = tmp_path / "rules.yml"
+    config.write_text(yaml.safe_dump({"rules": [rule]}))
+    scanned = subprocess.run(
+        ["uvx", "--from", "semgrep", "semgrep", "scan", "--config", str(config), "--json", "packet.lean"], cwd=project, capture_output=True, text=True, check=True
+    )
+    raw = json.loads(scanned.stdout)
+    assert len(raw["results"]) == 1
+    finding = raw["results"][0]
+    assert finding["extra"]["severity"] == severity
+    report = tmp_path / "scan.json"
+    report.write_text(scanned.stdout)
+    exceptions = tmp_path / "exceptions.toml"
+    exceptions.write_text(f'[[exception]]\nrepository = "dzackgarza/lean-cas-dsl"\npath = "packet.lean"\nrule = "{finding["check_id"]}"\nissue = {OPEN_ISSUE}\n')
+    result = subprocess.run([str(SCRIPT), str(exceptions), str(report)], cwd=project, capture_output=True, text=True)
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert json.loads(report.read_text()) == raw
+    assert "independent review required" in result.stdout
