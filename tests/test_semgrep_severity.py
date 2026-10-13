@@ -108,3 +108,16 @@ def test_real_caller_retains_exact_revision_warning_report(tmp_path: Path) -> No
     assert finding['path'] == 'packet.lean'
     assert finding['extra']['severity'] == 'WARNING'
     assert subprocess.check_output(['git', 'status', '--porcelain'], cwd=project, text=True) == ''
+
+
+def test_real_caller_without_commit_still_scans(tmp_path: Path) -> None:
+    for initialize_git in (False, True):
+        project = tmp_path / str(initialize_git)
+        project.mkdir()
+        if initialize_git:
+            subprocess.run(['git', 'init', '-q', str(project)], check=True)
+        (project / 'unsafe.lean').write_text('axiom fabricated : True\n')
+        result = subprocess.run(['just', '-f', str(ROOT / 'justfiles/shared.just'), '-d', '.',
+                                 '_semgrep'], cwd=project, capture_output=True, text=True)
+        assert 'lean-no-axiom' in result.stdout + result.stderr
+        assert result.returncode != 0
