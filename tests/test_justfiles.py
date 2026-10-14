@@ -987,6 +987,47 @@ def test_common_normalization_formats_structured_text(
     assert json_file.read_text() == '{ "b": 2, "a": 1 }\n'
 
 
+def test_common_normalization_formats_staged_text_beyond_one_argument_list(
+    tmp_path: pathlib.Path,
+) -> None:
+    # Importing a record corpus stages ~160k Markdown cards in one commit; the
+    # formatter command line then exceeds ARG_MAX ("Argument list too long").
+    project = tmp_path / "project"
+    records = project / "records"
+    records.mkdir(parents=True)
+    argument_bytes = int(subprocess.run(["getconf", "ARG_MAX"], text=True, capture_output=True, check=True).stdout)
+    stem = "r" * 200
+    count = argument_bytes // len(f"records/{stem}00000.md") + 1
+    markdown = [records / f"{stem}{index:05d}.md" for index in range(count)]
+    data = [records / f"{stem}{index:05d}.json" for index in range(count)]
+    for path in markdown:
+        path.write_text("# Title\n\n-   item\n")
+    for path in data:
+        path.write_text('{"b":2,"a":1}\n')
+    subprocess.run(["git", "init", "-q"], cwd=project, check=True)
+    subprocess.run(["git", "add", "records"], cwd=project, check=True)
+
+    result = subprocess.run(
+        [
+            "just",
+            "--justfile",
+            str(ROOT / "justfiles" / "shared.just"),
+            "-d",
+            str(project),
+            "_format-structured-text",
+        ],
+        cwd=project,
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+
+    output = result.stdout + result.stderr
+    assert result.returncode == 0, output
+    assert {path.read_text() for path in markdown} == {"# Title\n\n- item\n"}
+    assert {path.read_text() for path in data} == {'{ "b": 2, "a": 1 }\n'}
+
+
 def load_lint_staged_config() -> dict[str, list[str]]:
     result = subprocess.run(
         [
