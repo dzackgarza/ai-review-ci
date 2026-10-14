@@ -3,8 +3,6 @@ set -euo pipefail
 
 image=sagemath/sagemath-dev:develop
 container=sage-dev-develop
-# Snapshot of the container after its Sage build, so a new container never rebuilds Sage.
-built_image=sage-dev-develop:built
 
 # A group change takes effect in new logins. Keep existing shells usable too.
 docker_gid=$(getent group docker | cut -d: -f3)
@@ -22,16 +20,11 @@ if [[ "$mode" == sage-docker-update ]]; then
     if [[ "$running" == false ]]; then
         docker start "$container"
     elif [[ -z "$running" ]]; then
-        if docker image inspect "$built_image" >/dev/null 2>&1; then
-            run_image=$built_image
-        else
-            docker pull "$image"
-            run_image=$image
-        fi
+        docker pull "$image"
         # Sage runs in the caller's working directory, so every repository must be visible.
         docker run -d --restart unless-stopped --name "$container" --entrypoint /bin/sleep \
             --mount type=bind,src=/home/dzack,dst=/home/dzack \
-            "$run_image" infinity
+            "$image" infinity
     fi
     for ((attempt = 0; attempt < 120; attempt++)); do
         if docker top "$container" 2>/dev/null | grep -q 'sleep infinity'; then
@@ -60,9 +53,6 @@ if [[ "$mode" == sage-docker-update ]]; then
         docker exec "$container" uv pip install --python "$sage_python" \
             'tree-sitter-sage @ git+https://github.com/dzackgarza/tree-sitter-sage@9d7901bbdb5983fa6f47c88c275904c7d6012b4a'
         docker exec "$container" touch /home/sage/sage/local/var/lib/sage/docker-py314-ready
-    fi
-    if ! docker image inspect "$built_image" >/dev/null 2>&1; then
-        docker commit "$container" "$built_image"
     fi
     docker exec -u "$(id -u):$(id -g)" -e HOME=/tmp/sage-home-dzack \
         -e PYTHONNOUSERSITE=1 "$container" sage -c 'print(1)'
