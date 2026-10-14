@@ -68,12 +68,16 @@ _format-structured-text:
 		echo "No staged Markdown, JSON, or YAML files found"
 		exit 0
 	fi
+	# xargs splits each list into command lines that fit ARG_MAX: a corpus import
+	# stages more files than one argument list holds. A failed batch fails xargs.
 	if [ "${#md_files[@]}" -gt 0 ]; then
-		uvx --from 'git+https://github.com/dzackgarza/flowmark.git' flowmark \
-			--inplace --nobackup --semantic --no-respect-gitignore "${md_files[@]}"
+		printf '%s\0' "${md_files[@]}" | xargs -0 \
+			uvx --from 'git+https://github.com/dzackgarza/flowmark.git' flowmark \
+			--inplace --nobackup --semantic --no-respect-gitignore
 	fi
 	if [ "${#data_files[@]}" -gt 0 ]; then
-		npx -y prettier --write --config {{configs}}/prettier-global.json "${data_files[@]}"
+		printf '%s\0' "${data_files[@]}" | xargs -0 \
+			npx -y prettier --write --config {{configs}}/prettier-global.json
 	fi
 
 _semgrep-autofix:
