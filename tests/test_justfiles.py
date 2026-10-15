@@ -1028,6 +1028,46 @@ def test_common_normalization_formats_staged_text_beyond_one_argument_list(
     assert {path.read_text() for path in data} == {'{ "b": 2, "a": 1 }\n'}
 
 
+def test_common_normalization_leaves_declared_corpus_directories_to_their_scheduled_job(
+    tmp_path: pathlib.Path,
+) -> None:
+    # A record corpus (lattice-database: 160k cards) is formatted by its own
+    # nightly job; the commit gate formats everything else that is staged.
+    project = tmp_path / "project"
+    corpus = project / "cards"
+    corpus.mkdir(parents=True)
+    (project / "justfile").write_text('ai_review_ci_format_scheduled_dirs := "cards"\n\ndefault:\n    @just --list\n')
+    readme = project / "README.md"
+    card = corpus / "0001.md"
+    record = corpus / "0001.json"
+    readme.write_text("# Title\n\n-   item\n")
+    card.write_text("# Card\n\n-   item\n")
+    record.write_text('{"b":2,"a":1}\n')
+    subprocess.run(["git", "init", "-q"], cwd=project, check=True)
+    subprocess.run(["git", "add", "."], cwd=project, check=True)
+
+    result = subprocess.run(
+        [
+            "just",
+            "--justfile",
+            str(ROOT / "justfiles" / "shared.just"),
+            "-d",
+            str(project),
+            "_format-structured-text",
+        ],
+        cwd=project,
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+
+    output = result.stdout + result.stderr
+    assert result.returncode == 0, output
+    assert readme.read_text() == "# Title\n\n- item\n"
+    assert card.read_text() == "# Card\n\n-   item\n"
+    assert record.read_text() == '{"b":2,"a":1}\n'
+
+
 def load_lint_staged_config() -> dict[str, list[str]]:
     result = subprocess.run(
         [
