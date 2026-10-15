@@ -9,7 +9,9 @@ A ``.sage`` test is a Sage script. It is lowered by ``sage.repl.preparse.
 preparse_file`` at collection time, after the project's conftests have run.
 That is Sage's own preparser, or the one a project installs in its place, as
 ``sageparse`` does. It runs with ``sage.all_cmdline`` in scope, which is what
-Sage's ``sage-preparse`` prepends to a script. Those names sit in the module's
+Sage's ``sage-preparse`` prepends to a script. An installed preparser's
+``runtime_namespace()``, the prelude its lowerings resolve against, is bound in
+the module before the file runs. The Sage names sit in the module's
 builtins scope, so the file's own bindings take precedence and pytest does not
 collect Sage's ``TestSuite`` from the module namespace. pytest's assertion
 rewriting is applied to the lowered tree, as its import hook does for a ``.py``
@@ -52,11 +54,17 @@ class SageSession(pytest.Module):
             sys.path.insert(0, directory)
         name = ".".join(self.path.relative_to(self.config.rootpath).with_suffix("").parts)
         lowered = preparse.preparse_file(self.path.read_text())
+        preparser = sys.modules[preparse.preparse_file.__module__]
         tree = ast.parse(lowered, filename=str(self.path))
         rewrite_asserts(tree, lowered.encode("utf-8"), str(self.path), self.config)
         module = ModuleType(name)
         module.__file__ = str(self.path)
         module.__dict__["__builtins__"] = _sage_scope()
+        if preparser is not preparse:
+            # An installed preparser's lowerings emit names it binds itself:
+            # sageparse gives every module it lowers runtime_namespace() as its
+            # prelude, as its own .sage importer does.
+            module.__dict__.update(preparser.runtime_namespace())
         sys.modules[name] = module
         exec(compile(tree, str(self.path), "exec", dont_inherit=True), module.__dict__)
         self.config.pluginmanager.consider_module(module)
