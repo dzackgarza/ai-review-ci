@@ -1316,6 +1316,8 @@ def test_semgrep_autofix_defers_unfixed_findings_to_push_tier(
     project.mkdir()
     source = project / "app.ts"
     source.write_text('const API_URL = "https://example.test";\nconsole.log(API_URL);\n')
+    subprocess.run(["git", "init", "-q"], cwd=project, check=True)
+    subprocess.run(["git", "add", "app.ts"], cwd=project, check=True)
 
     commit_tier = run_just(ROOT / "justfiles" / "shared.just", project, "_semgrep-autofix")
     push_tier = run_just(ROOT / "justfiles" / "shared.just", project, "_semgrep")
@@ -1348,6 +1350,30 @@ def test_semgrep_autofix_scans_only_the_staged_files(tmp_path: pathlib.Path) -> 
     assert "Ran" in output and " on 1 file:" in output, output
 
 
+@pytest.mark.parametrize("profile", ["python", "sage", "rust", "bun", "bun-python"])
+def test_ambient_tier_semgrep_scans_files_no_change_touched(tmp_path: pathlib.Path, profile: str) -> None:
+    # The commit tier scans staged files and test-ci scans the diff, so the
+    # scheduled ambient tier is the only scan of the whole tree.
+    project = tmp_path / "ambient-project"
+    source = project / "source"
+    source.mkdir(parents=True)
+    (source / "legacy.ts").write_text("export const legacy = incoming || 'ambient'\n")
+    init_git_repo(project)
+    assert run_git(project, "add", ".").returncode == 0
+    commit_without_hooks(project, "base")
+    revision = run_git(project, "rev-parse", "HEAD").stdout.strip()
+    # A CI runner exports a base; the ambient tier must not narrow to its empty diff.
+    environment = {**os.environ, "DIFF_COVER_BASE": revision, "QC_TIER": "test-ci"}
+
+    result = run_just(ROOT / "justfiles" / f"{profile}.just", project, "ambient", env=environment)
+
+    output = result.stdout + result.stderr
+    assert result.returncode != 0, output
+    report = json.loads((project / ".git/ai-review-ci/semgrep" / revision / "head.raw.json").read_text())
+    assert report["paths"]["scanned"] == ["source/legacy.ts"], output
+    assert any(r["check_id"].endswith("ts-no-or-default") for r in report["results"]), output
+
+
 def test_archived_directories_are_excluded_from_qc_file_discovery_and_semgrep(
     tmp_path: pathlib.Path,
 ) -> None:
@@ -1356,6 +1382,8 @@ def test_archived_directories_are_excluded_from_qc_file_discovery_and_semgrep(
     archive.mkdir(parents=True)
     (project / "active.py").write_text("def current() -> str:\n    return 'current'\n")
     (archive / "historical.py").write_text("from os import getenv\n\nMODE = getenv('MODE', 'historical')\n")
+    subprocess.run(["git", "init", "-q"], cwd=project, check=True)
+    subprocess.run(["git", "add", "."], cwd=project, check=True)
 
     files = run_just(ROOT / "justfiles" / "python.just", project, "_python-qc-files")
     assert files.returncode == 0, files.stdout + files.stderr
