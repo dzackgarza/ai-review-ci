@@ -9,6 +9,7 @@ import yaml
 from ai_review_ci.gates import POLICY_GATE_MARKER, SUPPORTED_PROFILES
 from ai_review_ci.install import (
     AISLOP_CONFIG,
+    AMBIENT_WORKFLOW,
     PR_TEMPLATE,
     PR_WORKFLOW,
     _prove_installation,
@@ -138,7 +139,7 @@ def test_install_writes_trigger_workflows(tmp_path: pathlib.Path) -> None:
     repo = _git_repo(tmp_path)
     _write_trigger_workflows(repo, "bun")
     wf = repo / ".github" / "workflows"
-    assert [p.name for p in wf.iterdir()] == [PR_WORKFLOW]
+    assert sorted(p.name for p in wf.iterdir()) == sorted([PR_WORKFLOW, AMBIENT_WORKFLOW])
     pr = (wf / PR_WORKFLOW).read_text()
     jobs = yaml.safe_load(pr)["jobs"]
     assert set(jobs) == {"qc-ci", "deterministic-diff", "delegation-conformance", "qc-doctor", "pr-description-checklist"}
@@ -153,6 +154,29 @@ def test_install_writes_trigger_workflows(tmp_path: pathlib.Path) -> None:
     assert "profile: 'bun'" in pr
     assert "fail_below" not in pr
     assert "pull_request" in pr
+
+
+@pytest.mark.parametrize("profile", ["python", "bun", "bun-playwright", "bun-python", "rust", "sage"])
+def test_install_writes_scheduled_ambient_workflow(tmp_path: pathlib.Path, profile: str) -> None:
+    repo = _git_repo(tmp_path)
+    _write_trigger_workflows(repo, profile)
+
+    ambient = yaml.safe_load((repo / ".github" / "workflows" / AMBIENT_WORKFLOW).read_text())
+    # PyYAML reads the bare key `on` as True.
+    triggers = ambient[True]
+    assert [entry["cron"] for entry in triggers["schedule"]]
+    assert "pull_request" not in triggers and "push" not in triggers
+    (job,) = ambient["jobs"].values()
+    assert job["uses"] == "dzackgarza/ai-review-ci/.github/workflows/_qc.yml@main"
+    assert job["with"] == {"tier": "ambient", "profile": profile, "infra_ref": "main"}
+
+
+def test_install_writes_no_ambient_workflow_for_docs_and_configs(tmp_path: pathlib.Path) -> None:
+    # docs-and-configs runs no semgrep in any tier, so it has no ambient audit.
+    repo = _git_repo(tmp_path)
+    _write_trigger_workflows(repo, "docs-and-configs")
+
+    assert [p.name for p in (repo / ".github" / "workflows").iterdir()] == [PR_WORKFLOW]
 
 
 @pytest.mark.parametrize("profile", ["python", "bun", "bun-playwright", "bun-python", "rust", "sage"])
