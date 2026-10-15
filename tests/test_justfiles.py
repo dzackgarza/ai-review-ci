@@ -1325,6 +1325,29 @@ def test_semgrep_autofix_defers_unfixed_findings_to_push_tier(
     assert push_tier.returncode != 0, push_tier.stdout + push_tier.stderr
 
 
+def test_semgrep_autofix_scans_only_the_staged_files(tmp_path: pathlib.Path) -> None:
+    # The commit tier is a fast check of what is being committed; the whole tree is
+    # the CI tier's. Committing one file to lattice-database scanned all 161k files.
+    project = tmp_path / "staged-scope-project"
+    project.mkdir()
+    (project / "settled.py").write_text("def settled() -> int:\n    return 1\n")
+    subprocess.run(["git", "init", "-q"], cwd=project, check=True)
+    subprocess.run(["git", "add", "settled.py"], cwd=project, check=True)
+    subprocess.run(
+        ["git", "-c", "user.name=t", "-c", "user.email=t@t", "commit", "-q", "--no-verify", "-m", "settled"],
+        cwd=project,
+        check=True,
+    )
+    (project / "changed.py").write_text("def changed() -> int:\n    return 2\n")
+    subprocess.run(["git", "add", "changed.py"], cwd=project, check=True)
+
+    result = run_just(ROOT / "justfiles" / "shared.just", project, "_semgrep-autofix")
+
+    output = result.stdout + result.stderr
+    assert result.returncode == 0, output
+    assert "Ran" in output and " on 1 file:" in output, output
+
+
 def test_archived_directories_are_excluded_from_qc_file_discovery_and_semgrep(
     tmp_path: pathlib.Path,
 ) -> None:
