@@ -681,11 +681,21 @@ test-ci:
 # changed files to the whole tree, so the debt surfaces run here unscoped
 # rather than against a base ref a schedule does not have.
 
-# public: AMBIENT audit — full-repo deferred-debt scan, not a PR gate
-ambient:
+# private: Bun deferred-debt scans, unscoped
+_ambient-bun-debt:
 	#!/usr/bin/env bash
 	set -euo pipefail
-	export AI_REVIEW_CI_FAILURE_MODE=triage
 	export QC_TIER=ambient
 	just --justfile {{justfile()}} -d . _knip _jscpd-bun _lizard-bun _slop-scan
-	echo "Bun ambient debt audit completed"
+
+# public: AMBIENT audit — whole-tree semgrep and deferred-debt scan, not a PR gate.
+# Every step runs; the audit fails if any did.
+ambient:
+	#!/usr/bin/env bash
+	set -uo pipefail
+	export AI_REVIEW_CI_FAILURE_MODE=triage
+	status=0
+	just -f {{justfiles}}/shared.just -d . _ambient-semgrep || status=1
+	just --justfile {{justfile()}} -d . _ambient-bun-debt || status=1
+	[ "$status" -eq 0 ] || exit 1
+	echo "Bun ambient audit completed"

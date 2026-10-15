@@ -471,6 +471,10 @@ def test_doctor_justfile_parser_accepts_parameter_defaults_and_recipe_attributes
                 "test-ci:",
                 "    @just -f ~/ai-review-ci/justfiles/python.just -d . test-ci",
                 "",
+                "# Run the scheduled whole-tree audit through the central implementation.",
+                "ambient:",
+                "    @just -f ~/ai-review-ci/justfiles/python.just -d . ambient",
+                "",
             ]
         )
     )

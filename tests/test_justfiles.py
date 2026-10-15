@@ -1370,8 +1370,8 @@ def test_ambient_tier_semgrep_scans_files_no_change_touched(tmp_path: pathlib.Pa
     output = result.stdout + result.stderr
     assert result.returncode != 0, output
     report = json.loads((project / ".git/ai-review-ci/semgrep" / revision / "head.raw.json").read_text())
-    assert report["paths"]["scanned"] == ["source/legacy.ts"], output
-    assert any(r["check_id"].endswith("ts-no-or-default") for r in report["results"]), output
+    assert "source/legacy.ts" in report["paths"]["scanned"], output
+    assert any(r["check_id"].endswith("ts-no-or-default") and r["path"] == "source/legacy.ts" for r in report["results"]), output
 
 
 def test_archived_directories_are_excluded_from_qc_file_discovery_and_semgrep(

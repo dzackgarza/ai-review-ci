@@ -15,7 +15,7 @@ from cyclopts import Parameter
 from pydantic import BaseModel, ConfigDict, Field, TypeAdapter, ValidationError
 
 from ai_review_ci.gates import PROJECT_PROFILES, SUPPORTED_PROFILES, ProjectProfile, delegates_to_global_qc, required_check_contexts
-from ai_review_ci.install import PR_WORKFLOW
+from ai_review_ci.install import AMBIENT_WORKFLOW, PR_WORKFLOW
 from ai_review_ci.labels import Label, RemoteLabel, compute_label_actions, load_taxonomy
 
 SCHEMA_VERSION: Literal[1] = 1
@@ -445,6 +445,36 @@ def _profile_proofs(target: Path) -> dict[str, ProfileProofObservation]:
 
 def _workflow_refs(target: Path, contract: JustfileContractDeclaration, profile: ProfileName) -> dict[str, WorkflowRefObservation]:
     required_ref = contract.installed_ref if isinstance(contract, QcJustfileContract) else ""
+    refs = {PR_WORKFLOW: _pr_workflow_ref(target, required_ref, profile)}
+    if PROJECT_PROFILES[profile].has_ambient_audit:
+        refs[AMBIENT_WORKFLOW] = _ambient_workflow_ref(target, required_ref)
+    return refs
+
+
+def _ambient_workflow_ref(target: Path, required_ref: str) -> WorkflowRefObservation:
+    path = target / ".github" / "workflows" / AMBIENT_WORKFLOW
+    refs: set[str] = set()
+    gates: set[str] = set()
+    if path.is_file():
+        data = _yaml_mapping(path)
+        jobs = TypeAdapter(dict[str, dict[str, Any]]).validate_python(data["jobs"] if "jobs" in data else {})
+        for job in jobs.values():
+            uses = str(job["uses"]) if "uses" in job else ""
+            if "dzackgarza/ai-review-ci/.github/workflows/_qc.yml@" in uses:
+                refs.add(uses.rsplit("@", 1)[1])
+                with_block = TypeAdapter(dict[str, Any]).validate_python(job["with"]) if "with" in job else {}
+                if with_block.get("tier") == "ambient":
+                    gates.add("ambient")
+    return WorkflowRefObservation(
+        path=str(path),
+        required_ref=required_ref,
+        observed_ref=next(iter(refs)) if len(refs) == 1 else "",
+        required_gates=("ambient",),
+        observed_gates=tuple(sorted(gates)),
+    )
+
+
+def _pr_workflow_ref(target: Path, required_ref: str, profile: ProfileName) -> WorkflowRefObservation:
     path = target / ".github" / "workflows" / PR_WORKFLOW
     refs: set[str] = set()
     gates: set[str] = set()
@@ -464,15 +494,13 @@ def _workflow_refs(target: Path, contract: JustfileContractDeclaration, profile:
                 gate = with_block["gate"] if "gate" in with_block else ""
                 if isinstance(gate, str):
                     gates.add(gate)
-    return {
-        PR_WORKFLOW: WorkflowRefObservation(
-            path=str(path),
-            required_ref=required_ref,
-            observed_ref=next(iter(refs)) if len(refs) == 1 else "",
-            required_gates=_required_workflow_gates(profile),
-            observed_gates=tuple(sorted(gates)),
-        )
-    }
+    return WorkflowRefObservation(
+        path=str(path),
+        required_ref=required_ref,
+        observed_ref=next(iter(refs)) if len(refs) == 1 else "",
+        required_gates=_required_workflow_gates(profile),
+        observed_gates=tuple(sorted(gates)),
+    )
 
 
 def _yaml_mapping(path: Path) -> Mapping[object, object]:
@@ -500,6 +528,8 @@ def _justfile_delegation(target: Path, profile: ProfileName) -> dict[str, Delega
     recipes = ["test-commit", "test-push", "test-ci"]
     if project_profile.requires_app_boot:
         recipes.append("app-boot")
+    if project_profile.has_ambient_audit:
+        recipes.append("ambient")
     justfile = _justfile_path(target)
     return {recipe: _recipe_delegation(target, justfile, project_profile, recipe) for recipe in recipes}
 
@@ -914,6 +944,7 @@ def _invalidation_inputs(target: Path, declaration_hash: str) -> tuple[str, ...]
         target / "justfile",
         target / "Justfile",
         target / ".github" / "workflows" / PR_WORKFLOW,
+        target / ".github" / "workflows" / AMBIENT_WORKFLOW,
     ]:
         if path.is_file():
             inputs.append(f"{path.relative_to(target)}:{_sha256(path)}")

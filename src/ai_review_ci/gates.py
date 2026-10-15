@@ -40,6 +40,8 @@ class ProjectProfile(BaseModel):
     requires_cargo_manifest: bool = False
     requires_sage_file: bool = False
     requires_app_boot: bool = False
+    # The scheduled whole-tree audit (ambient.yml, `just ambient`); every profile that runs semgrep has one.
+    has_ambient_audit: bool = True
 
 
 PROJECT_PROFILES = {
@@ -58,7 +60,7 @@ PROJECT_PROFILES = {
         required_paths=("pyproject.toml", "package.json"),
         requires_bun_lock=True,
     ),
-    "docs-and-configs": ProjectProfile(name="docs-and-configs", justfile_names=("docs-and-configs.just",), required_paths=()),
+    "docs-and-configs": ProjectProfile(name="docs-and-configs", justfile_names=("docs-and-configs.just",), required_paths=(), has_ambient_audit=False),
     "rust": ProjectProfile(name="rust", justfile_names=("rust.just",), required_paths=(), requires_cargo_manifest=True),
     "sage": ProjectProfile(name="sage", justfile_names=("sage.just",), required_paths=("pyproject.toml",), requires_sage_file=True),
 }

@@ -93,26 +93,40 @@ _semgrep-autofix:
 	source "{{artifacts}}/scripts/heavy-gate-lock.sh"
 	echo "============================="
 	echo "=== Running: semgrep auto-fix ==="
-	echo "# Applies Semgrep autofixes; CI-tier Semgrep verification owns remaining findings"
+	echo "# Applies Semgrep autofixes to the staged files; the ambient tier scans the whole tree"
+	# The commit tier checks what is being committed. The whole tree is scanned by
+	# the scheduled ambient tier (QC_TIER=ambient _semgrep), not on every commit.
 	exclude_dirs_output="$(uv run {{artifacts}}/scripts/read_qc_excludes.py {{configs}}/qc-excludes.toml)"
-	exclude_dirs=()
+	exclude_pathspecs=(":(exclude,glob)**/*.html")
+	exclude_args=("--exclude=*.html" "--exclude=**/*.html")
 	if [ -n "$exclude_dirs_output" ]; then
-		mapfile -t exclude_dirs <<<"$exclude_dirs_output"
+		while IFS= read -r dir; do
+			exclude_pathspecs+=(":(exclude,glob)**/$dir/**")
+			exclude_args+=("--exclude=$dir")
+		done <<<"$exclude_dirs_output"
 	fi
-	exclude_args=()
-	for dir in "${exclude_dirs[@]}"; do
-		exclude_args+=("--exclude=$dir")
-	done
-	exclude_args+=("--exclude=*.html")
-	exclude_args+=("--exclude=**/*.html")
+	# A repository's record corpus is formatted and scanned by its own scheduled jobs.
+	if just --variables | tr ' ' '\n' | grep -x ai_review_ci_format_scheduled_dirs >/dev/null; then
+		for dir in $(just --evaluate ai_review_ci_format_scheduled_dirs); do
+			exclude_pathspecs+=(":(exclude)$dir")
+		done
+	fi
+	staged_manifest="$(mktemp -t semgrep-autofix-staged.XXXXXX)"
+	git diff --cached --name-only --diff-filter=ACMR -z -- . "${exclude_pathspecs[@]}" >"$staged_manifest"
+	if [ ! -s "$staged_manifest" ]; then
+		rm -f -- "$staged_manifest"
+		echo "semgrep autofix: no staged files."
+		exit 0
+	fi
 	# This gate applies autofixes; CI-tier verification owns the remaining findings, so
 	# printing them here is advisory output the caller cannot act on. Measured at 177 lines
 	# and 8.4 KB per run in one repository — on every commit, in every repository. Agent
 	# callers carry that into their conversation, so capture it and print a summary instead,
 	# replaying the whole thing only when the scan actually fails.
 	scan_log="$(mktemp -t semgrep-autofix.XXXXXX)"
-	trap 'rm -f -- "$scan_log"' EXIT
-	if "{{artifacts}}/scripts/semgrep-with-qc-ignores.sh" \
+	trap 'rm -f -- "$scan_log" "$staged_manifest"' EXIT
+	# xargs batches a large staged set (a corpus import) under ARG_MAX.
+	if xargs -0 "{{artifacts}}/scripts/semgrep-with-qc-ignores.sh" \
 		"{{artifacts}}/scripts/read_qc_excludes.py" \
 		"{{configs}}/qc-excludes.toml" \
 		-- \
@@ -122,7 +136,7 @@ _semgrep-autofix:
 		--exclude=codeql-db \
 		"${exclude_args[@]}" \
 		--scan-unknown-extensions \
-		--autofix >"$scan_log" 2>&1; then
+		--autofix <"$staged_manifest" >"$scan_log" 2>&1; then
 		grep -E '^(Ran [0-9]+ rules|.*files? (modified|left unchanged) by autofix)' "$scan_log" || true
 		findings="$(grep -cE '^\s+❯❯❱ ' "$scan_log" || true)"
 		echo "semgrep autofix: ${findings:-0} advisory finding group(s); CI-tier verification owns them"
@@ -797,6 +811,14 @@ _sync-qc-excludes:
 
 # Push/CI-tier cross-language stack. `_no-bypass` is NOT here — it is a
 # commit-tier check invoked directly by each language's `test-commit` recipe.
+# private: whole-tree semgrep for the scheduled ambient tier. QC_TIER=ambient makes
+# _semgrep ignore DIFF_COVER_BASE and scan every file.
+_ambient-semgrep:
+	#!/usr/bin/env bash
+	set -euo pipefail
+	export QC_TIER=ambient
+	just --justfile {{justfile()}} -d . _semgrep
+
 _global-qc: _ensure-qc-repo-current _check-envrc _check-no-local-qc-override _semgrep _ast-grep _vibecheck _slop _aislop
 	#!/usr/bin/env bash
 	set -euo pipefail

@@ -5,6 +5,8 @@ configuration file that the repo owns and edits directly afterward:
 
 - review-pr.yml       — the required deterministic QC gates on every pull
                         request, rendered for the declared profile
+- ambient.yml         — the scheduled whole-tree audit, for every profile
+                        that runs semgrep
 
 Existing files are never overwritten: once installed they are repo-owned
 configuration. Installation also applies the GitHub-side required-check
@@ -15,11 +17,13 @@ import pathlib
 import sys
 from importlib.resources import files
 
-from ai_review_ci.gates import SUPPORTED_PROFILES, protect_branch
+from ai_review_ci.gates import PROJECT_PROFILES, SUPPORTED_PROFILES, protect_branch
 
 SCAFFOLD_FILES = ("justfile",)
 PR_TEMPLATE = "pull_request_template.md"
 PR_WORKFLOW = "review-pr.yml"
+# The scheduled whole-tree audit: the only semgrep scan of the whole tree.
+AMBIENT_WORKFLOW = "ambient.yml"
 # The canonical aislop policy, distributed into every governed repo (#228).
 # aislop has no --config flag; it reads .aislop/config.yml from the scanned
 # directory root, so distribution means writing the file into the target repo.
@@ -50,10 +54,10 @@ def _git_repo_root(target: pathlib.Path) -> pathlib.Path:
     return target
 
 
-def _template_text(profile: str, ref: str = DEFAULT_INFRA_REF) -> str:
-    """Render the PR QC trigger workflow for a profile and an ai-review-ci ref."""
+def _template_text(profile: str, ref: str = DEFAULT_INFRA_REF, workflow: str = PR_WORKFLOW) -> str:
+    """Render a trigger workflow for a profile and an ai-review-ci ref."""
     _validate_profile(profile)
-    source = "review-pr-bun-playwright.yml" if profile == "bun-playwright" else PR_WORKFLOW
+    source = "review-pr-bun-playwright.yml" if workflow == PR_WORKFLOW and profile == "bun-playwright" else workflow
     text = (files("ai_review_ci") / "templates" / source).read_text(encoding="utf-8")
     return text.replace("{{ profile }}", profile).replace("{{ ref }}", ref)
 
@@ -111,21 +115,26 @@ def _write_scaffold(
 
 
 def _write_trigger_workflows(target: pathlib.Path, profile: str, ref: str = DEFAULT_INFRA_REF) -> None:
-    """Write the repo-owned PR QC trigger workflow."""
+    """Write the repo-owned PR QC and scheduled ambient trigger workflows."""
     _validate_profile(profile)
     target = _git_repo_root(target)
+    workflows = [PR_WORKFLOW]
+    if PROJECT_PROFILES[profile].has_ambient_audit:
+        workflows.append(AMBIENT_WORKFLOW)
 
-    dest = target / ".github" / "workflows" / PR_WORKFLOW
-    if dest.exists():
+    existing = [name for name in workflows if (target / ".github" / "workflows" / name).exists()]
+    if existing:
         print(
-            f"FATAL: already installed in {target}: {PR_WORKFLOW} — this is repo-owned configuration; edit it directly, or remove it first to re-initialize.",
+            f"FATAL: already installed in {target}: {', '.join(existing)} — this is repo-owned configuration; edit it directly, or remove it first to re-initialize.",
             file=sys.stderr,
         )
         sys.exit(1)
 
-    dest.parent.mkdir(parents=True, exist_ok=True)
-    dest.write_text(_template_text(profile, ref))
-    print(f"installed .github/workflows/{PR_WORKFLOW}")
+    for name in workflows:
+        dest = target / ".github" / "workflows" / name
+        dest.parent.mkdir(parents=True, exist_ok=True)
+        dest.write_text(_template_text(profile, ref, name))
+        print(f"installed .github/workflows/{name}")
 
 
 def _write_pr_template(target: pathlib.Path) -> None:
