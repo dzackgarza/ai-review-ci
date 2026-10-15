@@ -50,6 +50,13 @@ _format-structured-text:
 			exclude_pathspecs+=(":(exclude,glob)**/$dir/**")
 		done <<<"$exclude_dirs_output"
 	fi
+	# A repository's record corpus is formatted by that repository's own scheduled
+	# job: its justfile names the directories in ai_review_ci_format_scheduled_dirs.
+	if just --variables | tr ' ' '\n' | grep -x ai_review_ci_format_scheduled_dirs >/dev/null; then
+		for dir in $(just --evaluate ai_review_ci_format_scheduled_dirs); do
+			exclude_pathspecs+=(":(exclude)$dir")
+		done
+	fi
 	md_files=()
 	data_files=()
 	while IFS= read -r -d '' file; do
