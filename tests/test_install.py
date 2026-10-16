@@ -546,6 +546,12 @@ def test_qc_workflow_installs_project_profile_before_running_acceptance() -> Non
     assert install == ('just -f "$HOME/ai-review-ci/ci/runner.just" setup-profile "$QC_PROFILE"')
 
 
+def test_sage_ci_uses_the_published_runtime_when_no_setup_is_supplied() -> None:
+    job = _workflow_jobs("_qc.yml")["qc"]
+    assert job["container"] == "${{ inputs.profile == 'sage' && inputs.tier == 'test-ci' && inputs.setup_recipe == '' && 'ghcr.io/dzackgarza/sage:develop' || '' }}"
+    assert job["defaults"]["run"]["shell"] == "bash"
+
+
 def test_sage_ambient_does_not_require_project_dependencies() -> None:
     job = _workflow_jobs("_qc.yml")["qc"]
     install = next(step for step in job["steps"] if step.get("name") == "Install project dependencies")
