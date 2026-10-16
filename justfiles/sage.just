@@ -481,7 +481,7 @@ _sage-pytest:
 	for test_file in "${sage_test_files[@]:-}" "${py_test_files[@]:-}"; do
 		[ -n "$test_file" ] && test_paths+=("$test_file")
 	done
-	just --justfile {{justfile()}} -d . _sage-pytest-run "${test_paths[@]}"
+	just --justfile {{justfile()}} -d . _sage-pytest-run -p qc_unique_inventory "${test_paths[@]}"
 
 # public: run selected Sage tests (paths, node ids, -k) exactly as the PUSH gate does, recording timings
 [positional-arguments]
@@ -573,7 +573,7 @@ _sage-pytest-coverage:
 		"{{artifacts}}/scripts/emit-triage-directive.sh"
 		exit 1
 	fi
-	pytest_args=(-p qc_sage_session -p qc_xfail_issues)
+	pytest_args=(-p qc_sage_session -p qc_xfail_issues -p qc_unique_inventory)
 	for test_file in "${sage_test_files[@]:-}" "${py_test_files[@]:-}"; do
 		[ -n "$test_file" ] && pytest_args+=("$test_file")
 	done
