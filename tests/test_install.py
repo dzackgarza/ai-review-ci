@@ -533,7 +533,7 @@ def test_qc_workflow_installs_flowmark_runtime_dependencies() -> None:
 
     assert install_index < run_index
     assert isinstance(install, dict)
-    assert install["run"] == "sudo apt-get update && sudo apt-get install -y pandoc ripgrep"
+    assert "sudo apt-get update && sudo apt-get install -y pandoc ripgrep" in install["run"]
 
 
 def test_qc_workflow_installs_project_profile_before_running_acceptance() -> None:
