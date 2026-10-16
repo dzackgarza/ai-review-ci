@@ -7,8 +7,8 @@ container=sage-dev-develop
 # A group change takes effect in new logins. Keep existing shells usable too.
 docker_gid=$(getent group docker | cut -d: -f3)
 if ! id -G | tr ' ' '\n' | grep -qx "$docker_gid"; then
-    printf -v command '%q ' "$0" "$@"
-    exec /usr/bin/sg docker -c "$command"
+    launcher_dir=$(dirname -- "$(readlink -f -- "$0")")
+    exec bash "$launcher_dir/group-exec" docker "$0" "$@"
 fi
 
 mode=${0##*/}
