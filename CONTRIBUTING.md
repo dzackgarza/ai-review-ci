@@ -47,6 +47,14 @@ archived source documents (including raw HTML tables) are data, not source code 
 to this limit. The central recipe owns the source-language selection; consumers do not
 supply exclusions or change the thresholds.
 
+## In-progress database field defaults
+
+Projects carrying the GitHub topic `in-progress-database` are exempt from the
+`no-field-default` Pydantic rule. The central Python scanner reads the origin
+repository's live GitHub topics and disables only that rule. A local configuration,
+environment variable or source comment cannot grant the exception. A failed metadata
+lookup fails the scan; it never grants an exception. Other rules and gates still apply.
+
 ## Where the rules come from
 
 The rules are not defaults, and they are not best practice as generally understood. They

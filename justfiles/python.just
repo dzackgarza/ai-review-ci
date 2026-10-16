@@ -689,10 +689,16 @@ _ast-grep: _install-tools
 		echo "ast-grep: no changed Python files."
 		exit 0
 	fi
+	project_rule_arguments=()
+	project_rule_output="$(uv run --project {{infra}} python -m ai_review_ci.project_policy)"
+	if [ -n "$project_rule_output" ]; then
+		mapfile -t project_rule_arguments <<<"$project_rule_output"
+	fi
 	findings_file=$(mktemp)
 	trap 'if [ -e "$findings_file" ]; then rm -f "$findings_file"; fi' EXIT
 	npx -y --package @ast-grep/cli ast-grep scan \
 		--config {{configs}}/sgconfig.yml \
+		"${project_rule_arguments[@]}" \
 		--report-style short \
 		"${python_files[@]}" | tee "$findings_file"
 	# Fail on error-severity findings. Every central rule routes to a POLICY.*
