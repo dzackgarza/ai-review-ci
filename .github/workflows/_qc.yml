@@ -118,7 +118,13 @@ jobs:
         # The QC file-discovery recipes (_python-qc-files etc.) shell out to `rg`.
         # Dev machines have it on PATH; a bare runner does not, so install it
         # explicitly — same contract for downstream consumers of this workflow.
-        run: sudo apt-get update && sudo apt-get install -y pandoc ripgrep
+        run: |
+          if [ "$(id -u)" -eq 0 ]; then
+            apt-get update
+            apt-get install -y sudo
+          fi
+          sudo apt-get update && sudo apt-get install -y pandoc ripgrep
+
       # The Markdown formatter (flowmark, run by _format-structured-text) parses
       # only with pandoc-flowmark, a static build of the Pandoc fork
       # dzackgarza/pandoc (branch flowmark-sourcepos). Same pinned tag and
@@ -210,3 +216,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: just -f "$HOME/ai-review-ci/justfiles/python.just" -d . test-gh-boundary
         if: inputs.run_gh_boundary
+    container: ${{ inputs.profile == 'sage' && inputs.tier == 'test-ci' && inputs.setup_recipe == '' && 'ghcr.io/dzackgarza/sage:develop' || '' }}
+    defaults:
+      run:
+        shell: bash
