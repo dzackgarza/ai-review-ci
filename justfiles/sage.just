@@ -779,19 +779,27 @@ _sage-mypy: _sage-qc-files
 		done
 	}
 	trap cleanup_mypy EXIT
-	uv venv --quiet --allow-existing --python "$sage_python" "$mypy_env"
+	# Execute tools through the configured interpreter's environment. Its native
+	# sys.executable may exist only inside a container, so host uv cannot use it.
+	run_in_sage() {
+		"$sage_python" -c 'import os, sys; os.execvp(sys.argv[1], sys.argv[1:])' "$@"
+	}
+	native_sage_python="$("$sage_python" -c 'import sys; print(sys.executable)')"
+	run_in_sage uv venv --quiet --allow-existing --python "$native_sage_python" "$mypy_env"
 	sage_site="$("$sage_python" -c 'import sysconfig; print(sysconfig.get_paths()["purelib"])')"
-	overlay_site="$("$mypy_env/bin/python" -c 'import sysconfig; print(sysconfig.get_paths()["purelib"])')"
-	printf '%s\n' "$sage_site" >"$overlay_site/zz-sage-environment.pth"
+	overlay_site="$(run_in_sage "$mypy_env/bin/python" -c 'import sysconfig; print(sysconfig.get_paths()["purelib"])')"
+	# Sage may be editable: process its own .pth files as well as adding the directory.
+	"$sage_python" -c 'import sys; print("import site; site.addsitedir(" + repr(sys.argv[1]) + ")")' \
+		"$sage_site" >"$overlay_site/zz-sage-environment.pth"
 	typing_requirements=()
 	typing_requirements_output="$(uv run --no-project python "{{artifacts}}/scripts/python_qc_metadata.py" dependency-group-requirements .)"
 	if [ -n "$typing_requirements_output" ]; then
 		mapfile -t typing_requirements <<<"$typing_requirements_output"
 	fi
-	uv pip install --quiet --python "$mypy_env/bin/python" mypy \
+	run_in_sage uv pip install --quiet --python "$mypy_env/bin/python" mypy \
 		"sage-mypy-category-plugin @ git+https://github.com/dzackgarza/sagemath-mypy-plugin@main" \
 		"${typing_requirements[@]}"
-	if (cd "$mypy_run_dir" && "$mypy_env/bin/python" -m mypy \
+	if (cd "$mypy_run_dir" && run_in_sage "$mypy_env/bin/python" -m mypy \
 		--config-file "$effective_config" \
 		"${mypy_flags[@]}" \
 		"${mypy_targets[@]}"); then
