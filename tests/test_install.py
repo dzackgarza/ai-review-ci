@@ -1,3 +1,4 @@
+import os
 import pathlib
 import subprocess
 import sys
@@ -643,3 +644,22 @@ def test_qc_scopes_gh_token_to_explicitly_opted_in_gh_boundary_step() -> None:
     assert 'just -f "$HOME/ai-review-ci/justfiles/python.just" -d . test-gh-boundary' == run
     assert '"$QC_TIER"' not in run
     assert step["if"] == "inputs.run_gh_boundary"
+
+
+def test_qc_tier_provisions_the_scratch_directory_declared_by_the_consumer(tmp_path: pathlib.Path) -> None:
+    home = tmp_path / "home"
+    home.mkdir()
+    consumer = tmp_path / "consumer"
+    consumer.mkdir()
+    scratch = consumer / "scratch"
+    (consumer / ".envrc").write_text('source_up\nexport TMPDIR="$PWD/scratch"\n')
+    (consumer / "justfile").write_text('ambient:\n    mktemp > created-path\n')
+    job = _workflow_jobs("_qc.yml")["qc"]
+    step = next(step for step in job["steps"] if step.get("name") == "Run QC tier")
+    result = subprocess.run(["bash", "-e", "-c", step["run"]], cwd=consumer,
+                            env=os.environ | {"HOME": str(home), "QC_TIER": "ambient"},
+                            capture_output=True, text=True)
+    assert result.returncode == 0, result.stdout + result.stderr
+    created = pathlib.Path((consumer / "created-path").read_text().strip())
+    assert created.parent == scratch
+    assert created.is_file()
