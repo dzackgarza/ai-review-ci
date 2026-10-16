@@ -1,5 +1,6 @@
 """Deterministic gates that do not depend on reviewer judgment."""
 
+import io
 import json
 import re
 import subprocess
@@ -14,8 +15,6 @@ JsonDict = dict[str, Any]
 
 _TS_JS_SUFFIXES = (".ts", ".tsx", ".js", ".jsx", ".mjs", ".cjs")
 _NON_CODE_SUFFIXES = (".md", ".markdown", ".mdx")
-_DIFF_SECTION_START = re.compile(r"(?m)(?=^diff --git )")
-_NON_TEXT_DIFF_CONTENT = re.compile(r"[\udc80-\udcff\x0b\x0c\x1c-\x1e\x85\u2028\u2029]|\r(?!\n)")
 
 
 class DiffRule(BaseModel):
@@ -207,7 +206,9 @@ def lexical_diff_findings(diff_text: str) -> list[str]:
     discard. Semantic code shapes are owned by Semgrep or ast-grep.
     """
     findings: list[str] = []
-    for patched_file in PatchSet(diff_text.splitlines(keepends=True)):
+    # Git delimits patch records with LF. Other line-separator characters can
+    # occur inside the changed text and must remain part of that record.
+    for patched_file in PatchSet(io.StringIO(diff_text)):
         if patched_file.is_removed_file:
             continue
         file_path = str(patched_file.path)
@@ -224,24 +225,17 @@ def lexical_diff_findings(diff_text: str) -> list[str]:
     return findings
 
 
-def _text_diff_sections(diff_text: str) -> str:
-    """Keep file sections whose content is safe for unified-text parsing."""
-    sections = _DIFF_SECTION_START.split(diff_text)
-    return "".join(section for section in sections if _NON_TEXT_DIFF_CONTENT.search(section) is None)
-
-
 def check_staged_bypass() -> None:
     """Fail if staged added lines introduce validator or type-system bypasses."""
     result = subprocess.run(
         ["git", "diff", "--cached", "--unified=0", "--diff-filter=ACM"],
         capture_output=True,
-        text=True,
-        encoding="utf-8",
-        errors="surrogateescape",
     )
     if result.returncode != 0:
-        _fail(f"git diff --cached failed: {result.stderr.strip()}")
-    findings = lexical_diff_findings(_text_diff_sections(result.stdout))
+        _fail(f"git diff --cached failed: {result.stderr.decode('utf-8', errors='backslashreplace').strip()}")
+    # Text-mode subprocess capture translates CR in payload text into LF and
+    # corrupts hunk lengths before parsing. Preserve the original patch bytes.
+    findings = lexical_diff_findings(result.stdout.decode("utf-8", errors="surrogateescape"))
     if findings:
         print("Staged bypass gate found introduced violations:", file=sys.stderr)
         for finding in findings:

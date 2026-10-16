@@ -442,7 +442,7 @@ _vulture: _sage-qc-files
 		done
 	fi
 
-	uvx --python 3.14 --from vulture vulture \
+	uv run --no-project --python 3.14 --with vulture python "{{artifacts}}/scripts/vulture-frameworks.py" \
 		--config {{configs}}/pyproject.toml \
 		"${python_files[@]}" \
 		"${generated_sage_python_files[@]}" \
