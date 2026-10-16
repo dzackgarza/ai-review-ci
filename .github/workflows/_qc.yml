@@ -196,6 +196,9 @@ jobs:
           set -a
           [ -f .envrc ] && . .envrc
           set +a
+          if [[ -n "${TMPDIR:-}" ]]; then
+            mkdir -p "$TMPDIR"
+          fi
           just "$QC_TIER"
       # The delegated profile owns scanner applicability. qc-tooling omits product
       # scanners on checker sources; its missing artifact is not an empty scan.
