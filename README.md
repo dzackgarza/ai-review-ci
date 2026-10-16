@@ -19,6 +19,12 @@ uvx --from git+https://github.com/dzackgarza/ai-review-ci \
 
 Supported profiles are `python`, `bun`, `bun-playwright`, `bun-python`, `docs-and-configs`, `rust`, and `sage`.
 
+For Sage, the reusable workflow runs `test-ci` inside
+`ghcr.io/dzackgarza/sage:develop` (Python 3.14) and installs the consuming project
+into its Sage interpreter. A caller supplying `setup_recipe` provisions its own
+runtime instead. Sage `ambient` runs whole-tree Semgrep on the Ubuntu runner and
+requires no Sage installation.
+
 The installer writes these repository-owned files:
 
 - a root `justfile` with the QC contract;
