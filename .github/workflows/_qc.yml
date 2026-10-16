@@ -169,6 +169,7 @@ jobs:
           key: ${{ steps.setup-cache-key.outputs.key }}
       - name: Install project dependencies
         run: just -f "$HOME/ai-review-ci/ci/runner.just" setup-profile "$QC_PROFILE"
+        if: inputs.tier != 'ambient' || inputs.profile != 'sage'
       - name: Run QC tier
         # No GH_TOKEN here (#218): the tier runs every QC recipe and every
         # npx/uvx tool runner (semgrep, ai-slop, aislop), which must not execute
