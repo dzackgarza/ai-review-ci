@@ -546,6 +546,14 @@ def test_qc_workflow_installs_project_profile_before_running_acceptance() -> Non
     assert install == ('just -f "$HOME/ai-review-ci/ci/runner.just" setup-profile "$QC_PROFILE"')
 
 
+def test_sage_ambient_does_not_require_project_dependencies() -> None:
+    job = _workflow_jobs("_qc.yml")["qc"]
+    install = next(step for step in job["steps"] if step.get("name") == "Install project dependencies")
+    assert install["if"] == "inputs.tier != 'ambient' || inputs.profile != 'sage'"
+    tier = next(step for step in job["steps"] if step.get("name") == "Run QC tier")
+    assert "if" not in tier
+
+
 def test_qc_workflow_runs_validated_project_setup_before_acceptance() -> None:
     data = yaml.safe_load((_WORKFLOWS_DIR / "_qc.yml").read_text())
     on_block = data.get("on", data.get(True)) or {}
