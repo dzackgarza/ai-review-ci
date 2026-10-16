@@ -102,6 +102,11 @@ jobs:
           python-version: '3.14'
       - name: Install uv
         uses: astral-sh/setup-uv@v6
+        # The cache key's default dependency glob walks the whole checkout and
+        # overflows the action's stack on a large repository (lattice-database,
+        # 161k files); packages are downloaded on each run instead.
+        with:
+          enable-cache: false
       - name: Install just
         # Use the maintained action's authenticated resolver instead of the
         # former hand-rolled release lookup, which could hit anonymous API
