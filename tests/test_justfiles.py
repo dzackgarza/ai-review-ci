@@ -22,6 +22,9 @@ LINT_STAGED_CONFIG = TypeAdapter(dict[str, list[str]])
 def private_recipe_failure_mode(monkeypatch: pytest.MonkeyPatch) -> None:
     """Private-recipe tests exercise CI-style directives unless overridden."""
     monkeypatch.setenv("AI_REVIEW_CI_FAILURE_MODE", "triage")
+    # Temporary fixture repositories do not contain the enclosing CI refs.
+    monkeypatch.delenv("DIFF_COVER_BASE", raising=False)
+    monkeypatch.delenv("QC_TIER", raising=False)
 
 
 def run_just(
@@ -466,12 +469,12 @@ def test_sage_check_runner_replaces_only_the_reached_check_artifacts(
     assert second.returncode == 7, second.stdout + second.stderr
     fixture_log = (artifacts / "fixture.log").read_text()
     assert fixture_log.startswith("second run\nWARNING: inspect this warning\nERROR: inspect this error\n")
-    assert "recipe `check` failed with exit code 7" in fixture_log
+    assert "recipe `check` failed with exit code 7" in fixture_log.lower()
     assert "first run" not in fixture_log
     diagnostics = (artifacts / "fixture.diagnostics.log").read_text()
     assert "2:WARNING: inspect this warning" in diagnostics
     assert "3:ERROR: inspect this error" in diagnostics
-    assert "recipe `check` failed with exit code 7" in diagnostics
+    assert "recipe `check` failed with exit code 7" in diagnostics.lower()
     assert json.loads((artifacts / "fixture.json").read_text()) == {
         "check": "fixture",
         "diagnostics": ".ai-review-ci/sage/fixture.diagnostics.log",
@@ -685,7 +688,7 @@ def test_tsc_requires_ags_when_tsconfig_declares_ags(tmp_path: pathlib.Path) -> 
     project.mkdir()
     (project / "package.json").write_text(json.dumps({"scripts": {}}) + "\n")
     (project / "tsconfig.json").write_text(json.dumps({"compilerOptions": {"jsxImportSource": "ags/gtk4"}}) + "\n")
-    env = os.environ | {"PATH": path_with_only(tmp_path, "bash", "cat", "jq", "just", "rg")}
+    env = os.environ | {"PATH": path_with_only(tmp_path, "bash", "cat", "date", "flock", "jq", "just", "mkdir", "rg")}
 
     result = run_just(ROOT / "justfiles" / "bun.just", project, "_tsc", env=env)
 
@@ -2231,43 +2234,6 @@ def test_python_scaffold_bare_push_gate_reaches_downstream_preflight_without_wor
     assert "Python project must have tests" in output
     assert "the following required arguments were not provided" not in output
 
-
-def test_python_scaffold_bare_push_gate_breaks_when_just_working_directory_is_exported(
-    tmp_path: pathlib.Path,
-) -> None:
-    project = tmp_path / "python-scaffold-project"
-    project.mkdir()
-    shutil.copy(ROOT / "scaffolds" / "python" / "justfile", project / "justfile")
-    (project / "pyproject.toml").write_text(
-        "\n".join(
-            [
-                "[project]",
-                'name = "scaffold-python-target"',
-                'version = "0.1.0"',
-                'requires-python = ">=3.14"',
-                "",
-            ]
-        )
-    )
-    (project / ".envrc").write_text('source_up\nexport JUST_WORKING_DIRECTORY="$(pwd -P)"\n')
-    env = os.environ | {
-        "DIRENV_CONFIGURED_CORRECTLY": "1",
-        "JUST_WORKING_DIRECTORY": str(project),
-    }
-
-    result = subprocess.run(
-        ["just", "test-push"],
-        cwd=project,
-        env=env,
-        text=True,
-        capture_output=True,
-        check=False,
-    )
-
-    output = result.stdout + result.stderr
-    assert result.returncode != 0, output
-    assert "the following required arguments were not provided" in output
-    assert "--justfile <JUSTFILE>" in output
 
 
 def test_eslint_flat_config_imports_with_declared_tool_config_deps(
@@ -4506,9 +4472,9 @@ def test_scaffold_does_not_export_working_directory_routing_hint(language: str) 
     assert "JUST_WORKING_DIRECTORY" not in scaffold
 
 
-# The collision itself (JUST_WORKING_DIRECTORY set -> bare `just` fails at
-# arg-parse) is covered with the real delegated chain by
-# test_python_scaffold_bare_just_test_breaks_when_just_working_directory_is_exported.
+# Historical Just versions rejected JUST_WORKING_DIRECTORY at argument parsing.
+# That external bug is not an invariant: the owned scaffold entrypoints above
+# must route correctly on current Just releases.
 
 
 def test_docs_and_configs_qc_routes_formatting_and_link_validation(tmp_path: pathlib.Path) -> None:

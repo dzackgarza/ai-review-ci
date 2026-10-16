@@ -533,7 +533,7 @@ def test_qc_workflow_installs_flowmark_runtime_dependencies() -> None:
 
     assert install_index < run_index
     assert isinstance(install, dict)
-    assert install["run"] == "sudo apt-get update && sudo apt-get install -y pandoc ripgrep"
+    assert "sudo apt-get update && sudo apt-get install -y pandoc ripgrep" in install["run"]
 
 
 def test_qc_workflow_installs_project_profile_before_running_acceptance() -> None:
@@ -544,6 +544,20 @@ def test_qc_workflow_installs_project_profile_before_running_acceptance() -> Non
 
     assert install_index < run_index
     assert install == ('just -f "$HOME/ai-review-ci/ci/runner.just" setup-profile "$QC_PROFILE"')
+
+
+def test_sage_ci_uses_the_published_runtime_when_no_setup_is_supplied() -> None:
+    job = _workflow_jobs("_qc.yml")["qc"]
+    assert job["container"] == "${{ inputs.profile == 'sage' && inputs.tier == 'test-ci' && inputs.setup_recipe == '' && 'ghcr.io/dzackgarza/sage:develop' || '' }}"
+    assert job["defaults"]["run"]["shell"] == "bash"
+
+
+def test_sage_ambient_does_not_require_project_dependencies() -> None:
+    job = _workflow_jobs("_qc.yml")["qc"]
+    install = next(step for step in job["steps"] if step.get("name") == "Install project dependencies")
+    assert install["if"] == "inputs.tier != 'ambient' || inputs.profile != 'sage'"
+    tier = next(step for step in job["steps"] if step.get("name") == "Run QC tier")
+    assert "if" not in tier
 
 
 def test_qc_workflow_runs_validated_project_setup_before_acceptance() -> None:

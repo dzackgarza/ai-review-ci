@@ -252,6 +252,14 @@ _sage-bin:
 _sage-python:
 	#!/usr/bin/env bash
 	set -euo pipefail
+	if [ -n "${SAGE_PYTHON_BIN:-}" ]; then
+		if [ ! -x "$SAGE_PYTHON_BIN" ]; then
+			echo "ERROR: configured SAGE_PYTHON_BIN is not executable: $SAGE_PYTHON_BIN" >&2
+			exit 1
+		fi
+		printf '%s\n' "$SAGE_PYTHON_BIN"
+		exit 0
+	fi
 	sage_bin="$(just --justfile {{justfile()}} -d . _sage-bin)"
 	# Ask the launcher which interpreter it runs. SAGE_BIN may be a source-tree launcher that
 	# sets up GAP and friends before exec'ing its venv, so its own directory holds no python.
@@ -266,6 +274,14 @@ _sage-python:
 _sage-preparse-bin:
 	#!/usr/bin/env bash
 	set -euo pipefail
+	if [ -n "${SAGE_PREPARSE_BIN:-}" ]; then
+		if [ ! -x "$SAGE_PREPARSE_BIN" ]; then
+			echo "ERROR: configured SAGE_PREPARSE_BIN is not executable: $SAGE_PREPARSE_BIN" >&2
+			exit 1
+		fi
+		printf '%s\n' "$SAGE_PREPARSE_BIN"
+		exit 0
+	fi
 	sage_python="$(just --justfile {{justfile()}} -d . _sage-python)"
 	sage_preparse="$(dirname "$sage_python")/sage-preparse"
 	if [ ! -x "$sage_preparse" ]; then
