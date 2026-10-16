@@ -1,0 +1,6 @@
+#!/usr/bin/env bash
+set -euo pipefail
+group=$1
+shift
+printf -v command '%q ' "$@"
+exec /usr/bin/sg "$group" -c "$command"
