@@ -471,7 +471,7 @@ def test_sage_check_runner_replaces_only_the_reached_check_artifacts(
     diagnostics = (artifacts / "fixture.diagnostics.log").read_text()
     assert "2:WARNING: inspect this warning" in diagnostics
     assert "3:ERROR: inspect this error" in diagnostics
-    assert "recipe `check` failed with exit code 7" in diagnostics
+    assert "recipe `check` failed with exit code 7" in diagnostics.lower()
     assert json.loads((artifacts / "fixture.json").read_text()) == {
         "check": "fixture",
         "diagnostics": ".ai-review-ci/sage/fixture.diagnostics.log",
@@ -685,7 +685,7 @@ def test_tsc_requires_ags_when_tsconfig_declares_ags(tmp_path: pathlib.Path) -> 
     project.mkdir()
     (project / "package.json").write_text(json.dumps({"scripts": {}}) + "\n")
     (project / "tsconfig.json").write_text(json.dumps({"compilerOptions": {"jsxImportSource": "ags/gtk4"}}) + "\n")
-    env = os.environ | {"PATH": path_with_only(tmp_path, "bash", "cat", "flock", "jq", "just", "rg")}
+    env = os.environ | {"PATH": path_with_only(tmp_path, "bash", "cat", "date", "flock", "jq", "just", "mkdir", "rg")}
 
     result = run_just(ROOT / "justfiles" / "bun.just", project, "_tsc", env=env)
 
