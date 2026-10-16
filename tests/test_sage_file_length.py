@@ -48,3 +48,41 @@ def test_file_length_checks_all_git_paths_beyond_arg_max(tmp_path: Path) -> None
     assert str(first.relative_to(target)) in invalid.stdout, invalid.stdout + invalid.stderr
     assert str(last.relative_to(target)) in invalid.stdout, invalid.stdout + invalid.stderr
     assert "not in Git scope.py" not in invalid.stdout
+
+
+def test_file_length_limits_source_not_stored_documents(tmp_path: Path) -> None:
+    subprocess.run(["git", "init", "--quiet", str(tmp_path)], check=True)
+    for name in ("certificates.yaml", "gram-index.json", "lattices/card.md", "sources/table.html", "sources/table.txt"):
+        path = tmp_path / name
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text("stored data\n" * 701)
+    subprocess.run(["git", "add", "."], cwd=tmp_path, check=True)
+    command = ["just", "-f", str(ROOT / "justfiles" / "sage.just"), "-d", str(tmp_path), "_sage-file-length"]
+    documents = subprocess.run(command, text=True, capture_output=True, check=False)
+    assert documents.returncode == 0, documents.stdout + documents.stderr
+    for name in (
+        "module.py",
+        "module.sage",
+        "module.pyx",
+        "worker.jl",
+        "worker.sh",
+        "client.ts",
+        "styles.css",
+        "partial.j2",
+        "page.vue",
+        "tasks.just",
+        "nested/Makefile",
+        "Dockerfile",
+        "nested/justfile",
+        "runner",
+    ):
+        source = tmp_path / name
+        source.parent.mkdir(parents=True, exist_ok=True)
+        first_line = "#!/usr/bin/env python3\n" if name == "runner" else "source\n"
+        source.write_text(first_line + "source\n" * 700)
+        result = subprocess.run(command, text=True, capture_output=True, check=False)
+        assert result.returncode != 0, name
+        assert name in result.stdout, result.stdout + result.stderr
+        source.write_text(first_line + "source\n" * 699)
+        boundary = subprocess.run(command, text=True, capture_output=True, check=False)
+        assert boundary.returncode == 0, boundary.stdout + boundary.stderr

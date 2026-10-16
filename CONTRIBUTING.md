@@ -38,6 +38,15 @@ fleet toward that state, and each one looks locally reasonable while doing it.
 So a rule that fires on correct code is a **defect in the rule**, and the repair happens
 here, in the rule, for everyone. That is the only repair shape there is.
 
+## Source file length
+
+The file-length gate warns at 500 lines and fails above 700 lines of source code.
+It checks tracked and non-ignored untracked program, stylesheet and component/template
+source files. Stored corpus records, serialized indexes and certificates, prose and
+archived source documents (including raw HTML tables) are data, not source code subject
+to this limit. The central recipe owns the source-language selection; consumers do not
+supply exclusions or change the thresholds.
+
 ## Where the rules come from
 
 The rules are not defaults, and they are not best practice as generally understood. They
