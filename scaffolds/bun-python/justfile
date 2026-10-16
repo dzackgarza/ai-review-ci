@@ -25,3 +25,7 @@ test-push:
 # Run CI acceptance QC: both languages' CI gates, then the cross-language checks once.
 test-ci:
     @just -f ~/ai-review-ci/justfiles/bun-python.just -d . test-ci
+
+# Run the scheduled whole-tree audit (semgrep and debt scans) through the central implementation.
+ambient:
+    @just -f ~/ai-review-ci/justfiles/bun-python.just -d . ambient

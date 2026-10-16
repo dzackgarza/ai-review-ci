@@ -308,6 +308,32 @@ def test_doctor_classifies_missing_workflow_as_misconfigured(tmp_path: pathlib.P
     assert payload["findings"][0]["surface"] == "workflow"
 
 
+def test_doctor_requires_the_scheduled_ambient_workflow(tmp_path: pathlib.Path) -> None:
+    # The ambient tier is the only whole-tree semgrep; a repo without it has none.
+    project = create_target(tmp_path, "python")
+    (project / ".github" / "workflows" / "ambient.yml").unlink()
+
+    status, payload = status_for(project)
+
+    assert status == "misconfigured"
+    assert [finding["surface"] for finding in payload["findings"]] == ["workflow"]
+    assert "ambient.yml is missing" in payload["findings"][0]["evidence"]
+
+
+def test_doctor_requires_ambient_recipe_delegation(tmp_path: pathlib.Path) -> None:
+    project = create_target(tmp_path, "sage")
+    scaffold = (ROOT / "scaffolds" / "sage" / "justfile").read_text()
+    without_ambient, separator, _ = scaffold.partition("\n# Run the scheduled whole-tree audit")
+    assert separator
+    (project / "justfile").write_text(without_ambient + "\n")
+
+    status, payload = status_for(project)
+
+    assert status == "misconfigured"
+    assert [finding["surface"] for finding in payload["findings"]] == ["justfile_delegation"]
+    assert payload["justfile_delegation"]["ambient"]["observed"]["present"] is False
+
+
 def test_doctor_classifies_missing_bun_playwright_app_boot_as_misconfigured(tmp_path: pathlib.Path) -> None:
     project = create_target(tmp_path, "bun-playwright")
     (project / "justfile").write_text((ROOT / "scaffolds" / "bun" / "justfile").read_text())
@@ -444,6 +470,10 @@ def test_doctor_justfile_parser_accepts_parameter_defaults_and_recipe_attributes
                 "# Run CI-tier Python QC through the central implementation.",
                 "test-ci:",
                 "    @just -f ~/ai-review-ci/justfiles/python.just -d . test-ci",
+                "",
+                "# Run the scheduled whole-tree audit through the central implementation.",
+                "ambient:",
+                "    @just -f ~/ai-review-ci/justfiles/python.just -d . ambient",
                 "",
             ]
         )

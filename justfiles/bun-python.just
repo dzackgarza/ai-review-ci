@@ -33,3 +33,19 @@ test-ci:
 	just -f {{justfiles}}/bun.just -d . _ci-checks
 	just -f {{justfiles}}/shared.just -d . _global-qc
 	echo "CI quality checks completed"
+
+# Scheduled, never in the PR/push gate: the whole-tree scans. The commit tier
+# scans staged files and test-ci the diff, so this is the only whole-tree semgrep.
+# Every step runs; the audit fails if any did.
+#
+# public: AMBIENT audit — whole-tree semgrep and debt scan
+ambient:
+	#!/usr/bin/env bash
+	set -uo pipefail
+	export AI_REVIEW_CI_FAILURE_MODE=triage
+	status=0
+	just -f {{justfiles}}/shared.just -d . _ambient-semgrep || status=1
+	just -f {{justfiles}}/python.just -d . _ambient-python-debt || status=1
+	just -f {{justfiles}}/bun.just -d . _ambient-bun-debt || status=1
+	[ "$status" -eq 0 ] || exit 1
+	echo "Bun/Python ambient audit completed"
