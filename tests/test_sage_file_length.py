@@ -1,0 +1,50 @@
+"""The native file-length recipe checks Git scope beyond the exec argument limit."""
+
+from __future__ import annotations
+
+import os
+import subprocess
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parents[1]
+
+
+def test_file_length_checks_all_git_paths_beyond_arg_max(tmp_path: Path) -> None:
+    target = tmp_path / "consumer"
+    target.mkdir()
+    subprocess.run(["git", "init", "--quiet", str(target)], check=True)
+    tracked = target / "tracked"
+    untracked = target / "untracked"
+    tracked.mkdir()
+    untracked.mkdir()
+    seed = tracked / "000 first file.py"
+    seed.write_text("pass\n")
+    argument_bytes = 0
+    index = 0
+    while argument_bytes <= os.sysconf("SC_ARG_MAX") + 131072:
+        directory = (tracked, untracked)[index % 2]
+        path = directory / f"{index:06d} {'long name ' * 20}.py"
+        path.hardlink_to(seed)
+        argument_bytes += len(os.fsencode(path.relative_to(target))) + 1
+        index += 1
+    (untracked / "embedded\nnewline.py").hardlink_to(seed)
+    subprocess.run(["git", "add", "tracked"], cwd=target, check=True)
+    (target / ".gitignore").write_text("ignored/\n")
+    ignored = target / "ignored"
+    ignored.mkdir()
+    (ignored / "not in Git scope.py").write_text("pass\n" * 701)
+    command = ["just", "-f", str(ROOT / "justfiles" / "sage.just"), "-d", str(target), "_sage-file-length"]
+    valid = subprocess.run(command, text=True, capture_output=True, check=False)
+    assert valid.returncode == 0, valid.stdout + valid.stderr
+
+    # Distinct files in the first and last batches must both be diagnosed.
+    first = untracked / "000 first failure with spaces.py"
+    first.write_text("pass\n" * 701)
+    last = tracked / "zzzz last file with spaces.py"
+    last.write_text("pass\n" * 701)
+    subprocess.run(["git", "add", str(last.relative_to(target))], cwd=target, check=True)
+    invalid = subprocess.run(command, text=True, capture_output=True, check=False)
+    assert invalid.returncode != 0
+    assert str(first.relative_to(target)) in invalid.stdout, invalid.stdout + invalid.stderr
+    assert str(last.relative_to(target)) in invalid.stdout, invalid.stdout + invalid.stderr
+    assert "not in Git scope.py" not in invalid.stdout

@@ -843,9 +843,8 @@ _sage-file-length:
 	if [ ! -x "$linecheck_bin" ]; then
 		cargo install --locked --version 1.2.1 --root "$linecheck_root" linecheck
 	fi
-	repo_files=()
-	mapfile -d '' -t repo_files < <(git ls-files -z --cached --others --exclude-standard)
-	"$linecheck_bin" --config {{configs}}/linecheck.yml "${repo_files[@]}"
+	git ls-files -z --cached --others --exclude-standard | \
+		xargs -0 -r -- "$linecheck_bin" --config {{configs}}/linecheck.yml --
 
 test-push:
 	#!/usr/bin/env bash
