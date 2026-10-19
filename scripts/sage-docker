@@ -75,6 +75,9 @@ case "$mode" in
     sage|sage-docker)
         command=(sage "$@")
         ;;
+    sage-docker-preparse)
+        command=(sage -preparse "$@")
+        ;;
     sage-docker-python)
         if [[ ${1:-} == */sage-docker-preparse ]]; then
             shift
