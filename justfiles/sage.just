@@ -312,7 +312,7 @@ _sage-syntax:
 	sage_python="$(just --justfile {{justfile()}} -d . _sage-python)"
 	sage_preparse="$(just --justfile {{justfile()}} -d . _sage-preparse-bin)"
 
-	sage_preparse_dir="$(mktemp -d "${TMPDIR:-/tmp}/qc-sage-syntax.XXXXXX")"
+	sage_preparse_dir="$(mktemp -d "${SAGE_QC_STAGING_ROOT:-${TMPDIR:-/tmp}}/qc-sage-syntax.XXXXXX")"
 	trap 'if [ -e "$sage_preparse_dir" ]; then rm -rf -- "$sage_preparse_dir"; fi' EXIT
 	echo "# Preparsing and compiling ${#sage_files[@]} Sage file(s)"
 	copied_sage_files=()
