@@ -79,6 +79,9 @@ case "$mode" in
         if [[ ${1:-} == */sage-docker-preparse ]]; then
             shift
             command=(sage -preparse "$@")
+        elif [[ ${1:-} == */sage-preparse ]]; then
+            shift
+            command=(sage -preparse "$@")
         else
             command=(sage -python "$@")
         fi

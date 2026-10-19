@@ -329,7 +329,7 @@ _sage-syntax:
 
 	(
 		cd "$sage_preparse_dir"
-		"$sage_python" "$sage_preparse" "${copied_sage_files[@]}" >/dev/null
+		"$sage_preparse" "${copied_sage_files[@]}" >/dev/null
 	)
 
 	for sage_file in "${sage_files[@]}"; do
@@ -431,7 +431,7 @@ _vulture: _sage-qc-files
 		done
 		(
 			cd "$sage_preparse_dir"
-			"$sage_python" "$sage_preparse" "${copied_sage_files[@]}" >/dev/null
+			"$sage_preparse" "${copied_sage_files[@]}" >/dev/null
 		)
 		for generated_file in "${generated_sage_python_files[@]}"; do
 			if [ ! -f "$generated_file" ]; then
@@ -698,7 +698,7 @@ _sage-mypy: _sage-qc-files
 		if [ "${#cli_sage_files[@]}" -gt 0 ]; then
 			(
 				cd "$sage_preparse_dir"
-				"$sage_python" "$sage_preparse" "${cli_sage_files[@]}" >/dev/null
+				"$sage_preparse" "${cli_sage_files[@]}" >/dev/null
 			)
 		fi
 		for sage_file in "${copied_sage_files[@]}"; do
@@ -902,7 +902,7 @@ _sage-ast-grep:
 		done
 		(
 			cd "$sage_preparse_dir"
-			"$sage_python" "$sage_preparse" "${copied_sage_files[@]}" >/dev/null
+			"$sage_preparse" "${copied_sage_files[@]}" >/dev/null
 		)
 		for sage_file in "${sage_files[@]}"; do
 			generated_file="$sage_preparse_dir/$sage_file.py"
