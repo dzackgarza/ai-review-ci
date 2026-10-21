@@ -1,0 +1,122 @@
+# Reusable acceptance tier (#478). The push and CI tiers run every test except
+# tests/acceptance/; this workflow runs that suite on every push of the caller.
+# Each file is split into pytest-shard shards so no job nears the 6-hour
+# hosted-runner limit, and the summary job collates every shard's JUnit report
+# into one failure list (the run summary and the acceptance-summary artifact).
+#
+# The caller's setup_recipe runs in the Sage image before its shard. It makes
+# the project and its dependencies importable by the Sage interpreter: install
+# them with "$SAGE_BIN" -pip, or export PYTHONPATH through $GITHUB_ENV.
+#
+# A caller runs it on every push and never cancels a run in progress:
+#
+#   on:
+#     push: {}
+#   concurrency:
+#     group: acceptance-${{ github.ref }}
+#     cancel-in-progress: false
+#   jobs:
+#     acceptance:
+#       uses: dzackgarza/ai-review-ci/.github/workflows/_acceptance.yml@main
+#       with:
+#         infra_ref: main
+#         setup_recipe: ci-provision-sage
+#         shards: '{"test_family.sage": 4}'
+name: Acceptance (reusable)
+on:
+  workflow_call:
+    inputs:
+      infra_ref:
+        description: Git ref of ai-review-ci whose recipes and scripts run the suite
+        required: true
+        type: string
+      setup_recipe:
+        description: Caller-owned just recipe that makes the project importable by the Sage interpreter
+        required: true
+        type: string
+      shards:
+        description: JSON object mapping every file under tests/acceptance/ (relative to it) to its shard count
+        required: true
+        type: string
+permissions:
+  contents: read
+defaults:
+  run:
+    # Explicit bash runs with pipefail; a container job's default shell is sh.
+    shell: bash
+jobs:
+  plan:
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.plan.outputs.matrix }}
+    env:
+      INFRA_REF: ${{ inputs.infra_ref }}
+      SHARDS: ${{ inputs.shards }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Clone QC infrastructure
+        run: git clone --depth 1 --branch "$INFRA_REF" https://github.com/dzackgarza/ai-review-ci.git "$RUNNER_TEMP/ai-review-ci"
+      - id: plan
+        run: python3 "$RUNNER_TEMP/ai-review-ci/tool-artifacts/scripts/acceptance_matrix.py" "$SHARDS" >> "$GITHUB_OUTPUT"
+  shard:
+    needs: plan
+    name: ${{ matrix.file }} ${{ matrix.shard }}/${{ matrix.shards }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 360
+    container:
+      # The image of the local sage-dev-develop container (Sage 11.0.beta1, Python 3.14).
+      image: sagemath/sagemath-dev@sha256:2928e82688bf4f182ae1f9a03187cfdb2b4ea4c4f0e902963c8130c1959666d9
+      options: --user root
+    env:
+      SAGE_BIN: /home/sage/sage/sage
+      INFRA_REF: ${{ inputs.infra_ref }}
+      SETUP_RECIPE: ${{ inputs.setup_recipe }}
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.plan.outputs.matrix) }}
+    steps:
+      - uses: actions/checkout@v4
+      - run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
+      - uses: extractions/setup-just@v4
+        with:
+          github-token: ${{ github.token }}
+      - name: Clone QC infrastructure
+        run: git clone --depth 1 --branch "$INFRA_REF" https://github.com/dzackgarza/ai-review-ci.git "$HOME/ai-review-ci"
+      - name: Install the shard runner
+        run: '"$SAGE_BIN" -pip install --quiet pytest pytest-shard'
+      - name: Provision the project
+        run: just "$SETUP_RECIPE"
+      - name: Run the shard
+        env:
+          SHARD_FILE: ${{ matrix.file }}
+          SHARD_NAME: ${{ matrix.name }}
+          SHARD: ${{ matrix.shard }}
+          SHARDS: ${{ matrix.shards }}
+        run: just -f "$HOME/ai-review-ci/justfiles/sage.just" -d . _sage-acceptance-shard "$SHARD_FILE" "$SHARD_NAME" "$SHARD" "$SHARDS"
+      - if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: acceptance-${{ matrix.name }}-${{ matrix.shard }}
+          path: .ai-review-ci/acceptance/
+          include-hidden-files: true
+  summary:
+    needs: shard
+    if: always()
+    runs-on: ubuntu-latest
+    env:
+      INFRA_REF: ${{ inputs.infra_ref }}
+    steps:
+      - name: Clone QC infrastructure
+        run: git clone --depth 1 --branch "$INFRA_REF" https://github.com/dzackgarza/ai-review-ci.git "$RUNNER_TEMP/ai-review-ci"
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: acceptance-*
+          path: results
+          merge-multiple: true
+      - name: Collate shard results
+        run: python3 "$RUNNER_TEMP/ai-review-ci/tool-artifacts/scripts/acceptance_summary.py" results | tee -a "$GITHUB_STEP_SUMMARY" acceptance-failures.md
+      - if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: acceptance-summary
+          path: acceptance-failures.md

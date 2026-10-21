@@ -25,6 +25,12 @@ into its Sage interpreter. A caller supplying `setup_recipe` provisions its own
 runtime instead. Sage `ambient` runs whole-tree Semgrep on the Ubuntu runner and
 requires no Sage installation.
 
+A Sage repository's `tests/acceptance/` suite runs in neither `test-push` nor `test-ci`.
+It runs on every push in the reusable `.github/workflows/_acceptance.yml`, each file
+sharded across hosted-runner jobs; its header shows the caller workflow. The doctor
+fails a repository that has `tests/acceptance/` and no `.github/workflows/acceptance.yml`
+calling it.
+
 The installer writes these repository-owned files:
 
 - a root `justfile` with the QC contract;

@@ -12,8 +12,11 @@
 #
 # WORKFLOW (three-tier):
 #   just test-commit — Sage/Python syntax, normalization, bypass check.
-#   just test-push   — commit checks, mypy, the full Sage test suite, and the
-#                      cheap deterministic gates (vulture, ast-grep, deptry).
+#   just test-push   — commit checks, mypy, the Sage test suite except
+#                      tests/acceptance/, and the cheap deterministic gates
+#                      (vulture, ast-grep, deptry).
+#   _acceptance.yml  — tests/acceptance/, sharded across hosted-runner jobs on
+#                      every push (_sage-acceptance-shard).
 #   just test-ci     — push checks plus the threshold metrics (coverage,
 #                      duplication) and the minutes-long import graph.
 
@@ -146,6 +149,10 @@ _sage-vulture-files:
 		printf '%s\n' "$sage_file"
 	done
 
+# The test files the push and CI tiers run: every test except the acceptance suite.
+# tests/acceptance/ runs on every push in .github/workflows/_acceptance.yml, sharded
+# across hosted-runner jobs, because its runtime exceeds the local loop's budget
+# (#478). The doctor requires a repository with that directory to call it.
 _sage-test-files:
 	#!/usr/bin/env bash
 	set -euo pipefail
@@ -155,6 +162,9 @@ _sage-test-files:
 		mapfile -t sage_files <<<"$sage_files_output"
 	fi
 	for sage_file in "${sage_files[@]}"; do
+		case "$sage_file" in
+			tests/acceptance/*) continue ;;
+		esac
 		case "${sage_file##*/}" in
 			test_*.sage|*_test.sage) printf '%s\n' "$sage_file" ;;
 		esac
@@ -168,7 +178,8 @@ _sage-python-test-files:
 	# files, wrong for deciding which tests exist.  On a clean tree it returned
 	# nothing, so _sage-pytest saw no tests: a Sage project whose suite is all
 	# .py ran pytest only when a test file happened to be in the diff, and
-	# reported success when it ran nothing at all.
+	# reported success when it ran nothing at all.  tests/acceptance/ is left to
+	# the acceptance workflow, as in _sage-test-files.
 	exclude_dirs_output="$(uv run {{artifacts}}/scripts/read_qc_excludes.py {{configs}}/qc-excludes.toml)"
 	exclude_dirs=()
 	if [ -n "$exclude_dirs_output" ]; then
@@ -182,6 +193,7 @@ _sage-python-test-files:
 		-g 'tests/**/test_*.py' \
 		-g 'tests/**/*_test.py' \
 		-g '!*.sage.py' \
+		-g '!tests/acceptance/**' \
 		"${exclude_args[@]}"; then
 		:
 	else
@@ -482,6 +494,27 @@ _sage-pytest:
 		[ -n "$test_file" ] && test_paths+=("$test_file")
 	done
 	just --justfile {{justfile()}} -d . _sage-pytest-run -p qc_unique_inventory "${test_paths[@]}"
+
+# One shard of one tests/acceptance/ file: the step each job of
+# .github/workflows/_acceptance.yml runs, inside its Sage image. The suite runs
+# with --runxfail: an acceptance case passes or the suite is not accepted.
+# Results land in .ai-review-ci/acceptance/<name>-<shard>/ (junit.xml, log, commit).
+_sage-acceptance-shard file name shard shards:
+	#!/usr/bin/env bash
+	set -euo pipefail
+	out=".ai-review-ci/acceptance/{{name}}-{{shard}}"
+	mkdir -p "$out"
+	printf '*\n' >.ai-review-ci/.gitignore
+	git rev-parse HEAD >"$out/commit"
+	sage_python="$(just --justfile {{justfile()}} -d . _sage-python)"
+	# The venv's bin/ goes on PATH for the same reason as in _sage-pytest-run.
+	export PATH="$(dirname "$sage_python"):$PATH"
+	export PYTHONPATH="{{artifacts}}/pytest_plugins${PYTHONPATH:+:$PYTHONPATH}"
+	# SIGINT before the workflow's 360-minute job limit, so pytest still writes
+	# the JUnit report for every case that finished.
+	timeout --signal=INT 345m "$sage_python" -c "import sage.all, sys, pytest; sys.exit(pytest.main(sys.argv[1:]))" \
+		-p qc_sage_session "tests/acceptance/{{file}}" --runxfail -rA --tb=long \
+		--shard-id={{shard}} --num-shards={{shards}} --junitxml="$out/junit.xml" 2>&1 | tee "$out/log"
 
 # public: run selected Sage tests (paths, node ids, -k) exactly as the PUSH gate does, recording timings
 [positional-arguments]
