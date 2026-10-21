@@ -31,7 +31,7 @@ def run_just(
     justfile: pathlib.Path,
     workdir: pathlib.Path,
     recipe: str,
-    *,
+    *arguments: str,
     env: dict[str, str] | None = None,
 ) -> subprocess.CompletedProcess[str]:
     return subprocess.run(
@@ -42,6 +42,7 @@ def run_just(
             "-d",
             str(workdir),
             recipe,
+            *arguments,
         ],
         cwd=workdir,
         env=env,
@@ -402,6 +403,44 @@ def test_sage_syntax_uses_tools_from_the_sage_virtual_environment(
 
     output = result.stdout + result.stderr
     assert result.returncode == 0, output
+
+
+def _venv_sage(tmp_path: pathlib.Path) -> dict[str, str]:
+    """A Sage venv whose preparser copies sources, so a Python syntax error stays one."""
+    sage_bin_dir = tmp_path / "sage-venv" / "bin"
+    sage_bin_dir.mkdir(parents=True)
+    (sage_bin_dir / "python").symlink_to(pathlib.Path(sys.executable))
+    sage = sage_bin_dir / "sage"
+    sage.write_text(f'#!/usr/bin/env bash\nif [ "$1" = -c ]; then exec "{sage_bin_dir / "python"}" "$@"; fi\nexit 97\n')
+    sage.chmod(0o755)
+    sage_preparse = sage_bin_dir / "sage-preparse"
+    sage_preparse.write_text(
+        "from pathlib import Path\nimport sys\nfor source_name in sys.argv[1:]:\n    source = Path(source_name)\n    Path(f'{source}.py').write_text(source.read_text())\n"
+    )
+    sage_preparse.chmod(0o755)
+    env = os.environ.copy()
+    env["SAGE_BIN"] = str(sage)
+    return env
+
+
+def test_commit_scope_sage_syntax_checks_only_staged_files(tmp_path: pathlib.Path) -> None:
+    project = project_with_sage_file(tmp_path)
+    init_git_repo(project)
+    assert run_git(project, "add", "example.sage").returncode == 0
+    commit_without_hooks(project, "baseline")
+    # An unstaged syntax error is the push tier's to find, not the commit's.
+    (project / "broken.sage").write_text("def (:\n")
+    env = _venv_sage(tmp_path)
+
+    nothing_staged = run_just(ROOT / "justfiles" / "sage.just", project, "_sage-syntax", "staged", env=env)
+    assert nothing_staged.returncode == 0, nothing_staged.stdout + nothing_staged.stderr
+    assert "no staged Sage files" in nothing_staged.stdout
+    assert "machine-wide QC lock" not in nothing_staged.stdout + nothing_staged.stderr
+
+    assert run_git(project, "add", "broken.sage").returncode == 0
+    staged = run_just(ROOT / "justfiles" / "sage.just", project, "_sage-syntax", "staged", env=env)
+    assert staged.returncode != 0, staged.stdout + staged.stderr
+    assert "Preparsing and compiling 1 Sage file(s)" in staged.stdout
 
 
 def test_sage_check_runner_replaces_only_the_reached_check_artifacts(
