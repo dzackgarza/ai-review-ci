@@ -67,6 +67,21 @@ _format-structured-text:
 			*.json|*.jsonc|*.yaml|*.yml) data_files+=("$file") ;;
 		esac
 	done < <(git diff --cached --name-only --diff-filter=ACMR -z -- . "${exclude_pathspecs[@]}")
+	# The formatter rewrites the working tree, so its output reaches the commit only
+	# when it is staged again. A file whose working tree equals its staged blob is
+	# restaged; a partially staged file is not, since that would stage its unstaged
+	# hunks, and it is named so its formatted working tree is not mistaken for new work.
+	commit_index="${GIT_INDEX_FILE:-}"
+	restage=()
+	partial=()
+	for file in "${md_files[@]}" "${data_files[@]}"; do
+		if git diff --quiet -- "$file"; then
+			restage+=("$file")
+		else
+			partial+=("$file")
+		fi
+	done
+	repository_root="$(git rev-parse --show-toplevel)"
 	# git-sourced uvx tools must not inherit repository-location variables: they
 	# can otherwise redirect their own fetch at the host repository and fail.
 	# The selected file lists above already preserve the temporary commit index.
@@ -85,6 +100,14 @@ _format-structured-text:
 	if [ "${#data_files[@]}" -gt 0 ]; then
 		printf '%s\0' "${data_files[@]}" | xargs -0 \
 			npx -y prettier --write --config {{configs}}/prettier-global.json
+	fi
+	if [ "${#restage[@]}" -gt 0 ]; then
+		printf '%s\0' "${restage[@]}" | GIT_INDEX_FILE="${commit_index:-$(git -C "$repository_root" rev-parse --git-path index)}" \
+			xargs -0 git -C "$repository_root" add --
+	fi
+	if [ "${#partial[@]}" -gt 0 ]; then
+		echo "WARNING: formatted but not staged, since these files have unstaged changes:" >&2
+		printf '  %s\n' "${partial[@]}" >&2
 	fi
 
 _semgrep-autofix:
