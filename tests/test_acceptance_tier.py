@@ -10,9 +10,11 @@ Here the interpreter is a real Python with pytest and coverage, and ``sage.all``
 empty module. Which test files the recipe hands to pytest does not depend on either.
 """
 
+import json
 import os
 import pathlib
 import subprocess
+import sys
 
 import pytest
 
@@ -98,3 +100,53 @@ def test_sage_test_discovery_leaves_acceptance_sage_files_to_the_acceptance_work
 
     assert result.returncode == 0, result.stdout + result.stderr
     assert result.stdout.splitlines() == ["tests/test_unit.sage"]
+
+
+MATRIX_SCRIPT = ROOT / "tool-artifacts" / "scripts" / "acceptance_matrix.py"
+SUMMARY_SCRIPT = ROOT / "tool-artifacts" / "scripts" / "acceptance_summary.py"
+
+
+def test_acceptance_matrix_shards_every_suite_file_and_nothing_else(tmp_path: pathlib.Path) -> None:
+    project = target_repository(
+        tmp_path,
+        {"tests/acceptance/test_family.sage": "assert 2 + 2 == 4\n", "tests/acceptance/deep/test_other.py": ACCEPTANCE_CASE},
+    )
+
+    planned = run([sys.executable, str(MATRIX_SCRIPT), '{"test_family.sage": 2, "deep/test_other.py": 1}'], project)
+    unsharded = run([sys.executable, str(MATRIX_SCRIPT), '{"test_family.sage": 2}'], project)
+    absent = run([sys.executable, str(MATRIX_SCRIPT), '{"test_family.sage": 2, "deep/test_other.py": 1, "test_gone.sage": 1}'], project)
+
+    assert planned.returncode == 0, planned.stderr
+    assert planned.stdout.startswith("matrix=")
+    assert json.loads(planned.stdout.removeprefix("matrix="))["include"] == [
+        {"file": "deep/test_other.py", "name": "deep.test_other", "shard": 0, "shards": 1},
+        {"file": "test_family.sage", "name": "test_family", "shard": 0, "shards": 2},
+        {"file": "test_family.sage", "name": "test_family", "shard": 1, "shards": 2},
+    ]
+    assert unsharded.returncode != 0
+    assert "deep/test_other.py" in unsharded.stderr
+    assert absent.returncode != 0
+    assert "test_gone.sage" in absent.stderr
+
+
+def test_acceptance_summary_fails_on_any_unpassed_case_or_missing_shard(tmp_path: pathlib.Path) -> None:
+    suite = tmp_path / "test_family.py"
+    suite.write_text(
+        "import pytest\n\n\ndef test_passes():\n    pass\n\n\ndef test_fails():\n    assert 1 == 2, 'one is not two'\n\n\n"
+        "@pytest.mark.skip(reason='skipped')\ndef test_skipped():\n    pass\n"
+    )
+    results = tmp_path / "results"
+    reported = results / "test_family-0"
+    reported.mkdir(parents=True)
+    (reported / "commit").write_text("abc123\n")
+    junit = run([sys.executable, "-m", "pytest", "-p", "no:cacheprovider", str(suite), f"--junitxml={reported / 'junit.xml'}"], tmp_path)
+    assert junit.returncode == 1, junit.stdout + junit.stderr
+    (results / "test_family-1").mkdir()
+
+    summary = run([sys.executable, str(SUMMARY_SCRIPT), str(results)], tmp_path)
+
+    assert summary.returncode == 1, summary.stdout + summary.stderr
+    assert "| test_family | 1 | 1 | 0 | 1 |" in summary.stdout
+    assert "test_fails` (failure): AssertionError: one is not two" in summary.stdout
+    assert "test_skipped` (skipped)" in summary.stdout
+    assert "- test_family-1" in summary.stdout
