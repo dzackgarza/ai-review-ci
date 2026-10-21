@@ -87,10 +87,11 @@ _format-structured-text:
 			npx -y prettier --write --config {{configs}}/prettier-global.json
 	fi
 
+# Commit tier: it scans only the staged files, so it takes no machine-wide heavy-gate
+# slot and a commit never queues behind another repository's suite.
 _semgrep-autofix:
 	#!/usr/bin/env bash
 	set -euo pipefail
-	source "{{artifacts}}/scripts/heavy-gate-lock.sh"
 	echo "============================="
 	echo "=== Running: semgrep auto-fix ==="
 	echo "# Applies Semgrep autofixes to the staged files; the ambient tier scans the whole tree"
