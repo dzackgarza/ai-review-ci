@@ -141,6 +141,14 @@ _semgrep-autofix:
 		echo "semgrep autofix: no staged files."
 		exit 0
 	fi
+	# An autofix rewrites the working tree, so it reaches the commit only when staged
+	# again: a file whose working tree equals its staged blob is restaged after the scan.
+	restage=()
+	while IFS= read -r -d '' file; do
+		if git diff --quiet -- "$file"; then
+			restage+=("$file")
+		fi
+	done <"$staged_manifest"
 	# This gate applies autofixes; CI-tier verification owns the remaining findings, so
 	# printing them here is advisory output the caller cannot act on. Measured at 177 lines
 	# and 8.4 KB per run in one repository — on every commit, in every repository. Agent
@@ -163,6 +171,9 @@ _semgrep-autofix:
 		grep -E '^(Ran [0-9]+ rules|.*files? (modified|left unchanged) by autofix)' "$scan_log" || true
 		findings="$(grep -cE '^\s+❯❯❱ ' "$scan_log" || true)"
 		echo "semgrep autofix: ${findings:-0} advisory finding group(s); CI-tier verification owns them"
+		if [ "${#restage[@]}" -gt 0 ]; then
+			printf '%s\0' "${restage[@]}" | xargs -0 git add --
+		fi
 	else
 		ec=$?
 		echo ""
