@@ -22,6 +22,7 @@
 #         infra_ref: main
 #         setup_recipe: ci-provision-sage
 #         shards: '{"test_family.sage": 4}'
+#         image: ghcr.io/<owner>/<repo>-sage:py314
 name: Acceptance (reusable)
 on:
   workflow_call:
@@ -38,8 +39,13 @@ on:
         description: JSON object mapping every file under tests/acceptance/ (relative to it) to its shard count
         required: true
         type: string
+      image:
+        description: Sage container image the shards run in; SAGE_BIN is /home/sage/sage/sage inside it
+        required: true
+        type: string
 permissions:
   contents: read
+  packages: read
 defaults:
   run:
     # Explicit bash runs with pipefail; a container job's default shell is sh.
@@ -64,8 +70,12 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 360
     container:
-      # The image of the local sage-dev-develop container (Sage 11.0.beta1, Python 3.14).
-      image: sagemath/sagemath-dev@sha256:2928e82688bf4f182ae1f9a03187cfdb2b4ea4c4f0e902963c8130c1959666d9
+      # The caller's image: a project on a newer Python than the stock
+      # sagemath images (3.12) publishes its own rebuild.
+      image: ${{ inputs.image }}
+      credentials:
+        username: ${{ github.actor }}
+        password: ${{ github.token }}
       options: --user root
     env:
       SAGE_BIN: /home/sage/sage/sage
