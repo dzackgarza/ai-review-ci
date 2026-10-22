@@ -274,6 +274,12 @@ _sage-python:
 		exit 0
 	fi
 	sage_bin="$(just --justfile {{justfile()}} -d . _sage-bin)"
+	# The Docker launcher exposes an interpreter path *inside* the container.
+	# The host must execute its host-side Python launcher, not that path.
+	if [ "$(readlink -f "$sage_bin")" = "${HOME}/ai-review-ci/scripts/sage-docker" ]; then
+		printf '%s\n' "${HOME}/.local/bin/sage-docker-python"
+		exit 0
+	fi
 	# Ask the launcher which interpreter it runs. SAGE_BIN may be a source-tree launcher that
 	# sets up GAP and friends before exec'ing its venv, so its own directory holds no python.
 	sage_python="$("$sage_bin" -c 'import sys; print(sys.executable)')"
@@ -296,6 +302,10 @@ _sage-preparse-bin:
 		exit 0
 	fi
 	sage_python="$(just --justfile {{justfile()}} -d . _sage-python)"
+	if [ "$(basename "$sage_python")" = sage-docker-python ]; then
+		printf '%s\n' "${HOME}/.local/bin/sage-docker-preparse"
+		exit 0
+	fi
 	sage_preparse="$(dirname "$sage_python")/sage-preparse"
 	if [ ! -x "$sage_preparse" ]; then
 		echo "ERROR: Sage virtual-environment preparser is not executable: $sage_preparse" >&2
@@ -325,7 +335,14 @@ _sage-syntax:
 	sage_python="$(just --justfile {{justfile()}} -d . _sage-python)"
 	sage_preparse="$(just --justfile {{justfile()}} -d . _sage-preparse-bin)"
 
-	sage_preparse_dir="$(mktemp -d "${TMPDIR:-/tmp}/qc-sage-syntax.XXXXXX")"
+	if [ "$(basename "$sage_python")" = sage-docker-python ]; then
+		# Host /tmp is not visible in the pinned Sage container.
+		sage_staging_root="${SAGE_QC_STAGING_ROOT:-${HOME}/.cache/sage-docker-tmp}"
+	else
+		sage_staging_root="${SAGE_QC_STAGING_ROOT:-${TMPDIR:-/tmp}}"
+	fi
+	mkdir -p "$sage_staging_root"
+	sage_preparse_dir="$(mktemp -d "$sage_staging_root/qc-sage-syntax.XXXXXX")"
 	trap 'if [ -e "$sage_preparse_dir" ]; then rm -rf -- "$sage_preparse_dir"; fi' EXIT
 	echo "# Preparsing and compiling ${#sage_files[@]} Sage file(s)"
 	copied_sage_files=()
@@ -342,7 +359,11 @@ _sage-syntax:
 
 	(
 		cd "$sage_preparse_dir"
-		"$sage_python" "$sage_preparse" "${copied_sage_files[@]}" >/dev/null
+		if [ "$(basename "$sage_preparse")" = sage-docker-preparse ]; then
+			"$sage_preparse" "${copied_sage_files[@]}" >/dev/null
+		else
+			"$sage_python" "$sage_preparse" "${copied_sage_files[@]}" >/dev/null
+		fi
 	)
 
 	for sage_file in "${sage_files[@]}"; do
@@ -444,7 +465,11 @@ _vulture: _sage-qc-files
 		done
 		(
 			cd "$sage_preparse_dir"
+			if [ "$(basename "$sage_preparse")" = sage-docker-preparse ]; then
+			"$sage_preparse" "${copied_sage_files[@]}" >/dev/null
+		else
 			"$sage_python" "$sage_preparse" "${copied_sage_files[@]}" >/dev/null
+		fi
 		)
 		for generated_file in "${generated_sage_python_files[@]}"; do
 			if [ ! -f "$generated_file" ]; then
@@ -714,7 +739,13 @@ _sage-mypy: _sage-qc-files
 		git ls-files -z -- '*.py' '*.pyi' | xargs -0 --no-run-if-empty cp --parents -t "$sage_preparse_dir"
 		copied_sage_files=()
 		cli_sage_files=()
-		startup_source="$("$sage_python" -c 'from pathlib import Path; from sage.env import SAGE_STARTUP_FILE; print(Path(SAGE_STARTUP_FILE).resolve() if SAGE_STARTUP_FILE else "")')"
+		if [ "$(basename "$sage_python")" = sage-docker-python ]; then
+			startup_file="${SAGE_STARTUP_FILE:-${DOT_SAGE:-$HOME/.sage}/init.sage}"
+			startup_source=""
+			if [ -e "$startup_file" ]; then startup_source="$(realpath "$startup_file")"; fi
+		else
+			startup_source="$("$sage_python" -c 'from pathlib import Path; from sage.env import SAGE_STARTUP_FILE; print(Path(SAGE_STARTUP_FILE).resolve() if SAGE_STARTUP_FILE else "")')"
+		fi
 		for sage_file in "${sage_files[@]}"; do
 			target="$sage_preparse_dir/$sage_file"
 			mkdir -p "$(dirname "$target")"
@@ -732,7 +763,11 @@ _sage-mypy: _sage-qc-files
 		if [ "${#cli_sage_files[@]}" -gt 0 ]; then
 			(
 				cd "$sage_preparse_dir"
-				"$sage_python" "$sage_preparse" "${cli_sage_files[@]}" >/dev/null
+				if [ "$(basename "$sage_preparse")" = sage-docker-preparse ]; then
+			"$sage_preparse" "${cli_sage_files[@]}" >/dev/null
+		else
+			"$sage_python" "$sage_preparse" "${cli_sage_files[@]}" >/dev/null
+		fi
 			)
 		fi
 		for sage_file in "${copied_sage_files[@]}"; do
@@ -915,7 +950,11 @@ _sage-ast-grep:
 		done
 		(
 			cd "$sage_preparse_dir"
+			if [ "$(basename "$sage_preparse")" = sage-docker-preparse ]; then
+			"$sage_preparse" "${copied_sage_files[@]}" >/dev/null
+		else
 			"$sage_python" "$sage_preparse" "${copied_sage_files[@]}" >/dev/null
+		fi
 		)
 		for sage_file in "${sage_files[@]}"; do
 			generated_file="$sage_preparse_dir/$sage_file.py"
