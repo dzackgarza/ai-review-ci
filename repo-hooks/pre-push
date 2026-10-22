@@ -6,7 +6,7 @@ qc_should_gate || exit 0
 # GitHub CI owns all suites and review diagnostics. In particular, no
 # API-dependent issue-closure confrontation or machine-wide heavy gate runs
 # during publication of an unfinished implementation.
-if just test-push; then
+if python3 "$qc_hook_repo/scripts/local-check.py"; then
     exit 0
 fi
 echo "Local staged-source syntax check failed; see the file and line above." >&2

@@ -5,7 +5,7 @@ qc_should_gate || exit 0
 
 # Development feedback only. No dependency installation, style, typing,
 # performance, complete test suites, or policy review in the local loop.
-if just test-commit; then
+if python3 "$qc_hook_repo/scripts/local-check.py"; then
     exit 0
 fi
 echo "Local staged-source syntax check failed; see the file and line above." >&2
