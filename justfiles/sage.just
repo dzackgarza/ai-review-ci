@@ -261,6 +261,12 @@ _sage-python:
 		exit 0
 	fi
 	sage_bin="$(just --justfile {{justfile()}} -d . _sage-bin)"
+	# A container-backed Sage launcher reports an interpreter path inside the
+	# container. Use its host-side Sage Python entrypoint instead.
+	if [ "$(readlink -f "$sage_bin")" = "${HOME}/ai-review-ci/scripts/sage-docker" ]; then
+		printf '%s\n' "${HOME}/.local/bin/sage-docker-python"
+		exit 0
+	fi
 	# Ask the launcher which interpreter it runs. SAGE_BIN may be a source-tree launcher that
 	# sets up GAP and friends before exec'ing its venv, so its own directory holds no python.
 	sage_python="$("$sage_bin" -c 'import sys; print(sys.executable)')"
@@ -283,6 +289,10 @@ _sage-preparse-bin:
 		exit 0
 	fi
 	sage_python="$(just --justfile {{justfile()}} -d . _sage-python)"
+	if [ "$(basename "$sage_python")" = sage-docker-python ]; then
+		printf '%s\n' "${HOME}/.local/bin/sage-docker-preparse"
+		exit 0
+	fi
 	sage_preparse="$(dirname "$sage_python")/sage-preparse"
 	if [ ! -x "$sage_preparse" ]; then
 		echo "ERROR: Sage virtual-environment preparser is not executable: $sage_preparse" >&2
@@ -291,17 +301,41 @@ _sage-preparse-bin:
 	fi
 	printf '%s\n' "$sage_preparse"
 
-_sage-syntax:
+# scope=all sweeps every selected .sage file and is a heavy gate (push tier);
+# scope=staged checks only the staged ones, so a commit costs seconds and never
+# queues behind another repository's suite for the machine-wide lock.
+_sage-syntax scope="all":
 	#!/usr/bin/env bash
 	set -euo pipefail
-	source "{{artifacts}}/scripts/heavy-gate-lock.sh"
+	case "{{scope}}" in
+		all) source "{{artifacts}}/scripts/heavy-gate-lock.sh" ;;
+		staged) ;;
+		*) echo "ERROR: _sage-syntax scope must be all or staged, not {{scope}}" >&2; exit 2 ;;
+	esac
 	echo "============================="
-	echo "=== Running: Sage syntax validation ==="
+	echo "=== Running: Sage syntax validation ({{scope}}) ==="
 	echo "# Preparses .sage files and byte-compiles the generated Python to catch syntax errors early"
 	sage_files_output="$(just --justfile {{justfile()}} -d . _sage-qc-files)"
 	sage_files=()
 	if [ -n "$sage_files_output" ]; then
 		mapfile -t sage_files <<<"$sage_files_output"
+	fi
+	if [ "{{scope}}" = staged ]; then
+		declare -A staged=()
+		while IFS= read -r -d '' path; do
+			staged["$path"]=1
+		done < <(git diff --cached --name-only --diff-filter=ACMR -z -- '*.sage')
+		selected=()
+		for sage_file in "${sage_files[@]}"; do
+			if [ -n "${staged[$sage_file]:-}" ]; then
+				selected+=("$sage_file")
+			fi
+		done
+		sage_files=("${selected[@]}")
+		if [ "${#sage_files[@]}" -eq 0 ]; then
+			echo "Sage syntax validation: no staged Sage files."
+			exit 0
+		fi
 	fi
 	if [ "${#sage_files[@]}" -eq 0 ]; then
 		echo "ERROR: Sage syntax validation: no .sage files found in a Sage project."
@@ -312,7 +346,15 @@ _sage-syntax:
 	sage_python="$(just --justfile {{justfile()}} -d . _sage-python)"
 	sage_preparse="$(just --justfile {{justfile()}} -d . _sage-preparse-bin)"
 
-	sage_preparse_dir="$(mktemp -d "${SAGE_QC_STAGING_ROOT:-${TMPDIR:-/tmp}}/qc-sage-syntax.XXXXXX")"
+	# Docker-backed Sage cannot see the host's /tmp. Stage files under
+	# the shared home mount unless the caller supplies a shared root.
+	if [ "$(basename "$sage_python")" = sage-docker-python ]; then
+		sage_staging_root="${SAGE_QC_STAGING_ROOT:-${HOME}/.cache/sage-docker-tmp}"
+	else
+		sage_staging_root="${SAGE_QC_STAGING_ROOT:-${TMPDIR:-/tmp}}"
+	fi
+	mkdir -p "$sage_staging_root"
+	sage_preparse_dir="$(mktemp -d "$sage_staging_root/qc-sage-syntax.XXXXXX")"
 	trap 'if [ -e "$sage_preparse_dir" ]; then rm -rf -- "$sage_preparse_dir"; fi' EXIT
 	echo "# Preparsing and compiling ${#sage_files[@]} Sage file(s)"
 	copied_sage_files=()
@@ -680,7 +722,17 @@ _sage-mypy: _sage-qc-files
 		git ls-files -z -- '*.py' '*.pyi' | xargs -0 --no-run-if-empty cp --parents -t "$sage_preparse_dir"
 		copied_sage_files=()
 		cli_sage_files=()
-		startup_source="$("$sage_python" -c 'from pathlib import Path; from sage.env import SAGE_STARTUP_FILE; print(Path(SAGE_STARTUP_FILE).resolve() if SAGE_STARTUP_FILE else "")')"
+		if [ "$(basename "$sage_python")" = sage-docker-python ]; then
+			# The container runs with its own HOME, so its SAGE_STARTUP_FILE never
+			# names the host's startup link. Resolve it as host Sage does.
+			startup_file="${SAGE_STARTUP_FILE:-${DOT_SAGE:-$HOME/.sage}/init.sage}"
+			startup_source=""
+			if [ -e "$startup_file" ]; then
+				startup_source="$(realpath "$startup_file")"
+			fi
+		else
+			startup_source="$("$sage_python" -c 'from pathlib import Path; from sage.env import SAGE_STARTUP_FILE; print(Path(SAGE_STARTUP_FILE).resolve() if SAGE_STARTUP_FILE else "")')"
+		fi
 		for sage_file in "${sage_files[@]}"; do
 			target="$sage_preparse_dir/$sage_file"
 			mkdir -p "$(dirname "$target")"
@@ -819,7 +871,7 @@ test-commit:
 	just --justfile {{justfile()}} -d . _sage-run-check doctor-preflight {{justfile()}} _doctor-preflight
 	just --justfile {{justfile()}} -d . _sage-run-check sage-preflight {{justfile()}} _sage-preflight
 	just --justfile {{justfile()}} -d . _sage-run-check normalize-common {{justfile()}} _normalize-common
-	just --justfile {{justfile()}} -d . _sage-run-check sage-syntax {{justfile()}} _sage-syntax
+	just --justfile {{justfile()}} -d . _sage-run-check sage-syntax {{justfile()}} _sage-syntax staged
 	just --justfile {{justfile()}} -d . _sage-run-check python-normalize {{justfiles}}/python.just _normalize
 	just --justfile {{justfile()}} -d . _sage-run-check python-syntax {{justfiles}}/python.just _python-syntax
 	just --justfile {{justfile()}} -d . _sage-run-check no-bypass {{justfiles}}/shared.just _no-bypass
@@ -852,6 +904,7 @@ test-push:
 	set -euo pipefail
 	export AI_REVIEW_CI_FAILURE_MODE=direct
 	just --justfile {{justfile()}} -d . _sage-run-check test-commit {{justfile()}} test-commit
+	just --justfile {{justfile()}} -d . _sage-run-check sage-syntax-all {{justfile()}} _sage-syntax all
 	just --justfile {{justfile()}} -d . _sage-run-check sage-mypy {{justfile()}} _sage-mypy
 	just --justfile {{justfile()}} -d . _sage-run-check sage-pytest {{justfile()}} _sage-pytest
 	just --justfile {{justfile()}} -d . _sage-run-check vulture {{justfile()}} _vulture

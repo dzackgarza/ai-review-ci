@@ -653,12 +653,10 @@ def test_qc_tier_provisions_the_scratch_directory_declared_by_the_consumer(tmp_p
     consumer.mkdir()
     scratch = consumer / "scratch"
     (consumer / ".envrc").write_text('source_up\nexport TMPDIR="$PWD/scratch"\n')
-    (consumer / "justfile").write_text('ambient:\n    mktemp > created-path\n')
+    (consumer / "justfile").write_text("ambient:\n    mktemp > created-path\n")
     job = _workflow_jobs("_qc.yml")["qc"]
     step = next(step for step in job["steps"] if step.get("name") == "Run QC tier")
-    result = subprocess.run(["bash", "-e", "-c", step["run"]], cwd=consumer,
-                            env=os.environ | {"HOME": str(home), "QC_TIER": "ambient"},
-                            capture_output=True, text=True)
+    result = subprocess.run(["bash", "-e", "-c", step["run"]], cwd=consumer, env=os.environ | {"HOME": str(home), "QC_TIER": "ambient"}, capture_output=True, text=True)
     assert result.returncode == 0, result.stdout + result.stderr
     created = pathlib.Path((consumer / "created-path").read_text().strip())
     assert created.parent == scratch

@@ -8,7 +8,7 @@ container=sage-dev-develop
 docker_gid=$(getent group docker | cut -d: -f3)
 if ! id -G | tr ' ' '\n' | grep -qx "$docker_gid"; then
     launcher_dir=$(dirname -- "$(readlink -f -- "$0")")
-    exec bash "$launcher_dir/group-exec" docker "$0" "$@"
+    exec bash "$launcher_dir/group-exec" docker env PATH="/snap/bin:$PATH" "$0" "$@"
 fi
 
 mode=${0##*/}
@@ -95,5 +95,5 @@ case "$mode" in
         ;;
 esac
 
-exec docker exec -u "$(id -u):$(id -g)" -w "$PWD" "${env_args[@]}" \
+exec docker exec -i -u "$(id -u):$(id -g)" -w "$PWD" "${env_args[@]}" \
     "$container" "${command[@]}"

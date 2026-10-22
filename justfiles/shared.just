@@ -67,6 +67,21 @@ _format-structured-text:
 			*.json|*.jsonc|*.yaml|*.yml) data_files+=("$file") ;;
 		esac
 	done < <(git diff --cached --name-only --diff-filter=ACMR -z -- . "${exclude_pathspecs[@]}")
+	# The formatter rewrites the working tree, so its output reaches the commit only
+	# when it is staged again. A file whose working tree equals its staged blob is
+	# restaged; a partially staged file is not, since that would stage its unstaged
+	# hunks, and it is named so its formatted working tree is not mistaken for new work.
+	commit_index="${GIT_INDEX_FILE:-}"
+	restage=()
+	partial=()
+	for file in "${md_files[@]}" "${data_files[@]}"; do
+		if git diff --quiet -- "$file"; then
+			restage+=("$file")
+		else
+			partial+=("$file")
+		fi
+	done
+	repository_root="$(git rev-parse --show-toplevel)"
 	# git-sourced uvx tools must not inherit repository-location variables: they
 	# can otherwise redirect their own fetch at the host repository and fail.
 	# The selected file lists above already preserve the temporary commit index.
@@ -86,11 +101,20 @@ _format-structured-text:
 		printf '%s\0' "${data_files[@]}" | xargs -0 \
 			npx -y prettier --write --config {{configs}}/prettier-global.json
 	fi
+	if [ "${#restage[@]}" -gt 0 ]; then
+		printf '%s\0' "${restage[@]}" | GIT_INDEX_FILE="${commit_index:-$(git -C "$repository_root" rev-parse --git-path index)}" \
+			xargs -0 git -C "$repository_root" add --
+	fi
+	if [ "${#partial[@]}" -gt 0 ]; then
+		echo "WARNING: formatted but not staged, since these files have unstaged changes:" >&2
+		printf '  %s\n' "${partial[@]}" >&2
+	fi
 
+# Commit tier: it scans only the staged files, so it takes no machine-wide heavy-gate
+# slot and a commit never queues behind another repository's suite.
 _semgrep-autofix:
 	#!/usr/bin/env bash
 	set -euo pipefail
-	source "{{artifacts}}/scripts/heavy-gate-lock.sh"
 	echo "============================="
 	echo "=== Running: semgrep auto-fix ==="
 	echo "# Applies Semgrep autofixes to the staged files; the ambient tier scans the whole tree"
@@ -118,6 +142,14 @@ _semgrep-autofix:
 		echo "semgrep autofix: no staged files."
 		exit 0
 	fi
+	# An autofix rewrites the working tree, so it reaches the commit only when staged
+	# again: a file whose working tree equals its staged blob is restaged after the scan.
+	restage=()
+	while IFS= read -r -d '' file; do
+		if git diff --quiet -- "$file"; then
+			restage+=("$file")
+		fi
+	done <"$staged_manifest"
 	# This gate applies autofixes; CI-tier verification owns the remaining findings, so
 	# printing them here is advisory output the caller cannot act on. Measured at 177 lines
 	# and 8.4 KB per run in one repository — on every commit, in every repository. Agent
@@ -140,6 +172,9 @@ _semgrep-autofix:
 		grep -E '^(Ran [0-9]+ rules|.*files? (modified|left unchanged) by autofix)' "$scan_log" || true
 		findings="$(grep -cE '^\s+❯❯❱ ' "$scan_log" || true)"
 		echo "semgrep autofix: ${findings:-0} advisory finding group(s); CI-tier verification owns them"
+		if [ "${#restage[@]}" -gt 0 ]; then
+			printf '%s\0' "${restage[@]}" | xargs -0 git add --
+		fi
 	else
 		ec=$?
 		echo ""
