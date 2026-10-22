@@ -8,6 +8,13 @@ name: CI
 on:
   push: {}
 
+# Under a runner backlog, retain only the newest diagnostic snapshot for a
+# branch. Running every superseded push would spend CI capacity on obsolete
+# revisions and delay feedback for the actual current implementation.
+concurrency:
+  group: development-ci-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   qc-ci:
     uses: ./.github/workflows/_qc.yml

@@ -181,6 +181,21 @@ def test_ci_retains_hidden_diagnostics_and_fails_if_report_absent() -> None:
     assert upload["with"]["if-no-files-found"] == "error"
 
 
+def test_ci_cancels_superseded_same_branch_runs() -> None:
+    # Older revisions in a hosted-runner backlog must not consume runner
+    # capacity ahead of the current branch revision. Different branches stay
+    # independent and reusable workflows do not accidentally cancel callers.
+    import yaml
+
+    ci = yaml.safe_load((ROOT / ".github/workflows/ci.yml").read_text())
+    assert ci["concurrency"] == {
+        "group": "development-ci-${{ github.ref }}",
+        "cancel-in-progress": True,
+    }
+    reusable = yaml.safe_load((ROOT / ".github/workflows/_qc.yml").read_text())
+    assert "concurrency" not in reusable
+
+
 def test_ci_retains_individual_location_and_test_failures(tmp_path: Path) -> None:
     from importlib.util import module_from_spec, spec_from_file_location
 
