@@ -2232,7 +2232,7 @@ def test_python_scaffold_bare_push_does_not_require_tests_or_preflight(
 
     output = result.stdout + result.stderr
     assert result.returncode == 0, output
-    assert "Staged syntax: 0 file(s) checked" in output
+    assert "Push syntax: 0 file(s) checked" in output
     assert "Python project must have tests" not in output
 
 
@@ -2842,7 +2842,7 @@ def test_bun_scaffold_delegates_qc_in_project_directory(
 
     output = result.stdout + result.stderr
     assert result.returncode == 0, output
-    assert "Staged syntax: 0 file(s) checked" in output
+    assert "Push syntax: 0 file(s) checked" in output
     assert "TypeScript project must have tests" not in output
 
 
