@@ -1,0 +1,84 @@
+commit 0c9533161dff13802dfcf03ee0bb6e2d96d4599b
+Author: D. Zack Garza <dzackgarza@gmail.com>
+Date:   Wed Oct 21 12:25:34 2026 +0000
+
+    fix(sage): check only staged Sage files at commit, without the heavy lock
+    
+    The commit tier preparsed every .sage file in the repository (1,669 in
+    research) and so took the machine-wide heavy-gate slot. Every commit on
+    the machine then queued behind any other repository's full pytest run,
+    for as long as 7200 s, to check files it had not changed.
+    
+    `_sage-syntax staged` intersects the QC selection with the staged .sage
+    files and takes no lock; with none staged it passes at once. The full
+    sweep, `_sage-syntax all`, moves to the push tier, where it keeps the lock.
+    
+    Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+
+diff --git a/justfiles/sage.just b/justfiles/sage.just
+index ebdf381..13929e4 100644
+--- a/justfiles/sage.just
++++ b/justfiles/sage.just
+@@ -291,18 +291,42 @@ _sage-preparse-bin:
+ 	fi
+ 	printf '%s\n' "$sage_preparse"
+ 
+-_sage-syntax:
++# scope=all sweeps every selected .sage file and is a heavy gate (push tier);
++# scope=staged checks only the staged ones, so a commit costs seconds and never
++# queues behind another repository's suite for the machine-wide lock.
++_sage-syntax scope="all":
+ 	#!/usr/bin/env bash
+ 	set -euo pipefail
+-	source "{{artifacts}}/scripts/heavy-gate-lock.sh"
++	case "{{scope}}" in
++		all) source "{{artifacts}}/scripts/heavy-gate-lock.sh" ;;
++		staged) ;;
++		*) echo "ERROR: _sage-syntax scope must be all or staged, not {{scope}}" >&2; exit 2 ;;
++	esac
+ 	echo "============================="
+-	echo "=== Running: Sage syntax validation ==="
++	echo "=== Running: Sage syntax validation ({{scope}}) ==="
+ 	echo "# Preparses .sage files and byte-compiles the generated Python to catch syntax errors early"
+ 	sage_files_output="$(just --justfile {{justfile()}} -d . _sage-qc-files)"
+ 	sage_files=()
+ 	if [ -n "$sage_files_output" ]; then
+ 		mapfile -t sage_files <<<"$sage_files_output"
+ 	fi
++	if [ "{{scope}}" = staged ]; then
++		declare -A staged=()
++		while IFS= read -r -d '' path; do
++			staged["$path"]=1
++		done < <(git diff --cached --name-only --diff-filter=ACMR -z -- '*.sage')
++		selected=()
++		for sage_file in "${sage_files[@]}"; do
++			if [ -n "${staged[$sage_file]:-}" ]; then
++				selected+=("$sage_file")
++			fi
++		done
++		sage_files=("${selected[@]}")
++		if [ "${#sage_files[@]}" -eq 0 ]; then
++			echo "Sage syntax validation: no staged Sage files."
++			exit 0
++		fi
++	fi
+ 	if [ "${#sage_files[@]}" -eq 0 ]; then
+ 		echo "ERROR: Sage syntax validation: no .sage files found in a Sage project."
+ 		"{{artifacts}}/scripts/emit-triage-directive.sh"
+@@ -819,7 +843,7 @@ test-commit:
+ 	just --justfile {{justfile()}} -d . _sage-run-check doctor-preflight {{justfile()}} _doctor-preflight
+ 	just --justfile {{justfile()}} -d . _sage-run-check sage-preflight {{justfile()}} _sage-preflight
+ 	just --justfile {{justfile()}} -d . _sage-run-check normalize-common {{justfile()}} _normalize-common
+-	just --justfile {{justfile()}} -d . _sage-run-check sage-syntax {{justfile()}} _sage-syntax
++	just --justfile {{justfile()}} -d . _sage-run-check sage-syntax {{justfile()}} _sage-syntax staged
+ 	just --justfile {{justfile()}} -d . _sage-run-check python-normalize {{justfiles}}/python.just _normalize
+ 	just --justfile {{justfile()}} -d . _sage-run-check python-syntax {{justfiles}}/python.just _python-syntax
+ 	just --justfile {{justfile()}} -d . _sage-run-check no-bypass {{justfiles}}/shared.just _no-bypass
+@@ -852,6 +876,7 @@ test-push:
+ 	set -euo pipefail
+ 	export AI_REVIEW_CI_FAILURE_MODE=direct
+ 	just --justfile {{justfile()}} -d . _sage-run-check test-commit {{justfile()}} test-commit
++	just --justfile {{justfile()}} -d . _sage-run-check sage-syntax-all {{justfile()}} _sage-syntax all
+ 	just --justfile {{justfile()}} -d . _sage-run-check sage-mypy {{justfile()}} _sage-mypy
+ 	just --justfile {{justfile()}} -d . _sage-run-check sage-pytest {{justfile()}} _sage-pytest
+ 	just --justfile {{justfile()}} -d . _sage-run-check vulture {{justfile()}} _vulture

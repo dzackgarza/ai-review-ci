@@ -1,0 +1,29 @@
+commit ee8388147b43dd773966490d87984d540c8f9481
+Author: D. Zack Garza <dzackgarza@gmail.com>
+Date:   Wed Oct 21 13:47:30 2026 +0000
+
+    fix(semgrep): take no heavy-gate slot for the staged-file autofix
+    
+    The commit-tier autofix scans only the staged files, yet took the
+    machine-wide slot before even checking whether any were staged, so every
+    commit could queue behind another repository's test suite.
+    
+    Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+
+diff --git a/justfiles/shared.just b/justfiles/shared.just
+index d856edf..392295c 100644
+--- a/justfiles/shared.just
++++ b/justfiles/shared.just
+@@ -87,10 +87,11 @@ _format-structured-text:
+ 			npx -y prettier --write --config {{configs}}/prettier-global.json
+ 	fi
+ 
++# Commit tier: it scans only the staged files, so it takes no machine-wide heavy-gate
++# slot and a commit never queues behind another repository's suite.
+ _semgrep-autofix:
+ 	#!/usr/bin/env bash
+ 	set -euo pipefail
+-	source "{{artifacts}}/scripts/heavy-gate-lock.sh"
+ 	echo "============================="
+ 	echo "=== Running: semgrep auto-fix ==="
+ 	echo "# Applies Semgrep autofixes to the staged files; the ambient tier scans the whole tree"
