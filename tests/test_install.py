@@ -689,3 +689,15 @@ def test_qc_tier_provisions_the_scratch_directory_declared_by_the_consumer(tmp_p
     created = pathlib.Path((consumer / "created-path").read_text().strip())
     assert created.parent == scratch
     assert created.is_file()
+
+
+@pytest.mark.parametrize("workflow", ["_qc.yml", "_gates.yml", "_acceptance.yml"])
+def test_reusable_workflows_pin_the_just_release(workflow: str) -> None:
+    """An empty version specifier can make setup-just fail before CI runs."""
+    jobs = _workflow_jobs(workflow)
+    installers = [
+        step for job in jobs.values() for step in job.get("steps", [])
+        if step.get("uses") == "extractions/setup-just@v4"
+    ]
+    assert installers
+    assert all(step["with"]["just-version"] == "1.59.0" for step in installers)

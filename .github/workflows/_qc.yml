@@ -120,6 +120,7 @@ jobs:
         uses: extractions/setup-just@v4
         with:
           github-token: ${{ github.token }}
+          just-version: '1.59.0'
       - name: Install QC system packages
         # The QC file-discovery recipes (_python-qc-files etc.) shell out to `rg`.
         # Dev machines have it on PATH; a bare runner does not, so install it

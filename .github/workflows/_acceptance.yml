@@ -90,6 +90,7 @@ jobs:
       - uses: extractions/setup-just@v4
         with:
           github-token: ${{ github.token }}
+          just-version: '1.59.0'
       - name: Clone QC infrastructure
         run: git clone --depth 1 --branch "$INFRA_REF" https://github.com/dzackgarza/ai-review-ci.git "$HOME/ai-review-ci"
       - name: Install the shard runner
