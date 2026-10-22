@@ -701,3 +701,48 @@ def test_reusable_workflows_pin_the_just_release(workflow: str) -> None:
     ]
     assert installers
     assert all(step["with"]["just-version"] == "1.59.0" for step in installers)
+
+
+
+def test_qc_push_diff_uses_previous_commit_and_branch_scoped_debt(tmp_path: pathlib.Path) -> None:
+    workflow = yaml.safe_load((_WORKFLOWS_DIR / "_qc.yml").read_text())
+    job = workflow["jobs"]["qc"]
+    assert "github.event.before" in job["env"]["DIFF_COVER_BASE"]
+    steps = job["steps"]
+    restore = next(step for step in steps if step.get("name") == "Restore prior branch diagnostic snapshot")
+    save = next(step for step in steps if step.get("name") == "Cache branch diagnostic snapshot")
+    assert "github.ref" in restore["with"]["key"]
+    assert "github.ref" in restore["with"]["restore-keys"]
+    assert restore["with"]["key"] == save["with"]["key"]
+    resolver = next(step for step in steps if step.get("name") == "Resolve diff base on first branch push")
+    script = resolver["run"].replace("${{ github.event.repository.default_branch }}", "main")
+
+    repo = tmp_path / "repository"
+    repo.mkdir()
+    subprocess.run(["git", "init", "-q", "-b", "main"], cwd=repo, check=True)
+    (repo / "tracked").write_text("base")
+    subprocess.run(["git", "add", "tracked"], cwd=repo, check=True)
+    subprocess.run(["git", "-c", "user.name=Test", "-c", "user.email=test@example.com",
+                    "-c", "core.hooksPath=/dev/null", "commit", "-q", "-m", "base"],
+                   cwd=repo, check=True)
+    base = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=repo, text=True).strip()
+    subprocess.run(["git", "update-ref", "refs/remotes/origin/main", base], cwd=repo, check=True)
+    subprocess.run(["git", "checkout", "-q", "-b", "feature"], cwd=repo, check=True)
+    (repo / "tracked").write_text("feature")
+    subprocess.run(["git", "add", "tracked"], cwd=repo, check=True)
+    subprocess.run(["git", "-c", "user.name=Test", "-c", "user.email=test@example.com",
+                    "-c", "core.hooksPath=/dev/null", "commit", "-q", "-m", "feature"],
+                   cwd=repo, check=True)
+    output = tmp_path / "github-env"
+    output.write_text("")
+    env = os.environ | {"DIFF_COVER_BASE": "0" * 40, "GITHUB_ENV": str(output)}
+    result = subprocess.run(["bash", "-e", "-o", "pipefail", "-c", script],
+                            cwd=repo, env=env, text=True, capture_output=True)
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert output.read_text().strip() == f"DIFF_COVER_BASE={base}"
+    output.write_text("")
+    env["DIFF_COVER_BASE"] = base
+    result = subprocess.run(["bash", "-e", "-o", "pipefail", "-c", script],
+                            cwd=repo, env=env, text=True, capture_output=True)
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert output.read_text() == ""

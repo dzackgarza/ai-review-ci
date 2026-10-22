@@ -60,10 +60,10 @@ jobs:
       QC_ENFORCE: ${{ inputs.enforce }}
       QC_SETUP_RECIPE: ${{ inputs.setup_recipe }}
       QC_INFRA_REF: ${{ inputs.infra_ref }}
-      # _diff-cover compares changed lines against this ref. A CI checkout is a
-      # detached merge ref with no local `main`, so point at the remote-tracking
-      # base branch (the PR base on PRs, the default branch on pushes).
-      DIFF_COVER_BASE: origin/${{ github.base_ref || github.event.repository.default_branch }}
+      # On push, analyze changes since the previously pushed commit, not
+      # origin/main (which already equals HEAD on the default branch).
+      # Pull requests use their target branch; first pushes resolve a merge base.
+      DIFF_COVER_BASE: ${{ github.event_name == 'push' && github.event.before || format('origin/{0}', github.base_ref || github.event.repository.default_branch) }}
       QC_SETUP_CACHE_PATHS: ${{ inputs.setup_cache_paths }}
       QC_SETUP_CACHE_KEY_FILES: ${{ inputs.setup_cache_key_files }}
     steps:
@@ -187,9 +187,23 @@ jobs:
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: .qc-triage/previous-results.json
-          key: qc-triage-${{ inputs.profile }}-${{ inputs.tier }}-${{ github.run_id }}-${{ github.run_attempt }}
+          key: qc-triage-${{ github.ref }}-${{ inputs.profile }}-${{ inputs.tier }}-${{ github.run_id }}-${{ github.run_attempt }}
           restore-keys: |
-            qc-triage-${{ inputs.profile }}-${{ inputs.tier }}-
+            qc-triage-${{ github.ref }}-${{ inputs.profile }}-${{ inputs.tier }}-
+      - name: Resolve diff base on first branch push
+        if: inputs.tier == 'test-ci'
+        run: |
+          if ! git cat-file -e "$DIFF_COVER_BASE^{commit}" 2>/dev/null; then
+            if git show-ref --verify --quiet "refs/remotes/origin/${{ github.event.repository.default_branch }}"; then
+              DIFF_COVER_BASE="$(git merge-base HEAD "origin/${{ github.event.repository.default_branch }}")"
+            elif git rev-parse HEAD^ >/dev/null 2>&1; then
+              DIFF_COVER_BASE="$(git rev-parse HEAD^)"
+            else
+              echo "No usable base commit for CI diff analysis" >&2
+              exit 1
+            fi
+            echo "DIFF_COVER_BASE=$DIFF_COVER_BASE" >> "$GITHUB_ENV"
+          fi
       - name: Run QC tier
         # No GH_TOKEN here (#218): the tier runs every QC recipe and every
         # npx/uvx tool runner (semgrep, ai-slop, aislop), which must not execute
@@ -227,7 +241,7 @@ jobs:
         uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: .qc-triage/previous-results.json
-          key: qc-triage-${{ inputs.profile }}-${{ inputs.tier }}-${{ github.run_id }}-${{ github.run_attempt }}
+          key: qc-triage-${{ github.ref }}-${{ inputs.profile }}-${{ inputs.tier }}-${{ github.run_id }}-${{ github.run_attempt }}
       - name: Retain development diagnostic triage
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
