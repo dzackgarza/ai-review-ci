@@ -155,3 +155,43 @@ def test_ci_retains_hidden_diagnostics_and_fails_if_report_absent() -> None:
     (upload,) = (step for step in steps if step.get("name") == "Retain development diagnostic triage")
     assert upload["with"]["include-hidden-files"] is True
     assert upload["with"]["if-no-files-found"] == "error"
+
+
+def test_ci_retains_individual_location_and_test_failures(tmp_path: Path) -> None:
+    from importlib.util import module_from_spec, spec_from_file_location
+
+    spec = spec_from_file_location("ci_triage_findings", TRIAGE)
+    assert spec and spec.loader
+    module = module_from_spec(spec)
+    sys.modules[spec.name] = module
+    spec.loader.exec_module(module)
+
+    logfile = tmp_path / "types-and-tests.log"
+    logfile.write_text(
+        "src/algebra/module.py:17: error: incompatible assignment [assignment]\n"
+        "src/algebra/module.py:18: error: another error [no-untyped-def]\n"
+        "FAILED tests/test_module.py::test_consistency - AssertionError\n"
+    )
+    check = module.Check("quality", "debt", "python", "_mypy")
+    findings = module.extract_findings(check, logfile, 1)
+    assert len(findings) == 3
+    assert {(item["location"], item["rule"]) for item in findings} == {
+        ("src/algebra/module.py", "assignment"),
+        ("src/algebra/module.py", "no-untyped-def"),
+        ("tests/test_module.py::test_consistency", ""),
+    }
+    assert all(item["log"] == logfile.name for item in findings)
+
+    old = {"profile": "sage", "tier": "ci", "generated_at": "old",
+           "findings": [findings[0], findings[1]]}
+    current = {"profile": "sage", "tier": "ci", "findings": [findings[1], findings[2]]}
+    delta = module.compare_findings(current, old)
+    assert delta["new"] == [findings[2]["id"]]
+    assert delta["persistent"] == [findings[1]["id"]]
+    assert delta["resolved"] == [findings[0]["id"]]
+    assert module.compare_findings(current, {"profile": "sage", "tier": "ci", "checks": []})["baseline"] == "unavailable"
+    assert module.extract_findings(check, logfile, 0) == []
+    logfile.write_text("unrecognized tool failure")
+    fallback = module.extract_findings(check, logfile, 127)
+    assert len(fallback) == 1
+    assert fallback[0]["rule"] == "CHECK_FAILED"

@@ -9,6 +9,8 @@ Pass --enforce only after a project has explicitly adopted a stable baseline.
 from __future__ import annotations
 
 import argparse
+import hashlib
+import re
 from dataclasses import dataclass
 from datetime import datetime, timezone
 import json
@@ -163,10 +165,81 @@ def compare_results(current: dict, previous: dict | None) -> dict:
     }
 
 
+
+# Recognize common compiler/linter locations and pytest's stable test IDs.
+# Tools with unrecognized output retain a check-level failure, never an empty
+# result that falsely looks like no problems.
+LOCATED = re.compile(
+    r"^(?P<path>[^\s:]+\.(?:py|pyi|sage|lean|rs|ts|tsx|js|jsx|toml|json|ya?ml|md))"
+    r":(?P<line>[0-9]+)(?::[0-9]+)?:\s*(?P<message>.+)$"
+)
+PYTEST = re.compile(r"^(?:FAILED|ERROR)\s+(?P<node>\S+)(?:\s+-\s+(?P<message>.*))?$")
+
+
+def extract_findings(spec: Check, logfile: Path, exit_code: int) -> list[dict]:
+    """Return identified failures, retaining their source location and full log."""
+    if exit_code == 0:
+        return []
+    findings: dict[str, dict] = {}
+    with logfile.open(encoding="utf-8", errors="replace") as stream:
+        for raw_line in stream:
+            line = raw_line.strip()
+            match = PYTEST.match(line)
+            if match:
+                location = match["node"]
+                number = None
+                message = match["message"] or "pytest case failed"
+            else:
+                match = LOCATED.match(line)
+                if not match:
+                    continue
+                location = match["path"]
+                number = int(match["line"])
+                message = match["message"]
+            # Code/check/message discriminate independent findings. Preserve
+            # line numbers separately; adding lines does not reset the burndown.
+            code = re.search(r"\[([a-z][a-z0-9-]+)\]$", message)
+            rule = code.group(1) if code else ""
+            normalized = " ".join(message.split())[:500]
+            signature = "\x00".join((spec.id, location, rule, normalized))
+            key = hashlib.sha256(signature.encode()).hexdigest()[:20]
+            findings[key] = {
+                "id": key, "check": spec.id, "category": spec.category,
+                "location": location, "line": number, "rule": rule,
+                "message": normalized, "log": logfile.name,
+            }
+    if not findings:
+        key = hashlib.sha256((spec.id + "\x00unparsed-failure").encode()).hexdigest()[:20]
+        findings[key] = {
+            "id": key, "check": spec.id, "category": spec.category,
+            "location": None, "line": None, "rule": "CHECK_FAILED",
+            "message": f"Check returned {exit_code}; inspect {logfile.name}",
+            "log": logfile.name,
+        }
+    return list(findings.values())
+
+
+def compare_findings(current: dict, previous: dict | None) -> dict:
+    """Findings-level debt movement; an older check-only report is not a baseline."""
+    active = {item["id"] for item in current["findings"]}
+    if (
+        previous is None or "findings" not in previous
+        or previous.get("profile") != current["profile"]
+        or previous.get("tier") != current["tier"]
+    ):
+        return {"baseline": "unavailable", "open": sorted(active),
+                "new": [], "persistent": [], "resolved": []}
+    prior = {item["id"] for item in previous["findings"]}
+    return {"baseline": previous.get("generated_at", "available"),
+            "open": sorted(active), "new": sorted(active - prior),
+            "persistent": sorted(active & prior), "resolved": sorted(prior - active)}
+
+
 def run(profile: str, tier: str, report_dir: Path, *, enforce: bool = False) -> int:
     checks = ci_checks(profile) if tier == "ci" else ambient_checks(profile)
     report_dir.mkdir(parents=True, exist_ok=True)
     results = []
+    findings = []
     for spec in checks:
         logfile = report_dir / f"{spec.id}.log"
         command = spec.command()
@@ -177,8 +250,11 @@ def run(profile: str, tier: str, report_dir: Path, *, enforce: bool = False) -> 
             except OSError as error:
                 stream.write(f"Unable to launch check: {error}\n")
                 exit_code = 127
+        check_findings = extract_findings(spec, logfile, exit_code)
+        findings.extend(check_findings)
         results.append(
             {
+                "finding_count": len(check_findings),
                 "id": spec.id,
                 "category": spec.category,
                 "status": "passed" if exit_code == 0 else "failed",
@@ -197,6 +273,7 @@ def run(profile: str, tier: str, report_dir: Path, *, enforce: bool = False) -> 
         "enforced": enforce,
         "generated_at": datetime.now(timezone.utc).isoformat(),
         "checks": results,
+        "findings": findings,
         "failed_checks": len(failures),
     }
     (report_dir / "results.json").write_text(json.dumps(payload, indent=2) + "\n")
@@ -208,6 +285,7 @@ def run(profile: str, tier: str, report_dir: Path, *, enforce: bool = False) -> 
         except (ValueError, OSError):
             pass
     burndown = compare_results(payload, previous)
+    burndown["finding_burndown"] = compare_findings(payload, previous)
     (report_dir / "burndown.json").write_text(json.dumps(burndown, indent=2) + "\n")
     summary = [
         f"## {profile} {tier} — development diagnostics",
@@ -223,7 +301,13 @@ def run(profile: str, tier: str, report_dir: Path, *, enforce: bool = False) -> 
         "", "### Burndown", "",
         "Previous matching CI snapshot unavailable." if burndown["baseline"] == "unavailable" else
         f"{len(burndown['new'])} newly failing; {len(burndown['persistent'])} persistent; {len(burndown['resolved'])} resolved.",
-        "Open: " + (", ".join(burndown["open"]) if burndown["open"] else "none"),
+        "Open checks: " + (", ".join(burndown["open"]) if burndown["open"] else "none"),
+        "",
+        f"{len(findings)} individual findings retained.",
+        ("Previous finding snapshot unavailable." if burndown["finding_burndown"]["baseline"] == "unavailable"
+         else (f"{len(burndown['finding_burndown']['new'])} new; "
+               f"{len(burndown['finding_burndown']['persistent'])} persistent; "
+               f"{len(burndown['finding_burndown']['resolved'])} resolved findings.")),
         "", "Logs, results.json and burndown.json are retained as CI artifacts.",
         "All findings enforced (stabilized phase)." if enforce else "Development findings do not block publication.",
     ]

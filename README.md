@@ -98,7 +98,10 @@ The tiers are:
   is not subjected to a compile or type gate locally.
 - test-ci: run the complete project test suite and individual correctness and
   code-quality checks on CI; retain each result as a JSON record, individual
-  log, and GitHub job summary. A branch-scoped prior CI snapshot is cached
+  log, and GitHub job summary. Recognized test failures and source-location
+  diagnostics receive stable finding IDs in results.json; unrecognized tool
+  output remains a check-level failure linked to its full log. A branch-scoped
+  prior CI snapshot is cached
   to produce burndown.json with newly failing, persistent, resolved, and
   currently open check IDs. A missing baseline is explicitly reported as
   unavailable, not treated as zero failures. In development the checks do not
