@@ -70,19 +70,16 @@ def _red_commit(repo: pathlib.Path, *args: str) -> subprocess.CompletedProcess[s
     )
 
 
-def test_ordinary_pre_commit_hook_rejects_red_and_names_the_route(repo: pathlib.Path) -> None:
-    """The plain hook blocks a red commit AND points at the sanctioned route."""
+def test_development_hook_allows_red_proof_without_policy_gate(repo: pathlib.Path) -> None:
+    """Staged syntax, rather than test failure or policy status, controls the local commit."""
     (repo / "RED").write_text("reproduces the bug\n")
     _git(repo, "add", "RED")
     result = subprocess.run(
         ["git", "-c", "user.name=T", "-c", "user.email=t@e.x", "-C", str(repo), "commit", "-m", "red proof"],
-        text=True,
-        capture_output=True,
-        check=False,
+        text=True, capture_output=True, check=False,
     )
-    assert result.returncode != 0, "hook must reject a commit whose gate fails"
-    assert "ai-review-ci red-commit" in result.stderr
-    assert "--issue" in result.stderr
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert _git(repo, "show", "HEAD:RED").stdout == "reproduces the bug\n"
 
 
 def test_authorized_red_proof_is_accepted_through_the_route(repo: pathlib.Path) -> None:
