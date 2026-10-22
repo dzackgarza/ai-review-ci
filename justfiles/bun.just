@@ -1,3 +1,4 @@
+# Development: local commit/push check staged syntax only; CI owns suites and quality debt.
 # justfile-bun — TypeScript-specific quality control
 #
 # Imports cross-language QC recipes from `justfile` (shared) and adds
@@ -143,7 +144,7 @@ _coverage:
 	fi
 	bun test --coverage --coverage-reporter=lcov --coverage-dir=.
 
-_diff-cover: _coverage
+_diff-cover:
 	#!/usr/bin/env bash
 	set -euo pipefail
 	if [ -f playwright.config.ts ]; then
@@ -642,20 +643,11 @@ _doctor-preflight:
 
 # public: COMMIT gate — immediate, directly repairable feedback
 test-commit:
-	#!/usr/bin/env bash
-	set -euo pipefail
-	export AI_REVIEW_CI_FAILURE_MODE=direct
-	just --justfile {{justfile()}} -d . _doctor-preflight _check-ts-project _normalize-common _normalize _tsc
-	just -f {{justfiles}}/shared.just -d . _no-bypass
-	echo "Commit quality checks completed"
+    @python3 "{{justfile_directory()}}/../scripts/local-check.py"
 
 # public: PUSH gate — commit checks plus the full project-owned test suite
 test-push:
-	#!/usr/bin/env bash
-	set -euo pipefail
-	export AI_REVIEW_CI_FAILURE_MODE=direct
-	just --justfile {{justfile()}} -d . test-commit _bun-test
-	echo "Push quality checks completed"
+    @python3 "{{justfile_directory()}}/../scripts/local-check.py"
 
 # private: the Bun CI gates without the cross-language stack, which a profile that
 # composes several languages runs once (bun-python.just). `_coverage` is the
@@ -668,12 +660,7 @@ _ci-checks:
 
 # public: CI gate — push checks plus gameable and long-running acceptance gates
 test-ci:
-	#!/usr/bin/env bash
-	set -euo pipefail
-	export AI_REVIEW_CI_FAILURE_MODE=triage
-	just --justfile {{justfile()}} -d . _ci-checks
-	just -f {{justfiles}}/shared.just -d . _global-qc
-	echo "CI quality checks completed"
+    @python3 "{{justfile_directory()}}/../scripts/ci-triage.py" bun
 
 # `_qc.yml` accepts `tier: ambient` and dispatches `just ambient`, so a profile
 # that does not define it fails every scheduled run before any tool starts.
@@ -691,11 +678,4 @@ _ambient-bun-debt:
 # public: AMBIENT audit — whole-tree semgrep and deferred-debt scan, not a PR gate.
 # Every step runs; the audit fails if any did.
 ambient:
-	#!/usr/bin/env bash
-	set -uo pipefail
-	export AI_REVIEW_CI_FAILURE_MODE=triage
-	status=0
-	just -f {{justfiles}}/shared.just -d . _ambient-semgrep || status=1
-	just --justfile {{justfile()}} -d . _ambient-bun-debt || status=1
-	[ "$status" -eq 0 ] || exit 1
-	echo "Bun ambient audit completed"
+    @python3 "{{justfile_directory()}}/../scripts/ci-triage.py" bun --tier ambient

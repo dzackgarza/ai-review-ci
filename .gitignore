@@ -8,3 +8,4 @@ node_modules/
 .pr/triage_state.json
 .pr/REVIEW_DISPOSITIONS.md
 .mypy_cache/
+\n.qc-triage/\n

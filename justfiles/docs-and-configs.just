@@ -1,3 +1,4 @@
+# Development: local commit/push check staged syntax only; CI owns suites and quality debt.
 # ai-review-ci docs-and-configs QC implementation.
 # Markdown is reformatted with Flowmark at commit tier; tracked Markdown and HTML links
 # are validated with Lychee at push and CI tiers.
@@ -25,12 +26,12 @@ _check-links:
 
 # Reformat Markdown and structured configuration before commit.
 test-commit:
-    @just --justfile {{ justfile() }} _format-structured-text
+    @python3 "{{justfile_directory()}}/../scripts/local-check.py"
 
 # Validate tracked documentation links before push.
 test-push:
-    @just --justfile {{ justfile() }} _check-links
+    @python3 "{{justfile_directory()}}/../scripts/local-check.py"
 
 # Validate tracked documentation links in CI.
 test-ci:
-    @just --justfile {{ justfile() }} _check-links
+    @python3 "{{justfile_directory()}}/../scripts/ci-triage.py" docs-and-configs

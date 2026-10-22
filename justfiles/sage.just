@@ -1,3 +1,4 @@
+# Development: local commit/push check staged syntax only; CI owns suites and quality debt.
 # justfile-sage — SageMath-specific quality control
 #
 # Imports shared and Python QC recipes and adds Sage-specific checks.
@@ -649,7 +650,7 @@ _sage-pytest-coverage:
 	fi
 	echo "Coverage XML report: $coverage_root/coverage.xml"
 
-_sage-diff-cover: _sage-pytest-coverage
+_sage-diff-cover:
 	#!/usr/bin/env bash
 	set -euo pipefail
 	echo "============================="
@@ -846,17 +847,7 @@ _sage-mypy: _sage-qc-files
 
 # public: COMMIT gate — immediate, directly repairable feedback
 test-commit:
-	#!/usr/bin/env bash
-	set -euo pipefail
-	export AI_REVIEW_CI_FAILURE_MODE=direct
-	just --justfile {{justfile()}} -d . _sage-run-check doctor-preflight {{justfile()}} _doctor-preflight
-	just --justfile {{justfile()}} -d . _sage-run-check sage-preflight {{justfile()}} _sage-preflight
-	just --justfile {{justfile()}} -d . _sage-run-check normalize-common {{justfile()}} _normalize-common
-	just --justfile {{justfile()}} -d . _sage-run-check sage-syntax {{justfile()}} _sage-syntax
-	just --justfile {{justfile()}} -d . _sage-run-check python-normalize {{justfiles}}/python.just _normalize
-	just --justfile {{justfile()}} -d . _sage-run-check python-syntax {{justfiles}}/python.just _python-syntax
-	just --justfile {{justfile()}} -d . _sage-run-check no-bypass {{justfiles}}/shared.just _no-bypass
-	echo "Sage commit quality checks completed"
+    @python3 "{{justfile_directory()}}/../scripts/local-check.py"
 
 # public: PUSH gate — commit checks, the project-owned test suite, and the
 # deterministic checks a developer can answer without leaving the local loop.
@@ -881,18 +872,7 @@ _sage-file-length:
 		xargs -0 -r -- "$linecheck_bin" --config {{configs}}/linecheck.yml --
 
 test-push:
-	#!/usr/bin/env bash
-	set -euo pipefail
-	export AI_REVIEW_CI_FAILURE_MODE=direct
-	just --justfile {{justfile()}} -d . _sage-run-check test-commit {{justfile()}} test-commit
-	just --justfile {{justfile()}} -d . _sage-run-check sage-mypy {{justfile()}} _sage-mypy
-	just --justfile {{justfile()}} -d . _sage-run-check sage-pytest {{justfile()}} _sage-pytest
-	just --justfile {{justfile()}} -d . _sage-run-check vulture {{justfile()}} _vulture
-	just --justfile {{justfile()}} -d . _sage-run-check sage-ast-grep {{justfile()}} _sage-ast-grep
-	just --justfile {{justfile()}} -d . _sage-run-check sage-file-length {{justfile()}} _sage-file-length
-	just --justfile {{justfile()}} -d . _sage-run-check deptry {{justfiles}}/python.just _deptry
-	just --justfile {{justfile()}} -d . _sage-run-check python-ast-grep {{justfiles}}/python.just _ast-grep
-	echo "Sage push quality checks completed"
+    @python3 "{{justfile_directory()}}/../scripts/local-check.py"
 
 _sage-ast-grep:
 	#!/usr/bin/env bash
@@ -967,20 +947,7 @@ _sage-ast-grep:
 # a number to golf rather than a defect to fix. `_import-linter` builds the
 # whole import graph and takes minutes, which no push gate can carry.
 test-ci:
-	#!/usr/bin/env bash
-	set -euo pipefail
-	export AI_REVIEW_CI_FAILURE_MODE=triage
-	just --justfile {{justfile()}} -d . _sage-run-check test-push {{justfile()}} test-push
-	just --justfile {{justfile()}} -d . _sage-run-check import-linter {{justfiles}}/python.just _import-linter
-	just --justfile {{justfile()}} -d . _sage-run-check jscpd-python {{justfiles}}/python.just _jscpd-python
-	# CCN 15 (lizard's own default) for Sage projects: mathematical case
-	# analysis is irreducibly branchy; see _lizard-python in python.just.
-	just --justfile {{justfile()}} -d . _sage-run-check lizard-python {{justfiles}}/python.just _lizard-python 15
-	# Coverage runs under the Sage interpreter (python-flavor coverage cannot
-	# import sage.* or see preparsed .sage tests).
-	just --justfile {{justfile()}} -d . _sage-run-check sage-diff-cover {{justfile()}} _sage-diff-cover
-	just --justfile {{justfile()}} -d . _sage-run-check global-qc {{justfiles}}/shared.just _global-qc
-	echo "Sage CI quality checks completed"
+    @python3 "{{justfile_directory()}}/../scripts/ci-triage.py" sage
 
 # Scheduled, never in the PR/push gate: the whole-tree scans. The commit tier
 # scans staged files and test-ci the diff, so this is the only whole-tree semgrep.
@@ -988,10 +955,4 @@ test-ci:
 #
 # public: AMBIENT audit — whole-tree semgrep and debt scan
 ambient:
-	#!/usr/bin/env bash
-	set -uo pipefail
-	export AI_REVIEW_CI_FAILURE_MODE=triage
-	status=0
-	just -f {{justfiles}}/shared.just -d . _ambient-semgrep || status=1
-	[ "$status" -eq 0 ] || exit 1
-	echo "Sage ambient audit completed"
+    @python3 "{{justfile_directory()}}/../scripts/ci-triage.py" sage --tier ambient

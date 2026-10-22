@@ -25,6 +25,11 @@ on:
         required: false
         type: string
         default: main
+      enforce:
+        description: Enforce all CI findings after an explicit stabilized-phase baseline
+        required: false
+        type: boolean
+        default: false
       run_gh_boundary:
         description: "Run this repository's real GitHub API tests marked pytest.mark.gh_boundary in an isolated token-scoped step"
         required: false
@@ -52,6 +57,7 @@ jobs:
     env:
       QC_TIER: ${{ inputs.tier }}
       QC_PROFILE: ${{ inputs.profile }}
+      QC_ENFORCE: ${{ inputs.enforce }}
       QC_SETUP_RECIPE: ${{ inputs.setup_recipe }}
       QC_INFRA_REF: ${{ inputs.infra_ref }}
       # _diff-cover compares changed lines against this ref. A CI checkout is a
@@ -72,7 +78,7 @@ jobs:
             *) echo "invalid tier: $QC_TIER" >&2; exit 1 ;;
           esac
           case "$QC_PROFILE" in
-            python|bun|bun-python|bun-playwright|rust|sage) ;;
+            python|bun|bun-python|bun-playwright|rust|sage|docs-and-configs) ;;
             *) echo "invalid profile: $QC_PROFILE" >&2; exit 1 ;;
           esac
           if [[ -n "$QC_SETUP_RECIPE" && "$QC_SETUP_RECIPE" =~ [^A-Za-z0-9_-] ]]; then
@@ -200,6 +206,13 @@ jobs:
             mkdir -p "$TMPDIR"
           fi
           just "$QC_TIER"
+      - name: Retain development diagnostic triage
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: qc-triage-${{ github.run_id }}-${{ github.run_attempt }}-${{ inputs.tier }}-${{ inputs.profile }}
+          path: .qc-triage/
+          if-no-files-found: warn
       # The delegated profile owns scanner applicability. qc-tooling omits product
       # scanners on checker sources; its missing artifact is not an empty scan.
       # For profiles requiring Semgrep, missing reports remain missing review input.

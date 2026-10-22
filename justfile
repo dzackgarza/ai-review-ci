@@ -36,12 +36,12 @@ check-skill-links:
 test-commit:
     just -f {{repo}}/justfiles/qc-tooling.just -d . test-commit
 
-# Push gate: commit checks plus the full project-owned test suite.
+# Push gate: same minimal staged syntax checks as commit; CI owns suites.
 test-push:
     just -f {{repo}}/justfiles/qc-tooling.just -d . test-push
 
-# CI gate: push checks plus changed-line coverage / dependency / import
-# boundary checks. This repo does not self-apply the downstream slop stack.
+# CI records independent correctness and quality diagnostics; it does not
+# enforce them during development.
 test-ci:
     just -f {{repo}}/justfiles/qc-tooling.just -d . test-ci
 

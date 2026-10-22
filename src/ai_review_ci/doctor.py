@@ -15,7 +15,7 @@ from cyclopts import Parameter
 from pydantic import BaseModel, ConfigDict, Field, TypeAdapter, ValidationError
 
 from ai_review_ci.gates import PROJECT_PROFILES, SUPPORTED_PROFILES, ProjectProfile, delegates_to_global_qc, required_check_contexts
-from ai_review_ci.install import AMBIENT_WORKFLOW, PR_WORKFLOW
+from ai_review_ci.install import AMBIENT_WORKFLOW, DEVELOPMENT_WORKFLOW, PR_WORKFLOW
 from ai_review_ci.labels import Label, RemoteLabel, compute_label_actions, load_taxonomy
 
 SCHEMA_VERSION: Literal[1] = 1
@@ -305,7 +305,13 @@ def doctor_report(target: Path) -> DoctorReport:
     workflow_refs = _workflow_refs(target_root, contract, report_profile)
     justfile_delegation = _justfile_delegation(target_root, report_profile)
     branch_protection = _branch_protection(target_root, contract, report_profile)
-    label_alignment = _label_alignment(target_root)
+    if _development_mode(target_root):
+        label_alignment = LabelAlignmentObservation(
+            observed_state="not_applicable", missing=(), drifted=(), variants=(),
+            evidence="development phase does not enforce label alignment",
+        )
+    else:
+        label_alignment = _label_alignment(target_root)
     findings = _findings(
         target_root=target_root,
         contract=contract,
@@ -448,9 +454,14 @@ def _profile_proofs(target: Path) -> dict[str, ProfileProofObservation]:
     }
 
 
+def _development_mode(target: Path) -> bool:
+    return (target / ".github" / "workflows" / DEVELOPMENT_WORKFLOW).is_file()
+
+
 def _workflow_refs(target: Path, contract: JustfileContractDeclaration, profile: ProfileName) -> dict[str, WorkflowRefObservation]:
     required_ref = contract.installed_ref if isinstance(contract, QcJustfileContract) else ""
-    refs = {PR_WORKFLOW: _pr_workflow_ref(target, required_ref, profile)}
+    name = DEVELOPMENT_WORKFLOW if _development_mode(target) else PR_WORKFLOW
+    refs = {name: _pr_workflow_ref(target, required_ref, profile, workflow_name=name)}
     if PROJECT_PROFILES[profile].has_ambient_audit:
         refs[AMBIENT_WORKFLOW] = _ambient_workflow_ref(target, required_ref)
     if profile == "sage" and (target / ACCEPTANCE_SUITE).is_dir():
@@ -500,8 +511,10 @@ def _ambient_workflow_ref(target: Path, required_ref: str) -> WorkflowRefObserva
     )
 
 
-def _pr_workflow_ref(target: Path, required_ref: str, profile: ProfileName) -> WorkflowRefObservation:
-    path = target / ".github" / "workflows" / PR_WORKFLOW
+def _pr_workflow_ref(
+    target: Path, required_ref: str, profile: ProfileName, *, workflow_name: str = PR_WORKFLOW
+) -> WorkflowRefObservation:
+    path = target / ".github" / "workflows" / workflow_name
     refs: set[str] = set()
     gates: set[str] = set()
     if path.is_file():
@@ -513,7 +526,9 @@ def _pr_workflow_ref(target: Path, required_ref: str, profile: ProfileName) -> W
                 refs.add(uses.rsplit("@", 1)[1])
             if job_name == "qc-ci" and "dzackgarza/ai-review-ci/.github/workflows/_qc.yml" in uses:
                 with_block = TypeAdapter(dict[str, Any]).validate_python(job["with"]) if "with" in job else {}
-                if with_block.get("tier") == "test-ci":
+                if with_block.get("tier") == "test-ci" and (
+                    workflow_name == DEVELOPMENT_WORKFLOW or with_block.get("enforce") is True
+                ):
                     gates.add(job_name)
             if "dzackgarza/ai-review-ci/.github/workflows/_gates.yml" in uses:
                 with_block = TypeAdapter(dict[str, Any]).validate_python(job["with"]) if "with" in job else {}
@@ -524,7 +539,7 @@ def _pr_workflow_ref(target: Path, required_ref: str, profile: ProfileName) -> W
         path=str(path),
         required_ref=required_ref,
         observed_ref=next(iter(refs)) if len(refs) == 1 else "",
-        required_gates=_required_workflow_gates(profile),
+        required_gates=("qc-ci",) if workflow_name == DEVELOPMENT_WORKFLOW else _required_workflow_gates(profile),
         observed_gates=tuple(sorted(gates)),
     )
 
@@ -597,6 +612,11 @@ def _recipe_delegation(target: Path, justfile: Path, project_profile: ProjectPro
 
 
 def _branch_protection(target: Path, contract: JustfileContractDeclaration, profile: ProfileName) -> BranchProtectionObservation:
+    if _development_mode(target):
+        return BranchProtectionObservation(
+            required_contexts=(), observed_contexts=(), observed_state="not_applicable",
+            evidence="development phase has no required branch protection",
+        )
     required = required_check_contexts(profile)
     remote = _remote(target)
     if remote == "":
@@ -975,6 +995,7 @@ def _invalidation_inputs(target: Path, declaration_hash: str) -> tuple[str, ...]
         target / "justfile",
         target / "Justfile",
         target / ".github" / "workflows" / PR_WORKFLOW,
+        target / ".github" / "workflows" / DEVELOPMENT_WORKFLOW,
         target / ".github" / "workflows" / AMBIENT_WORKFLOW,
         target / ".github" / "workflows" / ACCEPTANCE_WORKFLOW,
     ]:

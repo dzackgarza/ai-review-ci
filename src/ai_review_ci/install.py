@@ -1,27 +1,21 @@
-"""Installer for the deterministic QC trigger workflow and branch protection.
+"""Install development diagnostics by default; PR enforcement is explicit.
 
-Installing into a repo writes one minimally-correct trigger workflow, a plain
-configuration file that the repo owns and edits directly afterward:
-
-- review-pr.yml       — the required deterministic QC gates on every pull
-                        request, rendered for the declared profile
-- ambient.yml         — the scheduled whole-tree audit, for every profile
-                        that runs semgrep
-
-Existing files are never overwritten: once installed they are repo-owned
-configuration. Installation also applies the GitHub-side required-check
-contract, because QC setup is incomplete if branch protection can be skipped.
+Development installs a push-triggered diagnostics workflow and no PR review
+or branch protection. Stabilized installations retain the legacy PR contract.
+Existing repository-owned files are never overwritten.
 """
 
 import pathlib
 import sys
 from importlib.resources import files
+from typing import Literal
 
 from ai_review_ci.gates import PROJECT_PROFILES, SUPPORTED_PROFILES, protect_branch
 
 SCAFFOLD_FILES = ("justfile",)
 PR_TEMPLATE = "pull_request_template.md"
 PR_WORKFLOW = "review-pr.yml"
+DEVELOPMENT_WORKFLOW = "development.yml"
 # The scheduled whole-tree audit: the only semgrep scan of the whole tree.
 AMBIENT_WORKFLOW = "ambient.yml"
 # The canonical aislop policy, distributed into every governed repo (#228).
@@ -114,11 +108,15 @@ def _write_scaffold(
         print(f"installed {name}")
 
 
-def _write_trigger_workflows(target: pathlib.Path, profile: str, ref: str = DEFAULT_INFRA_REF) -> None:
-    """Write the repo-owned PR QC and scheduled ambient trigger workflows."""
+def _write_trigger_workflows(
+    target: pathlib.Path, profile: str, ref: str = DEFAULT_INFRA_REF, *, phase: str = "stabilized"
+) -> None:
+    """Write push diagnostics in development, PR gates only when stabilized."""
     _validate_profile(profile)
+    if phase not in ("development", "stabilized"):
+        raise ValueError(f"invalid QC phase: {phase}")
     target = _git_repo_root(target)
-    workflows = [PR_WORKFLOW]
+    workflows = [DEVELOPMENT_WORKFLOW if phase == "development" else PR_WORKFLOW]
     if PROJECT_PROFILES[profile].has_ambient_audit:
         workflows.append(AMBIENT_WORKFLOW)
 
@@ -221,8 +219,9 @@ def install(
     ref: str = DEFAULT_INFRA_REF,
     release_channel: str = DEFAULT_INFRA_REF,
     skip_scaffold: bool = False,
+    phase: Literal["development", "stabilized"] = "development",
 ) -> None:
-    """Install the PR QC trigger workflow and required branch protection.
+    """Install CI diagnostics; enforce review only in the stabilized phase.
 
     Args:
         target: Target repository root (default: current directory).
@@ -231,6 +230,8 @@ def install(
         profile: Curated project profile to enforce.
         ref: ai-review-ci git ref used by installed workflows.
         release_channel: Human-readable ai-review-ci release channel recorded in the justfile contract.
+        phase: Development (default) records CI diagnostics without requiring a PR.
+            Stabilized explicitly installs the legacy PR gates and branch protection.
         skip_scaffold: Brownfield adoption path. A repo that predates ai-review-ci
             already owns a top-level justfile, and the scaffold step refuses to
             overwrite it. Pass this to skip writing the delegation scaffold and
@@ -242,19 +243,16 @@ def install(
     target = target.resolve()
     if not skip_scaffold:
         _write_scaffold(target, profile, branch=branch, ref=ref, release_channel=release_channel)
-    _write_trigger_workflows(target, profile, ref)
+    _write_trigger_workflows(target, profile, ref, phase=phase)
     _write_aislop_config(target)
-    # PR template last among local writes: it is the opt-in signal for gate
-    # enforcement, so create it only after profile validation and every other
-    # repo-owned-file conflict has already passed. A failed install must not leave
-    # a repo opted into PR-description enforcement.
-    _write_pr_template(target)
-    protect_branch(repo, branch, profile)
+    if phase == "stabilized":
+        _write_pr_template(target)
+        protect_branch(repo, branch, profile)
     _prove_installation(target, skip_scaffold=skip_scaffold)
 
     print(
         "\nDone. Commit the installed files; they are now repo-owned "
         "configuration — edit branches and upstream refs directly.\n"
-        "Requirement: branch protection "
-        f"requiring the ai-review-ci deterministic gates for {profile}."
+        f"Phase: {phase}. "
+        + ("Required PR protection enabled." if phase == "stabilized" else "No PR review or branch protection installed.")
     )

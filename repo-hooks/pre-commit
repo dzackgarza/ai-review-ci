@@ -1,34 +1,12 @@
 #!/usr/bin/env sh
 set -e
 . "$(dirname -- "$(readlink -f "$0")")/qc-exempt.sh"
+qc_should_gate || exit 0
 
-if ! qc_should_gate; then
-	exit 0
-fi
-
+# Development feedback only. No dependency installation, style, typing,
+# performance, complete test suites, or policy review in the local loop.
 if just test-commit; then
-	exit 0
+    exit 0
 fi
-
-cat >&2 <<'MSG'
-
-────────────────────────────────────────────────────────────────
-ai-review-ci commit gate FAILED (just test-commit).
-
-If this is an INTENTIONAL red proof — a test that genuinely fails because it
-reproduces a bug, landing before its green fix per the red/green workflow —
-prefer the sanctioned, auditable route (records the owning issue and bypasses
-this gate for that ONE commit only; ordinary hooks stay active):
-
-    ai-review-ci red-commit --issue <owning-issue> -m "<message>"
-
-`git commit --no-verify` is also a permitted bypass for that same TDD red-proof
-audit case (and for wiki repos, repos not under the dzackgarza account, and
-forks of third-party projects, which are auto-detected and skipped above).
-See the git-integration-workflow skill (red-proof route) and test-guidelines.
-
-Any other failure is direct local repair work. Fix the reported object and
-recommit; do not start a PR disposition or subagent remediation workflow.
-────────────────────────────────────────────────────────────────
-MSG
+echo "Local staged-source syntax check failed; see the file and line above." >&2
 exit 1

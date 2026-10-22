@@ -19,6 +19,8 @@ setup-profile profile:
       --target "{{control_repo}}" \
       --profile "{{profile}}"
     case "{{profile}}" in
+      docs-and-configs)
+        ;;
       python)
         uv sync --project "{{control_repo}}"
         ;;

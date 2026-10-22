@@ -46,6 +46,7 @@ def _run_cli_install(
     *,
     github_repo: str = "dzackgarza/ai-review-ci-install-target-does-not-exist",
     skip_scaffold: bool = False,
+    phase: str = "development",
 ) -> subprocess.CompletedProcess[str]:
     args = [
         sys.executable,
@@ -60,6 +61,8 @@ def _run_cli_install(
         "main",
         "--profile",
         "python",
+        "--phase",
+        phase,
     ]
     if skip_scaffold:
         args.append("--skip-scaffold")
@@ -148,6 +151,7 @@ def test_install_writes_trigger_workflows(tmp_path: pathlib.Path) -> None:
     assert all("needs" not in job for job in jobs.values())
     assert "uses: dzackgarza/ai-review-ci/.github/workflows/_qc.yml@main" in pr
     assert "tier: test-ci" in pr
+    assert "enforce: true" in pr
     assert "gate: deterministic-diff" in pr
     assert "gate: delegation-conformance" in pr
     assert "gate: qc-doctor" in pr
@@ -230,13 +234,35 @@ def test_install_local_files_finalize_with_doctor(tmp_path: pathlib.Path) -> Non
     assert (repo / "justfile").read_text() == (ROOT / "scaffolds" / "python" / "justfile").read_text()
 
 
+def test_default_install_is_push_diagnostics_without_pr_protection(tmp_path: pathlib.Path) -> None:
+    repo = _git_repo(tmp_path)
+    (repo / "pyproject.toml").write_text('[project]\\nname = "target"\\nversion = "0.1.0"\\n')
+
+    result = _run_cli_install(repo)
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    workflows = repo / ".github" / "workflows"
+    assert (workflows / "development.yml").is_file()
+    assert not (workflows / "review-pr.yml").exists()
+    assert not (repo / ".github" / PR_TEMPLATE).exists()
+    assert "No PR review or branch protection installed." in result.stdout
+    data = yaml.safe_load((workflows / "development.yml").read_text())
+    assert "push" in data[True] and "pull_request" not in data[True]
+    assert list(data["jobs"]) == ["qc-ci"]
+    from ai_review_ci.doctor import doctor_report
+    report = doctor_report(repo)
+    assert report.global_status == "current"
+    assert report.branch_protection.observed_state == "not_applicable"
+    assert report.label_alignment.observed_state == "not_applicable"
+
+
 def test_cli_install_uses_real_gh_and_fails_before_final_doctor_for_unavailable_branch_target(
     tmp_path: pathlib.Path,
 ) -> None:
     repo = _git_repo(tmp_path)
     (repo / "pyproject.toml").write_text('[project]\nname = "target"\nversion = "0.1.0"\n')
 
-    result = _run_cli_install(repo)
+    result = _run_cli_install(repo, phase="stabilized")
 
     assert result.returncode == 1
     assert "FATAL: gh api --method PUT failed:" in result.stderr
@@ -475,7 +501,7 @@ def test_cli_install_skip_scaffold_bypasses_scaffold_overwrite_guard(
     existing = repo / "justfile"
     existing.write_text("# pre-existing brownfield justfile\ntest-commit:\n    @true\n")
 
-    result = _run_cli_install(repo, skip_scaffold=True)
+    result = _run_cli_install(repo, skip_scaffold=True, phase="stabilized")
 
     combined = result.stdout + result.stderr
     assert "refusing to overwrite existing scaffold" not in combined, combined

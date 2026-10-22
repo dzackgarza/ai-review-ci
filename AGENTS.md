@@ -1,27 +1,28 @@
 # Agent Rules
 
-## Issue-Scoped PR Lifecycle
+## Development is the default phase
 
-Policy, QC, reviewer, workflow, and gate changes must be issue-first.
-Do not accumulate local changes and then invent a PR scope around them.
-The work-unit issue is the draft: keep the story, scope, acceptance criteria, proof obligations, implementation checklist, blocker state, and planning decisions in the issue body or comments.
-Do not open a draft PR to hold planning state.
-Before writing code:
+Produce the intended executable capability and its acceptance behavior first.
+Do not open PRs, write policy prohibitions, profile, optimize, reorganize,
+deduplicate, reduce LOC, refactor styles, or fix unrelated type errors as an
+alternative to completing the active implementation. A CI finding is evidence
+for a later maintenance phase, not a command to interrupt the current one.
 
-- identify the existing triaged issue or create one with the original problem, policy risk, and acceptance criteria;
-- update that issue with the plan, proof obligations, checklist, and expected review evidence before broad implementation continues;
-- keep the PR diff limited to that work-unit issue and its evidence; unrelated reopened issues require separate branches/PRs;
-- open the PR when implementation starts, synthesize its body from the issue acceptance criteria and the Policy Alignment Gate, and refresh that synthesis before review;
-- use the first coherent push to start PR QC, so gate findings arrive before local polishing drifts;
-- request review only after tests/evidence and adversarial policy review are complete;
-- route returned review feedback through [[pr-feedback-triage/SKILL|pr-feedback-triage]]: every substantive item receives a visible thread- or surface-local disposition, and accepted or modified feedback receives committed, proven remediation before any positive reply.
+Local commit and push hooks inspect the syntax of staged sources only. Run
+focused tests for the behavior being implemented as needed. Complete suites,
+type analysis, stylistic rules, review and performance diagnostics run on
+GitHub CI and are retained in independently inspectable logs.
 
-If a branch is discovered to contain a broad, untriaged, or policy-poisoned diff, close or abandon the PR rather than trying to salvage it by summary wording.
-Recreate the work from `origin/main` on an issue-scoped branch.
+A stabilized phase requires a deliberate human adoption of a frozen baseline.
+Until then, the issue-first PR lifecycle, PR review and quality-enforcement
+sections later in this document are **inactive**. There is no implicit promotion
+to stabilization when an agent believes code looks ready.
 
 ## QC Delegation
 
-The stance behind this section — QC is not opt-in, local overrides are banned, a rule is right for all repositories or wrong for all of them — is stated in [CONTRIBUTING.md](./CONTRIBUTING.md). What follows is the mechanics.
+Shared diagnostic implementations remain centralized; consumers delegate
+their local syntax check and CI diagnostics here. Local and CI intentionally
+have different enforcement standards.
 
 - Treat `~/ai-review-ci` as the authoritative QC implementation.
   Downstream repositories carry only thin `test-commit`, `test-push`, and `test-ci` gate recipes that delegate to this repo.
@@ -128,27 +129,22 @@ same path, found by running the gate and reading its output, is `#409`.
 - A downstream report that “Semgrep found issues about CI files” is a cwd/provenance triage problem until target paths prove otherwise.
   Reproduce the run from the target repository and inspect the exact reported paths before editing rules or suppressions.
 
-## Hook Tiers
+## Hook and CI boundaries
 
-- The three gate boundaries are intentional: `pre-commit` runs `just test-commit`, `pre-push` runs `just test-push`, and required PR CI runs `just test-ci`.
+- test-commit and test-push: staged syntax only; no dependency installation,
+  complete suite, mypy, clippy, formatting, complexity, performance, slop, or
+  PR policy checks.
+- test-ci and ambient: independent checks and full suites that write structured
+  diagnostic artifacts, including failures, without blocking MVP publication.
+- Do not remediate unrelated CI debt during a feature implementation. A
+  distinct cleanup/refactoring phase with a fresh agent owns it.
+- A stabilized-phase project may explicitly enforce a frozen baseline. Nothing
+  in a development project's CI output constitutes authorization to add a
+  local gate or mandatory PR review.
 
-- Commit failures are direct local repair and push failures are ordinary project/test repair.
-  Neither enters the PR-feedback triage workflow or requires an independent remediation role.
+# Stabilized-phase policy alignment (inactive for development)
 
-- Slop/style/coverage findings during commit or push indicate a gate-tier or delegation problem.
-
-  Lean push also runs Semgrep to expose defects before publication; explicit ERROR
-  findings block it. Heuristic WARNING/INFO findings are retained as review input
-  and do not block publication. Independent PR review consumes and disposes them
-  through the code-review guide; successful publication is not review acceptance.
-  Policy-sensitive findings belong in `test-ci`, where independent anti-golfing triage and PR review run as separate acceptance channels.
-  Do not reinstall hooks or weaken QC until the active hook path, hook contents, and delegated cwd have been verified.
-
-> Optimized tool-use workflow for agents: see [SDL.md](./SDL.md).
-
-# Policy Alignment Gate
-
-Every PR against this repo must reconcile against the burned-bridge policy before review is requested or before it merges.
+Only after explicit stabilization, every PR against this repo must reconcile against the burned-bridge policy before review is requested or before it merges.
 
 Why the burden sits in the definition of done rather than in CI, why an argument for relaxing a rule carries no weight by default, and the PR #143 case where a merged "fix" silenced a detector for every downstream consumer: [CONTRIBUTING.md](./CONTRIBUTING.md).
 
@@ -186,7 +182,7 @@ This is the gate PR #143 would have failed: a `ruleid` fixture on `?? ""` / `?? 
 
 See `# Review Guidelines` → Evidence Expectations for the reviewer-side counterpart, and the wiki page [Policy Alignment Gate](https://github.com/dzackgarza/ai-review-ci/wiki/Policy-Alignment-Gate) for the full rationale.
 
-# Review Guidelines
+# Stabilized-phase review guidelines (inactive for development)
 
 These are additional requirements for reviewing agent work.
 They do not replace the reviewer’s normal role, repo-specific standards, or technical judgment.

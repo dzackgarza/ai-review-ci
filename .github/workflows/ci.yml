@@ -1,5 +1,4 @@
-# Authoritative remote acceptance tier (just test-ci). Local pre-commit and
-# pre-push hooks run test-commit and test-push respectively.
+# Development CI: full tests and diagnostics; no MVP publication gate.
 name: CI
 
 # ai-review-ci dogfoods the same required test-ci workflow installed in downstream
@@ -7,9 +6,7 @@ name: CI
 # workflow owns remote acceptance. The ambient debt audit remains separate.
 
 on:
-  push:
-    branches: [main]
-  pull_request: {}
+  push: {}
 
 jobs:
   qc-ci:

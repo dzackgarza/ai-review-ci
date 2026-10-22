@@ -296,15 +296,15 @@ def test_hooks_still_gate_dzackgarza_repos(hook_source_repo: pathlib.Path, tmp_p
 
 
 @pytest.mark.parametrize(("hook_dir", "hook", "recipe"), BYPASS_HOOKS)
-def test_hooks_print_red_proof_sanction_on_gated_failure(hook_source_repo: pathlib.Path, tmp_path: pathlib.Path, hook_dir: str, hook: str, recipe: str) -> None:
-    # A genuine QC failure in a gated repo blocks (exit 1) and names the sanctioned
-    # route for red-by-design work: red-commit at commit time, the strict issue-linked
-    # xfail at push time.
+def test_hooks_report_only_local_syntax_failure(
+    hook_source_repo: pathlib.Path, tmp_path: pathlib.Path, hook_dir: str, hook: str, recipe: str
+) -> None:
     gated = _init_downstream(tmp_path / "gated", recipe, "@exit 1", remote="https://github.com/dzackgarza/foo.git")
-    result = subprocess.run([str(hook_source_repo / hook_dir / hook)], cwd=gated, env=git_test_env(), text=True, capture_output=True, check=False)
+    result = subprocess.run([str(hook_source_repo / hook_dir / hook)], cwd=gated, env=git_test_env(), text=True, capture_output=True)
     assert result.returncode == 1, result.stdout + result.stderr
-    sanctioned = {"pre-commit": "ai-review-ci red-commit --issue", "pre-push": 'xfail(reason="... #N", strict=True)'}[hook]
-    assert sanctioned in result.stderr
+    assert "staged-source syntax" in result.stderr
+    assert "red-commit" not in result.stderr
+    assert "xfail" not in result.stderr
 
 
 def _cache_upstream_owner(repo: pathlib.Path, owner: str) -> None:
