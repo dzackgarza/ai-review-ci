@@ -246,7 +246,14 @@ def run(profile: str, tier: str, report_dir: Path, *, enforce: bool = False) -> 
         print(f"[{spec.category}] {spec.id}", flush=True)
         with logfile.open("w", encoding="utf-8") as stream:
             try:
-                exit_code = subprocess.run(command, stdout=stream, stderr=subprocess.STDOUT, check=False).returncode
+                # Individual diagnostic recipes must never inherit the
+                # interactive/direct-repair mode. Their failure is retained in
+                # this collector rather than becoming a worker instruction.
+                env = {**os.environ, "AI_REVIEW_CI_FAILURE_MODE": "triage"}
+                exit_code = subprocess.run(
+                    command, env=env, stdout=stream,
+                    stderr=subprocess.STDOUT, check=False,
+                ).returncode
             except OSError as error:
                 stream.write(f"Unable to launch check: {error}\n")
                 exit_code = 127

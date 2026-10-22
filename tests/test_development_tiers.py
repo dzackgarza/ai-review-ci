@@ -93,6 +93,7 @@ def test_ci_collects_multiple_failures_without_stopping_and_opt_in_enforces(tmp_
     fake_just = fake_bin / "just"
     fake_just.write_text(
         "#!/bin/sh\n"
+        "test \"$AI_REVIEW_CI_FAILURE_MODE\" = triage || exit 21\n"
         "case \" $* \" in\n"
         "  *' _pytest_with_coverage '*) echo 'assertion failed'; exit 7;;\n"
         "  *' _mypy '*) echo 'type debt'; exit 8;;\n"
@@ -120,6 +121,26 @@ def test_ci_collects_multiple_failures_without_stopping_and_opt_in_enforces(tmp_
     env["QC_ENFORCE"] = "true"
     stabilized = subprocess.run(args, env=env, cwd=tmp_path, capture_output=True, text=True)
     assert stabilized.returncode == 1
+
+
+@pytest.mark.parametrize("mode", ("direct", "triage"))
+@pytest.mark.parametrize(
+    "script", ("emit-triage-directive.sh", "emit-test-writing-directive.sh"),
+)
+def test_qc_diagnostic_notices_never_redirect_implementation(mode: str, script: str) -> None:
+    result = subprocess.run(
+        [str(ROOT / "tool-artifacts" / "scripts" / script)],
+        env={**os.environ, "AI_REVIEW_CI_FAILURE_MODE": mode},
+        capture_output=True, text=True,
+    )
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert "QC FAILURE" in result.stdout
+    assert "subagent" not in result.stdout.lower()
+    assert "TRIAGE REQUIRED" not in result.stdout
+    assert "DIRECT REPAIR REQUIRED" not in result.stdout
+    assert "MUST" not in result.stdout
+    assert "pause only" not in result.stdout
+    assert "policy exception" not in result.stdout.lower()
 
 
 def test_development_ci_runs_full_suite_and_debt_independently() -> None:

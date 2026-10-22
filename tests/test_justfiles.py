@@ -4300,8 +4300,9 @@ def test_rust_preflight_accepts_nested_cargo_manifest_and_routes_missing_tests(
 
     output = result.stdout + result.stderr
     assert "Rust project must have a Cargo.toml file" not in output
-    assert "TEST-WRITING TRIAGE REQUIRED" in output
-    assert "test-writing" in output
+    assert "QC FAILURE — CI recorded missing project-test coverage" in output
+    assert "development diagnostic" in output
+    assert "SUBAGENT" not in output
 
 
 def test_rust_normalization_formats_nested_manifest_project(
@@ -4407,13 +4408,13 @@ def test_direct_failure_mode_forbids_review_ceremony() -> None:
     )
 
     assert result.returncode == 0
-    assert "DIRECT REPAIR REQUIRED" in result.stdout
-    assert "does not enter returned-PR-feedback triage" in result.stdout
+    assert "explicitly invoked check returned a nonzero result" in result.stdout
+    assert "does not change the current work objective" in result.stdout
     assert "TRIAGE REQUIRED" not in result.stdout
-    assert "subagent" in result.stdout
+    assert "subagent" not in result.stdout.lower()
 
 
-def test_ci_failure_mode_retains_anti_golfing_triage() -> None:
+def test_ci_failure_mode_does_not_redirect_implementation() -> None:
     result = subprocess.run(
         [str(ROOT / "tool-artifacts" / "scripts" / "emit-triage-directive.sh")],
         env=os.environ | {"AI_REVIEW_CI_FAILURE_MODE": "triage"},
@@ -4423,9 +4424,11 @@ def test_ci_failure_mode_retains_anti_golfing_triage() -> None:
     )
 
     assert result.returncode == 0
-    assert "QC FAILURE — TRIAGE REQUIRED" in result.stdout
-    assert "golf" in result.stdout
-    assert "subagent" in result.stdout
+    assert "QC FAILURE — CI diagnostic recorded" in result.stdout
+    assert "development publication is nonblocking" in result.stdout
+    assert "does not redirect the current implementation task" in result.stdout
+    assert "TRIAGE REQUIRED" not in result.stdout
+    assert "subagent" not in result.stdout.lower()
 
 
 @pytest.mark.parametrize("language", sorted(SCAFFOLD_DELEGATES))
