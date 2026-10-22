@@ -297,3 +297,43 @@ def test_manual_push_check_respects_published_branch_baseline(tmp_path: Path) ->
     assert failed.returncode == 1
     assert "new.py" in failed.stderr
     assert "legacy.py" not in failed.stderr
+
+
+def test_caller_owned_ci_check_is_reported_in_nonblocking_burndown(tmp_path: Path) -> None:
+    """A repository's own scanner belongs in the same diagnostic evidence."""
+    fake_bin = tmp_path / "bin"
+    fake_bin.mkdir()
+    executable = fake_bin / "just"
+    executable.write_text(
+        "#!/bin/sh\n"
+        "if [ \"$1\" = tensor-boundary ]; then\n"
+        "  echo 'src/math.py:23: tensor ownership violated'\n"
+        "  exit 14\n"
+        "fi\n"
+        "exit 0\n"
+    )
+    executable.chmod(0o755)
+    env = os.environ | {"PATH": str(fake_bin) + os.pathsep + os.environ["PATH"]}
+    report = tmp_path / "report"
+    command = [
+        sys.executable, TRIAGE, "docs-and-configs", "--report-dir", str(report),
+        "--caller-check", "research-tensor-boundary", "tensor-boundary",
+    ]
+    result = subprocess.run(command, env=env, cwd=tmp_path, text=True, capture_output=True)
+    assert result.returncode == 0, result.stdout + result.stderr
+    payload = json.loads((report / "results.json").read_text())
+    assert payload["failed_checks"] == 1
+    assert [item["id"] for item in payload["checks"]] == [
+        "document-links", "research-tensor-boundary",
+    ]
+    assert payload["checks"][-1]["category"] == "debt"
+    assert payload["checks"][-1]["exit_code"] == 14
+    assert [finding["location"] for finding in payload["findings"]] == ["src/math.py"]
+    assert json.loads((report / "burndown.json").read_text())["open"] == [
+        "research-tensor-boundary",
+    ]
+    assert "tensor ownership violated" in (report / "research-tensor-boundary.log").read_text()
+    enforced = subprocess.run(
+        command + ["--enforce"], env=env, cwd=tmp_path, text=True, capture_output=True,
+    )
+    assert enforced.returncode == 1

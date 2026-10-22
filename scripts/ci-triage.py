@@ -235,8 +235,17 @@ def compare_findings(current: dict, previous: dict | None) -> dict:
             "persistent": sorted(active & prior), "resolved": sorted(prior - active)}
 
 
-def run(profile: str, tier: str, report_dir: Path, *, enforce: bool = False) -> int:
-    checks = ci_checks(profile) if tier == "ci" else ambient_checks(profile)
+def run(
+    profile: str,
+    tier: str,
+    report_dir: Path,
+    *,
+    enforce: bool = False,
+    caller_checks: tuple[Check, ...] = (),
+) -> int:
+    checks = (ci_checks(profile) if tier == "ci" else ambient_checks(profile)) + caller_checks
+    if len({spec.id for spec in checks}) != len(checks):
+        raise ValueError("Duplicate CI diagnostic check ID")
     report_dir.mkdir(parents=True, exist_ok=True)
     results = []
     findings = []
@@ -333,9 +342,23 @@ def main() -> int:
     parser.add_argument("--tier", choices=["ci", "ambient"], default="ci")
     parser.add_argument("--report-dir", type=Path, default=Path(os.environ.get("QC_TRIAGE_DIR", ".qc-triage")))
     parser.add_argument("--enforce", action="store_true", help="Opt-in only after a project has a frozen baseline")
+    parser.add_argument(
+        "--caller-check", nargs=2, action="append", default=[], metavar=("ID", "RECIPE"),
+        help="Include a consuming repository's own Just recipe as an independent debt check",
+    )
     args = parser.parse_args()
     try:
-        return run(args.profile, args.tier, args.report_dir, enforce=args.enforce or os.getenv("QC_ENFORCE", "false").lower() == "true")
+        for item_id, recipe in args.caller_check:
+            if not re.fullmatch(r"[a-z][a-z0-9-]*", item_id):
+                raise ValueError(f"Invalid caller check ID: {item_id!r}")
+            if not re.fullmatch(r"[a-zA-Z_][a-zA-Z0-9_-]*", recipe):
+                raise ValueError(f"Invalid caller recipe name: {recipe!r}")
+        extras = tuple(check(item_id, "debt", "caller", recipe) for item_id, recipe in args.caller_check)
+        return run(
+            args.profile, args.tier, args.report_dir,
+            enforce=args.enforce or os.getenv("QC_ENFORCE", "false").lower() == "true",
+            caller_checks=extras,
+        )
     except ValueError as error:
         parser.error(str(error))
     return 2
