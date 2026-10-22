@@ -142,3 +142,16 @@ def test_burndown_tracks_new_persistent_and_resolved_findings() -> None:
         "baseline": "unavailable", "open": ["format", "types"],
         "new": [], "persistent": [], "resolved": [],
     }
+
+
+
+def test_ci_retains_hidden_diagnostics_and_fails_if_report_absent() -> None:
+    # A success status without the promised triage evidence is infrastructure
+    # failure, distinct from the deliberately nonblocking project findings.
+    import yaml
+
+    workflow = yaml.safe_load((ROOT / ".github/workflows/_qc.yml").read_text())
+    steps = workflow["jobs"]["qc"]["steps"]
+    (upload,) = (step for step in steps if step.get("name") == "Retain development diagnostic triage")
+    assert upload["with"]["include-hidden-files"] is True
+    assert upload["with"]["if-no-files-found"] == "error"

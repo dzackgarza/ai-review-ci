@@ -233,7 +233,8 @@ jobs:
         with:
           name: qc-triage-${{ github.run_id }}-${{ github.run_attempt }}-${{ inputs.tier }}-${{ inputs.profile }}
           path: .qc-triage/
-          if-no-files-found: warn
+          include-hidden-files: true
+          if-no-files-found: error
       # The delegated profile owns scanner applicability. qc-tooling omits product
       # scanners on checker sources; its missing artifact is not an empty scan.
       # For profiles requiring Semgrep, missing reports remain missing review input.
