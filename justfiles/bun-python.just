@@ -17,7 +17,7 @@ test-commit:
 
 # public: PUSH gate — both languages' push checks and test suites
 test-push:
-    @python3 "{{justfile_directory()}}/../scripts/local-check.py"
+    @python3 "{{justfile_directory()}}/../scripts/local-check.py" --mode push
 
 # public: CI gate — both languages' CI gates, then the cross-language stack once
 test-ci:

@@ -294,7 +294,7 @@ test-commit:
 
 # public: PUSH gate — commit checks plus the full project-owned test suite
 test-push:
-    @python3 "{{justfile_directory()}}/../scripts/local-check.py"
+    @python3 "{{justfile_directory()}}/../scripts/local-check.py" --mode push
 
 # public: CI gate — push checks plus gameable and long-running acceptance gates
 test-ci:

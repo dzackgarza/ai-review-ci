@@ -1,4 +1,4 @@
-# Development: local commit/push check staged syntax only; CI owns suites and quality debt.
+# Development: staged syntax at commit; outgoing-commit syntax at push; CI owns suites and quality debt.
 # justfile-sage — SageMath-specific quality control
 #
 # Imports shared and Python QC recipes and adds Sage-specific checks.
@@ -12,14 +12,10 @@
 #   _sage-qc-files, _sage-syntax, _vulture, _sage-ast-grep (Sage-aware preparse)
 #
 # WORKFLOW (three-tier):
-#   just test-commit — Sage/Python syntax, normalization, bypass check.
-#   just test-push   — commit checks, mypy, the Sage test suite except
-#                      tests/acceptance/, and the cheap deterministic gates
-#                      (vulture, ast-grep, deptry).
-#   _acceptance.yml  — tests/acceptance/, sharded across hosted-runner jobs on
-#                      every push (_sage-acceptance-shard).
-#   just test-ci     — push checks plus the threshold metrics (coverage,
-#                      duplication) and the minutes-long import graph.
+#   just test-commit — validate staged Python, JSON and TOML syntax.
+#   just test-push   — validate outgoing committed syntax and staged edits.
+#   just test-ci     — run Sage tests and independent diagnostics on CI;
+#                      acceptance shards run in their separate hosted workflow.
 
 infra := justfile_directory() / ".."
 configs := infra / "tool-configs"
@@ -108,10 +104,9 @@ setup:
 	@echo "   The package must be importable there (PYTHONPATH via .envrc, or"
 	@echo "   installed into Sage's python)."
 	@echo ""
-	@echo "6. Gates: pre-commit runs 'just test-commit' (syntax and normalization);"
-	@echo "   pre-push runs 'just test-push' (adds mypy, Sage tests and the cheap"
-	@echo "   deterministic gates); CI runs 'just test-ci' (threshold metrics)."
-	@echo "   Commit/push failures are direct repair; CI policy findings are triaged."
+	@echo "6. Local commit/push checks inspect staged/outgoing syntax only."
+	@echo "   CI owns Sage tests, typing, scanners, coverage and full acceptance."
+	@echo "   Development diagnostics are retained and nonblocking."
 
 _sage-qc-files:
 	#!/usr/bin/env bash
@@ -907,7 +902,7 @@ _sage-file-length:
 		xargs -0 -r -- "$linecheck_bin" --config {{configs}}/linecheck.yml --
 
 test-push:
-    @python3 "{{justfile_directory()}}/../scripts/local-check.py"
+    @python3 "{{justfile_directory()}}/../scripts/local-check.py" --mode push
 
 _sage-ast-grep:
 	#!/usr/bin/env bash

@@ -647,7 +647,7 @@ test-commit:
 
 # public: PUSH gate — commit checks plus the full project-owned test suite
 test-push:
-    @python3 "{{justfile_directory()}}/../scripts/local-check.py"
+    @python3 "{{justfile_directory()}}/../scripts/local-check.py" --mode push
 
 # private: the Bun CI gates without the cross-language stack, which a profile that
 # composes several languages runs once (bun-python.just). `_coverage` is the

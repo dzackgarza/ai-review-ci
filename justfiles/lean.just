@@ -28,7 +28,7 @@ test-commit:
 
 # public: static Lean scans before push; no compilation
 test-push:
-    @python3 "{{justfile_directory()}}/../scripts/local-check.py"
+    @python3 "{{justfile_directory()}}/../scripts/local-check.py" --mode push
 
 # public: build the project and run the full Lean gate in CI
 test-ci:

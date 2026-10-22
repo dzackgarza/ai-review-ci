@@ -30,7 +30,7 @@ test-commit:
 
 # Validate tracked documentation links before push.
 test-push:
-    @python3 "{{justfile_directory()}}/../scripts/local-check.py"
+    @python3 "{{justfile_directory()}}/../scripts/local-check.py" --mode push
 
 # Validate tracked documentation links in CI.
 test-ci:

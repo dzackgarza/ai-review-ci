@@ -60,7 +60,7 @@ def test_local_tiers_require_no_toolchain_or_suite(tmp_path: Path, profile: str,
         cwd=tmp_path, capture_output=True, text=True,
     )
     assert result.returncode == 0, result.stdout + result.stderr
-    assert "Staged syntax: 1 file(s)" in result.stdout
+    assert f'{"Push" if tier == "test-push" else "Staged"} syntax: 1 file(s)' in result.stdout
 
 
 def test_ci_collects_multiple_failures_without_stopping_and_opt_in_enforces(tmp_path: Path) -> None:

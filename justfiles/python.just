@@ -1,4 +1,4 @@
-# Development: local commit/push check staged syntax only; CI owns suites and quality debt.
+# Development: staged syntax at commit; outgoing-commit syntax at push; CI owns suites and quality debt.
 # justfile-python — Python-specific quality control
 #
 # Imports cross-language QC recipes from `justfile` (shared) and adds
@@ -14,16 +14,9 @@
 #   _import-linter, _ast-grep, _jscpd, _lizard, _codeql
 #
 # WORKFLOW (three-tier):
-#   just test-commit — preflight, normalization, syntax, mypy, bypass check.
-#   just test-push   — commit checks, the full pytest suite, and the cheap
-#                      deterministic gates (deptry, ast-grep).
-#   just test-ci     — push checks plus the threshold metrics (coverage,
-#                      duplication) and the minutes-long import graph.
-#
-# HOOKS: pre-commit blocks on `just test-commit`; pre-push blocks on `just test-push`.
-#   Run `just install-global-hooks` from ~/ai-review-ci to activate them globally.
-#
-# CONFIG: this justfile resolves configs and artifacts from the ai-review-ci repo.
+#   just test-commit — validate staged Python, JSON and TOML syntax.
+#   just test-push   — validate outgoing committed syntax and staged edits.
+#   just test-ci     — run full tests and independent quality diagnostics on CI.
 
 infra := justfile_directory() / ".."
 configs := infra / "tool-configs"
@@ -52,10 +45,9 @@ setup:
 	@echo ""
 	@echo "4. Tests must exist (test_*.py / *_test.py / tests/*.py)."
 	@echo ""
-	@echo "5. Gates: pre-commit runs 'just test-commit' (syntax and mypy);"
-	@echo "   pre-push runs 'just test-push' (adds pytest and the cheap"
-	@echo "   deterministic gates); CI runs 'just test-ci' (threshold metrics)."
-	@echo "   Commit/push failures are direct repair; CI policy findings are triaged."
+	@echo "5. Local commit/push checks inspect staged/outgoing syntax only."
+	@echo "   CI runs the complete suite, typing, formatting and other diagnostic checks."
+	@echo "   Development diagnostics are retained and nonblocking."
 	@echo ""
 	@echo "Sage projects: use sage.just instead ('just -f ~/ai-review-ci/justfiles/sage.just setup')."
 
@@ -918,7 +910,7 @@ test-commit:
 # prose rules. Each reports the same verdict locally and in CI, so discovering
 # it here costs one edit and discovering it there costs a CI round trip.
 test-push:
-    @python3 "{{justfile_directory()}}/../scripts/local-check.py"
+    @python3 "{{justfile_directory()}}/../scripts/local-check.py" --mode push
 
 # private: the Python CI gates without the cross-language stack, which a profile
 # that composes several languages runs once (bun-python.just). The coverage run is

@@ -8,7 +8,7 @@ deduplicate, reduce LOC, refactor styles, or fix unrelated type errors as an
 alternative to completing the active implementation. A CI finding is evidence
 for a later maintenance phase, not a command to interrupt the current one.
 
-Local commit and push hooks inspect the syntax of staged sources only. Run
+Local commit hooks inspect staged-source syntax. Push hooks inspect outgoing committed-tree syntax, rather than an empty post-commit index. Run
 focused tests for the behavior being implemented as needed. Complete suites,
 type analysis, stylistic rules, review and performance diagnostics run on
 GitHub CI and are retained in independently inspectable logs.
@@ -131,7 +131,7 @@ same path, found by running the gate and reading its output, is `#409`.
 
 ## Hook and CI boundaries
 
-- test-commit and test-push: staged syntax only; no dependency installation,
+- test-commit: staged syntax; test-push: outgoing committed syntax; no dependency installation,
   complete suite, mypy, clippy, formatting, complexity, performance, slop, or
   PR policy checks.
 - test-ci and ambient: independent checks and full suites that write structured
