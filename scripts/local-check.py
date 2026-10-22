@@ -46,6 +46,12 @@ def push_base(commit: str, remote_oid: str | None, remote: str) -> str | None:
     """Find a relevant local base without fetching or traversing repository history."""
     if remote_oid and (base := commit_oid(remote_oid)):
         return base
+    if remote_oid is None:
+        # A manual `just test-push` has no Git pre-push stdin. Compare with
+        # the branch's tracked remote, not origin/main: a feature branch that
+        # is already published must not re-audit all its historical changes.
+        if upstream := commit_oid("@{upstream}"):
+            return upstream
     candidates = (
         f"refs/remotes/{remote}/HEAD",
         f"refs/remotes/{remote}/main",

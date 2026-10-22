@@ -195,3 +195,45 @@ def test_ci_retains_individual_location_and_test_failures(tmp_path: Path) -> Non
     fallback = module.extract_findings(check, logfile, 127)
     assert len(fallback) == 1
     assert fallback[0]["rule"] == "CHECK_FAILED"
+
+
+def test_manual_push_check_respects_published_branch_baseline(tmp_path: Path) -> None:
+    # A branch that is already at its tracked remote must not be compared
+    # against origin/main and re-gate old implementation work.
+    git(tmp_path, "init", "-q", "-b", "feature")
+    (tmp_path / "legacy.py").write_text("def broken(:\n")
+    git(tmp_path, "add", "legacy.py")
+    subprocess.run(
+        ["git", "-C", str(tmp_path), "-c", "user.name=Test",
+         "-c", "user.email=test@example.com", "-c", "core.hooksPath=/dev/null",
+         "commit", "-q", "-m", "historical source"],
+        check=True,
+    )
+    commit = git(tmp_path, "rev-parse", "HEAD").stdout.decode().strip()
+    git(tmp_path, "remote", "add", "origin", str(tmp_path / "unreachable.git"))
+    git(tmp_path, "update-ref", "refs/remotes/origin/feature", commit)
+    git(tmp_path, "branch", "--set-upstream-to=origin/feature", "feature")
+
+    published = subprocess.run(
+        [sys.executable, LOCAL, "--mode", "push"],
+        cwd=tmp_path, text=True, capture_output=True,
+    )
+    assert published.returncode == 0, published.stdout + published.stderr
+    assert "Push syntax: 0 file(s)" in published.stdout
+
+    # A new outgoing committed defect is still inspected.
+    (tmp_path / "new.py").write_text("def also_broken(:\n")
+    git(tmp_path, "add", "new.py")
+    subprocess.run(
+        ["git", "-C", str(tmp_path), "-c", "user.name=Test",
+         "-c", "user.email=test@example.com", "-c", "core.hooksPath=/dev/null",
+         "commit", "-q", "-m", "new regression"],
+        check=True,
+    )
+    failed = subprocess.run(
+        [sys.executable, LOCAL, "--mode", "push"],
+        cwd=tmp_path, text=True, capture_output=True,
+    )
+    assert failed.returncode == 1
+    assert "new.py" in failed.stderr
+    assert "legacy.py" not in failed.stderr
