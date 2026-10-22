@@ -93,8 +93,7 @@ They do not use a target-specific local copy of the QC implementation.
 The tiers are:
 
 - test-commit: validate staged Python, JSON and TOML syntax; test-push: validate
-  outgoing committed changes (and any separately staged changes when invoked as
-  a recipe),
+  outgoing committed changes only,
   with no type checker, formatter, external dependency installation, test suite,
   code-style scanner, or performance restriction. Lean, Sage, Rust and Bun source
   is not subjected to a compile or type gate locally.

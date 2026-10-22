@@ -36,10 +36,15 @@ def commit_oid(oid: str) -> str | None:
     """Peel a ref to a commit, or reject missing/deleted/non-commit refs."""
     if not oid or set(oid) == {"0"}:
         return None
-    try:
-        return git("rev-parse", "--verify", f"{oid}^{{commit}}").decode().strip()
-    except subprocess.CalledProcessError:
+    # Missing upstreams are normal on new branches; probing them must never
+    # print Git's fatal diagnostic during an otherwise successful push check.
+    result = subprocess.run(
+        ["git", "rev-parse", "--verify", f"{oid}^{{commit}}"],
+        stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, check=False,
+    )
+    if result.returncode != 0:
         return None
+    return result.stdout.decode().strip()
 
 
 def push_base(commit: str, remote_oid: str | None, remote: str) -> str | None:
@@ -69,10 +74,7 @@ def push_base(commit: str, remote_oid: str | None, remote: str) -> str | None:
                 return base
     # With no known remote base, checking the newest commit keeps an initial
     # publication bounded; CI remains responsible for the complete tree.
-    try:
-        return git("rev-parse", "--verify", f"{commit}^").decode().strip()
-    except subprocess.CalledProcessError:
-        return None
+    return commit_oid(f"{commit}^")
 
 
 def committed_changes(commit: str, remote_oid: str | None, remote: str) -> list[tuple[str, str]]:
@@ -112,7 +114,7 @@ def main() -> int:
         parser.error("--pre-push requires --mode push")
     try:
         changes: list[tuple[str, str]] = []
-        if not args.pre_push:
+        if args.mode == "staged":
             names = git("diff", "--cached", "--name-only", "--diff-filter=ACMR", "-z")
             changes.extend((os.fsdecode(raw), "index") for raw in names.split(b"\0") if raw)
         if args.mode == "push":
