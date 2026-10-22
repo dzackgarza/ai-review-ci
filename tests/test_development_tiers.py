@@ -114,3 +114,31 @@ def test_development_ci_runs_full_suite_and_debt_independently() -> None:
         assert any(x.category == "correctness" for x in checks)
         assert any(x.category == "debt" for x in checks)
         assert len({x.id for x in checks}) == len(checks)
+
+
+def test_burndown_tracks_new_persistent_and_resolved_findings() -> None:
+    from importlib.util import module_from_spec, spec_from_file_location
+    import sys
+
+    spec = spec_from_file_location("ci_triage_burndown", TRIAGE)
+    assert spec and spec.loader
+    module = module_from_spec(spec)
+    sys.modules[spec.name] = module
+    spec.loader.exec_module(module)
+    old = {
+        "profile": "python", "tier": "ci", "generated_at": "previous-run",
+        "checks": [{"id": name, "status": "failed"} for name in ("types", "tests")],
+    }
+    new = {
+        "profile": "python", "tier": "ci",
+        "checks": [{"id": "types", "status": "failed"}, {"id": "tests", "status": "passed"},
+                   {"id": "format", "status": "failed"}],
+    }
+    assert module.compare_results(new, old) == {
+        "baseline": "previous-run", "open": ["format", "types"],
+        "new": ["format"], "persistent": ["types"], "resolved": ["tests"],
+    }
+    assert module.compare_results(new, None) == {
+        "baseline": "unavailable", "open": ["format", "types"],
+        "new": [], "persistent": [], "resolved": [],
+    }

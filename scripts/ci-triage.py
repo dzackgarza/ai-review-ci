@@ -148,6 +148,21 @@ def ambient_checks(profile: str) -> tuple[Check, ...]:
     return tuple(checks)
 
 
+def compare_results(current: dict, previous: dict | None) -> dict:
+    """Stable per-check burndown, without treating a missing baseline as zero failures."""
+    now = {item["id"] for item in current["checks"] if item["status"] == "failed"}
+    if previous is None or previous.get("profile") != current["profile"] or previous.get("tier") != current["tier"]:
+        return {"baseline": "unavailable", "open": sorted(now), "new": [], "persistent": [], "resolved": []}
+    old = {item["id"] for item in previous["checks"] if item["status"] == "failed"}
+    return {
+        "baseline": previous.get("generated_at", "available"),
+        "open": sorted(now),
+        "new": sorted(now - old),
+        "persistent": sorted(now & old),
+        "resolved": sorted(old - now),
+    }
+
+
 def run(profile: str, tier: str, report_dir: Path, *, enforce: bool = False) -> int:
     checks = ci_checks(profile) if tier == "ci" else ambient_checks(profile)
     report_dir.mkdir(parents=True, exist_ok=True)
@@ -185,6 +200,15 @@ def run(profile: str, tier: str, report_dir: Path, *, enforce: bool = False) -> 
         "failed_checks": len(failures),
     }
     (report_dir / "results.json").write_text(json.dumps(payload, indent=2) + "\n")
+    baseline_path = report_dir / "previous-results.json"
+    previous = None
+    if baseline_path.is_file():
+        try:
+            previous = json.loads(baseline_path.read_text())
+        except (ValueError, OSError):
+            pass
+    burndown = compare_results(payload, previous)
+    (report_dir / "burndown.json").write_text(json.dumps(burndown, indent=2) + "\n")
     summary = [
         f"## {profile} {tier} — development diagnostics",
         "",
@@ -195,7 +219,14 @@ def run(profile: str, tier: str, report_dir: Path, *, enforce: bool = False) -> 
     ]
     for result in results:
         summary.append(f"| {result['id']} | {result['category']} | {result['status']} | {result['log']} |")
-    summary += ["", "Logs and results.json are retained as CI artifacts.", "All findings enforced (stabilized phase)." if enforce else "Development findings do not block publication."]
+    summary += [
+        "", "### Burndown", "",
+        "Previous matching CI snapshot unavailable." if burndown["baseline"] == "unavailable" else
+        f"{len(burndown['new'])} newly failing; {len(burndown['persistent'])} persistent; {len(burndown['resolved'])} resolved.",
+        "Open: " + (", ".join(burndown["open"]) if burndown["open"] else "none"),
+        "", "Logs, results.json and burndown.json are retained as CI artifacts.",
+        "All findings enforced (stabilized phase)." if enforce else "Development findings do not block publication.",
+    ]
     markdown = "\n".join(summary) + "\n"
     (report_dir / "summary.md").write_text(markdown)
     if path := os.environ.get("GITHUB_STEP_SUMMARY"):

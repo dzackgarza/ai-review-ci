@@ -182,6 +182,13 @@ jobs:
       - name: Install project dependencies
         run: just -f "$HOME/ai-review-ci/ci/runner.just" setup-profile "$QC_PROFILE"
         if: inputs.tier != 'ambient' || inputs.profile != 'sage'
+      - name: Restore prior branch diagnostic snapshot
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: .qc-triage/previous-results.json
+          key: qc-triage-${{ inputs.profile }}-${{ inputs.tier }}-${{ github.run_id }}-${{ github.run_attempt }}
+          restore-keys: |
+            qc-triage-${{ inputs.profile }}-${{ inputs.tier }}-
       - name: Run QC tier
         # No GH_TOKEN here (#218): the tier runs every QC recipe and every
         # npx/uvx tool runner (semgrep, ai-slop, aislop), which must not execute
@@ -206,6 +213,20 @@ jobs:
             mkdir -p "$TMPDIR"
           fi
           just "$QC_TIER"
+      - name: Preserve current diagnostics as next branch baseline
+        if: always()
+        id: triage-snapshot
+        run: |
+          if [ -s .qc-triage/results.json ]; then
+            cp .qc-triage/results.json .qc-triage/previous-results.json
+            echo 'present=true' >> "$GITHUB_OUTPUT"
+          fi
+      - name: Cache branch diagnostic snapshot
+        if: always() && steps.triage-snapshot.outputs.present == 'true'
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: .qc-triage/previous-results.json
+          key: qc-triage-${{ inputs.profile }}-${{ inputs.tier }}-${{ github.run_id }}-${{ github.run_attempt }}
       - name: Retain development diagnostic triage
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02

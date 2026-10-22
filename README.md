@@ -98,8 +98,11 @@ The tiers are:
   is not subjected to a compile or type gate locally.
 - test-ci: run the complete project test suite and individual correctness and
   code-quality checks on CI; retain each result as a JSON record, individual
-  log, and GitHub job summary. In development the checks do not prevent
-  publication when they fail. They remain failures in the report.
+  log, and GitHub job summary. A branch-scoped prior CI snapshot is cached
+  to produce burndown.json with newly failing, persistent, resolved, and
+  currently open check IDs. A missing baseline is explicitly reported as
+  unavailable, not treated as zero failures. In development the checks do not
+  prevent publication when they fail; they remain failures in the report.
 - ambient: scheduled full-tree maintenance diagnostics, also recorded rather
   than block publication.
 
