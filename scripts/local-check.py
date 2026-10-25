@@ -10,6 +10,7 @@ import argparse
 import ast
 import json
 import os
+from pathlib import Path
 import subprocess
 import sys
 import tomllib
@@ -139,7 +140,21 @@ def main() -> int:
     if not errors:
         title = "Push" if args.mode == "push" else "Staged"
         print(f"{title} syntax: {checked} file(s) checked; no errors.")
-    return 1 if errors else 0
+    if errors:
+        return 1
+
+    validator = Path("scripts/local-validate.py")
+    if validator.is_file():
+        if not os.access(validator, os.X_OK):
+            print(f"Project local validator is not executable: {validator}", file=sys.stderr)
+            return 2
+        records = b"".join(
+            (json.dumps({"path": path, "version": version}) + "\n").encode("utf-8")
+            for path, version in dict.fromkeys(changes)
+        )
+        result = subprocess.run([str(validator.resolve()), "--mode", args.mode], input=records)
+        return result.returncode
+    return 0
 
 
 if __name__ == "__main__":

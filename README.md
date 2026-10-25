@@ -87,8 +87,17 @@ Install the hooks once:
 just install-global-git-hooks
 ```
 
-The hooks run the target repository's delegated recipes.
-They do not use a target-specific local copy of the QC implementation.
+The hooks run `scripts/local-check.py` from this checkout. They inspect the
+candidate Git index at commit and every outgoing ref at push; they do not run
+the target repository's `test-commit` or `test-push` recipes.
+
+A project can add an executable `scripts/local-validate.py` for cheap checks of
+its own content. The hook invokes its shebang with `--mode staged` or
+`--mode push` and sends one JSON record per changed file on stdin. Each record
+has `path` and `version`; `version` is `index` at commit or the exact candidate
+commit ID at push. The validator reads each blob with `git show :<path>` or
+`git show <version>:<path>` and exits nonzero to reject it. This hook has no
+tool installation step. Full suites and broad diagnostics remain in CI.
 
 The tiers are:
 
