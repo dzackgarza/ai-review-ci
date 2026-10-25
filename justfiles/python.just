@@ -220,7 +220,6 @@ _doctor-preflight:
 _mypy: _install-tools
 	#!/usr/bin/env bash
 	set -euo pipefail
-	source "{{artifacts}}/scripts/heavy-gate-lock.sh"
 	source "{{artifacts}}/scripts/test-file-paths.sh"
 	echo "============================="
 	echo "=== Running: mypy type checking ==="
@@ -238,6 +237,7 @@ _mypy: _install-tools
 		echo "mypy: no changed Python files."
 		exit 0
 	fi
+	source "{{artifacts}}/scripts/heavy-gate-lock.sh"
 	effective_config="${AI_REVIEW_CI_MYPY_CONFIG:-{{configs}}/mypy-global.ini}"
 	# Shared stub library, owned here so downstream repos never grow their own.
 	export MYPYPATH="{{infra}}/typings${MYPYPATH:+:$MYPYPATH}"

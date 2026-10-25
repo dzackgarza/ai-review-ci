@@ -79,10 +79,19 @@ _format-structured-text:
 _semgrep-autofix:
 	#!/usr/bin/env bash
 	set -euo pipefail
-	source "{{artifacts}}/scripts/heavy-gate-lock.sh"
 	echo "============================="
 	echo "=== Running: semgrep auto-fix ==="
-	echo "# Applies Semgrep autofixes; CI-tier Semgrep verification owns remaining findings"
+	echo "# Applies Semgrep autofixes to staged files; CI verifies the full diff"
+	# Commit hooks may use a temporary GIT_INDEX_FILE for a pathspec commit.
+	# Select from that index before running any tool that changes Git variables.
+	files=()
+	while IFS= read -r -d '' file; do
+		files+=("./$file")
+	done < <(git diff --cached --name-only --diff-filter=ACMR -z -- .)
+	if [ "${#files[@]}" -eq 0 ]; then
+		echo "semgrep autofix: no staged files"
+		exit 0
+	fi
 	exclude_dirs_output="$(uv run {{artifacts}}/scripts/read_qc_excludes.py {{configs}}/qc-excludes.toml)"
 	exclude_dirs=()
 	if [ -n "$exclude_dirs_output" ]; then
@@ -111,7 +120,7 @@ _semgrep-autofix:
 		--exclude=codeql-db \
 		"${exclude_args[@]}" \
 		--scan-unknown-extensions \
-		--autofix >"$scan_log" 2>&1; then
+		--autofix "${files[@]}" >"$scan_log" 2>&1; then
 		grep -E '^(Ran [0-9]+ rules|.*files? (modified|left unchanged) by autofix)' "$scan_log" || true
 		findings="$(grep -cE '^\s+❯❯❱ ' "$scan_log" || true)"
 		echo "semgrep autofix: ${findings:-0} advisory finding group(s); CI-tier verification owns them"
