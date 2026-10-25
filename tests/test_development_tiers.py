@@ -1,4 +1,5 @@
 """Regression checks for the development/publication versus CI-debt boundary."""
+import fcntl
 import json
 import os
 from pathlib import Path
@@ -45,6 +46,26 @@ def test_local_gate_catches_malformed_staged_config_not_typing_or_style(tmp_path
     bad = subprocess.run([sys.executable, LOCAL], cwd=tmp_path, capture_output=True, text=True)
     assert bad.returncode == 1
     assert "pyproject.toml" in bad.stderr
+
+
+def test_changed_python_commit_does_not_wait_for_a_heavy_job(tmp_path: Path) -> None:
+    git(tmp_path, "init", "-q")
+    (tmp_path / "implementation.py").write_text("def value() -> int:\n    return 3\n")
+    git(tmp_path, "add", "implementation.py")
+    lock_dir = tmp_path / "heavy-gate"
+    lock_dir.mkdir()
+    with (lock_dir / "slot-1.lock").open("w") as slot:
+        fcntl.flock(slot, fcntl.LOCK_EX)
+        environment = os.environ.copy()
+        environment.pop("AI_REVIEW_CI_HEAVY_GATE_HELD", None)
+        environment["AI_REVIEW_CI_HEAVY_GATE_LOCK_DIR"] = str(lock_dir)
+        environment["AI_REVIEW_CI_HEAVY_GATE_WAIT"] = "1"
+        result = subprocess.run(
+            ["just", "-f", str(ROOT / "justfiles" / "python.just"), "-d", str(tmp_path), "test-commit"],
+            cwd=tmp_path, env=environment, capture_output=True, text=True, timeout=5,
+        )
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert "Staged syntax: 1 file(s) checked" in result.stdout
 
 
 @pytest.mark.parametrize(

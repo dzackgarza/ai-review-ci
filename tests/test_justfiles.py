@@ -1399,6 +1399,32 @@ def test_archived_directories_are_excluded_from_qc_file_discovery_and_semgrep(
     assert verification.returncode == 0, verification.stdout + verification.stderr
 
 
+def test_semgrep_autofix_scans_only_the_commit_input(tmp_path: pathlib.Path) -> None:
+    project = tmp_path / "semgrep-staged-project"
+    project.mkdir()
+    assert run_git(project, "init", "-q").returncode == 0
+    (project / "staged.py").write_text("value = 1\n")
+    assert run_git(project, "add", "staged.py").returncode == 0
+    (project / "unstaged.py").write_text("value = 2\n")
+
+    result = run_just(ROOT / "justfiles" / "shared.just", project, "_semgrep-autofix")
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert re.search(r"Ran \d+ rules on 1 file", result.stdout), result.stdout
+
+
+def test_semgrep_autofix_skips_an_empty_index(tmp_path: pathlib.Path) -> None:
+    project = tmp_path / "semgrep-doc-project"
+    project.mkdir()
+    assert run_git(project, "init", "-q").returncode == 0
+    (project / "README.md").write_text("# Project\n")
+
+    result = run_just(ROOT / "justfiles" / "shared.just", project, "_semgrep-autofix")
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert "semgrep autofix: no staged files" in result.stdout
+
+
 def test_semgrep_blocks_typescript_value_defaults(tmp_path: pathlib.Path) -> None:
     project = tmp_path / "semgrep-value-default-project"
     project.mkdir()

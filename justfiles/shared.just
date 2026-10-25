@@ -90,7 +90,6 @@ _format-structured-text:
 _semgrep-autofix:
 	#!/usr/bin/env bash
 	set -euo pipefail
-	source "{{artifacts}}/scripts/heavy-gate-lock.sh"
 	echo "============================="
 	echo "=== Running: semgrep auto-fix ==="
 	echo "# Applies Semgrep autofixes to the staged files; the ambient tier scans the whole tree"
