@@ -308,6 +308,60 @@ def test_doctor_classifies_missing_workflow_as_misconfigured(tmp_path: pathlib.P
     assert payload["findings"][0]["surface"] == "workflow"
 
 
+def test_doctor_requires_the_scheduled_ambient_workflow(tmp_path: pathlib.Path) -> None:
+    # The ambient tier is the only whole-tree semgrep; a repo without it has none.
+    project = create_target(tmp_path, "python")
+    (project / ".github" / "workflows" / "ambient.yml").unlink()
+
+    status, payload = status_for(project)
+
+    assert status == "misconfigured"
+    assert [finding["surface"] for finding in payload["findings"]] == ["workflow"]
+    assert "ambient.yml is missing" in payload["findings"][0]["evidence"]
+
+
+def test_doctor_requires_the_acceptance_workflow_for_an_acceptance_suite(tmp_path: pathlib.Path) -> None:
+    # The push and CI tiers leave tests/acceptance/ to _acceptance.yml (#478); a repo
+    # with the suite and no workflow calling it would never run the suite at all.
+    project = create_target(tmp_path, "sage")
+    suite = project / "tests" / "acceptance" / "test_family.sage"
+    suite.parent.mkdir(parents=True)
+    suite.write_text("assert 2 + 2 == 4\n")
+    workflow = project / ".github" / "workflows" / "acceptance.yml"
+
+    missing_status, missing = status_for(project)
+    workflow.write_text("name: Acceptance\non: {push: {}}\njobs:\n  acceptance:\n    runs-on: ubuntu-latest\n    steps: []\n")
+    uncalled_status, uncalled = status_for(project)
+    workflow.write_text(
+        "name: Acceptance\non: {push: {}}\njobs:\n  acceptance:\n"
+        "    uses: dzackgarza/ai-review-ci/.github/workflows/_acceptance.yml@main\n"
+        "    with: {setup_recipe: ci-provision-sage, shards: '{\"test_family.sage\": 1}'}\n"
+    )
+    called_status, called = status_for(project)
+
+    assert missing_status == "misconfigured"
+    assert [(finding["surface"], finding["evidence"]) for finding in missing["findings"]] == [("workflow", f"{workflow} is missing")]
+    assert uncalled_status != "current"
+    assert ("error", "workflow", f"{workflow} missing gate(s): acceptance") in [
+        (finding["severity"], finding["surface"], finding["evidence"]) for finding in uncalled["findings"]
+    ]
+    assert called_status == "current", called["findings"]
+
+
+def test_doctor_requires_ambient_recipe_delegation(tmp_path: pathlib.Path) -> None:
+    project = create_target(tmp_path, "sage")
+    scaffold = (ROOT / "scaffolds" / "sage" / "justfile").read_text()
+    without_ambient, separator, _ = scaffold.partition("\n# Run the scheduled whole-tree audit")
+    assert separator
+    (project / "justfile").write_text(without_ambient + "\n")
+
+    status, payload = status_for(project)
+
+    assert status == "misconfigured"
+    assert [finding["surface"] for finding in payload["findings"]] == ["justfile_delegation"]
+    assert payload["justfile_delegation"]["ambient"]["observed"]["present"] is False
+
+
 def test_doctor_classifies_missing_bun_playwright_app_boot_as_misconfigured(tmp_path: pathlib.Path) -> None:
     project = create_target(tmp_path, "bun-playwright")
     (project / "justfile").write_text((ROOT / "scaffolds" / "bun" / "justfile").read_text())
@@ -444,6 +498,10 @@ def test_doctor_justfile_parser_accepts_parameter_defaults_and_recipe_attributes
                 "# Run CI-tier Python QC through the central implementation.",
                 "test-ci:",
                 "    @just -f ~/ai-review-ci/justfiles/python.just -d . test-ci",
+                "",
+                "# Run the scheduled whole-tree audit through the central implementation.",
+                "ambient:",
+                "    @just -f ~/ai-review-ci/justfiles/python.just -d . ambient",
                 "",
             ]
         )

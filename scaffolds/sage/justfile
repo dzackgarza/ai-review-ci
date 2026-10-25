@@ -25,3 +25,7 @@ test-push:
 # Run CI acceptance QC through the central implementation.
 test-ci:
     @just -f ~/ai-review-ci/justfiles/sage.just -d . test-ci
+
+# Run the scheduled whole-tree audit (semgrep and debt scans) through the central implementation.
+ambient:
+    @just -f ~/ai-review-ci/justfiles/sage.just -d . ambient

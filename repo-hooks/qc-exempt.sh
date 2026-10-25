@@ -30,30 +30,17 @@ qc_github_slug() {
 	printf '%s' "$1" | sed -E 's#^.*github\.com[:/]##; s#\.git$##'
 }
 
-# The owner this repository was forked from, or the empty string when it is not a fork.
-#
-# Fork-ness is a GitHub-side fact, so resolving it costs a network round trip. A hook runs
-# on every commit, so the answer is cached in the clone's own config and resolved once.
-# When it cannot be resolved — offline, no gh, unauthenticated — nothing is cached and
-# the caller gates normally: an unknown answer must not become an exemption.
+# Consult only local Git config during commits and pushes. An uncached fork
+# classification must never initiate a network call in the local feedback loop.
 qc_upstream_owner() {
-	if qc_cached="$(git -C "$qc_repo_root" config --get ai-review-ci.upstream-owner)"; then
-		case "$qc_cached" in
-			none) printf '' ;;
-			*) printf '%s' "$qc_cached" ;;
-		esac
-		return 0
-	fi
-	qc_slug="$(qc_github_slug "$1")"
-	if ! qc_parent="$(gh api "repos/$qc_slug" --jq 'if .fork then .parent.owner.login else "" end' 2>/dev/null)"; then
-		return 1
-	fi
-	if [ -z "$qc_parent" ]; then
-		git -C "$qc_repo_root" config --local ai-review-ci.upstream-owner none
-	else
-		git -C "$qc_repo_root" config --local ai-review-ci.upstream-owner "$qc_parent"
-	fi
-	printf '%s' "$qc_parent"
+    if qc_cached="$(git -C "$qc_repo_root" config --get ai-review-ci.upstream-owner)"; then
+        case "$qc_cached" in
+            none) printf '' ;;
+            *) printf '%s' "$qc_cached" ;;
+        esac
+        return 0
+    fi
+    return 1
 }
 
 qc_should_gate() {
@@ -101,7 +88,7 @@ qc_should_gate() {
 				;;
 		esac
 	else
-		echo "ai-review-ci hook: could not resolve fork status from GitHub; gating normally." >&2
+		echo "ai-review-ci hook: fork status not locally configured; gating normally." >&2
 		echo "  If this is a fork of a third-party project, record it once with:" >&2
 		echo "    git config --local ai-review-ci.upstream-owner <upstream-owner>" >&2
 	fi

@@ -44,6 +44,7 @@ jobs:
         uses: extractions/setup-just@v4
         with:
           github-token: ${{ github.token }}
+          just-version: '1.59.0'
       - name: Install gate tools
         run: just -f "$INFRA/ci/runner.just" install-gate-tools
       - name: Check semantic diff
@@ -75,6 +76,7 @@ jobs:
         uses: extractions/setup-just@v4
         with:
           github-token: ${{ github.token }}
+          just-version: '1.59.0'
       - name: Install gate tools
         run: just -f "$INFRA/ci/runner.just" install-gate-tools
       - name: Check delegation conformance
@@ -110,6 +112,7 @@ jobs:
         uses: extractions/setup-just@v4
         with:
           github-token: ${{ github.token }}
+          just-version: '1.59.0'
       - name: Install gate tools
         run: just -f "$INFRA/ci/runner.just" install-gate-tools
       - name: Check QC doctor
@@ -149,6 +152,7 @@ jobs:
         uses: extractions/setup-just@v4
         with:
           github-token: ${{ github.token }}
+          just-version: '1.59.0'
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2
       - name: Install gate tools
@@ -186,6 +190,7 @@ jobs:
         uses: extractions/setup-just@v4
         with:
           github-token: ${{ github.token }}
+          just-version: '1.59.0'
       - name: Install gate tools
         run: just -f "$INFRA/ci/runner.just" install-gate-tools
       - name: Check PR description checklist

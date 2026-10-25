@@ -25,3 +25,7 @@ test-push:
 # Run CI acceptance QC through the central implementation.
 test-ci:
     @just -d . -f ~/ai-review-ci/justfiles/rust.just test-ci
+
+# Run the scheduled whole-tree audit (semgrep and debt scans) through the central implementation.
+ambient:
+    @just -f ~/ai-review-ci/justfiles/rust.just -d . ambient

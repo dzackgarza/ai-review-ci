@@ -1,7 +1,8 @@
 # Owner-granted semgrep exceptions (CONTRIBUTING.md, "Sanctioned exceptions exist, and this is
-# their shape"). Each entry drops the findings of one rule on one path of one repository (its
+# their shape"). Each entry waives the blocking ERROR findings of one rule on one path of one repository (its
 # `origin` on GitHub) while the cited issue of dzackgarza/ai-review-ci is open. Closing the issue
-# ends the exception. Only the owner adds an entry, interactively.
+# ends the exception. WARNING/INFO findings remain required independent review input.
+# Only the owner adds an entry, interactively.
 
 [[exception]]
 repository = "dzackgarza/lean-cas-dsl"

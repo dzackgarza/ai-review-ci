@@ -1,3 +1,4 @@
+# Development: staged syntax at commit; outgoing-commit syntax at push; CI owns suites and quality debt.
 # justfile-python — Python-specific quality control
 #
 # Imports cross-language QC recipes from `justfile` (shared) and adds
@@ -13,16 +14,9 @@
 #   _import-linter, _ast-grep, _jscpd, _lizard, _codeql
 #
 # WORKFLOW (three-tier):
-#   just test-commit — preflight, normalization, syntax, mypy, bypass check.
-#   just test-push   — commit checks, the full pytest suite, and the cheap
-#                      deterministic gates (deptry, ast-grep).
-#   just test-ci     — push checks plus the threshold metrics (coverage,
-#                      duplication) and the minutes-long import graph.
-#
-# HOOKS: pre-commit blocks on `just test-commit`; pre-push blocks on `just test-push`.
-#   Run `just install-global-hooks` from ~/ai-review-ci to activate them globally.
-#
-# CONFIG: this justfile resolves configs and artifacts from the ai-review-ci repo.
+#   just test-commit — validate staged Python, JSON and TOML syntax.
+#   just test-push   — validate outgoing committed syntax and staged edits.
+#   just test-ci     — run full tests and independent quality diagnostics on CI.
 
 infra := justfile_directory() / ".."
 configs := infra / "tool-configs"
@@ -51,10 +45,9 @@ setup:
 	@echo ""
 	@echo "4. Tests must exist (test_*.py / *_test.py / tests/*.py)."
 	@echo ""
-	@echo "5. Gates: pre-commit runs 'just test-commit' (syntax and mypy);"
-	@echo "   pre-push runs 'just test-push' (adds pytest and the cheap"
-	@echo "   deterministic gates); CI runs 'just test-ci' (threshold metrics)."
-	@echo "   Commit/push failures are direct repair; CI policy findings are triaged."
+	@echo "5. Local commit/push checks inspect staged/outgoing syntax only."
+	@echo "   CI runs the complete suite, typing, formatting and other diagnostic checks."
+	@echo "   Development diagnostics are retained and nonblocking."
 	@echo ""
 	@echo "Sage projects: use sage.just instead ('just -f ~/ai-review-ci/justfiles/sage.just setup')."
 
@@ -391,6 +384,21 @@ _normalize: _install-tools
 		exit $ec
 	fi
 
+# CI-only Ruff checks are read-only: normalization must not rewrite source.
+_ci-ruff-check:
+	#!/usr/bin/env bash
+	set -euo pipefail
+	mapfile -t python_files < <(just --justfile {{justfile()}} -d . _python-qc-files)
+	[ "${#python_files[@]}" -gt 0 ] || exit 0
+	uvx --from ruff ruff check --config {{configs}}/ruff-global.toml "${python_files[@]}"
+
+_ci-ruff-format:
+	#!/usr/bin/env bash
+	set -euo pipefail
+	mapfile -t python_files < <(just --justfile {{justfile()}} -d . _python-qc-files)
+	[ "${#python_files[@]}" -gt 0 ] || exit 0
+	uvx --from ruff ruff format --check --config {{configs}}/ruff-global.toml "${python_files[@]}"
+
 _pytest: _install-tools
 	#!/usr/bin/env bash
 	set -euo pipefail
@@ -515,7 +523,7 @@ _pytest_with_coverage: _install-tools
 	fi
 	echo "Coverage XML report: $coverage_xml"
 
-_diff-cover: _pytest_with_coverage
+_diff-cover:
 	#!/usr/bin/env bash
 	set -euo pipefail
 	echo "============================="
@@ -586,7 +594,7 @@ _vulture: _install-tools
 		exit 0
 	fi
 
-	if uvx --python 3.14 --from vulture vulture \
+	if uv run --no-project --python 3.14 --with vulture python "{{artifacts}}/scripts/vulture-frameworks.py" \
 		--config {{configs}}/pyproject.toml \
 		"${python_files[@]}" \
 		"$whitelist_file"; then
@@ -689,10 +697,16 @@ _ast-grep: _install-tools
 		echo "ast-grep: no changed Python files."
 		exit 0
 	fi
+	project_rule_arguments=()
+	project_rule_output="$(uv run --project {{infra}} python -m ai_review_ci.project_policy)"
+	if [ -n "$project_rule_output" ]; then
+		mapfile -t project_rule_arguments <<<"$project_rule_output"
+	fi
 	findings_file=$(mktemp)
 	trap 'if [ -e "$findings_file" ]; then rm -f "$findings_file"; fi' EXIT
 	npx -y --package @ast-grep/cli ast-grep scan \
 		--config {{configs}}/sgconfig.yml \
+		"${project_rule_arguments[@]}" \
 		--report-style short \
 		"${python_files[@]}" | tee "$findings_file"
 	# Fail on error-severity findings. Every central rule routes to a POLICY.*
@@ -886,12 +900,7 @@ _codeql:
 
 # public: COMMIT gate — immediate, directly repairable feedback
 test-commit:
-	#!/usr/bin/env bash
-	set -euo pipefail
-	export AI_REVIEW_CI_FAILURE_MODE=direct
-	just --justfile {{justfile()}} -d . _doctor-preflight _check-python-project _normalize-common _normalize _python-syntax _mypy
-	just -f {{justfiles}}/shared.just -d . _no-bypass
-	echo "Commit quality checks completed"
+    @python3 "{{justfile_directory()}}/../scripts/local-check.py"
 
 # public: PUSH gate — commit checks, the project-owned test suite, and the
 # deterministic checks a developer can answer without leaving the local loop.
@@ -901,11 +910,7 @@ test-commit:
 # prose rules. Each reports the same verdict locally and in CI, so discovering
 # it here costs one edit and discovering it there costs a CI round trip.
 test-push:
-	#!/usr/bin/env bash
-	set -euo pipefail
-	export AI_REVIEW_CI_FAILURE_MODE=direct
-	just --justfile {{justfile()}} -d . test-commit _pytest _deptry _ast-grep
-	echo "Push quality checks completed"
+    @python3 "{{justfile_directory()}}/../scripts/local-check.py" --mode push
 
 # private: the Python CI gates without the cross-language stack, which a profile
 # that composes several languages runs once (bun-python.just). The coverage run is
@@ -926,9 +931,12 @@ _ambient-python-debt: _lizard-python _vulture
 # a number to golf rather than a defect to fix. `_import-linter` builds the
 # whole import graph and takes minutes, which no push gate can carry.
 test-ci:
-	#!/usr/bin/env bash
-	set -euo pipefail
-	export AI_REVIEW_CI_FAILURE_MODE=triage
-	just --justfile {{justfile()}} -d . _ci-checks
-	just -f {{justfiles}}/shared.just -d . _global-qc
-	echo "CI quality checks completed"
+    @python3 "{{justfile_directory()}}/../scripts/ci-triage.py" python
+
+# Scheduled, never in the PR/push gate: the whole-tree scans. The commit tier
+# scans staged files and test-ci the diff, so this is the only whole-tree semgrep.
+# Every step runs; the audit fails if any did.
+#
+# public: AMBIENT audit — whole-tree semgrep and debt scan
+ambient:
+    @python3 "{{justfile_directory()}}/../scripts/ci-triage.py" python --tier ambient

@@ -1,13 +1,26 @@
 # Contributing
 
-Read this before filing an issue or opening a pull request here.
+Development and stabilization have different enforcement standards. This
+document's older, strict policy sections are historical stabilization guidance,
+not instructions to interrupt MVP work with type, style, optimization or review
+tasks.
 
-Most proposals that reach this repository are well-reasoned, technically competent, and
-wrong for it. They assume a model of quality control that this repository rejects, and
-nothing else here states that model plainly enough to catch them. So they arrive, they
-look like ordinary work, and they get built.
+## Development and stabilization are different contracts
 
-## The stances, plainly
+Development is the default. Code completion and correctness of the requested
+capability are the active objective. Commit and push hooks check only staged
+syntax. All other QC findings, including types, full tests, policy, style,
+complexity and performance, are collected in CI artifacts for later triage.
+An agent must not convert these observations into a reason to delay publishing
+the MVP or undertake unsolicited cleanup.
+
+The policy discussion below documents the *stabilized-phase* standards and the
+history of their rules. It does not govern local development gates, require
+PR creation or review, or authorize an agent to promote its current work into
+stabilization. Stabilization is an explicit later action after a baseline is
+frozen and quality debt addressed.
+
+## Historical stabilized-phase policy
 
 - **QC is not opt-in.** Opting out is a QC failure, not a configuration.
 - **QC is not optional.** A repository does not choose which gates apply to it.
@@ -38,6 +51,23 @@ fleet toward that state, and each one looks locally reasonable while doing it.
 So a rule that fires on correct code is a **defect in the rule**, and the repair happens
 here, in the rule, for everyone. That is the only repair shape there is.
 
+## Source file length
+
+The file-length gate warns at 500 lines and fails above 700 lines of source code.
+It checks tracked and non-ignored untracked program, stylesheet and component/template
+source files. Stored corpus records, serialized indexes and certificates, prose and
+archived source documents (including raw HTML tables) are data, not source code subject
+to this limit. The central recipe owns the source-language selection; consumers do not
+supply exclusions or change the thresholds.
+
+## In-progress database field defaults
+
+Projects carrying the GitHub topic `in-progress-database` are exempt from the
+`no-field-default` Pydantic rule. The central Python scanner reads the origin
+repository's live GitHub topics and disables only that rule. A local configuration,
+environment variable or source comment cannot grant the exception. A failed metadata
+lookup fails the scan; it never grants an exception. Other rules and gates still apply.
+
 ## Where the rules come from
 
 The rules are not defaults, and they are not best practice as generally understood. They
@@ -56,10 +86,10 @@ is what the rule exists to stop.
 
 ## What QC is for
 
-QC exists to stop agents in their tracks.
+In the stabilized phase, QC can be used as an enforcement tool; during development its findings are diagnostics.
 
-Not to advise. Not to score. To halt work at a bad pattern or a bad architectural
-decision, and redirect the agent into reading about the correct architecture — which is
+In stabilization, its purpose is to catch a bad pattern or a bad architectural
+decision and support a corrective redesign — which is
 typically **a rewrite that obviates the problem entirely**.
 
 The predictable response is the one to watch for in yourself. Faced with a gate, agents

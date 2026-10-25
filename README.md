@@ -1,9 +1,9 @@
 # ai-review-ci
 
 `ai-review-ci` owns deterministic quality control for the repositories it governs.
-It supplies QC recipes, profile checks, Git hooks, branch protection, and repository diagnostics.
+It supplies fast local syntax checks and separate, nonblocking CI diagnostics. A stabilized release may additionally opt into PR review and branch protection.
 
-Read [CONTRIBUTING.md](./CONTRIBUTING.md) before you change a rule or open a pull request.
+Development is the default phase; see [CONTRIBUTING.md](./CONTRIBUTING.md) for the later stabilization policy.
 
 ## Install into a repository
 
@@ -19,14 +19,26 @@ uvx --from git+https://github.com/dzackgarza/ai-review-ci \
 
 Supported profiles are `python`, `bun`, `bun-playwright`, `bun-python`, `docs-and-configs`, `rust`, and `sage`.
 
-The installer writes these repository-owned files:
+For Sage, the reusable workflow runs `test-ci` inside
+`ghcr.io/dzackgarza/sage:develop` (Python 3.14) and installs the consuming project
+into its Sage interpreter. A caller supplying `setup_recipe` provisions its own
+runtime instead. Sage `ambient` runs whole-tree Semgrep on the Ubuntu runner and
+requires no Sage installation.
 
-- a root `justfile` with the QC contract;
-- `.github/workflows/review-pr.yml`;
-- `.github/pull_request_template.md`;
-- `.aislop/config.yml`.
+A Sage repository's `tests/acceptance/` suite runs in neither `test-push` nor `test-ci`.
+It runs on every push in the reusable `.github/workflows/_acceptance.yml`, each file
+sharded across hosted-runner jobs; its header shows the caller workflow. The doctor
+fails a repository that has `tests/acceptance/` and no `.github/workflows/acceptance.yml`
+calling it.
 
-The PR QC jobs call reusable workflows from `ai-review-ci`.
+The default installer writes a root justfile, a push-triggered
+development.yml workflow, an optional scheduled ambient.yml workflow, and
+the CI scanner configuration. The default does not install a pull-request
+review workflow, PR policy template or branch protection.
+
+Only an explicit --phase stabilized installs those release-era controls.
+The caller must decide to freeze a baseline and address existing quality
+debt before adopting that phase.
 
 Existing repository-owned files are not overwritten.
 Use `--skip-scaffold` when a repository already has a root `justfile`.
@@ -65,7 +77,7 @@ ai-review-ci doctor --target .
 ai-review-ci doctor --target . --json
 ```
 
-The doctor checks the declared profile, workflow references, required gates, labels, branch protection, and QC delegation.
+The doctor checks the development workflow and delegation without requiring branch protection or label alignment. Stabilized installations retain the stricter release checks.
 
 ## Global Git hooks
 
@@ -80,11 +92,28 @@ They do not use a target-specific local copy of the QC implementation.
 
 The tiers are:
 
-- `test-commit` for staged changes;
-- `test-push` for repository tests and dependency checks;
-- `test-ci` for the complete remote acceptance tier.
+- test-commit: validate staged Python, JSON and TOML syntax; test-push: validate
+  outgoing committed changes only,
+  with no type checker, formatter, external dependency installation, test suite,
+  code-style scanner, or performance restriction. Lean, Sage, Rust and Bun source
+  is not subjected to a compile or type gate locally.
+- test-ci: run the complete project test suite and individual correctness and
+  code-quality checks on CI; retain each result as a JSON record, individual
+  log, and GitHub job summary. Recognized test failures and source-location
+  diagnostics receive stable finding IDs in results.json; unrecognized tool
+  output remains a check-level failure linked to its full log. A branch-scoped
+  prior CI snapshot is cached
+  to produce burndown.json with newly failing, persistent, resolved, and
+  currently open check IDs. A missing baseline is explicitly reported as
+  unavailable, not treated as zero failures. In development the checks do not
+  prevent publication when they fail; they remain failures in the report.
+- ambient: scheduled full-tree maintenance diagnostics, also recorded rather
+  than block publication.
 
-Do not run a complete suite by hand when a commit or push will run the required tier.
+During implementation, use narrowly targeted tests for the active capability.
+Complete suites are CI work. Refactoring, typing, optimization, deduplication
+and style cleanup are later roadmap phases, executed by fresh agents rather
+than interrupting implementation.
 
 ## Canonical operations
 
@@ -94,7 +123,7 @@ Install or update the label taxonomy:
 ai-review-ci install-labels --repo owner/repo
 ```
 
-Apply required branch protection:
+Only after an explicit stabilized-phase baseline, apply required branch protection:
 
 ```bash
 ai-review-ci protect-branch --repo owner/repo --branch main --profile python

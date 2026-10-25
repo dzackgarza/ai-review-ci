@@ -6,11 +6,12 @@
 
     semgrep_exceptions.py <semgrep-exceptions.toml> <semgrep.json>
 
-Rewrites <semgrep.json> in place without each finding whose rule, path and repository (the
+Rewrites <semgrep.json> in place without each ERROR finding whose rule, path and repository (the
 GitHub slug of `origin` in the working directory) match an entry whose issue of
 dzackgarza/ai-review-ci is open, and prints each dropped finding. The issue state comes from
 the public GitHub REST API with no token (the QC tier runs without one, #218); if it cannot be
-read, the gate fails. Exit 0 with no findings left, 1 with findings left,
+read, the gate fails. Warning and informational findings remain in the report
+for review. Exit 0 with no ERROR findings left, 1 with ERROR findings left,
 2 when an issue state cannot be read.
 """
 
@@ -22,6 +23,8 @@ import tomllib
 import urllib.error
 import urllib.request
 from pathlib import Path
+
+from semgrep_report import load_report
 
 ISSUES = "dzackgarza/ai-review-ci"
 GITHUB_REMOTE = re.compile(r"github\.com[:/]([\w.-]+/[\w.-]+?)(?:\.git)?/?$")
@@ -47,10 +50,13 @@ def issue_open(number: int) -> bool:
 def main() -> int:
     exceptions = tomllib.loads(Path(sys.argv[1]).read_text())["exception"]
     output = Path(sys.argv[2])
-    payload = json.loads(output.read_text())
+    payload = load_report(output)
     here = repository()
     kept, open_issues = [], {}
     for result in payload["results"]:
+        if result["extra"]["severity"] != "ERROR":
+            kept.append(result)
+            continue
         match = next((e for e in exceptions if e["repository"] == here and e["path"] == result["path"]
                       and e["rule"] == result["check_id"]), None)
         if match is not None and match["issue"] not in open_issues:
@@ -60,9 +66,17 @@ def main() -> int:
                   f"{result['path']}:{result['start']['line']} {result['check_id']}")
             continue
         kept.append(result)
+    for result in kept:
+        severity = result["extra"]["severity"]
+        if severity in {"WARNING", "INFO"}:
+            print(f"semgrep: independent review required ({severity}): "
+                  f"{result['path']}:{result['start']['line']} {result['check_id']}")
     payload["results"] = kept
     output.write_text(json.dumps(payload))
-    return 1 if kept else 0
+    severities = {result["extra"]["severity"] for result in kept}
+    if not severities.issubset({"ERROR", "WARNING", "INFO"}):
+        raise ValueError(f"unknown Semgrep finding severity: {severities}")
+    return 1 if "ERROR" in severities else 0
 
 
 if __name__ == "__main__":

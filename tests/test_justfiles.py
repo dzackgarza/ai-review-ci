@@ -22,6 +22,9 @@ LINT_STAGED_CONFIG = TypeAdapter(dict[str, list[str]])
 def private_recipe_failure_mode(monkeypatch: pytest.MonkeyPatch) -> None:
     """Private-recipe tests exercise CI-style directives unless overridden."""
     monkeypatch.setenv("AI_REVIEW_CI_FAILURE_MODE", "triage")
+    # Temporary fixture repositories do not contain the enclosing CI refs.
+    monkeypatch.delenv("DIFF_COVER_BASE", raising=False)
+    monkeypatch.delenv("QC_TIER", raising=False)
 
 
 def run_just(
@@ -466,12 +469,12 @@ def test_sage_check_runner_replaces_only_the_reached_check_artifacts(
     assert second.returncode == 7, second.stdout + second.stderr
     fixture_log = (artifacts / "fixture.log").read_text()
     assert fixture_log.startswith("second run\nWARNING: inspect this warning\nERROR: inspect this error\n")
-    assert "recipe `check` failed with exit code 7" in fixture_log
+    assert "recipe `check` failed with exit code 7" in fixture_log.lower()
     assert "first run" not in fixture_log
     diagnostics = (artifacts / "fixture.diagnostics.log").read_text()
     assert "2:WARNING: inspect this warning" in diagnostics
     assert "3:ERROR: inspect this error" in diagnostics
-    assert "recipe `check` failed with exit code 7" in diagnostics
+    assert "recipe `check` failed with exit code 7" in diagnostics.lower()
     assert json.loads((artifacts / "fixture.json").read_text()) == {
         "check": "fixture",
         "diagnostics": ".ai-review-ci/sage/fixture.diagnostics.log",
@@ -685,7 +688,7 @@ def test_tsc_requires_ags_when_tsconfig_declares_ags(tmp_path: pathlib.Path) -> 
     project.mkdir()
     (project / "package.json").write_text(json.dumps({"scripts": {}}) + "\n")
     (project / "tsconfig.json").write_text(json.dumps({"compilerOptions": {"jsxImportSource": "ags/gtk4"}}) + "\n")
-    env = os.environ | {"PATH": path_with_only(tmp_path, "bash", "cat", "jq", "just", "rg")}
+    env = os.environ | {"PATH": path_with_only(tmp_path, "bash", "cat", "date", "flock", "jq", "just", "mkdir", "rg")}
 
     result = run_just(ROOT / "justfiles" / "bun.just", project, "_tsc", env=env)
 
@@ -987,6 +990,87 @@ def test_common_normalization_formats_structured_text(
     assert json_file.read_text() == '{ "b": 2, "a": 1 }\n'
 
 
+def test_common_normalization_formats_staged_text_beyond_one_argument_list(
+    tmp_path: pathlib.Path,
+) -> None:
+    # Importing a record corpus stages ~160k Markdown cards in one commit; the
+    # formatter command line then exceeds ARG_MAX ("Argument list too long").
+    project = tmp_path / "project"
+    records = project / "records"
+    records.mkdir(parents=True)
+    argument_bytes = int(subprocess.run(["getconf", "ARG_MAX"], text=True, capture_output=True, check=True).stdout)
+    stem = "r" * 200
+    count = argument_bytes // len(f"records/{stem}00000.md") + 1
+    markdown = [records / f"{stem}{index:05d}.md" for index in range(count)]
+    data = [records / f"{stem}{index:05d}.json" for index in range(count)]
+    for path in markdown:
+        path.write_text("# Title\n\n-   item\n")
+    for path in data:
+        path.write_text('{"b":2,"a":1}\n')
+    subprocess.run(["git", "init", "-q"], cwd=project, check=True)
+    subprocess.run(["git", "add", "records"], cwd=project, check=True)
+
+    result = subprocess.run(
+        [
+            "just",
+            "--justfile",
+            str(ROOT / "justfiles" / "shared.just"),
+            "-d",
+            str(project),
+            "_format-structured-text",
+        ],
+        cwd=project,
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+
+    output = result.stdout + result.stderr
+    assert result.returncode == 0, output
+    assert {path.read_text() for path in markdown} == {"# Title\n\n- item\n"}
+    assert {path.read_text() for path in data} == {'{ "b": 2, "a": 1 }\n'}
+
+
+def test_common_normalization_leaves_declared_corpus_directories_to_their_scheduled_job(
+    tmp_path: pathlib.Path,
+) -> None:
+    # A record corpus (lattice-database: 160k cards) is formatted by its own
+    # nightly job; the commit gate formats everything else that is staged.
+    project = tmp_path / "project"
+    corpus = project / "cards"
+    corpus.mkdir(parents=True)
+    (project / "justfile").write_text('ai_review_ci_format_scheduled_dirs := "cards"\n\ndefault:\n    @just --list\n')
+    readme = project / "README.md"
+    card = corpus / "0001.md"
+    record = corpus / "0001.json"
+    readme.write_text("# Title\n\n-   item\n")
+    card.write_text("# Card\n\n-   item\n")
+    record.write_text('{"b":2,"a":1}\n')
+    subprocess.run(["git", "init", "-q"], cwd=project, check=True)
+    subprocess.run(["git", "add", "."], cwd=project, check=True)
+
+    result = subprocess.run(
+        [
+            "just",
+            "--justfile",
+            str(ROOT / "justfiles" / "shared.just"),
+            "-d",
+            str(project),
+            "_format-structured-text",
+        ],
+        cwd=project,
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+
+    output = result.stdout + result.stderr
+    assert result.returncode == 0, output
+    assert readme.read_text() == "# Title\n\n- item\n"
+    assert card.read_text() == "# Card\n\n-   item\n"
+    assert record.read_text() == '{"b":2,"a":1}\n'
+
+
 def load_lint_staged_config() -> dict[str, list[str]]:
     result = subprocess.run(
         [
@@ -1235,8 +1319,8 @@ def test_semgrep_autofix_defers_unfixed_findings_to_push_tier(
     project.mkdir()
     source = project / "app.ts"
     source.write_text('const API_URL = "https://example.test";\nconsole.log(API_URL);\n')
-    assert run_git(project, "init", "-q").returncode == 0
-    assert run_git(project, "add", "app.ts").returncode == 0
+    subprocess.run(["git", "init", "-q"], cwd=project, check=True)
+    subprocess.run(["git", "add", "app.ts"], cwd=project, check=True)
 
     commit_tier = run_just(ROOT / "justfiles" / "shared.just", project, "_semgrep-autofix")
     push_tier = run_just(ROOT / "justfiles" / "shared.just", project, "_semgrep")
@@ -1244,6 +1328,53 @@ def test_semgrep_autofix_defers_unfixed_findings_to_push_tier(
     assert commit_tier.returncode == 0, commit_tier.stdout + commit_tier.stderr
     assert source.read_text() == 'const API_URL = "https://example.test";\nconsole.log(API_URL);\n'
     assert push_tier.returncode != 0, push_tier.stdout + push_tier.stderr
+
+
+def test_semgrep_autofix_scans_only_the_staged_files(tmp_path: pathlib.Path) -> None:
+    # The commit tier is a fast check of what is being committed; the whole tree is
+    # the CI tier's. Committing one file to lattice-database scanned all 161k files.
+    project = tmp_path / "staged-scope-project"
+    project.mkdir()
+    (project / "settled.py").write_text("def settled() -> int:\n    return 1\n")
+    subprocess.run(["git", "init", "-q"], cwd=project, check=True)
+    subprocess.run(["git", "add", "settled.py"], cwd=project, check=True)
+    subprocess.run(
+        ["git", "-c", "user.name=t", "-c", "user.email=t@t", "commit", "-q", "--no-verify", "-m", "settled"],
+        cwd=project,
+        check=True,
+    )
+    (project / "changed.py").write_text("def changed() -> int:\n    return 2\n")
+    subprocess.run(["git", "add", "changed.py"], cwd=project, check=True)
+
+    result = run_just(ROOT / "justfiles" / "shared.just", project, "_semgrep-autofix")
+
+    output = result.stdout + result.stderr
+    assert result.returncode == 0, output
+    assert "Ran" in output and " on 1 file:" in output, output
+
+
+@pytest.mark.parametrize("profile", ["python", "sage", "rust", "bun", "bun-python"])
+def test_ambient_tier_semgrep_scans_files_no_change_touched(tmp_path: pathlib.Path, profile: str) -> None:
+    # The commit tier scans staged files and test-ci scans the diff, so the
+    # scheduled ambient tier is the only scan of the whole tree.
+    project = tmp_path / "ambient-project"
+    source = project / "source"
+    source.mkdir(parents=True)
+    (source / "legacy.ts").write_text("export const legacy = incoming || 'ambient'\n")
+    init_git_repo(project)
+    assert run_git(project, "add", ".").returncode == 0
+    commit_without_hooks(project, "base")
+    revision = run_git(project, "rev-parse", "HEAD").stdout.strip()
+    # A CI runner exports a base; the ambient tier must not narrow to its empty diff.
+    environment = {**os.environ, "DIFF_COVER_BASE": revision, "QC_TIER": "test-ci"}
+
+    result = run_just(ROOT / "justfiles" / "shared.just", project, "_ambient-semgrep", env=environment)
+
+    output = result.stdout + result.stderr
+    assert result.returncode != 0, output
+    report = json.loads((project / ".git/ai-review-ci/semgrep" / revision / "head.raw.json").read_text())
+    assert "source/legacy.ts" in report["paths"]["scanned"], output
+    assert any(r["check_id"].endswith("ts-no-or-default") and r["path"] == "source/legacy.ts" for r in report["results"]), output
 
 
 def test_archived_directories_are_excluded_from_qc_file_discovery_and_semgrep(
@@ -1254,8 +1385,8 @@ def test_archived_directories_are_excluded_from_qc_file_discovery_and_semgrep(
     archive.mkdir(parents=True)
     (project / "active.py").write_text("def current() -> str:\n    return 'current'\n")
     (archive / "historical.py").write_text("from os import getenv\n\nMODE = getenv('MODE', 'historical')\n")
-    assert run_git(project, "init", "-q").returncode == 0
-    assert run_git(project, "add", ".").returncode == 0
+    subprocess.run(["git", "init", "-q"], cwd=project, check=True)
+    subprocess.run(["git", "add", "."], cwd=project, check=True)
 
     files = run_just(ROOT / "justfiles" / "python.just", project, "_python-qc-files")
     assert files.returncode == 0, files.stdout + files.stderr
@@ -1318,49 +1449,56 @@ def test_semgrep_blocks_typescript_value_defaults(tmp_path: pathlib.Path) -> Non
     assert "Route POLICY.RUNTIME_DEFAULT and other POLICY.* findings" in output
 
 
-def test_semgrep_scans_only_changed_files_in_ci(
-    tmp_path: pathlib.Path,
-) -> None:
+def test_semgrep_scans_only_changed_files_in_ci(tmp_path: pathlib.Path) -> None:
     project = tmp_path / "downstream"
     source = project / "source"
-    fake_bin = tmp_path / "bin"
-    calls = tmp_path / "semgrep-calls"
     source.mkdir(parents=True)
-    fake_bin.mkdir()
-    (source / "legacy.ts").write_text("export const legacy = 'ambient'\n")
-    run_git(project, "init")
-    run_git(project, "config", "user.email", "test@example.com")
-    run_git(project, "config", "user.name", "Test")
-    run_git(project, "add", ".")
-    base_commit = run_git(project, "-c", "core.hooksPath=/dev/null", "commit", "-m", "base")
-    assert base_commit.returncode == 0, base_commit.stdout + base_commit.stderr
+    # A real ERROR in an unchanged file must not enter differential scans.
+    (source / "legacy.ts").write_text("export const legacy = incoming || 'ambient'\n")
+    existing_violation = "export const retained = incoming || 'retained'\n"
+    changed = source / "changed.ts"
+    changed.write_text(existing_violation)
+    init_git_repo(project)
+    assert run_git(project, "add", ".").returncode == 0
+    commit_without_hooks(project, "base")
     base_result = run_git(project, "rev-parse", "HEAD")
     assert base_result.returncode == 0, base_result.stdout + base_result.stderr
     base = base_result.stdout.strip()
-    (source / "changed.ts").write_text("export const changed = 'new'\n")
-    run_git(project, "add", ".")
-    change_commit = run_git(project, "-c", "core.hooksPath=/dev/null", "commit", "-m", "change")
-    assert change_commit.returncode == 0, change_commit.stdout + change_commit.stderr
-    (fake_bin / "uvx").write_text('#!/usr/bin/env bash\nprintf \'%s\\n\' "$*" >> "$SEMGREP_CALLS"\nprintf \'{"results":[]}\\n\'\n')
-    (fake_bin / "uvx").chmod(0o755)
-
-    result = run_just(
-        ROOT / "justfiles" / "shared.just",
-        project,
-        "_semgrep",
-        env={
-            **os.environ,
-            "DIFF_COVER_BASE": base,
-            "PATH": f"{fake_bin}:{os.environ['PATH']}",
-            "QC_TIER": "test-ci",
-            "SEMGREP_CALLS": str(calls),
-        },
-    )
-
+    changed.write_text(existing_violation + "export const changed = 'new'\n")
+    assert run_git(project, "add", ".").returncode == 0
+    commit_without_hooks(project, "change")
+    revision = run_git(project, "rev-parse", "HEAD").stdout.strip()
+    command = ["just", "--justfile", str(ROOT / "justfiles/shared.just"), "-d", ".", "_semgrep"]
+    # The fixture supplies its own baseline, never the hosted outer repo's ref.
+    environment = {**os.environ, "DIFF_COVER_BASE": base, "QC_TIER": "test-ci"}
+    result = subprocess.run(command, cwd=project, env=environment, text=True, capture_output=True)
     assert result.returncode == 0, result.stdout + result.stderr
-    invocation = calls.read_text()
-    assert "source/changed.ts" in invocation
-    assert "source/legacy.ts" not in invocation
+    reports = project / ".git/ai-review-ci/semgrep" / revision
+    head = json.loads((reports / "head.raw.json").read_text())
+    baseline = json.loads((reports / "base.raw.json").read_text())
+    for report in (head, baseline):
+        assert report["errors"] == []
+        assert report["paths"]["scanned"] == ["source/changed.ts"]
+        finding = next(r for r in report["results"] if r["check_id"].endswith("ts-no-or-default"))
+        assert finding["extra"]["severity"] == "ERROR"
+        assert finding["start"]["line"] == 1
+
+    # New ERROR findings still block despite the existing baseline violation.
+    changed.write_text(changed.read_text() + "export const added = incoming || 'added'\n")
+    assert run_git(project, "add", ".").returncode == 0
+    commit_without_hooks(project, "new violation")
+    revision = run_git(project, "rev-parse", "HEAD").stdout.strip()
+    result = subprocess.run(command, cwd=project, env=environment, text=True, capture_output=True)
+    assert result.returncode != 0, result.stdout + result.stderr
+    report_path = project / ".git/ai-review-ci/semgrep" / revision / "head.raw.json"
+    report = json.loads(report_path.read_text())
+    assert report["paths"]["scanned"] == ["source/changed.ts"]
+    assert any(r["check_id"].endswith("ts-no-or-default") and r["start"]["line"] == 3 for r in report["results"])
+
+    result = subprocess.run(command, cwd=project, env={**environment, "DIFF_COVER_BASE": "nonexistent-fixture-ref"}, text=True, capture_output=True)
+    assert result.returncode != 0, result.stdout + result.stderr
+    assert "DIFF_COVER_BASE does not resolve" in result.stderr
+    assert not report_path.exists()
 
 
 def test_semgrep_allows_fail_loud_typescript_guards(tmp_path: pathlib.Path) -> None:
@@ -2088,7 +2226,7 @@ def test_envrc_check_accepts_root_envrc_and_rejects_dotenv_files(
     assert rejected.returncode != 0, rejected.stdout + rejected.stderr
 
 
-def test_python_scaffold_bare_push_gate_reaches_downstream_preflight_without_working_directory_env(
+def test_python_scaffold_bare_push_does_not_require_tests_or_preflight(
     tmp_path: pathlib.Path,
 ) -> None:
     project = tmp_path / "python-scaffold-project"
@@ -2106,6 +2244,7 @@ def test_python_scaffold_bare_push_gate_reaches_downstream_preflight_without_wor
         )
     )
     (project / ".envrc").write_text("source_up\n")
+    init_git_repo(project)
     env = os.environ | {"DIRENV_CONFIGURED_CORRECTLY": "1"}
 
     result = subprocess.run(
@@ -2118,47 +2257,10 @@ def test_python_scaffold_bare_push_gate_reaches_downstream_preflight_without_wor
     )
 
     output = result.stdout + result.stderr
-    assert result.returncode != 0, output
-    assert "Python project must have tests" in output
-    assert "the following required arguments were not provided" not in output
+    assert result.returncode == 0, output
+    assert "Push syntax: 0 file(s) checked" in output
+    assert "Python project must have tests" not in output
 
-
-def test_python_scaffold_bare_push_gate_breaks_when_just_working_directory_is_exported(
-    tmp_path: pathlib.Path,
-) -> None:
-    project = tmp_path / "python-scaffold-project"
-    project.mkdir()
-    shutil.copy(ROOT / "scaffolds" / "python" / "justfile", project / "justfile")
-    (project / "pyproject.toml").write_text(
-        "\n".join(
-            [
-                "[project]",
-                'name = "scaffold-python-target"',
-                'version = "0.1.0"',
-                'requires-python = ">=3.14"',
-                "",
-            ]
-        )
-    )
-    (project / ".envrc").write_text('source_up\nexport JUST_WORKING_DIRECTORY="$(pwd -P)"\n')
-    env = os.environ | {
-        "DIRENV_CONFIGURED_CORRECTLY": "1",
-        "JUST_WORKING_DIRECTORY": str(project),
-    }
-
-    result = subprocess.run(
-        ["just", "test-push"],
-        cwd=project,
-        env=env,
-        text=True,
-        capture_output=True,
-        check=False,
-    )
-
-    output = result.stdout + result.stderr
-    assert result.returncode != 0, output
-    assert "the following required arguments were not provided" in output
-    assert "--justfile <JUSTFILE>" in output
 
 
 def test_eslint_flat_config_imports_with_declared_tool_config_deps(
@@ -2754,6 +2856,7 @@ def test_bun_scaffold_delegates_qc_in_project_directory(
     shutil.copy(ROOT / "scaffolds" / "bun" / "justfile", project / "justfile")
     (project / "package.json").write_text(json.dumps({"scripts": {}}) + "\n")
     (project / "bun.lock").write_text("")
+    init_git_repo(project)
 
     result = subprocess.run(
         ["just", "test-push"],
@@ -2764,10 +2867,9 @@ def test_bun_scaffold_delegates_qc_in_project_directory(
     )
 
     output = result.stdout + result.stderr
-    assert result.returncode != 0, output
-    assert "TypeScript project must have a package.json file" not in output
-    assert "TypeScript project must use Bun" not in output
-    assert "TypeScript project must have tests" in output
+    assert result.returncode == 0, output
+    assert "Push syntax: 0 file(s) checked" in output
+    assert "TypeScript project must have tests" not in output
 
 
 @pytest.mark.parametrize(
@@ -2779,7 +2881,7 @@ def test_bun_scaffold_delegates_qc_in_project_directory(
                 "package.json": json.dumps({"scripts": {}}) + "\n",
                 "bun.lock": "",
             },
-            "TypeScript project must have tests",
+            "broken.py",
             (
                 "TypeScript project must have a package.json file",
                 "TypeScript project must use Bun",
@@ -2792,7 +2894,7 @@ def test_bun_scaffold_delegates_qc_in_project_directory(
                 "bun.lock": "",
                 "playwright.config.ts": "export default {};\n",
             },
-            "TypeScript project must have tests",
+            "broken.py",
             (
                 "TypeScript project must have a package.json file",
                 "TypeScript project must use Bun",
@@ -2811,7 +2913,7 @@ def test_bun_scaffold_delegates_qc_in_project_directory(
                     ]
                 ),
             },
-            "Python project must have tests",
+            "broken.py",
             ("Python project must have a pyproject.toml file",),
         ),
         (
@@ -2827,7 +2929,7 @@ def test_bun_scaffold_delegates_qc_in_project_directory(
                     ]
                 ),
             },
-            "Rust project must have tests",
+            "broken.py",
             ("Rust project must contain at least one Cargo.toml",),
         ),
         (
@@ -2836,10 +2938,7 @@ def test_bun_scaffold_delegates_qc_in_project_directory(
                 "example.sage": "x = 1\n",
                 "pyproject.toml": '[project]\nname = "scaffold-sage-target"\nversion = "0.1.0"\n',
             },
-            # Semantic key, not the copied diagnostic sentence
-            # (POLICY.NO_EXACT_STRING_PROOF): the preflight must fail *about*
-            # SAGE_BIN, whatever its wording.
-            "SAGE_BIN",
+            "broken.py",
             ("no .sage files found",),
         ),
     ],
@@ -2859,6 +2958,9 @@ def test_scaffolds_delegate_qc_in_project_directory(
         target.parent.mkdir(parents=True, exist_ok=True)
         target.write_text(contents)
 
+    init_git_repo(project)
+    (project / "broken.py").write_text("def broken(:\n")
+    assert run_git(project, "add", "broken.py").returncode == 0
     env = os.environ.copy()
     if language == "sage":
         env.pop("SAGE_BIN", None)
@@ -2875,6 +2977,7 @@ def test_scaffolds_delegate_qc_in_project_directory(
     output = result.stdout + result.stderr
     assert result.returncode != 0, output
     assert expected_error in output
+    assert "SyntaxError" in output or "invalid syntax" in output
     for wrong_root_error in wrong_root_errors:
         assert wrong_root_error not in output
 
@@ -2967,8 +3070,9 @@ def test_language_qc_delegates_nested_global_recipes_in_project_directory(
 
         output = result.stdout + result.stderr
         assert result.returncode == 0, output
-        delegated_lines = [line.strip() for line in output.splitlines() if re.search(r"\bjust\b.*(?:-d|--working-directory)\s+\.", line)]
-        assert delegated_lines, output
+        expected_script = "ci-triage.py" if recipe == "test-ci" else "local-check.py"
+        assert expected_script in output
+        assert "justfile_directory()" not in output
 
 
 @pytest.mark.parametrize(
@@ -2985,17 +3089,14 @@ def test_public_gate_composition_separates_immediate_checks_from_full_suite(
     full_suite_recipe: str,
 ) -> None:
     text = (ROOT / "justfiles" / justfile_name).read_text()
+    commit = recipe_body(text, "test-commit")
+    push = recipe_body(text, "test-push")
+    ci = recipe_body(text, "test-ci")
 
-    commit = re.search(r"(?ms)^test-commit:\n(?P<body>.*?)(?=^# public:)", text)
-    push = re.search(r"(?ms)^test-push:\n(?P<body>.*?)(?=^# public:|\Z)", text)
-    ci = re.search(r"(?ms)^test-ci:\n(?P<body>.*)\Z", text)
-
-    assert commit is not None
-    assert push is not None
-    assert ci is not None
-    assert full_suite_recipe not in commit.group("body")
-    assert full_suite_recipe in push.group("body")
-    assert "test-push" in ci.group("body") or "_ci-checks" in ci.group("body")
+    assert "local-check.py" in commit and "local-check.py" in push
+    assert "ci-triage.py" in ci
+    assert full_suite_recipe not in commit and full_suite_recipe not in push
+    assert "_mypy" not in commit and "_mypy" not in push
 
 
 def recipe_body(text: str, recipe: str) -> str:
@@ -3016,26 +3117,21 @@ def test_ci_tier_runs_the_suite_once_under_coverage(
     push_suite_recipe: str,
     coverage_recipe: str,
 ) -> None:
-    text = (ROOT / "justfiles" / justfile_name).read_text()
-    checks = recipe_body(text, "_ci-checks")
-    ci = recipe_body(text, "test-ci")
-
-    assert "test-commit" in checks
-    assert coverage_recipe in checks
-    assert push_suite_recipe not in checks.replace(coverage_recipe, "")
-    assert "test-push" not in checks
-    assert "_global-qc" not in checks
-    assert "_ci-checks" in ci
-    assert ci.count("_global-qc") == 1
+    ci = recipe_body((ROOT / "justfiles" / justfile_name).read_text(), "test-ci")
+    collector = (ROOT / "scripts" / "ci-triage.py").read_text()
+    assert "ci-triage.py" in ci
+    assert f'check("{justfile_name.split(".")[0]}-tests' in collector or coverage_recipe in collector
+    assert push_suite_recipe not in ci
+    assert "_ci-checks" not in ci
 
 
 def test_bun_python_ci_runs_the_cross_language_stack_once() -> None:
     ci = recipe_body((ROOT / "justfiles" / "bun-python.just").read_text(), "test-ci")
-
-    assert "python.just -d . _ci-checks" in ci
-    assert "bun.just -d . _ci-checks" in ci
-    assert "test-ci" not in ci
-    assert ci.count("_global-qc") == 1
+    assert 'ci-triage.py" bun-python' in ci
+    collector = (ROOT / "scripts" / "ci-triage.py").read_text()
+    assert 'return PYTHON + BUN + SHARED' in collector
+    assert collector.count('check("python-tests"') == 1
+    assert collector.count('check("bun-tests-and-coverage"') == 1
 
 
 def test_bun_coverage_runs_a_playwright_projects_suite(tmp_path: pathlib.Path) -> None:
@@ -3903,7 +3999,7 @@ def test_python_diff_scoped_recipes_accept_metadata_only_changes(
     assert result.returncode == 0, output
 
 
-def test_commit_gate_stops_at_doctor_preflight_before_typechecking(
+def test_commit_gate_does_not_block_on_doctor_or_types(
     tmp_path: pathlib.Path,
 ) -> None:
     project = tmp_path / "missing-pyproject-project"
@@ -3916,12 +4012,13 @@ def test_commit_gate_stops_at_doctor_preflight_before_typechecking(
 
     (project / "justfile").write_text((ROOT / "scaffolds" / "python" / "justfile").read_text())
 
+    init_git_repo(project)
     result = run_just(ROOT / "justfiles" / "python.just", project, "test-commit")
     output = result.stdout + result.stderr
 
-    assert result.returncode != 0, output
-    assert "QC doctor preflight failed" in output
-    assert "does not satisfy its declared 'python' profile; missing: pyproject.toml" in output
+    assert result.returncode == 0, output
+    assert "Staged syntax: 0 file(s) checked" in output
+    assert "QC doctor preflight failed" not in output
     assert "Running: mypy type checking" not in output
     assert 'Library stubs not installed for "yaml"' not in output
 
@@ -4229,8 +4326,9 @@ def test_rust_preflight_accepts_nested_cargo_manifest_and_routes_missing_tests(
 
     output = result.stdout + result.stderr
     assert "Rust project must have a Cargo.toml file" not in output
-    assert "TEST-WRITING TRIAGE REQUIRED" in output
-    assert "test-writing" in output
+    assert "QC FAILURE — CI recorded missing project-test coverage" in output
+    assert "development diagnostic" in output
+    assert "SUBAGENT" not in output
 
 
 def test_rust_normalization_formats_nested_manifest_project(
@@ -4283,9 +4381,7 @@ def test_rust_normalization_formats_a_workspace_and_its_members(
     (project / "Cargo.toml").write_text('[workspace]\nmembers = ["server", "desktop"]\nresolver = "2"\n')
     for member in ("server", "desktop"):
         (project / member / "src").mkdir(parents=True)
-        (project / member / "Cargo.toml").write_text(
-            f'[package]\nname = "{member}"\nversion = "0.1.0"\nedition = "2021"\n'
-        )
+        (project / member / "Cargo.toml").write_text(f'[package]\nname = "{member}"\nversion = "0.1.0"\nedition = "2021"\n')
         (project / member / "src" / "lib.rs").write_text("pub fn value()->u8{42}\n")
 
     result = subprocess.run(
@@ -4338,13 +4434,13 @@ def test_direct_failure_mode_forbids_review_ceremony() -> None:
     )
 
     assert result.returncode == 0
-    assert "DIRECT REPAIR REQUIRED" in result.stdout
-    assert "does not enter returned-PR-feedback triage" in result.stdout
+    assert "explicitly invoked check returned a nonzero result" in result.stdout
+    assert "does not change the current work objective" in result.stdout
     assert "TRIAGE REQUIRED" not in result.stdout
-    assert "subagent" in result.stdout
+    assert "subagent" not in result.stdout.lower()
 
 
-def test_ci_failure_mode_retains_anti_golfing_triage() -> None:
+def test_ci_failure_mode_does_not_redirect_implementation() -> None:
     result = subprocess.run(
         [str(ROOT / "tool-artifacts" / "scripts" / "emit-triage-directive.sh")],
         env=os.environ | {"AI_REVIEW_CI_FAILURE_MODE": "triage"},
@@ -4354,9 +4450,11 @@ def test_ci_failure_mode_retains_anti_golfing_triage() -> None:
     )
 
     assert result.returncode == 0
-    assert "QC FAILURE — TRIAGE REQUIRED" in result.stdout
-    assert "golf" in result.stdout
-    assert "subagent" in result.stdout
+    assert "QC FAILURE — CI diagnostic recorded" in result.stdout
+    assert "development publication is nonblocking" in result.stdout
+    assert "does not redirect the current implementation task" in result.stdout
+    assert "TRIAGE REQUIRED" not in result.stdout
+    assert "subagent" not in result.stdout.lower()
 
 
 @pytest.mark.parametrize("language", sorted(SCAFFOLD_DELEGATES))
@@ -4399,9 +4497,9 @@ def test_scaffold_does_not_export_working_directory_routing_hint(language: str) 
     assert "JUST_WORKING_DIRECTORY" not in scaffold
 
 
-# The collision itself (JUST_WORKING_DIRECTORY set -> bare `just` fails at
-# arg-parse) is covered with the real delegated chain by
-# test_python_scaffold_bare_just_test_breaks_when_just_working_directory_is_exported.
+# Historical Just versions rejected JUST_WORKING_DIRECTORY at argument parsing.
+# That external bug is not an invariant: the owned scaffold entrypoints above
+# must route correctly on current Just releases.
 
 
 def test_docs_and_configs_qc_routes_formatting_and_link_validation(tmp_path: pathlib.Path) -> None:
@@ -4452,9 +4550,13 @@ def test_docs_and_configs_qc_routes_formatting_and_link_validation(tmp_path: pat
     profile_justfile = str(ROOT / "justfiles" / "docs-and-configs.just")
 
     assert commit.returncode == 0, commit.stderr
-    assert f"--justfile {profile_justfile} _format-structured-text" in commit.stderr
+    assert "local-check.py" in commit.stderr
+    assert "_format-structured-text" not in commit.stderr
     assert push.returncode == 0, push.stderr
-    assert f"--justfile {profile_justfile} _check-links" in push.stderr
+    assert "local-check.py" in push.stderr
+    assert "_check-links" not in push.stderr
+    ci = recipe_body((ROOT / "justfiles" / "docs-and-configs.just").read_text(), "test-ci")
+    assert "ci-triage.py" in ci
     assert links.returncode == 0, links.stderr
     assert "lychee --no-progress" in links.stderr
 

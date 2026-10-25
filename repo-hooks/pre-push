@@ -1,36 +1,13 @@
 #!/usr/bin/env sh
 set -e
 . "$(dirname -- "$(readlink -f "$0")")/qc-exempt.sh"
+qc_should_gate || exit 0
 
-if ! qc_should_gate; then
-	exit 0
+# GitHub CI owns all suites and review diagnostics. In particular, no
+# API-dependent issue-closure confrontation or machine-wide heavy gate runs
+# during publication of an unfinished implementation.
+if python3 "$qc_hook_repo/scripts/local-check.py" --mode push --pre-push --remote "${1:-origin}"; then
+    exit 0
 fi
-
-# Closure-claim confrontation (#244): a default-branch push whose commit
-# messages carry GitHub closing keywords closes those issues server-side.
-# Reads the same keyword input GitHub acts on, then blocks once with the
-# issues' verbatim asks. Consumes this hook's stdin (the ref lines).
-python3 "$qc_hook_repo/global-hooks/confront_closes.py" "$1" || exit 1
-
-if just test-push; then
-	exit 0
-fi
-
-cat >&2 <<'MSG'
-
-────────────────────────────────────────────────────────────────
-ai-review-ci push gate FAILED (just test-push).
-
-A failing test that is red by design — a red proof landed before its fix, or
-an acceptance case whose capability is still being built — carries
-`@pytest.mark.xfail(reason="... #N", strict=True)` citing the open issue that
-owns it. The marker clears when the case passes (strict XPASS fails) and is
-rejected once #N closes. Do not use `git push --no-verify`. Wiki repositories,
-repositories not under the dzackgarza account, and forks of third-party
-projects are auto-detected and skipped above.
-
-Any other failure is direct project/test repair work. Fix the reported object
-and push again; do not start a PR disposition or subagent remediation workflow.
-────────────────────────────────────────────────────────────────
-MSG
+echo "Local outgoing-commit syntax check failed; see the file and line above." >&2
 exit 1

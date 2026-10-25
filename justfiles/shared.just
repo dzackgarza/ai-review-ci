@@ -50,6 +50,13 @@ _format-structured-text:
 			exclude_pathspecs+=(":(exclude,glob)**/$dir/**")
 		done <<<"$exclude_dirs_output"
 	fi
+	# A repository's record corpus is formatted by that repository's own scheduled
+	# job: its justfile names the directories in ai_review_ci_format_scheduled_dirs.
+	if just --variables | tr ' ' '\n' | grep -x ai_review_ci_format_scheduled_dirs >/dev/null; then
+		for dir in $(just --evaluate ai_review_ci_format_scheduled_dirs); do
+			exclude_pathspecs+=(":(exclude)$dir")
+		done
+	fi
 	md_files=()
 	data_files=()
 	while IFS= read -r -d '' file; do
@@ -68,12 +75,16 @@ _format-structured-text:
 		echo "No staged Markdown, JSON, or YAML files found"
 		exit 0
 	fi
+	# xargs splits each list into command lines that fit ARG_MAX: a corpus import
+	# stages more files than one argument list holds. A failed batch fails xargs.
 	if [ "${#md_files[@]}" -gt 0 ]; then
-		uvx --from 'git+https://github.com/dzackgarza/flowmark.git' flowmark \
-			--inplace --nobackup --semantic --no-respect-gitignore "${md_files[@]}"
+		printf '%s\0' "${md_files[@]}" | xargs -0 \
+			uvx --from 'git+https://github.com/dzackgarza/flowmark.git' flowmark \
+			--inplace --nobackup --semantic --no-respect-gitignore
 	fi
 	if [ "${#data_files[@]}" -gt 0 ]; then
-		npx -y prettier --write --config {{configs}}/prettier-global.json "${data_files[@]}"
+		printf '%s\0' "${data_files[@]}" | xargs -0 \
+			npx -y prettier --write --config {{configs}}/prettier-global.json
 	fi
 
 _semgrep-autofix:
@@ -81,36 +92,40 @@ _semgrep-autofix:
 	set -euo pipefail
 	echo "============================="
 	echo "=== Running: semgrep auto-fix ==="
-	echo "# Applies Semgrep autofixes to staged files; CI verifies the full diff"
-	# Commit hooks may use a temporary GIT_INDEX_FILE for a pathspec commit.
-	# Select from that index before running any tool that changes Git variables.
-	files=()
-	while IFS= read -r -d '' file; do
-		files+=("./$file")
-	done < <(git diff --cached --name-only --diff-filter=ACMR -z -- .)
-	if [ "${#files[@]}" -eq 0 ]; then
-		echo "semgrep autofix: no staged files"
+	echo "# Applies Semgrep autofixes to the staged files; the ambient tier scans the whole tree"
+	# The commit tier checks what is being committed. The whole tree is scanned by
+	# the scheduled ambient tier (QC_TIER=ambient _semgrep), not on every commit.
+	exclude_dirs_output="$(uv run {{artifacts}}/scripts/read_qc_excludes.py {{configs}}/qc-excludes.toml)"
+	exclude_pathspecs=(":(exclude,glob)**/*.html")
+	exclude_args=("--exclude=*.html" "--exclude=**/*.html")
+	if [ -n "$exclude_dirs_output" ]; then
+		while IFS= read -r dir; do
+			exclude_pathspecs+=(":(exclude,glob)**/$dir/**")
+			exclude_args+=("--exclude=$dir")
+		done <<<"$exclude_dirs_output"
+	fi
+	# A repository's record corpus is formatted and scanned by its own scheduled jobs.
+	if just --variables | tr ' ' '\n' | grep -x ai_review_ci_format_scheduled_dirs >/dev/null; then
+		for dir in $(just --evaluate ai_review_ci_format_scheduled_dirs); do
+			exclude_pathspecs+=(":(exclude)$dir")
+		done
+	fi
+	staged_manifest="$(mktemp -t semgrep-autofix-staged.XXXXXX)"
+	git diff --cached --name-only --diff-filter=ACMR -z -- . "${exclude_pathspecs[@]}" >"$staged_manifest"
+	if [ ! -s "$staged_manifest" ]; then
+		rm -f -- "$staged_manifest"
+		echo "semgrep autofix: no staged files."
 		exit 0
 	fi
-	exclude_dirs_output="$(uv run {{artifacts}}/scripts/read_qc_excludes.py {{configs}}/qc-excludes.toml)"
-	exclude_dirs=()
-	if [ -n "$exclude_dirs_output" ]; then
-		mapfile -t exclude_dirs <<<"$exclude_dirs_output"
-	fi
-	exclude_args=()
-	for dir in "${exclude_dirs[@]}"; do
-		exclude_args+=("--exclude=$dir")
-	done
-	exclude_args+=("--exclude=*.html")
-	exclude_args+=("--exclude=**/*.html")
 	# This gate applies autofixes; CI-tier verification owns the remaining findings, so
 	# printing them here is advisory output the caller cannot act on. Measured at 177 lines
 	# and 8.4 KB per run in one repository — on every commit, in every repository. Agent
 	# callers carry that into their conversation, so capture it and print a summary instead,
 	# replaying the whole thing only when the scan actually fails.
 	scan_log="$(mktemp -t semgrep-autofix.XXXXXX)"
-	trap 'rm -f -- "$scan_log"' EXIT
-	if "{{artifacts}}/scripts/semgrep-with-qc-ignores.sh" \
+	trap 'rm -f -- "$scan_log" "$staged_manifest"' EXIT
+	# xargs batches a large staged set (a corpus import) under ARG_MAX.
+	if xargs -0 "{{artifacts}}/scripts/semgrep-with-qc-ignores.sh" \
 		"{{artifacts}}/scripts/read_qc_excludes.py" \
 		"{{configs}}/qc-excludes.toml" \
 		-- \
@@ -120,7 +135,7 @@ _semgrep-autofix:
 		--exclude=codeql-db \
 		"${exclude_args[@]}" \
 		--scan-unknown-extensions \
-		--autofix "${files[@]}" >"$scan_log" 2>&1; then
+		--autofix <"$staged_manifest" >"$scan_log" 2>&1; then
 		grep -E '^(Ran [0-9]+ rules|.*files? (modified|left unchanged) by autofix)' "$scan_log" || true
 		findings="$(grep -cE '^\s+❯❯❱ ' "$scan_log" || true)"
 		echo "semgrep autofix: ${findings:-0} advisory finding group(s); CI-tier verification owns them"
@@ -292,6 +307,21 @@ _semgrep:
 	echo "============================="
 	echo "=== Running: semgrep security pattern verification ==="
 	echo "# Static analysis for code quality and fraud patterns after normalization"
+	if revision="$(git rev-parse --verify HEAD 2>/dev/null)" && [ -z "$(git status --porcelain)" ]; then
+		report_dir="$(git rev-parse --git-path ai-review-ci/semgrep)/$revision"
+	else
+		# Uncommitted callers remain supported; this report claims no committed identity.
+		if ! report_dir="$(mktemp -d -t ai-review-ci-semgrep.XXXXXX)"; then
+			echo "ERROR: semgrep cannot allocate its required review report directory" >&2
+			"{{artifacts}}/scripts/emit-triage-directive.sh"
+			exit 1
+		fi
+	fi
+	mkdir -p "$report_dir"
+	report_dir="$(cd "$report_dir" && pwd -P)"
+	# Never reuse a prior successful report for an evaluation that now fails.
+	rm -f "$report_dir/head.raw.json" "$report_dir/head.json" "$report_dir/base.raw.json"
+	echo "semgrep review reports: $report_dir"
 	# #214: with no project .semgrepignore, semgrep falls back to its bundled
 	# default template, which excludes tests/ — silently killing the
 	# test-antipattern rules (py-no-monkeypatch and its NO_MOCK_PROOF /
@@ -357,15 +387,21 @@ _semgrep:
 			esac
 			return 0
 		}
+		changed_manifest="$(mktemp)"
+		trap 'rm -f "$changed_manifest"; restore_semgrepignore' EXIT
+		git diff --name-only --diff-filter=ACMR -z "${DIFF_COVER_BASE}...HEAD" -- . > "$changed_manifest"
 		changed_files=()
 		while IFS= read -r -d '' file; do
 			[[ -f "$file" ]] || continue
 			is_excluded_qc_path "$file" && continue
 			is_semgrep_pr_target "$file" || continue
 			changed_files+=("$file")
-		done < <(git diff --name-only --diff-filter=ACMR -z "${DIFF_COVER_BASE}...HEAD" -- .)
+		done < "$changed_manifest"
+		rm -f "$changed_manifest"
 		if [ ${#changed_files[@]} -eq 0 ]; then
 			echo "semgrep: no changed authored files."
+			uv run {{artifacts}}/scripts/semgrep_report.py --empty-output "$report_dir/head.raw.json" --base "$DIFF_COVER_BASE"
+			cp "$report_dir/head.raw.json" "$report_dir/head.json"
 			exit 0
 		fi
 		head_json="$(mktemp)"
@@ -377,15 +413,21 @@ _semgrep:
 			restore_semgrepignore
 		}
 		trap cleanup_semgrep_diff EXIT
+		scan_rc=0
+		# Explicit filenames retain normal language dispatch: generic Lean rules
+		# still apply, while unrelated parsers do not reinterpret Lean as Python.
 		uvx --from semgrep semgrep scan \
 			--json \
 			--config={{configs}}/semgrep.yml \
 			--config=p/ci \
 			--exclude=codeql-db \
-			--scan-unknown-extensions \
-			"${changed_files[@]}" > "$head_json"
+			--skip-unknown-extensions \
+			"${changed_files[@]}" > "$head_json" || scan_rc=$?
+		cp "$head_json" "$report_dir/head.raw.json"
+		[ "$scan_rc" -eq 0 ] || exit "$scan_rc"
 		exceptions_rc=0
 		uv run {{artifacts}}/scripts/semgrep_exceptions.py {{configs}}/semgrep-exceptions.toml "$head_json" || exceptions_rc=$?
+		cp "$head_json" "$report_dir/head.json"
 		[ "$exceptions_rc" -le 1 ] || exit "$exceptions_rc"
 		git worktree add --detach "$base_tree" "$DIFF_COVER_BASE" >/dev/null
 		base_files=()
@@ -395,20 +437,25 @@ _semgrep:
 		if [ ${#base_files[@]} -gt 0 ]; then
 			(
 				cd "$base_tree"
+				scan_rc=0
 				uvx --from semgrep semgrep scan \
 					--json \
 					--config={{configs}}/semgrep.yml \
 					--config=p/ci \
 					--exclude=codeql-db \
-					--scan-unknown-extensions \
-					"${base_files[@]}" > "$base_json"
+					--skip-unknown-extensions \
+					"${base_files[@]}" > "$base_json" || scan_rc=$?
+				cp "$base_json" "$report_dir/base.raw.json"
+				exit "$scan_rc"
 			)
 		else
-			printf '{"results":[]}\n' > "$base_json"
+			uv run {{artifacts}}/scripts/semgrep_report.py --empty-output "$base_json" --base "$DIFF_COVER_BASE"
 		fi
-		uv run {{artifacts}}/scripts/semgrep_diff_gate.py --base-json "$base_json" --head-json "$head_json"
+		cp "$base_json" "$report_dir/base.raw.json"
+		uv run {{artifacts}}/scripts/semgrep_diff_gate.py --base-json "$base_json" --base-root "$base_tree" --head-json "$head_json" --head-root .
 		exit 0
 	fi
+	scan_rc=0
 	findings_json="$(mktemp)"
 	trap 'rm -f "$findings_json"; restore_semgrepignore' EXIT
 	uvx --from semgrep semgrep scan \
@@ -416,7 +463,11 @@ _semgrep:
 		--config=p/ci \
 		--exclude=codeql-db \
 		--scan-unknown-extensions \
-		--json-output="$findings_json"
+		--json-output="$findings_json" || scan_rc=$?
+	cp "$findings_json" "$report_dir/head.raw.json"
+	[ "$scan_rc" -eq 0 ] || exit "$scan_rc"
+	# Preserve both raw and exception-filtered findings, including WARNING/INFO.
+	trap 'cp "$findings_json" "$report_dir/head.json"; rm -f "$findings_json"; restore_semgrepignore' EXIT
 	if uv run {{artifacts}}/scripts/semgrep_exceptions.py {{configs}}/semgrep-exceptions.toml "$findings_json"; then
 		:
 	else
@@ -759,6 +810,14 @@ _sync-qc-excludes:
 
 # Push/CI-tier cross-language stack. `_no-bypass` is NOT here — it is a
 # commit-tier check invoked directly by each language's `test-commit` recipe.
+# private: whole-tree semgrep for the scheduled ambient tier. QC_TIER=ambient makes
+# _semgrep ignore DIFF_COVER_BASE and scan every file.
+_ambient-semgrep:
+	#!/usr/bin/env bash
+	set -euo pipefail
+	export QC_TIER=ambient
+	just --justfile {{justfile()}} -d . _semgrep
+
 _global-qc: _ensure-qc-repo-current _check-envrc _check-no-local-qc-override _semgrep _ast-grep _vibecheck _slop _aislop
 	#!/usr/bin/env bash
 	set -euo pipefail

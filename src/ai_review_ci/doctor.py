@@ -15,10 +15,15 @@ from cyclopts import Parameter
 from pydantic import BaseModel, ConfigDict, Field, TypeAdapter, ValidationError
 
 from ai_review_ci.gates import PROJECT_PROFILES, SUPPORTED_PROFILES, ProjectProfile, delegates_to_global_qc, required_check_contexts
-from ai_review_ci.install import PR_WORKFLOW
+from ai_review_ci.install import AMBIENT_WORKFLOW, DEVELOPMENT_WORKFLOW, PR_WORKFLOW
 from ai_review_ci.labels import Label, RemoteLabel, compute_label_actions, load_taxonomy
 
 SCHEMA_VERSION: Literal[1] = 1
+# A Sage repository's acceptance suite runs in the reusable acceptance workflow, never
+# in the push or CI tiers (#478), so a Sage repository with the suite must call it.
+ACCEPTANCE_SUITE = Path("tests") / "acceptance"
+ACCEPTANCE_WORKFLOW = "acceptance.yml"
+ACCEPTANCE_REUSABLE_WORKFLOW = "dzackgarza/ai-review-ci/.github/workflows/_acceptance.yml"
 MISSING_JUSTFILE_NAME = ".ai-review-ci-missing-justfile"
 JUSTFILE_CONTRACT_VARIABLES = {
     "schema_version": "ai_review_ci_schema_version",
@@ -300,7 +305,13 @@ def doctor_report(target: Path) -> DoctorReport:
     workflow_refs = _workflow_refs(target_root, contract, report_profile)
     justfile_delegation = _justfile_delegation(target_root, report_profile)
     branch_protection = _branch_protection(target_root, contract, report_profile)
-    label_alignment = _label_alignment(target_root)
+    if _development_mode(target_root):
+        label_alignment = LabelAlignmentObservation(
+            observed_state="not_applicable", missing=(), drifted=(), variants=(),
+            evidence="development phase does not enforce label alignment",
+        )
+    else:
+        label_alignment = _label_alignment(target_root)
     findings = _findings(
         target_root=target_root,
         contract=contract,
@@ -443,9 +454,67 @@ def _profile_proofs(target: Path) -> dict[str, ProfileProofObservation]:
     }
 
 
+def _development_mode(target: Path) -> bool:
+    return (target / ".github" / "workflows" / DEVELOPMENT_WORKFLOW).is_file()
+
+
 def _workflow_refs(target: Path, contract: JustfileContractDeclaration, profile: ProfileName) -> dict[str, WorkflowRefObservation]:
     required_ref = contract.installed_ref if isinstance(contract, QcJustfileContract) else ""
-    path = target / ".github" / "workflows" / PR_WORKFLOW
+    name = DEVELOPMENT_WORKFLOW if _development_mode(target) else PR_WORKFLOW
+    refs = {name: _pr_workflow_ref(target, required_ref, profile, workflow_name=name)}
+    if PROJECT_PROFILES[profile].has_ambient_audit:
+        refs[AMBIENT_WORKFLOW] = _ambient_workflow_ref(target, required_ref)
+    if profile == "sage" and (target / ACCEPTANCE_SUITE).is_dir():
+        refs[ACCEPTANCE_WORKFLOW] = _acceptance_workflow_ref(target, required_ref)
+    return refs
+
+
+def _acceptance_workflow_ref(target: Path, required_ref: str) -> WorkflowRefObservation:
+    path = target / ".github" / "workflows" / ACCEPTANCE_WORKFLOW
+    refs: set[str] = set()
+    if path.is_file():
+        data = _yaml_mapping(path)
+        jobs = TypeAdapter(dict[str, dict[str, Any]]).validate_python(data["jobs"] if "jobs" in data else {})
+        for job in jobs.values():
+            uses = str(job["uses"]) if "uses" in job else ""
+            if uses.startswith(f"{ACCEPTANCE_REUSABLE_WORKFLOW}@"):
+                refs.add(uses.rsplit("@", 1)[1])
+    return WorkflowRefObservation(
+        path=str(path),
+        required_ref=required_ref,
+        observed_ref=next(iter(refs)) if len(refs) == 1 else "",
+        required_gates=("acceptance",),
+        observed_gates=("acceptance",) if refs else (),
+    )
+
+
+def _ambient_workflow_ref(target: Path, required_ref: str) -> WorkflowRefObservation:
+    path = target / ".github" / "workflows" / AMBIENT_WORKFLOW
+    refs: set[str] = set()
+    gates: set[str] = set()
+    if path.is_file():
+        data = _yaml_mapping(path)
+        jobs = TypeAdapter(dict[str, dict[str, Any]]).validate_python(data["jobs"] if "jobs" in data else {})
+        for job in jobs.values():
+            uses = str(job["uses"]) if "uses" in job else ""
+            if "dzackgarza/ai-review-ci/.github/workflows/_qc.yml@" in uses:
+                refs.add(uses.rsplit("@", 1)[1])
+                with_block = TypeAdapter(dict[str, Any]).validate_python(job["with"]) if "with" in job else {}
+                if with_block.get("tier") == "ambient":
+                    gates.add("ambient")
+    return WorkflowRefObservation(
+        path=str(path),
+        required_ref=required_ref,
+        observed_ref=next(iter(refs)) if len(refs) == 1 else "",
+        required_gates=("ambient",),
+        observed_gates=tuple(sorted(gates)),
+    )
+
+
+def _pr_workflow_ref(
+    target: Path, required_ref: str, profile: ProfileName, *, workflow_name: str = PR_WORKFLOW
+) -> WorkflowRefObservation:
+    path = target / ".github" / "workflows" / workflow_name
     refs: set[str] = set()
     gates: set[str] = set()
     if path.is_file():
@@ -457,22 +526,22 @@ def _workflow_refs(target: Path, contract: JustfileContractDeclaration, profile:
                 refs.add(uses.rsplit("@", 1)[1])
             if job_name == "qc-ci" and "dzackgarza/ai-review-ci/.github/workflows/_qc.yml" in uses:
                 with_block = TypeAdapter(dict[str, Any]).validate_python(job["with"]) if "with" in job else {}
-                if with_block.get("tier") == "test-ci":
+                if with_block.get("tier") == "test-ci" and (
+                    workflow_name == DEVELOPMENT_WORKFLOW or with_block.get("enforce") is True
+                ):
                     gates.add(job_name)
             if "dzackgarza/ai-review-ci/.github/workflows/_gates.yml" in uses:
                 with_block = TypeAdapter(dict[str, Any]).validate_python(job["with"]) if "with" in job else {}
                 gate = with_block["gate"] if "gate" in with_block else ""
                 if isinstance(gate, str):
                     gates.add(gate)
-    return {
-        PR_WORKFLOW: WorkflowRefObservation(
-            path=str(path),
-            required_ref=required_ref,
-            observed_ref=next(iter(refs)) if len(refs) == 1 else "",
-            required_gates=_required_workflow_gates(profile),
-            observed_gates=tuple(sorted(gates)),
-        )
-    }
+    return WorkflowRefObservation(
+        path=str(path),
+        required_ref=required_ref,
+        observed_ref=next(iter(refs)) if len(refs) == 1 else "",
+        required_gates=("qc-ci",) if workflow_name == DEVELOPMENT_WORKFLOW else _required_workflow_gates(profile),
+        observed_gates=tuple(sorted(gates)),
+    )
 
 
 def _yaml_mapping(path: Path) -> Mapping[object, object]:
@@ -500,6 +569,8 @@ def _justfile_delegation(target: Path, profile: ProfileName) -> dict[str, Delega
     recipes = ["test-commit", "test-push", "test-ci"]
     if project_profile.requires_app_boot:
         recipes.append("app-boot")
+    if project_profile.has_ambient_audit:
+        recipes.append("ambient")
     justfile = _justfile_path(target)
     return {recipe: _recipe_delegation(target, justfile, project_profile, recipe) for recipe in recipes}
 
@@ -541,6 +612,11 @@ def _recipe_delegation(target: Path, justfile: Path, project_profile: ProjectPro
 
 
 def _branch_protection(target: Path, contract: JustfileContractDeclaration, profile: ProfileName) -> BranchProtectionObservation:
+    if _development_mode(target):
+        return BranchProtectionObservation(
+            required_contexts=(), observed_contexts=(), observed_state="not_applicable",
+            evidence="development phase has no required branch protection",
+        )
     required = required_check_contexts(profile)
     remote = _remote(target)
     if remote == "":
@@ -718,13 +794,18 @@ def _findings(
             )
         )
     for workflow in workflow_refs.values():
+        install = (
+            (f"add a job to {workflow.path} that uses {ACCEPTANCE_REUSABLE_WORKFLOW}@<ref> (see that workflow's header)",)
+            if Path(workflow.path).name == ACCEPTANCE_WORKFLOW
+            else ("ai-review-ci install --target <target-repo> --repo owner/repo --branch main --profile <profile>",)
+        )
         if not Path(workflow.path).is_file():
             findings.append(
                 DoctorFinding(
                     severity="error",
                     surface="workflow",
                     evidence=f"{workflow.path} is missing",
-                    remediation_commands=("ai-review-ci install --target <target-repo> --repo owner/repo --branch main --profile <profile>",),
+                    remediation_commands=install,
                 )
             )
             continue
@@ -735,7 +816,7 @@ def _findings(
                     severity="error",
                     surface="workflow",
                     evidence=f"{workflow.path} missing gate(s): {', '.join(missing_gates)}",
-                    remediation_commands=("ai-review-ci install --target <target-repo> --repo owner/repo --branch main --profile <profile>",),
+                    remediation_commands=install,
                 )
             )
         if workflow.required_ref != "" and workflow.observed_ref != workflow.required_ref:
@@ -914,6 +995,9 @@ def _invalidation_inputs(target: Path, declaration_hash: str) -> tuple[str, ...]
         target / "justfile",
         target / "Justfile",
         target / ".github" / "workflows" / PR_WORKFLOW,
+        target / ".github" / "workflows" / DEVELOPMENT_WORKFLOW,
+        target / ".github" / "workflows" / AMBIENT_WORKFLOW,
+        target / ".github" / "workflows" / ACCEPTANCE_WORKFLOW,
     ]:
         if path.is_file():
             inputs.append(f"{path.relative_to(target)}:{_sha256(path)}")

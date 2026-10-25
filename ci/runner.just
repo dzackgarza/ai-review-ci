@@ -10,11 +10,7 @@ check-semantic-diff base_ref:
     #!/usr/bin/env bash
     set -euo pipefail
     cd {{control_repo}}
-    uvx --from semgrep semgrep scan \
-      --config={{infra}}/tool-configs/semgrep.yml \
-      --baseline-commit="origin/{{base_ref}}" \
-      --scan-unknown-extensions \
-      --error
+    DIFF_COVER_BASE="origin/{{base_ref}}" just -f "{{infra}}/justfiles/shared.just" -d . _semgrep
 
 setup-profile profile:
     #!/usr/bin/env bash
@@ -23,6 +19,8 @@ setup-profile profile:
       --target "{{control_repo}}" \
       --profile "{{profile}}"
     case "{{profile}}" in
+      docs-and-configs)
+        ;;
       python)
         uv sync --project "{{control_repo}}"
         ;;
@@ -53,6 +51,9 @@ setup-profile profile:
           echo "ERROR: configured SAGE_BIN is not executable: $SAGE_BIN" >&2
           exit 1
         fi
+        sage_python="$("$SAGE_BIN" -python -c 'import sys; print(sys.executable)')"
+        "$sage_python" -c 'import sys, sage.all; assert sys.version_info >= (3, 14); print(sys.version)'
+        uv pip install --python "$sage_python" --editable "{{control_repo}}" pytest coverage
         ;;
       *)
         echo "ERROR: unsupported project profile: {{profile}}" >&2

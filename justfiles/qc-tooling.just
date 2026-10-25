@@ -1,3 +1,4 @@
+# Development: local commit/push check staged syntax only; CI owns suites and quality debt.
 # justfile-qc-tooling — QC profile for repos whose product *is* QC infrastructure.
 #
 # ai-review-ci ships the opinionated slop/style/duplication gates (semgrep,
@@ -38,33 +39,15 @@ _ci-recipes := "_pytest_with_coverage _diff-cover _deptry _import-linter"
 
 # public: COMMIT gate — immediate, directly repairable feedback
 test-commit:
-    #!/usr/bin/env bash
-    set -euo pipefail
-    export AI_REVIEW_CI_FAILURE_MODE=direct
-    just --justfile {{infra}}/justfile -d . check
-    uv run --project {{infra}} ai-review-ci check-tripwire-index
-    just -f {{justfiles}}/python.just -d . {{_commit-recipes}}
-    just -f {{justfiles}}/shared.just -d . _no-bypass
-    echo "QC-tooling commit checks completed"
+    @python3 "{{justfile_directory()}}/../scripts/local-check.py"
 
 # public: PUSH gate — commit checks plus the full project-owned test suite
 test-push:
-    #!/usr/bin/env bash
-    set -euo pipefail
-    export AI_REVIEW_CI_FAILURE_MODE=direct
-    just --justfile {{justfile()}} -d . test-commit
-    just -f {{justfiles}}/python.just -d . {{_push-recipes}}
-    echo "QC-tooling push checks completed"
+    @python3 "{{justfile_directory()}}/../scripts/local-check.py" --mode push
 
 # public: CI gate — push checks plus coverage/dependency/import gates, no slop
 test-ci:
-    #!/usr/bin/env bash
-    set -euo pipefail
-    export AI_REVIEW_CI_FAILURE_MODE=triage
-    just --justfile {{infra}}/justfile -d . check
-    just --justfile {{justfile()}} -d . test-push
-    just -f {{justfiles}}/python.just -d . {{_ci-recipes}}
-    echo "QC-tooling CI checks completed"
+    @python3 "{{justfile_directory()}}/../scripts/ci-triage.py" qc-tooling
 
 # Scheduled, NOT in the PR/push gate: pre-existing repo-wide debt stays visible
 # and reviewable without blocking unrelated PRs (#53), and is the non-blocking
@@ -73,8 +56,4 @@ test-ci:
 #
 # public: AMBIENT audit — full-repo deferred-debt scan (complexity, dead code, duplication)
 ambient:
-    #!/usr/bin/env bash
-    set -euo pipefail
-    export AI_REVIEW_CI_FAILURE_MODE=triage
-    just -f {{justfiles}}/python.just -d . _ambient-python-debt
-    echo "QC-tooling ambient debt audit completed"
+    @python3 "{{justfile_directory()}}/../scripts/ci-triage.py" qc-tooling --tier ambient

@@ -1,0 +1,7 @@
+[project]
+name = "qc-sage-runtime-fixture"
+version = "0.1.0"
+requires-python = ">=3.14"
+
+[tool.sage-mypy-category-plugin]
+packages = ["sage.categories"]

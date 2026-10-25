@@ -1,3 +1,4 @@
+# Development: local commit/push check staged syntax only; CI owns suites and quality debt.
 # justfile-rust — Rust-specific quality control
 #
 # Imports cross-language QC recipes from `justfile` (shared) and adds
@@ -289,26 +290,20 @@ _doctor-preflight:
 
 # public: COMMIT gate — immediate, directly repairable feedback
 test-commit:
-	#!/usr/bin/env bash
-	set -euo pipefail
-	export AI_REVIEW_CI_FAILURE_MODE=direct
-	just --justfile {{justfile()}} -d . _doctor-preflight _check-rust-project _normalize-common _normalize _clippy _rustfmt
-	just -f {{justfiles}}/shared.just -d . _no-bypass
-	echo "Commit quality checks completed"
+    @python3 "{{justfile_directory()}}/../scripts/local-check.py"
 
 # public: PUSH gate — commit checks plus the full project-owned test suite
 test-push:
-	#!/usr/bin/env bash
-	set -euo pipefail
-	export AI_REVIEW_CI_FAILURE_MODE=direct
-	just --justfile {{justfile()}} -d . test-commit _cargo-test
-	echo "Push quality checks completed"
+    @python3 "{{justfile_directory()}}/../scripts/local-check.py" --mode push
 
 # public: CI gate — push checks plus gameable and long-running acceptance gates
 test-ci:
-	#!/usr/bin/env bash
-	set -euo pipefail
-	export AI_REVIEW_CI_FAILURE_MODE=triage
-	just --justfile {{justfile()}} -d . test-push _jscpd _lizard _codeql
-	just -f {{justfiles}}/shared.just -d . _global-qc
-	echo "CI quality checks completed"
+    @python3 "{{justfile_directory()}}/../scripts/ci-triage.py" rust
+
+# Scheduled, never in the PR/push gate: the whole-tree scans. The commit tier
+# scans staged files and test-ci the diff, so this is the only whole-tree semgrep.
+# Every step runs; the audit fails if any did.
+#
+# public: AMBIENT audit — whole-tree semgrep and debt scan
+ambient:
+    @python3 "{{justfile_directory()}}/../scripts/ci-triage.py" rust --tier ambient

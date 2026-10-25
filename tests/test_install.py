@@ -1,3 +1,4 @@
+import os
 import pathlib
 import subprocess
 import sys
@@ -9,6 +10,7 @@ import yaml
 from ai_review_ci.gates import POLICY_GATE_MARKER, SUPPORTED_PROFILES
 from ai_review_ci.install import (
     AISLOP_CONFIG,
+    AMBIENT_WORKFLOW,
     PR_TEMPLATE,
     PR_WORKFLOW,
     _prove_installation,
@@ -44,6 +46,7 @@ def _run_cli_install(
     *,
     github_repo: str = "dzackgarza/ai-review-ci-install-target-does-not-exist",
     skip_scaffold: bool = False,
+    phase: str = "development",
 ) -> subprocess.CompletedProcess[str]:
     args = [
         sys.executable,
@@ -58,6 +61,8 @@ def _run_cli_install(
         "main",
         "--profile",
         "python",
+        "--phase",
+        phase,
     ]
     if skip_scaffold:
         args.append("--skip-scaffold")
@@ -138,7 +143,7 @@ def test_install_writes_trigger_workflows(tmp_path: pathlib.Path) -> None:
     repo = _git_repo(tmp_path)
     _write_trigger_workflows(repo, "bun")
     wf = repo / ".github" / "workflows"
-    assert [p.name for p in wf.iterdir()] == [PR_WORKFLOW]
+    assert sorted(p.name for p in wf.iterdir()) == sorted([PR_WORKFLOW, AMBIENT_WORKFLOW])
     pr = (wf / PR_WORKFLOW).read_text()
     jobs = yaml.safe_load(pr)["jobs"]
     assert set(jobs) == {"qc-ci", "deterministic-diff", "delegation-conformance", "qc-doctor", "pr-description-checklist"}
@@ -146,6 +151,7 @@ def test_install_writes_trigger_workflows(tmp_path: pathlib.Path) -> None:
     assert all("needs" not in job for job in jobs.values())
     assert "uses: dzackgarza/ai-review-ci/.github/workflows/_qc.yml@main" in pr
     assert "tier: test-ci" in pr
+    assert "enforce: true" in pr
     assert "gate: deterministic-diff" in pr
     assert "gate: delegation-conformance" in pr
     assert "gate: qc-doctor" in pr
@@ -153,6 +159,29 @@ def test_install_writes_trigger_workflows(tmp_path: pathlib.Path) -> None:
     assert "profile: 'bun'" in pr
     assert "fail_below" not in pr
     assert "pull_request" in pr
+
+
+@pytest.mark.parametrize("profile", ["python", "bun", "bun-playwright", "bun-python", "rust", "sage"])
+def test_install_writes_scheduled_ambient_workflow(tmp_path: pathlib.Path, profile: str) -> None:
+    repo = _git_repo(tmp_path)
+    _write_trigger_workflows(repo, profile)
+
+    ambient = yaml.safe_load((repo / ".github" / "workflows" / AMBIENT_WORKFLOW).read_text())
+    # PyYAML reads the bare key `on` as True.
+    triggers = ambient[True]
+    assert [entry["cron"] for entry in triggers["schedule"]]
+    assert "pull_request" not in triggers and "push" not in triggers
+    (job,) = ambient["jobs"].values()
+    assert job["uses"] == "dzackgarza/ai-review-ci/.github/workflows/_qc.yml@main"
+    assert job["with"] == {"tier": "ambient", "profile": profile, "infra_ref": "main"}
+
+
+def test_install_writes_no_ambient_workflow_for_docs_and_configs(tmp_path: pathlib.Path) -> None:
+    # docs-and-configs runs no semgrep in any tier, so it has no ambient audit.
+    repo = _git_repo(tmp_path)
+    _write_trigger_workflows(repo, "docs-and-configs")
+
+    assert [p.name for p in (repo / ".github" / "workflows").iterdir()] == [PR_WORKFLOW]
 
 
 @pytest.mark.parametrize("profile", ["python", "bun", "bun-playwright", "bun-python", "rust", "sage"])
@@ -205,13 +234,35 @@ def test_install_local_files_finalize_with_doctor(tmp_path: pathlib.Path) -> Non
     assert (repo / "justfile").read_text() == (ROOT / "scaffolds" / "python" / "justfile").read_text()
 
 
+def test_default_install_is_push_diagnostics_without_pr_protection(tmp_path: pathlib.Path) -> None:
+    repo = _git_repo(tmp_path)
+    (repo / "pyproject.toml").write_text('[project]\\nname = "target"\\nversion = "0.1.0"\\n')
+
+    result = _run_cli_install(repo)
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    workflows = repo / ".github" / "workflows"
+    assert (workflows / "development.yml").is_file()
+    assert not (workflows / "review-pr.yml").exists()
+    assert not (repo / ".github" / PR_TEMPLATE).exists()
+    assert "No PR review or branch protection installed." in result.stdout
+    data = yaml.safe_load((workflows / "development.yml").read_text())
+    assert "push" in data[True] and "pull_request" not in data[True]
+    assert list(data["jobs"]) == ["qc-ci"]
+    from ai_review_ci.doctor import doctor_report
+    report = doctor_report(repo)
+    assert report.global_status == "current"
+    assert report.branch_protection.observed_state == "not_applicable"
+    assert report.label_alignment.observed_state == "not_applicable"
+
+
 def test_cli_install_uses_real_gh_and_fails_before_final_doctor_for_unavailable_branch_target(
     tmp_path: pathlib.Path,
 ) -> None:
     repo = _git_repo(tmp_path)
     (repo / "pyproject.toml").write_text('[project]\nname = "target"\nversion = "0.1.0"\n')
 
-    result = _run_cli_install(repo)
+    result = _run_cli_install(repo, phase="stabilized")
 
     assert result.returncode == 1
     assert "FATAL: gh api --method PUT failed:" in result.stderr
@@ -450,7 +501,7 @@ def test_cli_install_skip_scaffold_bypasses_scaffold_overwrite_guard(
     existing = repo / "justfile"
     existing.write_text("# pre-existing brownfield justfile\ntest-commit:\n    @true\n")
 
-    result = _run_cli_install(repo, skip_scaffold=True)
+    result = _run_cli_install(repo, skip_scaffold=True, phase="stabilized")
 
     combined = result.stdout + result.stderr
     assert "refusing to overwrite existing scaffold" not in combined, combined
@@ -509,7 +560,7 @@ def test_qc_workflow_installs_flowmark_runtime_dependencies() -> None:
 
     assert install_index < run_index
     assert isinstance(install, dict)
-    assert install["run"] == "sudo apt-get update && sudo apt-get install -y pandoc ripgrep"
+    assert "sudo apt-get update && sudo apt-get install -y pandoc ripgrep" in install["run"]
 
 
 def test_qc_workflow_installs_project_profile_before_running_acceptance() -> None:
@@ -520,6 +571,20 @@ def test_qc_workflow_installs_project_profile_before_running_acceptance() -> Non
 
     assert install_index < run_index
     assert install == ('just -f "$HOME/ai-review-ci/ci/runner.just" setup-profile "$QC_PROFILE"')
+
+
+def test_sage_ci_uses_the_published_runtime_when_no_setup_is_supplied() -> None:
+    job = _workflow_jobs("_qc.yml")["qc"]
+    assert job["container"] == "${{ inputs.profile == 'sage' && inputs.tier == 'test-ci' && inputs.setup_recipe == '' && 'ghcr.io/dzackgarza/sage:develop' || '' }}"
+    assert job["defaults"]["run"]["shell"] == "bash"
+
+
+def test_sage_ambient_does_not_require_project_dependencies() -> None:
+    job = _workflow_jobs("_qc.yml")["qc"]
+    install = next(step for step in job["steps"] if step.get("name") == "Install project dependencies")
+    assert install["if"] == "inputs.tier != 'ambient' || inputs.profile != 'sage'"
+    tier = next(step for step in job["steps"] if step.get("name") == "Run QC tier")
+    assert "if" not in tier
 
 
 def test_qc_workflow_runs_validated_project_setup_before_acceptance() -> None:
@@ -605,3 +670,79 @@ def test_qc_scopes_gh_token_to_explicitly_opted_in_gh_boundary_step() -> None:
     assert 'just -f "$HOME/ai-review-ci/justfiles/python.just" -d . test-gh-boundary' == run
     assert '"$QC_TIER"' not in run
     assert step["if"] == "inputs.run_gh_boundary"
+
+
+def test_qc_tier_provisions_the_scratch_directory_declared_by_the_consumer(tmp_path: pathlib.Path) -> None:
+    home = tmp_path / "home"
+    home.mkdir()
+    consumer = tmp_path / "consumer"
+    consumer.mkdir()
+    scratch = consumer / "scratch"
+    (consumer / ".envrc").write_text('source_up\nexport TMPDIR="$PWD/scratch"\n')
+    (consumer / "justfile").write_text('ambient:\n    mktemp > created-path\n')
+    job = _workflow_jobs("_qc.yml")["qc"]
+    step = next(step for step in job["steps"] if step.get("name") == "Run QC tier")
+    result = subprocess.run(["bash", "-e", "-c", step["run"]], cwd=consumer,
+                            env=os.environ | {"HOME": str(home), "QC_TIER": "ambient"},
+                            capture_output=True, text=True)
+    assert result.returncode == 0, result.stdout + result.stderr
+    created = pathlib.Path((consumer / "created-path").read_text().strip())
+    assert created.parent == scratch
+    assert created.is_file()
+
+
+@pytest.mark.parametrize("workflow", ["_qc.yml", "_gates.yml", "_acceptance.yml"])
+def test_reusable_workflows_pin_the_just_release(workflow: str) -> None:
+    """An empty version specifier can make setup-just fail before CI runs."""
+    jobs = _workflow_jobs(workflow)
+    installers = [
+        step for job in jobs.values() for step in job.get("steps", [])
+        if step.get("uses") == "extractions/setup-just@v4"
+    ]
+    assert installers
+    assert all(step["with"]["just-version"] == "1.59.0" for step in installers)
+
+
+
+def test_qc_push_diff_uses_previous_commit_and_branch_scoped_debt(tmp_path: pathlib.Path) -> None:
+    workflow = yaml.safe_load((_WORKFLOWS_DIR / "_qc.yml").read_text())
+    job = workflow["jobs"]["qc"]
+    assert "github.event.before" in job["env"]["DIFF_COVER_BASE"]
+    steps = job["steps"]
+    restore = next(step for step in steps if step.get("name") == "Restore prior branch diagnostic snapshot")
+    save = next(step for step in steps if step.get("name") == "Cache branch diagnostic snapshot")
+    assert "github.ref" in restore["with"]["key"]
+    assert "github.ref" in restore["with"]["restore-keys"]
+    assert restore["with"]["key"] == save["with"]["key"]
+    resolver = next(step for step in steps if step.get("name") == "Resolve diff base on first branch push")
+    script = resolver["run"].replace("${{ github.event.repository.default_branch }}", "main")
+
+    repo = tmp_path / "repository"
+    repo.mkdir()
+    subprocess.run(["git", "init", "-q", "-b", "main"], cwd=repo, check=True)
+    (repo / "tracked").write_text("base")
+    subprocess.run(["git", "add", "tracked"], cwd=repo, check=True)
+    subprocess.run(["git", "-c", "user.name=Test", "-c", "user.email=test@example.com",
+                    "-c", "core.hooksPath=/dev/null", "commit", "-q", "-m", "base"],
+                   cwd=repo, check=True)
+    base = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=repo, text=True).strip()
+    subprocess.run(["git", "update-ref", "refs/remotes/origin/main", base], cwd=repo, check=True)
+    subprocess.run(["git", "checkout", "-q", "-b", "feature"], cwd=repo, check=True)
+    (repo / "tracked").write_text("feature")
+    subprocess.run(["git", "add", "tracked"], cwd=repo, check=True)
+    subprocess.run(["git", "-c", "user.name=Test", "-c", "user.email=test@example.com",
+                    "-c", "core.hooksPath=/dev/null", "commit", "-q", "-m", "feature"],
+                   cwd=repo, check=True)
+    output = tmp_path / "github-env"
+    output.write_text("")
+    env = os.environ | {"DIFF_COVER_BASE": "0" * 40, "GITHUB_ENV": str(output)}
+    result = subprocess.run(["bash", "-e", "-o", "pipefail", "-c", script],
+                            cwd=repo, env=env, text=True, capture_output=True)
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert output.read_text().strip() == f"DIFF_COVER_BASE={base}"
+    output.write_text("")
+    env["DIFF_COVER_BASE"] = base
+    result = subprocess.run(["bash", "-e", "-o", "pipefail", "-c", script],
+                            cwd=repo, env=env, text=True, capture_output=True)
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert output.read_text() == ""

@@ -1,3 +1,4 @@
+# Development: local commit/push check staged syntax only; CI owns suites and quality debt.
 # Shared Lean QC recipes.
 #
 # Lean projects keep their own build and test gates and delegate the
@@ -22,13 +23,16 @@
 # `cache` tool keeps machine-wide in ~/.cache/mathlib, keyed by file hash.
 
 # public: scan staged Lean source without compiling the project
-test-commit: _lean-staged-check
+test-commit:
+    @python3 "{{justfile_directory()}}/../scripts/local-check.py"
 
 # public: static Lean scans before push; no compilation
-test-push: lean-no-sorry lean-semgrep
+test-push:
+    @python3 "{{justfile_directory()}}/../scripts/local-check.py" --mode push
 
 # public: build the project and run the full Lean gate in CI
-test-ci: _lean-build lean-qc
+test-ci:
+    @python3 "{{justfile_directory()}}/../scripts/ci-triage.py" lean
 
 [private]
 _lean-staged-check:
