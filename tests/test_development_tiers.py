@@ -108,7 +108,7 @@ def test_push_does_not_inspect_unpublished_staged_edits(tmp_path: Path) -> None:
     assert "not_in_push.py" in commit.stderr
 
 
-def test_ci_collects_multiple_failures_without_stopping_and_opt_in_enforces(tmp_path: Path) -> None:
+def test_ci_collects_multiple_failures_and_enforces_the_selected_classes(tmp_path: Path) -> None:
     fake_bin = tmp_path / "bin"
     fake_bin.mkdir()
     fake_just = fake_bin / "just"
@@ -137,11 +137,43 @@ def test_ci_collects_multiple_failures_without_stopping_and_opt_in_enforces(tmp_
     assert payload["failed_checks"] == 2
     assert "assertion failed" in (report_dir / "python-tests.log").read_text()
     assert "type debt" in (report_dir / "python-types.log").read_text()
-    enforced = subprocess.run(args + ["--enforce"], env=env, cwd=tmp_path, capture_output=True, text=True)
-    assert enforced.returncode == 1
-    env["QC_ENFORCE"] = "true"
-    stabilized = subprocess.run(args, env=env, cwd=tmp_path, capture_output=True, text=True)
-    assert stabilized.returncode == 1
+    correctness = subprocess.run(
+        args + ["--enforcement", "correctness"],
+        env=env,
+        cwd=tmp_path,
+        capture_output=True,
+        text=True,
+    )
+    assert correctness.returncode == 1
+
+    fake_just.write_text(
+        "#!/bin/sh\n"
+        "test \"$AI_REVIEW_CI_FAILURE_MODE\" = triage || exit 21\n"
+        "case \" $* \" in\n"
+        "  *' _mypy '*) echo 'type debt'; exit 8;;\n"
+        "  *) echo 'check ran'; exit 0;;\n"
+        "esac\n"
+    )
+    debt_only = subprocess.run(
+        args + ["--enforcement", "correctness"],
+        env=env,
+        cwd=tmp_path,
+        capture_output=True,
+        text=True,
+    )
+    assert debt_only.returncode == 0, debt_only.stdout + debt_only.stderr
+    payload = json.loads((report_dir / "results.json").read_text())
+    assert payload["enforcement"] == "correctness"
+    assert payload["failed_checks"] == 1
+
+    fully_enforced = subprocess.run(
+        args + ["--enforcement", "all"],
+        env=env,
+        cwd=tmp_path,
+        capture_output=True,
+        text=True,
+    )
+    assert fully_enforced.returncode == 1
 
 
 @pytest.mark.parametrize("mode", ("direct", "triage"))
