@@ -9,7 +9,7 @@ jobs:
       issues: read
     with:
       tier: test-ci
-      enforce: true
+      enforcement: all
       profile: '{{ profile }}'
       infra_ref: '{{ ref }}'
   deterministic-diff:

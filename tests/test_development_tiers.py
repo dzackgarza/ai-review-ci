@@ -387,6 +387,6 @@ def test_caller_owned_ci_check_is_reported_in_nonblocking_burndown(tmp_path: Pat
     ]
     assert "tensor ownership violated" in (report / "research-tensor-boundary.log").read_text()
     enforced = subprocess.run(
-        command + ["--enforce"], env=env, cwd=tmp_path, text=True, capture_output=True,
+        command + ["--enforcement", "all"], env=env, cwd=tmp_path, text=True, capture_output=True,
     )
     assert enforced.returncode == 1

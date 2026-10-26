@@ -1,7 +1,7 @@
 # ai-review-ci
 
 `ai-review-ci` owns deterministic quality control for the repositories it governs.
-It supplies fast local syntax checks and separate, nonblocking CI diagnostics. A stabilized release may additionally opt into PR review and branch protection.
+It supplies fast local syntax checks and separate CI diagnostics. Development CI blocks on correctness failures and retains quality-debt failures as nonblocking evidence. A stabilized release may additionally enforce all findings through PR review and branch protection.
 
 Development is the default phase; see [CONTRIBUTING.md](./CONTRIBUTING.md) for the later stabilization policy.
 
@@ -114,8 +114,9 @@ The tiers are:
   prior CI snapshot is cached
   to produce burndown.json with newly failing, persistent, resolved, and
   currently open check IDs. A missing baseline is explicitly reported as
-  unavailable, not treated as zero failures. In development the checks do not
-  prevent publication when they fail; they remain failures in the report.
+  unavailable, not treated as zero failures. In development, correctness
+  failures block publication. Quality-debt failures remain failures in the
+  report without blocking publication.
 - ambient: scheduled full-tree maintenance diagnostics, also recorded rather
   than block publication.
 

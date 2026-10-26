@@ -151,7 +151,7 @@ def test_install_writes_trigger_workflows(tmp_path: pathlib.Path) -> None:
     assert all("needs" not in job for job in jobs.values())
     assert "uses: dzackgarza/ai-review-ci/.github/workflows/_qc.yml@main" in pr
     assert "tier: test-ci" in pr
-    assert "enforce: true" in pr
+    assert "enforcement: all" in pr
     assert "gate: deterministic-diff" in pr
     assert "gate: delegation-conformance" in pr
     assert "gate: qc-doctor" in pr

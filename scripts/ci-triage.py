@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
 """Run independent development-CI diagnostics and retain every outcome.
 
-The development phase records diagnostics; it does not decide whether an MVP
-can be committed or published. Each existing QC recipe is run independently:
-a compiler failure cannot prevent a test result or hide a later debt finding.
-Pass --enforce only after a project has explicitly adopted a stable baseline.
+Each existing QC recipe is run independently: a compiler failure cannot prevent
+a test result or hide a later debt finding. Development repositories enforce
+correctness while retaining debt as nonblocking evidence. Stabilized repositories
+enforce every finding.
 """
 from __future__ import annotations
 
@@ -240,9 +240,11 @@ def run(
     tier: str,
     report_dir: Path,
     *,
-    enforce: bool = False,
+    enforcement: str = "none",
     caller_checks: tuple[Check, ...] = (),
 ) -> int:
+    if enforcement not in ("none", "correctness", "all"):
+        raise ValueError(f"Unknown enforcement mode: {enforcement}")
     checks = (ci_checks(profile) if tier == "ci" else ambient_checks(profile)) + caller_checks
     if len({spec.id for spec in checks}) != len(checks):
         raise ValueError("Duplicate CI diagnostic check ID")
@@ -286,7 +288,7 @@ def run(
         "phase": "development",
         "profile": profile,
         "tier": tier,
-        "enforced": enforce,
+        "enforcement": enforcement,
         "generated_at": datetime.now(timezone.utc).isoformat(),
         "checks": results,
         "findings": findings,
@@ -325,7 +327,11 @@ def run(
                f"{len(burndown['finding_burndown']['persistent'])} persistent; "
                f"{len(burndown['finding_burndown']['resolved'])} resolved findings.")),
         "", "Logs, results.json and burndown.json are retained as CI artifacts.",
-        "All findings enforced (stabilized phase)." if enforce else "Development findings do not block publication.",
+        {
+            "none": "Findings are recorded without blocking publication.",
+            "correctness": "Correctness failures block publication; debt remains diagnostic.",
+            "all": "All findings block publication (stabilized phase).",
+        }[enforcement],
     ]
     markdown = "\n".join(summary) + "\n"
     (report_dir / "summary.md").write_text(markdown)
@@ -333,7 +339,12 @@ def run(
         with open(path, "a", encoding="utf-8") as output:
             output.write(markdown)
     print(f"Recorded {len(results)} checks ({len(failures)} failures) in {report_dir}", flush=True)
-    return 1 if enforce and failures else 0
+    blocking_failures = [
+        result
+        for result in failures
+        if enforcement == "all" or (enforcement == "correctness" and result["category"] == "correctness")
+    ]
+    return 1 if blocking_failures else 0
 
 
 def main() -> int:
@@ -341,7 +352,12 @@ def main() -> int:
     parser.add_argument("profile")
     parser.add_argument("--tier", choices=["ci", "ambient"], default="ci")
     parser.add_argument("--report-dir", type=Path, default=Path(os.environ.get("QC_TRIAGE_DIR", ".qc-triage")))
-    parser.add_argument("--enforce", action="store_true", help="Opt-in only after a project has a frozen baseline")
+    parser.add_argument(
+        "--enforcement",
+        choices=("none", "correctness", "all"),
+        default=os.getenv("QC_ENFORCEMENT", "none"),
+        help="Failure classes that make the command fail",
+    )
     parser.add_argument(
         "--caller-check", nargs=2, action="append", default=[], metavar=("ID", "RECIPE"),
         help="Include a consuming repository's own Just recipe as an independent debt check",
@@ -356,7 +372,7 @@ def main() -> int:
         extras = tuple(check(item_id, "debt", "caller", recipe) for item_id, recipe in args.caller_check)
         return run(
             args.profile, args.tier, args.report_dir,
-            enforce=args.enforce or os.getenv("QC_ENFORCE", "false").lower() == "true",
+            enforcement=args.enforcement,
             caller_checks=extras,
         )
     except ValueError as error:

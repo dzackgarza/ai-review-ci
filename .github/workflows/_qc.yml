@@ -25,11 +25,11 @@ on:
         required: false
         type: string
         default: main
-      enforce:
-        description: Enforce all CI findings after an explicit stabilized-phase baseline
+      enforcement:
+        description: 'Failure classes that block the workflow: none, correctness, or all'
         required: false
-        type: boolean
-        default: false
+        type: string
+        default: none
       run_gh_boundary:
         description: "Run this repository's real GitHub API tests marked pytest.mark.gh_boundary in an isolated token-scoped step"
         required: false
@@ -57,7 +57,7 @@ jobs:
     env:
       QC_TIER: ${{ inputs.tier }}
       QC_PROFILE: ${{ inputs.profile }}
-      QC_ENFORCE: ${{ inputs.enforce }}
+      QC_ENFORCEMENT: ${{ inputs.enforcement }}
       QC_SETUP_RECIPE: ${{ inputs.setup_recipe }}
       QC_INFRA_REF: ${{ inputs.infra_ref }}
       # On push, analyze changes since the previously pushed commit, not
@@ -80,6 +80,10 @@ jobs:
           case "$QC_PROFILE" in
             python|bun|bun-python|bun-playwright|rust|sage|docs-and-configs) ;;
             *) echo "invalid profile: $QC_PROFILE" >&2; exit 1 ;;
+          esac
+          case "$QC_ENFORCEMENT" in
+            none|correctness|all) ;;
+            *) echo "invalid enforcement: $QC_ENFORCEMENT" >&2; exit 1 ;;
           esac
           if [[ -n "$QC_SETUP_RECIPE" && "$QC_SETUP_RECIPE" =~ [^A-Za-z0-9_-] ]]; then
             echo "invalid setup_recipe: $QC_SETUP_RECIPE" >&2

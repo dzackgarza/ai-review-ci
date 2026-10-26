@@ -10,5 +10,6 @@ jobs:
       issues: read
     with:
       tier: test-ci
+      enforcement: correctness
       profile: '{{ profile }}'
       infra_ref: '{{ ref }}'

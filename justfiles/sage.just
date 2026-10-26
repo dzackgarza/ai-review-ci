@@ -106,7 +106,7 @@ setup:
 	@echo ""
 	@echo "6. Local commit/push checks inspect staged/outgoing syntax only."
 	@echo "   CI owns Sage tests, typing, scanners, coverage and full acceptance."
-	@echo "   Development diagnostics are retained and nonblocking."
+	@echo "   Correctness failures block development CI; quality debt remains diagnostic."
 
 _sage-qc-files:
 	#!/usr/bin/env bash

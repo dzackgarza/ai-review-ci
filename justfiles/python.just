@@ -47,7 +47,7 @@ setup:
 	@echo ""
 	@echo "5. Local commit/push checks inspect staged/outgoing syntax only."
 	@echo "   CI runs the complete suite, typing, formatting and other diagnostic checks."
-	@echo "   Development diagnostics are retained and nonblocking."
+	@echo "   Correctness failures block development CI; quality debt remains diagnostic."
 	@echo ""
 	@echo "Sage projects: use sage.just instead ('just -f ~/ai-review-ci/justfiles/sage.just setup')."
 

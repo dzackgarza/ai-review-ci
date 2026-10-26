@@ -526,8 +526,10 @@ def _pr_workflow_ref(
                 refs.add(uses.rsplit("@", 1)[1])
             if job_name == "qc-ci" and "dzackgarza/ai-review-ci/.github/workflows/_qc.yml" in uses:
                 with_block = TypeAdapter(dict[str, Any]).validate_python(job["with"]) if "with" in job else {}
-                if with_block.get("tier") == "test-ci" and (
-                    workflow_name == DEVELOPMENT_WORKFLOW or with_block.get("enforce") is True
+                required_enforcement = "correctness" if workflow_name == DEVELOPMENT_WORKFLOW else "all"
+                if (
+                    with_block.get("tier") == "test-ci"
+                    and with_block.get("enforcement") == required_enforcement
                 ):
                     gates.add(job_name)
             if "dzackgarza/ai-review-ci/.github/workflows/_gates.yml" in uses:
