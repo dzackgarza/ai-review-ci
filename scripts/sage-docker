@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-image=sagemath/sagemath-dev:develop
-container=sage-dev-develop
+image=ghcr.io/dzackgarza/sage:develop
+container=sage-research
+sage=/sage/.venv/bin/sage
 
 # A group change takes effect in new logins. Keep existing shells usable too.
 docker_gid=$(getent group docker | cut -d: -f3)
@@ -15,16 +16,21 @@ mode=${0##*/}
 if [[ "$mode" == sage-docker-update ]]; then
     exec 9>/home/dzack/.cache/sage-docker-tmp/update.lock
     flock 9
-    # The container holds the from-source Sage build: it is created once and never removed.
-    running=$(docker inspect --format '{{.State.Running}}' "$container" 2>/dev/null || true)
-    if [[ "$running" == false ]]; then
-        docker start "$container"
-    elif [[ -z "$running" ]]; then
-        docker pull "$image"
+    # The image owns the whole environment, so a container built from an older
+    # image is replaced rather than kept.
+    docker pull "$image"
+    current=$(docker inspect --format '{{.Image}}' "$container" 2>/dev/null || true)
+    if [[ -n "$current" && "$current" != $(docker inspect --format '{{.Id}}' "$image") ]]; then
+        docker rm -f "$container"
+        current=
+    fi
+    if [[ -z "$current" ]]; then
         # Sage runs in the caller's working directory, so every repository must be visible.
         docker run -d --restart unless-stopped --name "$container" --entrypoint /bin/sleep \
             --mount type=bind,src=/home/dzack,dst=/home/dzack \
             "$image" infinity
+    elif [[ $(docker inspect --format '{{.State.Running}}' "$container") == false ]]; then
+        docker start "$container"
     fi
     for ((attempt = 0; attempt < 120; attempt++)); do
         if docker top "$container" 2>/dev/null | grep -q 'sleep infinity'; then
@@ -37,25 +43,10 @@ if [[ "$mode" == sage-docker-update ]]; then
         sleep 1
     done
     docker top "$container" | grep -q 'sleep infinity'
-    docker exec -u 0 "$container" chmod o+x /home/sage
-    docker exec -u 0 "$container" mkdir -p /tmp/sage-home-dzack
-    docker exec -u 0 "$container" chown "$(id -u):$(id -g)" /tmp/sage-home-dzack
-    if ! docker exec "$container" test -f /home/sage/sage/local/var/lib/sage/docker-py314-ready; then
-        cp "$(command -v uv)" /home/dzack/.cache/sage-docker-tmp/uv
-        docker exec -u 0 "$container" cp /home/dzack/.cache/sage-docker-tmp/uv /usr/local/bin/uv
-        docker exec -u 0 "$container" chmod +x /usr/local/bin/uv
-        docker exec "$container" uv python install 3.14
-        python314=$(docker exec "$container" uv python find --managed-python --resolve-links 3.14)
-        docker exec "$container" uv pip install --python "$python314" --break-system-packages setuptools
-        docker exec -w /home/sage/sage "$container" ./configure --with-python="$python314"
-        docker exec -w /home/sage/sage "$container" make -j2 build
-        sage_python=$(docker exec "$container" sage -python -c 'import sys; print(sys.executable)')
-        docker exec "$container" uv pip install --python "$sage_python" \
-            'tree-sitter-sage @ git+https://github.com/dzackgarza/tree-sitter-sage@9d7901bbdb5983fa6f47c88c275904c7d6012b4a'
-        docker exec "$container" touch /home/sage/sage/local/var/lib/sage/docker-py314-ready
-    fi
+    docker exec "$container" mkdir -p /tmp/sage-home-dzack
+    docker exec "$container" chown "$(id -u):$(id -g)" /tmp/sage-home-dzack
     docker exec -u "$(id -u):$(id -g)" -e HOME=/tmp/sage-home-dzack \
-        -e PYTHONNOUSERSITE=1 "$container" sage -c 'print(1)'
+        -e PYTHONNOUSERSITE=1 "$container" "$sage" -c 'print(1)'
     exit
 fi
 
@@ -64,8 +55,11 @@ if [[ $(docker inspect --format '{{.State.Running}}' "$container" 2>/dev/null ||
     exit 1
 fi
 
-env_args=(-e HOME=/tmp/sage-home-dzack -e PYTHONNOUSERSITE=1)
-for name in PYTHONPATH MYPYPATH TMPDIR SAGE_STARTUP_FILE SAGE_CATEGORIES_GAP_PACKAGE_DIR SAGE_JULIA_COMMAND JULIA_COMMAND JULIAUP_DEPOT_PATH JULIA_DEPOT_PATH RESEARCH_EXPERIMENTS RESEARCH_ARCHIVES RESEARCH_SOURCE; do
+# Julia packages resolved at runtime go to a writable depot in front of the
+# image's read-only Oscar depot; the trailing empty entry keeps the stdlib depot.
+env_args=(-e HOME=/tmp/sage-home-dzack -e PYTHONNOUSERSITE=1
+    -e JULIA_DEPOT_PATH=/tmp/sage-home-dzack/.julia:/opt/julia-depot:)
+for name in PYTHONPATH MYPYPATH TMPDIR SAGE_STARTUP_FILE SAGE_CATEGORIES_GAP_PACKAGE_DIR RESEARCH_EXPERIMENTS RESEARCH_ARCHIVES RESEARCH_SOURCE; do
     if [[ -v $name ]]; then
         env_args+=(-e "$name")
     fi
@@ -73,20 +67,20 @@ done
 
 case "$mode" in
     sage|sage-docker)
-        command=(sage "$@")
+        command=("$sage" "$@")
         ;;
     sage-docker-preparse)
-        command=(sage -preparse "$@")
+        command=("$sage" -preparse "$@")
         ;;
     sage-docker-python)
         if [[ ${1:-} == */sage-docker-preparse ]]; then
             shift
-            command=(sage -preparse "$@")
+            command=("$sage" -preparse "$@")
         elif [[ ${1:-} == */sage-preparse ]]; then
             shift
-            command=(sage -preparse "$@")
+            command=("$sage" -preparse "$@")
         else
-            command=(sage -python "$@")
+            command=("$sage" -python "$@")
         fi
         ;;
     *)
