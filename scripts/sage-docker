@@ -45,22 +45,18 @@ if [[ "$mode" == sage-docker-update ]]; then
     docker top "$container" | grep -q 'sleep infinity'
     docker exec "$container" mkdir -p /tmp/sage-home-dzack
     docker exec "$container" chown "$(id -u):$(id -g)" /tmp/sage-home-dzack
-    # The image carries locked copies of the Sage research projects; the desk
-    # replaces them with editable installs of its checkouts, so the container
-    # always runs their working trees. research, which the image does not
-    # carry, comes first: it pulls the others from git, and their checkouts
-    # then replace those copies.
+    # The image owns the Sage research projects (sage-extensions,
+    # sage-julia-bridge, sage-categories, sage-stubs, tree-sitter-sage, vinal,
+    # sage-lsp, the mypy plugin); only research, which the image does not
+    # carry, is installed from its checkout. Its dependencies are constrained to
+    # the image's installed versions, so uv adds only what the image lacks and
+    # never replaces the image's copies of the projects above.
     docker exec "$container" chown -R "$(id -u):$(id -g)" /sage/.venv
     as_user=(docker exec -u "$(id -u):$(id -g)" -e HOME=/tmp/sage-home-dzack "$container")
     venv_python=/sage/.venv/bin/python
-    "${as_user[@]}" uv pip install --python "$venv_python" -e /home/dzack/research
-    for checkout in sage-extensions sage-julia-bridge tree-sitter-sage; do
-        "${as_user[@]}" uv pip install --python "$venv_python" --no-deps -e "/home/dzack/gitclones/$checkout"
-    done
-    # sage-categories declares its native workspace member only in its
-    # `platform` group, which its own CI installs with the project.
-    "${as_user[@]}" uv pip install --python "$venv_python" --project /home/dzack/gitclones/sage-categories \
-        --group platform --editable /home/dzack/gitclones/sage-categories
+    "${as_user[@]}" bash -c "uv pip freeze --python $venv_python > /tmp/sage-home-dzack/image-constraints.txt"
+    "${as_user[@]}" uv pip install --python "$venv_python" \
+        --constraint /tmp/sage-home-dzack/image-constraints.txt -e /home/dzack/research
     "${as_user[@]}" uv pip check --python "$venv_python"
     docker exec -u "$(id -u):$(id -g)" -e HOME=/tmp/sage-home-dzack \
         -e PYTHONNOUSERSITE=1 "$container" "$sage" -c 'print(1)'
