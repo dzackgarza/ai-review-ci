@@ -45,11 +45,11 @@ if [[ "$mode" == sage-docker-update ]]; then
     docker top "$container" | grep -q 'sleep infinity'
     docker exec "$container" mkdir -p /tmp/sage-home-dzack
     docker exec "$container" chown "$(id -u):$(id -g)" /tmp/sage-home-dzack
-    # The image carries only Sage. The research projects are installed from
-    # their checkouts, editable, so the container always runs their working
-    # trees. research comes first: it pulls the others from git, and their
-    # checkouts then replace those copies.
-    docker exec "$container" cp /root/.local/bin/uv /usr/local/bin/uv
+    # The image carries locked copies of the Sage research projects; the desk
+    # replaces them with editable installs of its checkouts, so the container
+    # always runs their working trees. research, which the image does not
+    # carry, comes first: it pulls the others from git, and their checkouts
+    # then replace those copies.
     docker exec "$container" chown -R "$(id -u):$(id -g)" /sage/.venv
     as_user=(docker exec -u "$(id -u):$(id -g)" -e HOME=/tmp/sage-home-dzack "$container")
     venv_python=/sage/.venv/bin/python
