@@ -53,7 +53,6 @@ to some checks and fails others.
 | Test files matching `*.test.ts` or under `tests/` | `_check-ts-project` | "TypeScript project must have tests" |
 | A `tsconfig.json` at the root whose `include` covers every root-level `*.config.ts` (for example `wxt.config.ts`) | eslint's typed project service picks the nearest tsconfig per file | "was not found by the project service. Consider either including it in the tsconfig.json" |
 | No local `biome.json`, `eslint.config.*`, `knip.*`, `lint-staged.*`, no `knip` or `lint-staged` keys in package.json | `_check-ts-project` | "Local QC override detected" |
-| Python package under root `src/` | `tool-configs/coverage.ini` has `source = src` | pytest passes, then "CoverageWarning: No data was collected" and diff-cover fails |
 | Python tests as `tests/test_*.py` | `_pytest` | "no test files found in a Python project" |
 | `requires-python = ">=3.14"` in `pyproject.toml`; no `[tool.ruff]`, `[tool.mypy]`, `[tool.coverage]`, `[tool.deptry]`, `[tool.vulture]`, `[tool.import-linter]` sections | `_check-python-project` | "must target Python >=3.14" / "global QC owns this tool config" |
 | A `py.typed` marker inside the Python package | `_mypy` analyzes the installed package from `tests/` | "module is installed, but missing library stubs or py.typed marker [import-untyped]" |
