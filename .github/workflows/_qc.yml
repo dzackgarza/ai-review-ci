@@ -218,7 +218,7 @@ jobs:
               exit 1
             fi
             echo "DIFF_COVER_BASE=$DIFF_COVER_BASE" >> "$GITHUB_ENV"
-          fii
+          fi
       - name: Run QC tier
         # No GH_TOKEN here (#218): the tier runs every QC recipe and every
         # npx/uvx tool runner (semgrep, ai-slop, aislop), which must not execute
