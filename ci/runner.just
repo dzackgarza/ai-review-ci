@@ -51,7 +51,7 @@ setup-profile profile:
           echo "ERROR: configured SAGE_BIN is not executable: $SAGE_BIN" >&2
           exit 1
         fi
-        sage_python="$("$SAGE_BIN" -python -c 'import sys; print(sys.executable)')"
+        sage_python="$("$SAGE_BIN" -c 'import sys; print(sys.executable)')"
         "$sage_python" -c 'import sys, sage.all; assert sys.version_info >= (3, 14); print(sys.version)'
         uv pip install --python "$sage_python" --editable "{{control_repo}}" pytest coverage
         ;;
