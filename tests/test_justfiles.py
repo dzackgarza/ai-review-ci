@@ -4755,3 +4755,30 @@ def test_global_stub_library_resolves_from_a_downstream_project(tmp_path: pathli
     # can still report those, which is a property of the stub, not of path resolution.
     output = result.stdout + result.stderr
     assert 'named "sarif_pydantic"' not in output, output
+
+
+def test_biome_applies_central_parser_options_to_project_files(tmp_path: pathlib.Path) -> None:
+    project = tmp_path / "biome-project"
+    (project / "src").mkdir(parents=True)
+    subprocess.run(["git", "init", "-q", str(project)], check=True)
+    (project / "src" / "app.css").write_text(
+        '@import "tailwindcss";\n\n@theme {\n  --color-ink: #111;\n}\n\n.a {\n  @apply flex;\n}\n'
+    )
+
+    result = run_just(ROOT / "justfiles" / "bun.just", project, "_biome")
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert not (project / "biome.json").exists()
+
+
+def test_biome_still_blocks_unformatted_files(tmp_path: pathlib.Path) -> None:
+    project = tmp_path / "biome-project"
+    (project / "src").mkdir(parents=True)
+    subprocess.run(["git", "init", "-q", str(project)], check=True)
+    (project / "src" / "app.ts").write_text("export const a = {b:1}\n")
+
+    result = run_just(ROOT / "justfiles" / "bun.just", project, "_biome")
+
+    assert result.returncode != 0
+    assert "app.ts format" in result.stdout + result.stderr
+    assert not (project / "biome.json").exists()
