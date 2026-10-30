@@ -199,6 +199,9 @@ jobs:
         run: |
           if ! git cat-file -e "$DIFF_COVER_BASE^{commit}" 2>/dev/null; then
             default_branch="${{ github.event.repository.default_branch }}"
+            # Container jobs can see the checkout under a different uid than
+            # the host runner; explicitly trust only this Actions workspace.
+            git config --global --add safe.directory "$GITHUB_WORKSPACE"
             # workflow_dispatch may omit the default-branch tracking ref even
             # with fetch-depth=0; fetch the exact base before merge-base.
             git fetch --no-tags origin "+refs/heads/${default_branch}:refs/remotes/origin/${default_branch}"
