@@ -1,8 +1,0 @@
-#!/usr/bin/env bash
-set -euo pipefail
-group=$1
-shift
-# Keep the sg command below MAX_ARG_STRLEN. Bash reads the quoted argv from
-# a separate inherited descriptor, leaving the caller's stdin untouched.
-exec /usr/bin/sg "$group" -c 'exec /bin/bash /dev/fd/3' \
-    3< <(printf 'exec '; printf '%q ' "$@")
