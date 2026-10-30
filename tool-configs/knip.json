@@ -18,7 +18,9 @@
     "extension/**/*.css",
     "tests/**/*.test.{js,ts,tsx}",
     "tests/**/*.spec.{js,ts,tsx}",
-    "tests/**/__tests__/**/*.{js,ts,tsx}"
+    "tests/**/__tests__/**/*.{js,ts,tsx}",
+    "src/**/*.vue",
+    "standalone/**/*.{ts,vue}"
   ],
   "project": [
     "src/**/*.ts",
@@ -39,7 +41,10 @@
     "index.css",
     "extension/**/*.{js,ts,tsx}",
     "extension/**/*.css",
-    "tests/**/*.{js,ts,tsx}"
+    "tests/**/*.{js,ts,tsx}",
+    "src/**/*.vue",
+    "standalone/**/*.{ts,vue}",
+    "vendor/**/*.{ts,tsx}"
   ],
   "ignore": [
     "**/env.d.ts",
@@ -117,7 +122,9 @@
     "pgrep",
     "just",
     "kitty",
-    "notify-send"
+    "notify-send",
+    "Xvfb",
+    "dbus-daemon"
   ],
   "ignoreExportsUsedInFile": true,
   "ignoreUnresolved": [
