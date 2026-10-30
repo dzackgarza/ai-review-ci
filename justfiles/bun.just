@@ -122,11 +122,14 @@ _coverage:
 		exit 0
 	fi
 	if jq -e '.scripts.coverage // empty' package.json >/dev/null 2>&1; then
-		bun run coverage
+		# A red suite still measured the lines it ran: deliver its report to _diff-cover,
+		# then return the suite's own status as this check's result.
+		status=0
+		bun run coverage || status=$?
 		if [ -f coverage/lcov.info ]; then
 			cp coverage/lcov.info lcov.info
 		fi
-		exit 0
+		exit "$status"
 	fi
 	if jq -e '(.devDependencies.vitest // .dependencies.vitest // empty)' package.json >/dev/null 2>&1; then
 		bun run test -- --coverage --coverage.reporter=lcov

@@ -3409,6 +3409,21 @@ def test_bun_coverage_consumes_declared_script_and_normalizes_lcov(
     assert (project / "lcov.info").read_text() == ("TN:\nSF:source.ts\nDA:1,1\nend_of_record\n")
 
 
+def test_bun_coverage_delivers_the_lcov_of_a_red_suite_and_keeps_its_status(
+    tmp_path: pathlib.Path,
+) -> None:
+    project = tmp_path / "bun-project"
+    project.mkdir()
+    (project / "package.json").write_text(
+        json.dumps({"scripts": {"coverage": ("mkdir -p coverage && printf 'TN:\\nSF:source.ts\\nDA:1,0\\nend_of_record\\n' > coverage/lcov.info && exit 4")}})
+    )
+
+    result = run_just(ROOT / "justfiles" / "bun.just", project, "_coverage")
+
+    assert result.returncode == 4, result.stdout + result.stderr
+    assert (project / "lcov.info").read_text() == ("TN:\nSF:source.ts\nDA:1,0\nend_of_record\n")
+
+
 def write_import_linter_project(
     project: pathlib.Path,
     *,
