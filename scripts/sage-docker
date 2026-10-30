@@ -12,23 +12,55 @@ sage_bin=/sage/.venv/bin
 export DOCKER_HOST="unix:///run/user/$(id -u)/docker.sock"
 docker() { "$HOME/bin/docker" "$@"; }
 
+# The research checkouts live in the container: the fork at /sage (source and
+# build tree) and every research repository under /repos. Each is a named
+# volume that Docker fills from the image when it is created, and the host
+# reaches the checkouts through ~/gitclones symlinks into the volumes, so
+# agents edit, commit and push them with ordinary tools and the container runs
+# what they edit.
+volumes=(sage-tree:/sage sage-repos:/repos)
+volume_root="$HOME/.local/share/docker/volumes"
+checkout_root="$HOME/gitclones"
+
+# Print each checkout in the volumes that holds work not on GitHub.
+checkouts_with_local_work() {
+    local checkout
+    for checkout in "$volume_root/sage-tree/_data" "$volume_root"/sage-repos/_data/*/; do
+        [[ -d "$checkout/.git" ]] || continue
+        if [[ -n $(git -C "$checkout" status --porcelain) ]] \
+            || [[ -n $(git -C "$checkout" log --branches --not --remotes --oneline) ]]; then
+            printf '%s\n' "$checkout"
+        fi
+    done
+}
+
 mode=${0##*/}
 if [[ "$mode" == sage-docker-update ]]; then
     exec 9>/home/dzack/.cache/sage-docker-tmp/update.lock
     flock 9
-    # The image owns the whole environment, so a container built from an older
-    # image is replaced rather than kept.
     docker pull "$image"
     current=$(docker inspect --format '{{.Image}}' "$container" 2>/dev/null || true)
     if [[ -n "$current" && "$current" != $(docker inspect --format '{{.Id}}' "$image") ]]; then
+        # A new image replaces the checkouts with its own, so it waits until
+        # nothing in them is lost.
+        local_work=$(checkouts_with_local_work)
+        if [[ -n "$local_work" ]]; then
+            printf 'Commit and push the work in these checkouts before updating:\n%s\n' "$local_work" >&2
+            exit 1
+        fi
         docker rm -f "$container"
+        for volume in "${volumes[@]}"; do
+            docker volume rm "${volume%%:*}"
+        done
         current=
     fi
     if [[ -z "$current" ]]; then
-        # Sage runs in the caller's working directory, so every repository must be visible.
+        mounts=(--mount type=bind,src=/home/dzack,dst=/home/dzack)
+        for volume in "${volumes[@]}"; do
+            mounts+=(--mount "type=volume,src=${volume%%:*},dst=${volume#*:}")
+        done
         docker run -d --restart unless-stopped --name "$container" --entrypoint /bin/sleep \
-            --mount type=bind,src=/home/dzack,dst=/home/dzack \
-            "$image" infinity
+            "${mounts[@]}" "$image" infinity
     elif [[ $(docker inspect --format '{{.State.Running}}' "$container") == false ]]; then
         docker start "$container"
     fi
@@ -43,18 +75,19 @@ if [[ "$mode" == sage-docker-update ]]; then
         sleep 1
     done
     docker top "$container" | grep -q 'sleep infinity'
-    # The image owns the Sage research projects (sage-extensions,
-    # sage-julia-bridge, sage-categories, sage-stubs, tree-sitter-sage, vinal,
-    # sage-lsp, the mypy plugin); only research, which the image does not
-    # carry, is installed from its checkout. Its dependencies are constrained to
-    # the image's installed versions, so uv adds only what the image lacks and
-    # never replaces the image's copies of the projects above.
-    in_container=(docker exec "$container")
-    venv_python=/sage/.venv/bin/python
-    "${in_container[@]}" bash -c "uv pip freeze --python $venv_python > /root/image-constraints.txt"
-    "${in_container[@]}" uv pip install --python "$venv_python" \
-        --constraint /root/image-constraints.txt -e /home/dzack/research
-    "${in_container[@]}" uv pip check --python "$venv_python"
+    links=("sage=$volume_root/sage-tree/_data")
+    for checkout in "$volume_root"/sage-repos/_data/*/; do
+        checkout=${checkout%/}
+        links+=("${checkout##*/}=$checkout")
+    done
+    for link in "${links[@]}"; do
+        path="$checkout_root/${link%%=*}"
+        if [[ -e "$path" && ! -L "$path" ]]; then
+            printf '%s is a separate clone of a repository the container holds; move its work into the container checkout and remove it.\n' "$path" >&2
+            exit 1
+        fi
+        ln -sfn "${link#*=}" "$path"
+    done
     docker exec -e PYTHONNOUSERSITE=1 "$container" "$sage_bin/sage" -c 'print(1)'
     exit
 fi
