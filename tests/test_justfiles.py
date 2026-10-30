@@ -4782,3 +4782,47 @@ def test_biome_still_blocks_unformatted_files(tmp_path: pathlib.Path) -> None:
     assert result.returncode != 0
     assert "app.ts format" in result.stdout + result.stderr
     assert not (project / "biome.json").exists()
+
+
+def g04_finding(project: pathlib.Path, content: str) -> dict[str, Any]:
+    return {
+        "rule_id": "G04",
+        "name": "eval() with variable",
+        "severity": "critical",
+        "category": "security",
+        "file": str(project / "tests" / "e2e.test.ts"),
+        "line": 1,
+        "content": content,
+        "notes": "eval() with a variable argument runs arbitrary code",
+        "two_pass": False,
+        "co_occurrence": False,
+    }
+
+
+def test_vibecheck_ignores_g04_puppeteer_member_eval(tmp_path: pathlib.Path) -> None:
+    project = tmp_path / "vibe-project"
+    project.mkdir()
+    payload = vibecheck_payload(
+        g04_finding(project, "expect(await page.$eval(field, (input) => input.value)).toBe(1);"),
+        g04_finding(project, "const n = await page.$$eval(rows, (all) => all.length);"),
+    )
+    env = os.environ | {"PATH": f"{write_fake_uvx_vibecheck(tmp_path, payload, exit_code=1)}:{os.environ['PATH']}"}
+
+    result = run_just(ROOT / "justfiles" / "shared.just", project, "_vibecheck", env=env)
+
+    output = result.stdout + result.stderr
+    assert result.returncode == 0, output
+    assert "ignored 2 G04 $eval/$$eval member-call false-positive finding(s)" in output
+
+
+def test_vibecheck_still_blocks_g04_bare_eval(tmp_path: pathlib.Path) -> None:
+    project = tmp_path / "vibe-project"
+    project.mkdir()
+    payload = vibecheck_payload(g04_finding(project, "await page.$eval(field, () => eval(code));"))
+    env = os.environ | {"PATH": f"{write_fake_uvx_vibecheck(tmp_path, payload, exit_code=1)}:{os.environ['PATH']}"}
+
+    result = run_just(ROOT / "justfiles" / "shared.just", project, "_vibecheck", env=env)
+
+    output = result.stdout + result.stderr
+    assert result.returncode != 0, output
+    assert "eval() with variable" in output

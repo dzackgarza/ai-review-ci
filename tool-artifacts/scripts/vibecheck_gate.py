@@ -6,6 +6,7 @@ from __future__ import annotations
 import argparse
 import collections
 import json
+import re
 from pathlib import Path
 from typing import Any
 
@@ -63,9 +64,18 @@ def _is_python_prose_arrow(finding: dict[str, Any]) -> bool:
     return path_value.endswith(".py")
 
 
+def _is_member_eval(finding: dict[str, Any]) -> bool:
+    # G04 matches `eval(` inside any identifier, so Puppeteer's `page.$eval(selector, fn)`
+    # and `$$eval` (https://pptr.dev/api/puppeteer.page._eval), which run a function and
+    # evaluate no string, are reported. A line with no bare `eval(` call is such a match.
+    if finding.get("rule_id") != "G04":
+        return False
+    return re.search(r"(?<![\w$.])eval\s*\(", finding.get("content") or "") is None
+
+
 def _filter_payload(payload: dict[str, Any], root: Path) -> tuple[dict[str, Any], dict[str, int]]:
     filtered = []
-    ignored = {"G141": 0, "G22": 0, "G118": 0, "G20": 0}
+    ignored = {"G141": 0, "G22": 0, "G118": 0, "G20": 0, "G04": 0}
     findings = payload.get("findings", [])
     if not isinstance(findings, list):
         findings = []
@@ -83,6 +93,9 @@ def _filter_payload(payload: dict[str, Any], root: Path) -> tuple[dict[str, Any]
             continue
         if _is_python_prose_arrow(finding):
             ignored["G118"] += 1
+            continue
+        if _is_member_eval(finding):
+            ignored["G04"] += 1
             continue
         normalized = dict(finding)
         file_value = normalized.get("file")
@@ -128,6 +141,7 @@ def _print_ignored(ignored: dict[str, int]) -> None:
         "G22": "G22 non-empty except-handler false-positive finding(s)",
         "G118": "G118 prose-arrow finding(s) in compiled Python (notation, not pseudocode)",
         "G20": "G20 prompt-context false-positive finding(s)",
+        "G04": "G04 $eval/$$eval member-call false-positive finding(s)",
     }
     for rule_id, message in messages.items():
         count = ignored.get(rule_id, 0)
