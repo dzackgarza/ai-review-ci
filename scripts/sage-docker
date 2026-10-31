@@ -4,6 +4,7 @@ set -euo pipefail
 image=ghcr.io/dzackgarza/sage:develop
 container=sage-research
 sage_bin=/sage/.venv/bin
+container_path="$sage_bin:/opt/elan/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
 
 # Docker runs rootless as this user: root in the container is this user on the
 # host, so files written under /home/dzack keep their owner, and the image's own
@@ -60,7 +61,7 @@ if [[ "$mode" == sage-docker-update ]]; then
             mounts+=(--mount "type=volume,src=${volume%%:*},dst=${volume#*:}")
         done
         docker run -d --restart unless-stopped --name "$container" --entrypoint /bin/sleep \
-            "${mounts[@]}" "$image" infinity
+            --env "PATH=$container_path" "${mounts[@]}" "$image" infinity
     elif [[ $(docker inspect --format '{{.State.Running}}' "$container") == false ]]; then
         docker start "$container"
     fi
@@ -99,7 +100,7 @@ fi
 
 # Julia packages resolved at runtime go to a writable depot in front of the
 # image's read-only Oscar depot; the trailing empty entry keeps the stdlib depot.
-env_args=(-e PYTHONNOUSERSITE=1 -e JULIA_DEPOT_PATH=/root/.julia:/opt/julia-depot:)
+env_args=(-e PYTHONNOUSERSITE=1 -e "PATH=$container_path" -e JULIA_DEPOT_PATH=/root/.julia:/opt/julia-depot:)
 for name in PYTHONPATH MYPYPATH TMPDIR SAGE_STARTUP_FILE SAGE_CATEGORIES_GAP_PACKAGE_DIR RESEARCH_EXPERIMENTS RESEARCH_ARCHIVES RESEARCH_SOURCE; do
     if [[ -v $name ]]; then
         env_args+=(-e "$name")
