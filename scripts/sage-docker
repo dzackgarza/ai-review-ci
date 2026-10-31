@@ -27,12 +27,22 @@ mode=${0##*/}
 if [[ "$mode" == sage-docker-update ]]; then
     exec 9>/home/dzack/.cache/sage-docker-tmp/update.lock
     flock 9
-    docker pull "$image"
+    remote_manifest=$(docker manifest inspect "$image" | jq -er \
+        '.manifests[] | select(.platform.os == "linux" and .platform.architecture == "amd64") | .digest')
     current=$(docker inspect --format '{{.Image}}' "$container" 2>/dev/null || true)
-    if [[ -n "$current" && "$current" != $(docker inspect --format '{{.Id}}' "$image") ]]; then
-        docker rm -f "$container"
-        current=
+    if [[ -n "$current" ]]; then
+        current_manifest=$(docker image inspect --platform linux/amd64 \
+            --format '{{.Descriptor.Digest}}' "$current")
+        if [[ "$current_manifest" != "$remote_manifest" ]]; then
+            revision=$(docker image inspect "$current" | jq -er \
+                '.[0].Config.Labels["org.opencontainers.image.revision"]')
+            docker rm -f "$container"
+            docker image rm "$current"
+            docker image prune --force --filter "label=org.opencontainers.image.revision=$revision"
+            current=
+        fi
     fi
+    docker pull "$image"
     if [[ -z "$current" ]]; then
         mounts=(--mount type=bind,src=/home/dzack,dst=/home/dzack)
         for volume in "${volumes[@]}"; do
