@@ -52,24 +52,31 @@ comes from the image, and subsequent package changes belong to the volume.
 | Research session preamble | `ZZ(2)**10` is `1024` |
 | Lean and Lake | Both select the installed Lean `4.33.0` toolchain |
 
-## Current required work
+## Deployed image and verification
 
-Publish and deploy the portable-cache image from
-[run 41217622692](https://github.com/dzackgarza/sage/actions/runs/41217622692),
-source `b0cd7d86e21eb450ed90e4c83707920e1d5d429a`. Then verify the changed-image
-update preserves the source directories and Julia environment, and run the
-exact computations above again. A fresh image must also load JSON and Oscar
-with `julia --compiled-modules=strict`; that check requires the baked caches.
+[Image build 41217622692](https://github.com/dzackgarza/sage/actions/runs/41217622692)
+passed for source `b0cd7d86e21eb450ed90e4c83707920e1d5d429a`.
 
-The previous image's strict cache probe rejects its `znver3` cache on this
-host's `ivybridge` target. The image source now sets `JULIA_CPU_TARGET=generic`
-before precompilation, following the
+| Image object | Immutable digest |
+| --- | --- |
+| OCI index | `sha256:ccdea4a52158c8fea4ef46b80dcf4cecd90ef0b61afa467f9541c6c658eeff09` |
+| Linux amd64 manifest | `sha256:c3a9f1637d43b727ab2b24c0ccf1bc9ee513a08a02094d20221065ef2d8643dd` |
+
+The image sets `JULIA_CPU_TARGET=generic` before precompilation, following the
 [Julia package-image configuration](https://docs.julialang.org/en/v1.12/manual/environment-variables/#JULIA_CPU_TARGET).
+It initializes the bridge's own Julia project, includes every Git source in
+the research dependency lock as a checkout, makes Sage's Python the default,
+and sets the default Lean toolchain. Its build checks passed.
 
-The image source also initializes the bridge's own Julia project, includes
-every git source in the research dependency lock as a checkout, makes Sage's
-Python the default, and sets the default Lean toolchain. The host runtime has
-these settings; the pending image publication supplies them to fresh consumers.
+The host runs this image. The changed-image update preserved the source-directory
+identities, original branches and refs, linked worktrees, local changes, and the
+writable Julia environment. The computations above passed after deployment.
+A fresh container, with no host Julia volume, loaded JSON/Oscar using
+`julia --compiled-modules=strict` and verified the quadratic number-field example.
+The persistent Julia environment and Sage Julia bridge also passed after deployment.
+[Fresh CI consumer 41224747377](https://github.com/dzackgarza/sage/actions/runs/41224747377)
+passed default Python and an exact rational determinant against the immutable
+amd64 manifest on a fresh hosted runner.
 
 The launcher is [scripts/sage-docker](scripts/sage-docker). The image source is
 the `develop` branch of `dzackgarza/sage`. Its
