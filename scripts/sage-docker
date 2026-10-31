@@ -30,15 +30,25 @@ if [[ "$mode" == sage-docker-update ]]; then
     flock 9
     remote_manifest=$(docker manifest inspect "$image" | jq -er \
         '.manifests[] | select(.platform.os == "linux" and .platform.architecture == "amd64") | .digest')
-    current=$(docker inspect --format '{{.Image}}' "$container" 2>/dev/null || true)
-    if [[ -n "$current" ]]; then
+    container_id=$(docker ps --all --quiet --filter "name=^/${container}$")
+    current=
+    if [[ -n "$container_id" ]]; then
+        current=$(docker inspect --format '{{.Image}}' "$container_id")
+    fi
+    local_image="$current"
+    if [[ -z "$local_image" ]]; then
+        local_image=$(docker image ls --no-trunc --filter "reference=$image" --format '{{.ID}}')
+    fi
+    if [[ -n "$local_image" ]]; then
         current_manifest=$(docker image inspect --platform linux/amd64 \
-            --format '{{.Descriptor.Digest}}' "$current")
+            --format '{{.Descriptor.Digest}}' "$local_image")
         if [[ "$current_manifest" != "$remote_manifest" ]]; then
-            revision=$(docker image inspect "$current" | jq -er \
+            revision=$(docker image inspect "$local_image" | jq -er \
                 '.[0].Config.Labels["org.opencontainers.image.revision"]')
-            docker rm -f "$container"
-            docker image rm "$current"
+            if [[ -n "$current" ]]; then
+                docker rm -f "$container"
+            fi
+            docker image rm "$local_image"
             docker image prune --force --filter "label=org.opencontainers.image.revision=$revision"
             current=
         fi
@@ -49,7 +59,7 @@ if [[ "$mode" == sage-docker-update ]]; then
         for volume in "${volumes[@]}"; do
             mounts+=(--mount "type=volume,src=${volume%%:*},dst=${volume#*:}")
         done
-        docker run -d --restart unless-stopped --name "$container" --entrypoint /bin/sleep \
+        docker run -d --init --restart unless-stopped --name "$container" --entrypoint /bin/sleep \
             --env "PATH=$container_path" --env "JULIA_DEPOT_PATH=$julia_depot" \
             "${mounts[@]}" "$image" infinity
     elif [[ $(docker inspect --format '{{.State.Running}}' "$container") == false ]]; then
