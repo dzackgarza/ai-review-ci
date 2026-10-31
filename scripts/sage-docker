@@ -23,18 +23,6 @@ volumes=(sage-tree:/sage sage-repos:/repos)
 volume_root="$HOME/.local/share/docker/volumes"
 checkout_root="$HOME/gitclones"
 
-# Print each checkout in the volumes that holds work not on GitHub.
-checkouts_with_local_work() {
-    local checkout
-    for checkout in "$volume_root/sage-tree/_data" "$volume_root"/sage-repos/_data/*/; do
-        [[ -d "$checkout/.git" ]] || continue
-        if [[ -n $(git -C "$checkout" status --porcelain) ]] \
-            || [[ -n $(git -C "$checkout" log --branches --not --remotes --oneline) ]]; then
-            printf '%s\n' "$checkout"
-        fi
-    done
-}
-
 mode=${0##*/}
 if [[ "$mode" == sage-docker-update ]]; then
     exec 9>/home/dzack/.cache/sage-docker-tmp/update.lock
@@ -42,17 +30,7 @@ if [[ "$mode" == sage-docker-update ]]; then
     docker pull "$image"
     current=$(docker inspect --format '{{.Image}}' "$container" 2>/dev/null || true)
     if [[ -n "$current" && "$current" != $(docker inspect --format '{{.Id}}' "$image") ]]; then
-        # A new image replaces the checkouts with its own, so it waits until
-        # nothing in them is lost.
-        local_work=$(checkouts_with_local_work)
-        if [[ -n "$local_work" ]]; then
-            printf 'Commit and push the work in these checkouts before updating:\n%s\n' "$local_work" >&2
-            exit 1
-        fi
         docker rm -f "$container"
-        for volume in "${volumes[@]}"; do
-            docker volume rm "${volume%%:*}"
-        done
         current=
     fi
     if [[ -z "$current" ]]; then
