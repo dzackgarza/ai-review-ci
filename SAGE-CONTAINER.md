@@ -18,6 +18,36 @@ through links. Existing branches, worktrees and local files survive the move.
 | Local checks | Cheap configuration and launch checks run before a long CI build |
 | Host operation | Rootless Docker starts the environment and the host commands reach its tools |
 
+## Use the image
+
+The shared Linux amd64 image is `ghcr.io/dzackgarza/sage:develop`. It includes
+Lean/Lake/elan, Sage with mypy and pytest, GAP, Julia with Oscar/Hecke,
+Macaulay2, Singular, Normaliz, polymake, and CoxIter.
+
+Pull it and open a shell with Docker:
+
+```bash
+docker pull ghcr.io/dzackgarza/sage:develop
+docker run --rm -it ghcr.io/dzackgarza/sage:develop bash
+```
+
+Inside the image, Sage's Python is `/sage/.venv/bin/python`, the Sage source
+is `/sage`, and the research checkouts are under `/repos`. For example:
+
+```bash
+docker run --rm ghcr.io/dzackgarza/sage:develop python -c 'from sage.all import QQ, matrix; assert matrix(QQ, [[2, 1], [1, 2]]).det() == 3'
+```
+
+For CI, use the image as the job container; pin an immutable digest for
+reproducible runs. See the working
+[GitHub Actions consumer](https://github.com/dzackgarza/sage/blob/develop/.github/workflows/research-image-consumer.yml).
+
+On the configured workstation, run `sage-docker-update` to pull the image and
+start or update `sage-research`. Use the host commands listed below, including
+`sage-docker-python` for Sage's Python. The launcher retains source and Julia
+volumes across updates. Host launcher installation is owned by
+[`just install-sage-launchers`](justfile) in this repository.
+
 ## Host workspace
 
 The `sage-research` runtime mounts these persistent volumes:
