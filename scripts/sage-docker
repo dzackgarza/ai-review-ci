@@ -121,6 +121,9 @@ case "$mode" in
             command=("$sage_bin/python" "$@")
         fi
         ;;
+    julia|gap|M2|Singular|coxiter|lean|lake|elan|normaliz|polymake)
+        command=("$mode" "$@")
+        ;;
     *)
         printf 'Unknown Sage Docker launcher: %s\n' "$mode" >&2
         exit 2

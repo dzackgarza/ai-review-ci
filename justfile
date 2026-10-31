@@ -124,7 +124,7 @@ install-sage-launchers:
     #!/usr/bin/env bash
     set -euo pipefail
     mkdir -p "$HOME/.local/bin" "$HOME/.cache/sage-docker-tmp"
-    for name in sage sage-docker-python sage-docker-preparse sage-docker-update; do
+    for name in sage sage-docker-python sage-docker-preparse sage-docker-update julia gap M2 Singular coxiter lean lake elan normaliz polymake; do
         target="$HOME/.local/bin/$name"
         if [[ -e "$target" && ! -L "$target" ]]; then
             echo "Error: refusing to replace non-symlink launcher: $target"
