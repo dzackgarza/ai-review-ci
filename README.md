@@ -21,8 +21,8 @@ Supported profiles are `python`, `bun`, `bun-playwright`, `bun-python`, `docs-an
 
 For Sage, the reusable workflow runs `test-ci` inside
 `ghcr.io/dzackgarza/sage:develop` (Python 3.14) and installs the consuming project
-into its Sage interpreter. A caller supplying `setup_recipe` provisions its own
-runtime instead. Sage `ambient` runs whole-tree Semgrep on the Ubuntu runner and
+into its Sage interpreter. A caller's `setup_recipe` runs inside that container,
+with bun and node installed, and uses the image's Sage. Sage `ambient` runs whole-tree Semgrep on the Ubuntu runner and
 requires no Sage installation.
 
 A Sage repository's `tests/acceptance/` suite runs in neither `test-push` nor `test-ci`.

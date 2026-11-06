@@ -153,6 +153,13 @@ jobs:
         # Some QC profiles (and ai-review-ci's own suite) drive JS tooling
         # configs through bun; node ships on the runner, bun does not.
         uses: oven-sh/setup-bun@v2
+      - name: Install node in the job container
+        # The Sage image carries no node. A setup recipe runs npm on the
+        # runner, so it must find node in the container too (#491).
+        if: job.container.id != ''
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
       - name: Key the project CI environment cache
         id: setup-cache-key
         if: inputs.setup_cache_paths != ''
@@ -287,7 +294,8 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: just -f "$HOME/ai-review-ci/justfiles/python.just" -d . test-gh-boundary
         if: inputs.run_gh_boundary
-    container: ${{ inputs.profile == 'sage' && inputs.tier == 'test-ci' && inputs.setup_recipe == '' && 'ghcr.io/dzackgarza/sage:develop' || '' }}
+    # The Sage image provides SAGE_BIN; a caller's setup recipe runs inside it.
+    container: ${{ inputs.profile == 'sage' && inputs.tier == 'test-ci' && 'ghcr.io/dzackgarza/sage:develop' || '' }}
     defaults:
       run:
         shell: bash
