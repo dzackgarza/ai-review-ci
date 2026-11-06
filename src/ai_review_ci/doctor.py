@@ -24,6 +24,10 @@ SCHEMA_VERSION: Literal[1] = 1
 ACCEPTANCE_SUITE = Path("tests") / "acceptance"
 ACCEPTANCE_WORKFLOW = "acceptance.yml"
 ACCEPTANCE_REUSABLE_WORKFLOW = "dzackgarza/ai-review-ci/.github/workflows/_acceptance.yml"
+REUSABLE_WORKFLOW_PREFIX = "dzackgarza/ai-review-ci/.github/workflows/"
+# The workflow_call workflows under this repository's .github/workflows/. GitHub
+# rejects a run whose job calls any other name before a job starts (#431).
+REUSABLE_WORKFLOWS = ("_acceptance.yml", "_gates.yml", "_qc.yml")
 MISSING_JUSTFILE_NAME = ".ai-review-ci-missing-justfile"
 JUSTFILE_CONTRACT_VARIABLES = {
     "schema_version": "ai_review_ci_schema_version",
@@ -546,6 +550,33 @@ def _pr_workflow_ref(
     )
 
 
+def _workflow_files(target: Path) -> list[Path]:
+    workflows = target / ".github" / "workflows"
+    return sorted([*workflows.glob("*.yml"), *workflows.glob("*.yaml")])
+
+
+def _unprovided_reusable_workflow_findings(target: Path) -> list[DoctorFinding]:
+    findings: list[DoctorFinding] = []
+    for path in _workflow_files(target):
+        jobs = TypeAdapter(dict[str, dict[str, Any]]).validate_python(_yaml_mapping(path)["jobs"])
+        for job_name, job in jobs.items():
+            uses = str(job["uses"]) if "uses" in job else ""
+            if not uses.startswith(REUSABLE_WORKFLOW_PREFIX):
+                continue
+            name = uses.removeprefix(REUSABLE_WORKFLOW_PREFIX).split("@", 1)[0]
+            if name in REUSABLE_WORKFLOWS:
+                continue
+            findings.append(
+                DoctorFinding(
+                    severity="error",
+                    surface="workflow",
+                    evidence=f"{path} job {job_name} calls {uses}; ai-review-ci provides no reusable workflow {name}",
+                    remediation_commands=(f"delete job {job_name} from {path}, and delete {path} if no job remains",),
+                )
+            )
+    return findings
+
+
 def _yaml_mapping(path: Path) -> Mapping[object, object]:
     data = yaml.safe_load(path.read_text())
     if not isinstance(data, Mapping):
@@ -832,6 +863,7 @@ def _findings(
                     ),
                 )
             )
+    findings.extend(_unprovided_reusable_workflow_findings(target_root))
     for recipe, observation in justfile_delegation.items():
         observed = observation.observed
         if not observed.present or not observed.delegates_to_global_qc or not observed.caller_root_preserved:
@@ -993,14 +1025,7 @@ def _sha256(path: Path) -> str:
 
 def _invalidation_inputs(target: Path, declaration_hash: str) -> tuple[str, ...]:
     inputs = [f"target_head:{_head(target)}", f"justfile_contract_sha256:{declaration_hash}"]
-    for path in [
-        target / "justfile",
-        target / "Justfile",
-        target / ".github" / "workflows" / PR_WORKFLOW,
-        target / ".github" / "workflows" / DEVELOPMENT_WORKFLOW,
-        target / ".github" / "workflows" / AMBIENT_WORKFLOW,
-        target / ".github" / "workflows" / ACCEPTANCE_WORKFLOW,
-    ]:
+    for path in [target / "justfile", target / "Justfile", *_workflow_files(target)]:
         if path.is_file():
             inputs.append(f"{path.relative_to(target)}:{_sha256(path)}")
     return tuple(inputs)

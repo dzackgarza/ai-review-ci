@@ -5,8 +5,10 @@ import sys
 from typing import Any
 
 import pytest
+import yaml
 
 from ai_review_ci.doctor import (
+    REUSABLE_WORKFLOWS,
     DoctorReport,
     ProfileAdapter,
     QcJustfileContract,
@@ -369,6 +371,14 @@ def test_doctor_reports_a_trigger_calling_a_reusable_workflow_ai_review_ci_does_
             "ai-review-ci provides no reusable workflow _review.yml",
         )
     ]
+
+
+def test_doctor_knows_every_reusable_workflow_ai_review_ci_provides() -> None:
+    workflows = {path.name: yaml.safe_load(path.read_text()) for path in (ROOT / ".github" / "workflows").glob("*.yml")}
+    # PyYAML reads the bare key `on` as the boolean True.
+    provided = {name for name, data in workflows.items() if isinstance(data[True], dict) and "workflow_call" in data[True]}
+
+    assert set(REUSABLE_WORKFLOWS) == provided
 
 
 def test_doctor_requires_ambient_recipe_delegation(tmp_path: pathlib.Path) -> None:
