@@ -573,10 +573,19 @@ def test_qc_workflow_installs_project_profile_before_running_acceptance() -> Non
     assert install == ('just -f "$HOME/ai-review-ci/ci/runner.just" setup-profile "$QC_PROFILE"')
 
 
-def test_sage_ci_uses_the_published_runtime_when_no_setup_is_supplied() -> None:
+def test_sage_ci_runs_the_setup_recipe_in_the_published_runtime() -> None:
+    # #491: the Sage image is the only provider of SAGE_BIN, so a caller's setup
+    # recipe runs inside it, with the node and bun a runner would carry.
     job = _workflow_jobs("_qc.yml")["qc"]
-    assert job["container"] == "${{ inputs.profile == 'sage' && inputs.tier == 'test-ci' && inputs.setup_recipe == '' && 'ghcr.io/dzackgarza/sage:develop' || '' }}"
+    assert job["container"] == "${{ inputs.profile == 'sage' && inputs.tier == 'test-ci' && 'ghcr.io/dzackgarza/sage:develop' || '' }}"
     assert job["defaults"]["run"]["shell"] == "bash"
+
+    names = [step.get("name") for step in job["steps"]]
+    node = job["steps"][names.index("Install node in the job container")]
+    assert node["uses"].startswith("actions/setup-node@")
+    assert node["if"] == "job.container.id != ''"
+    assert names.index("Install bun") < names.index("Provision project CI environment")
+    assert names.index("Install node in the job container") < names.index("Provision project CI environment")
 
 
 def test_sage_ambient_does_not_require_project_dependencies() -> None:
