@@ -348,6 +348,29 @@ def test_doctor_requires_the_acceptance_workflow_for_an_acceptance_suite(tmp_pat
     assert called_status == "current", called["findings"]
 
 
+def test_doctor_reports_a_trigger_calling_a_reusable_workflow_ai_review_ci_does_not_provide(tmp_path: pathlib.Path) -> None:
+    # #431: GitHub rejects a run whose job calls a deleted reusable workflow before any
+    # job starts, so a stale installed trigger fails every push and leaves no log.
+    project = create_target(tmp_path, "python")
+    stale = project / ".github" / "workflows" / "review-slop.yml"
+    stale.write_text(
+        "name: Slop Review\non: {push: {}}\njobs:\n  slop:\n"
+        "    uses: dzackgarza/ai-review-ci/.github/workflows/_review.yml@main\n"
+    )
+
+    status, payload = status_for(project)
+
+    assert status == "misconfigured"
+    assert [(finding["severity"], finding["surface"], finding["evidence"]) for finding in payload["findings"]] == [
+        (
+            "error",
+            "workflow",
+            f"{stale} job slop calls dzackgarza/ai-review-ci/.github/workflows/_review.yml@main; "
+            "ai-review-ci provides no reusable workflow _review.yml",
+        )
+    ]
+
+
 def test_doctor_requires_ambient_recipe_delegation(tmp_path: pathlib.Path) -> None:
     project = create_target(tmp_path, "sage")
     scaffold = (ROOT / "scaffolds" / "sage" / "justfile").read_text()
