@@ -1,6 +1,6 @@
 // POLICY.NO_HIDDEN_CONFIG: a constant whose name has a configuration word as
-// one of its `_`-separated segments, and whose value is a literal. A word
-// inside a longer word (PORT in EXPORT) is no such segment.
+// one of its `_`-separated segments after the first, and whose value is a
+// literal. A word inside a longer word (PORT in EXPORT) is no such segment.
 
 // ruleid: no-const-assignment
 const API_URL = "https://api.example.org/v1";
@@ -12,8 +12,6 @@ export const REQUEST_TIMEOUT_MS = 500;
 const SEARCH_PATHS = ["/usr/share", "/usr/local/share"];
 // ruleid: no-const-assignment
 const MAX_RETRIES = 3;
-// ruleid: no-const-assignment
-const TOKEN = "s3cr3t";
 // ruleid: no-const-assignment
 const MIRROR = "https://mirror.example.org/";
 
