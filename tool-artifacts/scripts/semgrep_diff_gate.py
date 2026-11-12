@@ -33,10 +33,13 @@ def _source_context(result: Mapping[str, object], source_root: Path) -> str:
             or not isinstance(last, int) or isinstance(last, bool)
             or not 0 <= first < last <= len(data)):
         raise ValueError("Semgrep source offsets must identify a nonempty source range")
-    for location in (start, end):
+    # The end offset is exclusive. Semgrep gives the end the line of the last
+    # byte of the range, so a range that closes with a newline ends on the
+    # line that the newline closes.
+    for location, byte in ((start, first), (end, last - 1)):
         if not isinstance(location["line"], int) or isinstance(location["line"], bool):
             raise ValueError("Semgrep source lines must be integers")
-        if location["line"] != data.count(b"\n", 0, location["offset"]) + 1:
+        if location["line"] != data.count(b"\n", 0, byte) + 1:
             raise ValueError("Semgrep source line and offset disagree")
     # Lexical rules can match only a declaration keyword. Include its complete
     # source lines so replacing the declaration cannot retain the old identity.
