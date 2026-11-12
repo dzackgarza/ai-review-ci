@@ -418,3 +418,62 @@ def test_current_severity_names_follow_their_legacy_equivalents(tmp_path: Path) 
     assert gates("HIGH") == (1, 1)
     assert gates("MEDIUM") == (0, 0)
     assert gates("LOW") == (0, 0)
+
+
+def test_finding_that_ends_with_the_final_newline_has_a_signature(tmp_path: Path) -> None:
+    """Semgrep gives the end of a range that closes with a newline the line of that newline."""
+    project = tmp_path / "caller"
+    project.mkdir()
+    subprocess.run(["git", "init", "-q", str(project)], check=True)
+    source = project / "settings.toml"
+    source.write_text("[install]\nregistry = \"local\"\n")
+    config = tmp_path / "rules.yml"
+    config.write_text(
+        yaml.safe_dump(
+            {
+                "rules": [
+                    {
+                        "id": "install-table-to-end",
+                        "pattern-regex": r"(?s)\[install\].*",
+                        "message": "install table",
+                        "languages": ["generic"],
+                        "severity": "WARNING",
+                    }
+                ]
+            }
+        )
+    )
+    scan = subprocess.run(
+        ["uvx", "--from", "semgrep", "semgrep", "scan", "--config", str(config), "--scan-unknown-extensions", "--no-git-ignore", "--json", str(source)],
+        cwd=project,
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    payload = json.loads(scan.stdout)
+    [finding] = payload["results"]
+    assert finding["end"]["offset"] == len(source.read_bytes())
+    report = project / "scan.json"
+    report.write_text(scan.stdout)
+    base = project / "base.json"
+    base.write_text('{"results":[],"errors":[]}')
+    diff = subprocess.run(
+        [
+            "python3",
+            str(ROOT / "tool-artifacts/scripts/semgrep_diff_gate.py"),
+            "--base-json",
+            str(report),
+            "--head-json",
+            str(report),
+            "--base-root",
+            str(project),
+            "--head-root",
+            str(project),
+        ],
+        cwd=project,
+        capture_output=True,
+        text=True,
+    )
+    assert "Traceback" not in diff.stderr, diff.stderr
+    assert diff.returncode == 0
+    assert "settings.toml: " in diff.stdout
