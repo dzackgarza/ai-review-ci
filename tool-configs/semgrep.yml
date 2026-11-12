@@ -38,7 +38,9 @@ rules:
     severity: ERROR
     patterns:
       - pattern-either:
-          - pattern-regex: (?m)^(?:export\s+)?const\s+[A-Z][A-Z0-9_]*(?:URL|URI|ENDPOINT|HOST|PORT|SERVER|DATABASE|COMMAND|CWD|PATH|DIR|DIRECTORY|TIMEOUT|RETRY|THRESHOLD|SECRET|TOKEN)[A-Z0-9_]*\s*=\s*(?:["'`][^"'`]*["'`]|[0-9]+(?:\.[0-9]+)?|\[[^\n]*\]|\{[^\n]*\})
+          # A configuration word is one whole `_`-separated segment of the
+          # name, in the singular or the plural: PORT in EXPORT is none (#363).
+          - pattern-regex: (?m)^(?:export\s+)?const\s+(?:[A-Z][A-Z0-9]*_)*(?:URL|URI|ENDPOINT|HOST|PORT|SERVER|DATABASE|COMMAND|CWD|PATH|DIR|DIRECTORY|TIMEOUT|RETRY|RETRIES|THRESHOLD|SECRET|TOKEN)S?(?:_[A-Z0-9]+)*\s*=\s*(?:["'`][^"'`]*["'`]|[0-9]+(?:\.[0-9]+)?|\[[^\n]*\]|\{[^\n]*\})
           - pattern-regex: (?m)^(?:export\s+)?const\s+[A-Z][A-Z0-9_]*\s*=\s*["'`](?:https?://|file://)[^"'`]*["'`]
     metadata:
       policy_code: POLICY.NO_HIDDEN_CONFIG
@@ -217,7 +219,12 @@ rules:
     metadata:
       policy_code: POLICY.CRITICAL_DEPENDENCY
   - id: py-no-hardcoded-env-var
-    pattern: os.environ[$KEY] = $VALUE
+    # A value that the program computes is not hidden configuration (#452).
+    patterns:
+      - pattern: os.environ[$KEY] = $VALUE
+      - metavariable-regex:
+          metavariable: $VALUE
+          regex: '^(?:"[^"]*"|\x27[^\x27]*\x27)$'
     message: POLICY.NO_HIDDEN_CONFIG
     languages:
       - python
@@ -225,9 +232,16 @@ rules:
     metadata:
       policy_code: POLICY.NO_HIDDEN_CONFIG
   - id: ts-no-hardcoded-env-var
-    pattern-either:
-      - pattern: process.env.$KEY = $VALUE
-      - pattern: process.env[$KEY] = $VALUE
+    # A value that the program computes is not hidden configuration: a
+    # template with an expression, an identifier, a call (#452).
+    patterns:
+      - pattern-either:
+          - pattern: process.env.$KEY = $VALUE
+          - pattern: process.env[$KEY] = $VALUE
+      - metavariable-regex:
+          metavariable: $VALUE
+          # Semgrep gives a template literal without its closing backtick.
+          regex: '^(?:"[^"]*"|\x27[^\x27]*\x27|\x60[^\x60$]*\x60?)$'
     message: POLICY.NO_HIDDEN_CONFIG
     languages:
       - typescript
@@ -236,9 +250,14 @@ rules:
     metadata:
       policy_code: POLICY.NO_HIDDEN_CONFIG
   - id: rust-no-hardcoded-env-var
-    pattern-either:
-      - pattern: env::set_var($KEY, $VALUE)
-      - pattern: std::env::set_var($KEY, $VALUE)
+    # A value that the program computes is not hidden configuration (#452).
+    patterns:
+      - pattern-either:
+          - pattern: env::set_var($KEY, $VALUE)
+          - pattern: std::env::set_var($KEY, $VALUE)
+      - metavariable-regex:
+          metavariable: $VALUE
+          regex: '^"[^"]*"$'
     message: POLICY.NO_HIDDEN_CONFIG
     languages:
       - rust
