@@ -145,6 +145,11 @@ def test_named_literal_constants_match_whole_name_segments() -> None:
     _assert_rules_match_annotations(("no-const-assignment",), "named_literal_constants.ts")
 
 
+def test_named_literal_constants_of_test_files_are_fixtures() -> None:
+    """#363: a constant of a test file is a fixed input of a proof, not hidden configuration."""
+    _assert_rules_match_annotations(("no-const-assignment",), "named_literal_constants*.ts")
+
+
 HARDCODED_ENV_VAR_RULES = ("ts-no-hardcoded-env-var", "py-no-hardcoded-env-var", "rust-no-hardcoded-env-var")
 
 
