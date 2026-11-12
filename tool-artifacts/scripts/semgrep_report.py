@@ -5,6 +5,12 @@ import argparse
 import json
 from pathlib import Path
 
+# Semgrep rule severities: the legacy names ERROR, WARNING and INFO equal HIGH,
+# MEDIUM and LOW, and CRITICAL is above HIGH
+# (https://semgrep.dev/docs/writing-rules/rule-syntax, field `severity`).
+BLOCKING_SEVERITIES = frozenset({'CRITICAL', 'HIGH', 'ERROR'})
+REVIEW_SEVERITIES = frozenset({'MEDIUM', 'WARNING', 'LOW', 'INFO'})
+
 
 def load_report(path: Path) -> dict[str, object]:
     """Preserve scanner metadata, rejecting missing or failed evaluations."""
@@ -36,7 +42,7 @@ def load_report(path: Path) -> dict[str, object]:
             raise ValueError('Semgrep start line must be a positive integer')
         if not isinstance(result['extra'], dict):
             raise ValueError('Semgrep finding metadata must be an object')
-        if result['extra']['severity'] not in {'ERROR', 'WARNING', 'INFO'}:
+        if result['extra']['severity'] not in BLOCKING_SEVERITIES | REVIEW_SEVERITIES:
             raise ValueError('unknown Semgrep finding severity')
     return payload
 

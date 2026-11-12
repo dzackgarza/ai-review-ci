@@ -24,7 +24,7 @@ import urllib.error
 import urllib.request
 from pathlib import Path
 
-from semgrep_report import load_report
+from semgrep_report import BLOCKING_SEVERITIES, load_report
 
 ISSUES = "dzackgarza/ai-review-ci"
 GITHUB_REMOTE = re.compile(r"github\.com[:/]([\w.-]+/[\w.-]+?)(?:\.git)?/?$")
@@ -54,7 +54,7 @@ def main() -> int:
     here = repository()
     kept, open_issues = [], {}
     for result in payload["results"]:
-        if result["extra"]["severity"] != "ERROR":
+        if result["extra"]["severity"] not in BLOCKING_SEVERITIES:
             kept.append(result)
             continue
         match = next((e for e in exceptions if e["repository"] == here and e["path"] == result["path"]
@@ -68,15 +68,13 @@ def main() -> int:
         kept.append(result)
     for result in kept:
         severity = result["extra"]["severity"]
-        if severity in {"WARNING", "INFO"}:
+        if severity not in BLOCKING_SEVERITIES:
             print(f"semgrep: independent review required ({severity}): "
                   f"{result['path']}:{result['start']['line']} {result['check_id']}")
     payload["results"] = kept
     output.write_text(json.dumps(payload))
     severities = {result["extra"]["severity"] for result in kept}
-    if not severities.issubset({"ERROR", "WARNING", "INFO"}):
-        raise ValueError(f"unknown Semgrep finding severity: {severities}")
-    return 1 if "ERROR" in severities else 0
+    return 1 if severities & BLOCKING_SEVERITIES else 0
 
 
 if __name__ == "__main__":

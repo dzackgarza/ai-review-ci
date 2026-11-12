@@ -9,7 +9,7 @@ from collections.abc import Mapping
 from pathlib import Path
 
 
-from semgrep_report import load_report
+from semgrep_report import BLOCKING_SEVERITIES, load_report
 
 
 def _string(value: object) -> str:
@@ -74,9 +74,7 @@ def finding_signatures(path: Path, source_root: Path) -> collections.Counter[str
         if not isinstance(result, dict):
             raise ValueError("Semgrep finding must be an object")
         severity = result["extra"]["severity"]
-        if severity not in ("ERROR", "WARNING", "INFO"):
-            raise ValueError(f"unknown Semgrep finding severity: {severity}")
-        if severity == "ERROR":
+        if severity in BLOCKING_SEVERITIES:
             signatures[_result_signature(result, source_root)] += 1
         else:
             print(f"semgrep review tripwire ({severity}): {_display_signature(_result_signature(result, source_root))}")
