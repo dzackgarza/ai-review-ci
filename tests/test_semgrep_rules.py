@@ -138,3 +138,16 @@ RUST_ERROR_DISCARD_RULES = ("rs-no-result-ok", "rs-no-unwrap-or", "rs-no-unwrap-
 def test_rust_error_discard_rules_flag_only_the_calls() -> None:
     """Only the discarding calls fire; identifiers that contain `ok` or `unwrap_or` do not."""
     _assert_rules_match_annotations(RUST_ERROR_DISCARD_RULES, "rust_error_discard.rs")
+
+
+def test_named_literal_constants_match_whole_name_segments() -> None:
+    """#363: a configuration word inside a longer word (PORT in EXPORT) is not a match."""
+    _assert_rules_match_annotations(("no-const-assignment",), "named_literal_constants.ts")
+
+
+HARDCODED_ENV_VAR_RULES = ("ts-no-hardcoded-env-var", "py-no-hardcoded-env-var", "rust-no-hardcoded-env-var")
+
+
+def test_hardcoded_env_var_rules_flag_only_literal_values() -> None:
+    """#452: an environment variable set to a computed value is not hidden configuration."""
+    _assert_rules_match_annotations(HARDCODED_ENV_VAR_RULES, "hardcoded_env_var.*")
