@@ -345,3 +345,76 @@ def test_ci_diff_distinguishes_replaced_hard_error_with_equal_counts(tmp_path: P
     assert old[0]["path"] == new[0]["path"] == "law.lean"
     assert old[0]["extra"]["message"] == new[0]["extra"]["message"]
     assert replaced.returncode != 0, replaced.stdout + replaced.stderr
+
+
+def test_current_severity_names_follow_their_legacy_equivalents(tmp_path: Path) -> None:
+    """Semgrep rules may use CRITICAL/HIGH/MEDIUM/LOW; HIGH is ERROR, MEDIUM is WARNING, LOW is INFO."""
+    project = tmp_path / "caller"
+    project.mkdir()
+    subprocess.run(["git", "init", "-q", str(project)], check=True)
+    source = project / "settings.toml"
+    source.write_text("[install]\nregistry = \"local\"\n")
+    base = project / "base.json"
+    base.write_text('{"results":[],"errors":[]}')
+    report = project / "scan.json"
+    config = tmp_path / "rules.yml"
+    exceptions = tmp_path / "exceptions.toml"
+    exceptions.write_text("exception = []\n")
+
+    def gates(severity: str) -> tuple[int, int]:
+        config.write_text(
+            yaml.safe_dump(
+                {
+                    "rules": [
+                        {
+                            "id": "install-table",
+                            "pattern-regex": r"\[install\]",
+                            "message": "install table",
+                            "languages": ["generic"],
+                            "severity": severity,
+                        }
+                    ]
+                }
+            )
+        )
+        scan = subprocess.run(
+            ["uvx", "--from", "semgrep", "semgrep", "scan", "--config", str(config), "--scan-unknown-extensions", "--no-git-ignore", "--json", str(source)],
+            cwd=project,
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+        payload = json.loads(scan.stdout)
+        assert [r["extra"]["severity"] for r in payload["results"]] == [severity]
+        report.write_text(scan.stdout)
+        diff = subprocess.run(
+            [
+                "python3",
+                str(ROOT / "tool-artifacts/scripts/semgrep_diff_gate.py"),
+                "--base-json",
+                str(base),
+                "--head-json",
+                str(report),
+                "--base-root",
+                str(project),
+                "--head-root",
+                str(project),
+            ],
+            cwd=project,
+            capture_output=True,
+            text=True,
+        )
+        assert "Traceback" not in diff.stderr, diff.stderr
+        full = subprocess.run(
+            ["python3", str(ROOT / "tool-artifacts/scripts/semgrep_exceptions.py"), str(exceptions), str(report)],
+            cwd=project,
+            capture_output=True,
+            text=True,
+        )
+        assert "Traceback" not in full.stderr, full.stderr
+        return diff.returncode, full.returncode
+
+    assert gates("CRITICAL") == (1, 1)
+    assert gates("HIGH") == (1, 1)
+    assert gates("MEDIUM") == (0, 0)
+    assert gates("LOW") == (0, 0)
