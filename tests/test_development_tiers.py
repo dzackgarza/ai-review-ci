@@ -255,6 +255,24 @@ def test_ci_retains_hidden_diagnostics_and_fails_if_report_absent() -> None:
     assert upload["with"]["if-no-files-found"] == "error"
 
 
+def test_ci_retains_test_runner_output_of_failed_tests() -> None:
+    # A test that fails only on the runner is diagnosed from the trace and
+    # screenshots its runner wrote under test-results/ (Playwright's output
+    # directory); without the artifact that evidence ends with the runner.
+    import yaml
+
+    workflow = yaml.safe_load((ROOT / ".github/workflows/_qc.yml").read_text())
+    steps = workflow["jobs"]["qc"]["steps"]
+    names = [step.get("name") for step in steps]
+    (upload,) = (step for step in steps if step.get("name") == "Retain test runner output")
+    assert names.index("Run QC tier") < names.index("Retain test runner output")
+    assert upload["if"] == "always()"
+    assert upload["uses"].startswith("actions/upload-artifact@")
+    assert upload["with"]["path"] == "test-results/"
+    assert upload["with"]["name"] == "test-results-${{ github.run_id }}-${{ github.run_attempt }}"
+    assert upload["with"]["if-no-files-found"] == "ignore"
+
+
 def test_ci_cancels_superseded_same_branch_runs() -> None:
     # Older revisions in a hosted-runner backlog must not consume runner
     # capacity ahead of the current branch revision. Different branches stay

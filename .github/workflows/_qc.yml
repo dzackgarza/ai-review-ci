@@ -275,6 +275,16 @@ jobs:
           path: .qc-triage/
           include-hidden-files: true
           if-no-files-found: error
+      # Traces and screenshots that a test runner writes to test-results/
+      # (Playwright's output directory) are the only evidence of a test that
+      # fails on the runner alone. A project without that directory uploads nothing.
+      - name: Retain test runner output
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: test-results-${{ github.run_id }}-${{ github.run_attempt }}
+          path: test-results/
+          if-no-files-found: ignore
       # The delegated profile owns scanner applicability. qc-tooling omits product
       # scanners on checker sources; its missing artifact is not an empty scan.
       # For profiles requiring Semgrep, missing reports remain missing review input.
