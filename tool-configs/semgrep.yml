@@ -28,10 +28,15 @@ rules:
   - id: no-const-assignment
     message: POLICY.NO_HIDDEN_CONFIG
     paths:
+      # A test file is no configuration surface: its constants are the fixed
+      # inputs of a proof (#363).
       exclude:
         - '*config*'
         - '*.config.*'
         - '*.d.ts'
+        - '**/*.test.*'
+        - '**/*.spec.*'
+        - '**/__tests__/**/*'
     languages:
       - typescript
       - javascript
