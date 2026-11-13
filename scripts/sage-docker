@@ -119,6 +119,12 @@ if [[ "$mode" == sage-docker-update ]]; then
             fi
         done
     '
+    # A link into the volumes whose checkout is gone names nothing; drop it.
+    for path in "$checkout_root"/*; do
+        if [[ -L "$path" && ! -e "$path" && "$(readlink "$path")" == "$volume_root"/* ]]; then
+            trash "$path"
+        fi
+    done
     links=("sage=$volume_root/sage-tree/_data")
     for checkout in "$volume_root"/sage-repos/_data/*/; do
         checkout=${checkout%/}
