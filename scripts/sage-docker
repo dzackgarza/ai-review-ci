@@ -26,7 +26,8 @@ checkout_root="$HOME/gitclones"
 
 mode=${0##*/}
 if [[ "$mode" == sage-docker-update ]]; then
-    exec 9>/home/dzack/.cache/sage-docker-tmp/update.lock
+    mkdir -p "$HOME/.cache/sage-docker-tmp"
+    exec 9>"$HOME/.cache/sage-docker-tmp/update.lock"
     flock 9
     remote_manifest=$(docker manifest inspect "$image" | jq -er \
         '.manifests[] | select(.platform.os == "linux" and .platform.architecture == "amd64") | .digest')
@@ -54,6 +55,40 @@ if [[ "$mode" == sage-docker-update ]]; then
         fi
     fi
     docker pull "$image"
+    # The sage-tree volume shadows the image's /sage. Docker fills a named volume
+    # from the image only when it creates the volume, so after a new image the
+    # checkout, its venv and its build tree are the previous image's. Bring them to
+    # the image: fast-forward the checkout to the image's revision and take the
+    # derived .venv and builddir from the image. A dirty checkout or one that
+    # cannot fast-forward stops the update.
+    tree="$volume_root/sage-tree/_data"
+    image_revision=$(docker image inspect "$image" | jq -er \
+        '.[0].Config.Labels["org.opencontainers.image.revision"]')
+    if [[ -d "$tree/.git" && "$(cat "$volume_root/sage-tree/image-revision" 2>/dev/null)" != "$image_revision" ]]; then
+        if [[ -n "$(git -C "$tree" status --porcelain)" ]]; then
+            printf 'the sage-tree checkout %s has uncommitted changes; commit them before updating to %s\n' \
+                "$tree" "$image_revision" >&2
+            exit 1
+        fi
+        git -C "$tree" fetch --quiet origin "$image_revision"
+        git -C "$tree" merge --quiet --ff-only "$image_revision"
+        if [[ -n "$current" ]]; then
+            docker rm -f "$container"
+            current=
+        fi
+        staging=$(mktemp -d "$volume_root/sage-tree/image-products.XXXXXX")
+        source_container=$(docker create "$image")
+        for product in .venv builddir; do
+            docker cp "$source_container:/sage/$product" "$staging/$product"
+        done
+        docker rm "$source_container"
+        for product in .venv builddir; do
+            trash "$tree/$product"
+            mv "$staging/$product" "$tree/$product"
+        done
+        rmdir "$staging"
+        printf '%s\n' "$image_revision" > "$volume_root/sage-tree/image-revision"
+    fi
     if [[ -z "$current" ]]; then
         mounts=(--mount type=bind,src=/home/dzack,dst=/home/dzack)
         for volume in "${volumes[@]}"; do
@@ -85,6 +120,12 @@ if [[ "$mode" == sage-docker-update ]]; then
             fi
         done
     '
+    # A link into the volumes whose checkout is gone names nothing; drop it.
+    for path in "$checkout_root"/*; do
+        if [[ -L "$path" && ! -e "$path" && "$(readlink "$path")" == "$volume_root"/* ]]; then
+            trash "$path"
+        fi
+    done
     links=("sage=$volume_root/sage-tree/_data")
     for checkout in "$volume_root"/sage-repos/_data/*/; do
         checkout=${checkout%/}
