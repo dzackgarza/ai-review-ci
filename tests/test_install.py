@@ -778,7 +778,12 @@ def test_qc_push_diff_uses_previous_commit_and_branch_scoped_debt(tmp_path: path
                     "-c", "core.hooksPath=/dev/null", "commit", "-q", "-m", "base"],
                    cwd=repo, check=True)
     base = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=repo, text=True).strip()
-    subprocess.run(["git", "update-ref", "refs/remotes/origin/main", base], cwd=repo, check=True)
+    # The resolver fetches the default branch from origin, as a checkout of
+    # workflow_dispatch needs.
+    origin = tmp_path / "origin.git"
+    subprocess.run(["git", "init", "-q", "--bare", str(origin)], check=True)
+    subprocess.run(["git", "remote", "add", "origin", str(origin)], cwd=repo, check=True)
+    subprocess.run(["git", "push", "-q", "origin", "main"], cwd=repo, check=True)
     subprocess.run(["git", "checkout", "-q", "-b", "feature"], cwd=repo, check=True)
     (repo / "tracked").write_text("feature")
     subprocess.run(["git", "add", "tracked"], cwd=repo, check=True)
@@ -787,7 +792,14 @@ def test_qc_push_diff_uses_previous_commit_and_branch_scoped_debt(tmp_path: path
                    cwd=repo, check=True)
     output = tmp_path / "github-env"
     output.write_text("")
-    env = os.environ | {"DIFF_COVER_BASE": "0" * 40, "GITHUB_ENV": str(output)}
+    # The resolver adds the workspace to the global safe.directory list; the
+    # global configuration of the test is a file of its own.
+    env = os.environ | {
+        "DIFF_COVER_BASE": "0" * 40,
+        "GITHUB_ENV": str(output),
+        "GITHUB_WORKSPACE": str(repo),
+        "GIT_CONFIG_GLOBAL": str(tmp_path / "gitconfig"),
+    }
     result = subprocess.run(["bash", "-e", "-o", "pipefail", "-c", script],
                             cwd=repo, env=env, text=True, capture_output=True)
     assert result.returncode == 0, result.stdout + result.stderr
