@@ -112,12 +112,13 @@ if [[ "$mode" == sage-docker-update ]]; then
     done
     docker top "$container" | grep -q 'sleep infinity'
     docker exec "$container" /bin/bash -c '
+        # The shared environments name the packages the image depot holds, so
+        # each update takes them from the image.
         mkdir -p /root/.julia/environments
         for environment in /opt/julia-depot/environments/*; do
             target="/root/.julia/environments/${environment##*/}"
-            if [[ ! -e "$target" ]]; then
-                cp -a "$environment" "$target"
-            fi
+            rm -rf "$target"
+            cp -a "$environment" "$target"
         done
     '
     # A link into the volumes whose checkout is gone names nothing; drop it.
