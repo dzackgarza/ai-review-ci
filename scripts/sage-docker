@@ -26,7 +26,8 @@ checkout_root="$HOME/gitclones"
 
 mode=${0##*/}
 if [[ "$mode" == sage-docker-update ]]; then
-    exec 9>/home/dzack/.cache/sage-docker-tmp/update.lock
+    mkdir -p "$HOME/.cache/sage-docker-tmp"
+    exec 9>"$HOME/.cache/sage-docker-tmp/update.lock"
     flock 9
     remote_manifest=$(docker manifest inspect "$image" | jq -er \
         '.manifests[] | select(.platform.os == "linux" and .platform.architecture == "amd64") | .digest')
