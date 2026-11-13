@@ -647,6 +647,7 @@ def test_qc_workflow_caches_project_setup_around_the_recipe(tmp_path: pathlib.Pa
             "RUNNER_OS": "Linux",
             "QC_SETUP_RECIPE": "setup-ci",
             "QC_SETUP_CACHE_KEY_FILES": "setup.sh\npins.json\n",
+            "QC_SETUP_CACHE_PERIOD": "",
             "GITHUB_OUTPUT": str(output),
         }
         subprocess.run(["bash", "-euo", "pipefail", "-c", key_step["run"]], cwd=tmp_path, env=env, check=True)
