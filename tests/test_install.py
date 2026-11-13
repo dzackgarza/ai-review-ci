@@ -1,3 +1,4 @@
+import datetime
 import os
 import pathlib
 import subprocess
@@ -646,6 +647,7 @@ def test_qc_workflow_caches_project_setup_around_the_recipe(tmp_path: pathlib.Pa
             "RUNNER_OS": "Linux",
             "QC_SETUP_RECIPE": "setup-ci",
             "QC_SETUP_CACHE_KEY_FILES": "setup.sh\npins.json\n",
+            "QC_SETUP_CACHE_PERIOD": "",
             "GITHUB_OUTPUT": str(output),
         }
         subprocess.run(["bash", "-euo", "pipefail", "-c", key_step["run"]], cwd=tmp_path, env=env, check=True)
@@ -656,6 +658,47 @@ def test_qc_workflow_caches_project_setup_around_the_recipe(tmp_path: pathlib.Pa
     assert cache_key() == first
     (tmp_path / "setup.sh").write_text("install v2\n")
     assert cache_key() != first
+
+
+def test_qc_workflow_setup_cache_follows_the_period_of_a_rolling_source(tmp_path: pathlib.Path) -> None:
+    # A setup recipe that installs from a rolling repository (TeX Live) has no
+    # pin in its key files; with setup_cache_period the key also holds the ISO
+    # week, so the cache follows upstream once a week.
+    job = _workflow_jobs("_qc.yml")["qc"]
+    key_step = next(step for step in job["steps"] if step.get("name") == "Key the project CI environment cache")
+    validation = next(step for step in job["steps"] if step.get("name") == "Validate inputs")
+    (tmp_path / "setup.sh").write_text("install v1\n")
+
+    def run_step(script: str, period: str) -> subprocess.CompletedProcess[str]:
+        output = tmp_path / "github-output"
+        output.write_text("")
+        env = {
+            "PATH": "/usr/bin:/bin",
+            "RUNNER_OS": "Linux",
+            "QC_TIER": "test-ci",
+            "QC_PROFILE": "bun",
+            "QC_ENFORCEMENT": "none",
+            "QC_INFRA_REF": "main",
+            "QC_SETUP_RECIPE": "setup-ci",
+            "QC_SETUP_CACHE_PATHS": "~/texlive\n",
+            "QC_SETUP_CACHE_KEY_FILES": "setup.sh\n",
+            "QC_SETUP_CACHE_PERIOD": period,
+            "GITHUB_OUTPUT": str(output),
+        }
+        return subprocess.run(["bash", "-euo", "pipefail", "-c", script], cwd=tmp_path, env=env, capture_output=True, text=True)
+
+    def cache_key(period: str) -> str:
+        run_step(key_step["run"], period).check_returncode()
+        return (tmp_path / "github-output").read_text().removeprefix("key=").strip()
+
+    year, week, _ = datetime.datetime.now(datetime.UTC).isocalendar()
+    without_period = cache_key("")
+    weekly = cache_key("iso-week")
+    assert weekly == without_period.replace("-setup-ci-", f"-setup-ci-{year}-W{week:02d}-", 1)
+    assert run_step(validation["run"], "iso-week").returncode == 0
+    refused = run_step(validation["run"], "daily")
+    assert refused.returncode == 1
+    assert "invalid setup_cache_period: daily" in refused.stderr
 
 
 def test_qc_workflow_accepts_only_remote_acceptance_tiers() -> None:
@@ -735,7 +778,12 @@ def test_qc_push_diff_uses_previous_commit_and_branch_scoped_debt(tmp_path: path
                     "-c", "core.hooksPath=/dev/null", "commit", "-q", "-m", "base"],
                    cwd=repo, check=True)
     base = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=repo, text=True).strip()
-    subprocess.run(["git", "update-ref", "refs/remotes/origin/main", base], cwd=repo, check=True)
+    # The resolver fetches the default branch from origin, as a checkout of
+    # workflow_dispatch needs.
+    origin = tmp_path / "origin.git"
+    subprocess.run(["git", "init", "-q", "--bare", str(origin)], check=True)
+    subprocess.run(["git", "remote", "add", "origin", str(origin)], cwd=repo, check=True)
+    subprocess.run(["git", "push", "-q", "origin", "main"], cwd=repo, check=True)
     subprocess.run(["git", "checkout", "-q", "-b", "feature"], cwd=repo, check=True)
     (repo / "tracked").write_text("feature")
     subprocess.run(["git", "add", "tracked"], cwd=repo, check=True)
@@ -744,7 +792,14 @@ def test_qc_push_diff_uses_previous_commit_and_branch_scoped_debt(tmp_path: path
                    cwd=repo, check=True)
     output = tmp_path / "github-env"
     output.write_text("")
-    env = os.environ | {"DIFF_COVER_BASE": "0" * 40, "GITHUB_ENV": str(output)}
+    # The resolver adds the workspace to the global safe.directory list; the
+    # global configuration of the test is a file of its own.
+    env = os.environ | {
+        "DIFF_COVER_BASE": "0" * 40,
+        "GITHUB_ENV": str(output),
+        "GITHUB_WORKSPACE": str(repo),
+        "GIT_CONFIG_GLOBAL": str(tmp_path / "gitconfig"),
+    }
     result = subprocess.run(["bash", "-e", "-o", "pipefail", "-c", script],
                             cwd=repo, env=env, text=True, capture_output=True)
     assert result.returncode == 0, result.stdout + result.stderr
