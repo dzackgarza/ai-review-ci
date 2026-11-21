@@ -146,7 +146,7 @@ def test_linked_worktree_records_into_shared_log(tmp_path: pathlib.Path) -> None
     assert pathlib.Path(str(hooks[0]["worktree"])).resolve() == worktree.resolve()
 
 
-def test_first_commit_reports_that_no_history_exists(tmp_path: pathlib.Path) -> None:
+def test_commit_prints_the_duration_it_logged(tmp_path: pathlib.Path) -> None:
     repo = init_repo(tmp_path / "repo")
     (repo / "module.py").write_text("x = 1\n")
     run_git(["add", "module.py"], repo)
@@ -154,19 +154,23 @@ def test_first_commit_reports_that_no_history_exists(tmp_path: pathlib.Path) -> 
     result = run_git(["commit", "-q", "-m", "first"], repo, check=False)
 
     assert result.returncode == 0, result.stdout + result.stderr
-    assert "pre-commit: no timing history yet" in result.stderr
+    logged_seconds = records(repo)[0]["duration_ms"] / 1000
+    assert f"pre-commit: checks took {logged_seconds:.1f}s" in result.stderr
 
 
-def test_later_commit_prints_median_of_recorded_runs(tmp_path: pathlib.Path) -> None:
+def test_push_prints_the_duration_it_logged(tmp_path: pathlib.Path) -> None:
     repo = init_repo(tmp_path / "repo")
-    for index in range(2):
-        (repo / "module.py").write_text(f"x = {index}\n")
-        run_git(["add", "module.py"], repo)
-        result = run_git(["commit", "-q", "-m", f"commit {index}"], repo, check=False)
-        assert result.returncode == 0, result.stdout + result.stderr
+    (repo / "module.py").write_text("x = 1\n")
+    run_git(["add", "module.py"], repo)
+    run_git(["-c", "core.hooksPath=/dev/null", "commit", "-q", "-m", "add module"], repo)
+    destination = tmp_path / "remote.git"
+    run_git(["init", "--bare", "-q", str(destination)], tmp_path)
 
-    assert "pre-commit: expected" in result.stderr
-    assert "median of 1 previous run" in result.stderr
+    result = run_git(["push", str(destination), "main"], repo, check=False)
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    logged_seconds = records(repo)[0]["duration_ms"] / 1000
+    assert f"pre-push: checks took {logged_seconds:.1f}s" in result.stderr
 
 
 def test_unwritable_timing_log_fails_the_hook_loudly(tmp_path: pathlib.Path) -> None:

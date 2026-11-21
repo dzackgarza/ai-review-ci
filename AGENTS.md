@@ -141,10 +141,9 @@ same path, found by running the gate and reading its output, is `#409`.
   verdict. The pre-push directive requires the agent to compare the published work
   against the review skills it names and remediate before claiming the task complete.
   The directives are advisory; hooks do not run those reviews locally.
-- Every hook run, in every repository including exempt ones, prints its expected
-  duration at start (median of the last ten successful runs of that hook in that
-  repository, or a statement that no history exists) and appends its measured
-  duration and exit code to `<git-common-dir>/ai-review-ci/timing/hooks.jsonl`.
+- Every hook run, in every repository including exempt ones, prints how long its
+  checks took for that one commit or push and appends the measured duration and
+  exit code to `<git-common-dir>/ai-review-ci/timing/hooks.jsonl`.
   `repo-hooks/hook-timing.sh` and `scripts/hook-timing.py` own this. A failure to
   record fails the hook.
 - test-ci and ambient: independent checks and full suites that write structured
