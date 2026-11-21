@@ -135,7 +135,7 @@ def test_ai_review_ci_hooks_still_run_in_downstream_repos(
     )
 
     assert result.returncode == 0, result.stdout + result.stderr
-    assert f"{'Push' if hook == 'pre-push' else 'Staged'} syntax: 0 file(s)" in result.stdout
+    assert "downstream-ran" in result.stdout
 
 
 @pytest.mark.parametrize("installation", ["global", "repo"])
@@ -261,7 +261,7 @@ def test_hooks_still_gate_dzackgarza_repos(hook_source_repo: pathlib.Path, tmp_p
     owned = _init_downstream(tmp_path / "owned", recipe, "@echo owned-ran", remote="https://github.com/dzackgarza/foo.git")
     result = subprocess.run([str(hook_source_repo / hook_dir / hook)], cwd=owned, env=git_test_env(), text=True, capture_output=True, check=False)
     assert result.returncode == 0, result.stdout + result.stderr
-    assert f"{'Push' if hook == 'pre-push' else 'Staged'} syntax: 0 file(s)" in result.stdout
+    assert "owned-ran" in result.stdout
 
 
 def test_hooks_pass_exact_candidate_blobs_to_project_validator(
@@ -408,7 +408,7 @@ def test_hooks_gate_a_repo_that_is_not_a_fork(hook_source_repo: pathlib.Path, tm
     result = subprocess.run([str(hook_source_repo / hook_dir / hook)], cwd=owned, env=git_test_env(), text=True, capture_output=True, check=False)
 
     assert result.returncode == 0, result.stdout + result.stderr
-    assert f"{'Push' if hook == 'pre-push' else 'Staged'} syntax: 0 file(s)" in result.stdout
+    assert "owned-ran" in result.stdout
 
 
 @pytest.mark.parametrize(("hook_dir", "hook", "recipe"), BYPASS_HOOKS)
@@ -421,7 +421,7 @@ def test_hooks_gate_a_fork_of_another_repo_in_the_account(hook_source_repo: path
     result = subprocess.run([str(hook_source_repo / hook_dir / hook)], cwd=fork, env=git_test_env(), text=True, capture_output=True, check=False)
 
     assert result.returncode == 0, result.stdout + result.stderr
-    assert f"{'Push' if hook == 'pre-push' else 'Staged'} syntax: 0 file(s)" in result.stdout
+    assert "owned-ran" in result.stdout
 
 
 def test_pre_push_checks_committed_tree_and_not_empty_index(
