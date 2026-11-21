@@ -57,11 +57,11 @@ test-gh-boundary:
 
 # Install the complete QC enforcement surface into a target repo.
 install repo branch profile target=".":
-    uvx --from . ai-review-ci install --target {{target}} --repo {{repo}} --branch {{branch}} --profile {{profile}}
+    uv run ai-review-ci install --target {{target}} --repo {{repo}} --branch {{branch}} --profile {{profile}}
 
 # Create/update the canonical label taxonomy on a target repo (idempotent).
 install-labels repo:
-    uvx --from . ai-review-ci install-labels --repo {{repo}}
+    uv run ai-review-ci install-labels --repo {{repo}}
 
 # Install globally managed Git hooks for this user.
 install-global-hooks:

@@ -92,8 +92,8 @@ them.
   named in the issue.
 - **`complexity:low`** — standard agent; CI-guarded; safe to parallelize.
 
-Apply exactly one `complexity:*` to every `work-unit`. Group/`epic` issues carry none (complexity
-lives on the leaf that a branch claims). Re-rate a unit if its dependency reach or the availability
+Apply exactly one `complexity:*` to every issue, epics included. An epic carries the highest drift
+risk among the work it groups. Re-rate a unit if its dependency reach or the availability
 of a reusable construction changes.
 
 ## `size:*` labels — anticipated amount of work
@@ -124,15 +124,15 @@ scope.
 - Dispatch capability comes from `complexity:*`; batching and split decisions come from
   `size:*`. One label never substitutes for the other.
 
-Apply exactly one `size:*` to every `work-unit`. Group/`epic` issues carry none (size lives
-on the leaf a branch claims), matching `complexity:*`.
+Apply exactly one `size:*` to every issue, epics included. An epic usually rates `size:l` or
+`size:xl`, which marks it for splitting before dispatch.
 
 ## Routing checklist when opening an issue
 
 1. Exactly one `type` label (`bug` only for observed defects).
 2. A `scope` label when the issue is an epic, a claimable work-unit, or research-gated.
-3. Exactly one `complexity:*` label on every `work-unit` (drift risk, not size).
-4. Exactly one `size:*` label on every `work-unit` (anticipated scope, orthogonal to complexity).
+3. Exactly one `complexity:*` label on every issue (drift risk, not size).
+4. Exactly one `size:*` label on every issue (anticipated scope, orthogonal to complexity).
 5. An `area:*` label naming the owning surface, when one applies.
 6. `blocker` only when it actually blocks other tracked work.
 
