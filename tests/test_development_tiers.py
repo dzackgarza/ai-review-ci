@@ -10,8 +10,8 @@ import pytest
 
 ROOT = Path(__file__).resolve().parents[1]
 SHARED = str(ROOT / "justfiles" / "shared.just")
-LOCAL_COMMIT = ["just", "-q", "-f", SHARED, "-d", ".", "_local-check", "staged"]
-LOCAL_PUSH = ["just", "-q", "-f", SHARED, "-d", ".", "_local-check", "push"]
+LOCAL_COMMIT = ["just", "-f", SHARED, "-d", ".", "_local-check", "staged"]
+LOCAL_PUSH = ["just", "-f", SHARED, "-d", ".", "_local-check", "push"]
 TRIAGE = ROOT / "scripts" / "ci-triage.py"
 
 

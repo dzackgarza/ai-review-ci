@@ -90,7 +90,7 @@ just install-global-hooks
 The pre-commit hook runs exactly the repository's `just test-commit`, and the
 pre-push hook runs exactly its `just test-push`. Every central profile's
 `test-commit` and `test-push` call the private `_local-check` recipe in
-`justfiles/shared.just`, which parses the candidate Git index at commit and every
+`justfiles/shared.just`, which runs `scripts/local-check.py` to parse the candidate Git index at commit and every
 outgoing ref at push. At push, the hook sets `AI_REVIEW_CI_PRE_PUSH_REMOTE` and
 leaves Git's ref list on stdin for that recipe.
 
