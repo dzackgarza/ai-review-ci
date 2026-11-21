@@ -132,13 +132,11 @@ def test_ai_review_ci_hooks_still_run_in_downstream_repos(
     )
 
     assert result.returncode == 0, result.stdout + result.stderr
-    assert f'{"Push" if hook == "pre-push" else "Staged"} syntax: 0 file(s)' in result.stdout
+    assert f"{'Push' if hook == 'pre-push' else 'Staged'} syntax: 0 file(s)" in result.stdout
 
 
 @pytest.mark.parametrize("installation", ["global", "repo"])
-def test_pre_commit_preserves_pathspec_temporary_index(
-    hook_source_repo: pathlib.Path, tmp_path: pathlib.Path, installation: str
-) -> None:
+def test_pre_commit_preserves_pathspec_temporary_index(hook_source_repo: pathlib.Path, tmp_path: pathlib.Path, installation: str) -> None:
     """The checker reads Git's temporary --only index without mutating other work."""
     hooks_path = hook_source_repo / "repo-hooks"
     if installation == "global":
@@ -156,7 +154,9 @@ def test_pre_commit_preserves_pathspec_temporary_index(
     subprocess.run(["git", "add", "."], cwd=downstream, env=git_test_env(), check=True)
     subprocess.run(
         ["git", "-c", "core.hooksPath=/dev/null", "commit", "-q", "-m", "base"],
-        cwd=downstream, env=git_test_env(), check=True,
+        cwd=downstream,
+        env=git_test_env(),
+        check=True,
     )
     subprocess.run(["git", "config", "core.hooksPath", str(hooks_path)], cwd=downstream, env=git_test_env(), check=True)
 
@@ -166,13 +166,20 @@ def test_pre_commit_preserves_pathspec_temporary_index(
     (downstream / "mine.py").write_text("def f(x): return x + 1\\n".replace("\\n", "\n"))
     result = subprocess.run(
         ["git", "commit", "--only", "mine.py", "-m", "pathspec commit"],
-        cwd=downstream, env=git_test_env(), text=True, capture_output=True,
+        cwd=downstream,
+        env=git_test_env(),
+        text=True,
+        capture_output=True,
     )
     assert result.returncode == 0, result.stdout + result.stderr
     assert "Staged syntax: 1 file(s)" in result.stderr
     assert subprocess.run(
-        ["git", "diff", "--cached", "--name-only"], cwd=downstream, env=git_test_env(),
-        text=True, capture_output=True, check=True,
+        ["git", "diff", "--cached", "--name-only"],
+        cwd=downstream,
+        env=git_test_env(),
+        text=True,
+        capture_output=True,
+        check=True,
     ).stdout.splitlines() == ["sibling.py"]
 
     # An invalid candidate for --only must be rejected, while the unrelated
@@ -180,13 +187,20 @@ def test_pre_commit_preserves_pathspec_temporary_index(
     (downstream / "mine.py").write_text("def broken(:\\n".replace("\\n", "\n"))
     rejected = subprocess.run(
         ["git", "commit", "--only", "mine.py", "-m", "invalid candidate"],
-        cwd=downstream, env=git_test_env(), text=True, capture_output=True,
+        cwd=downstream,
+        env=git_test_env(),
+        text=True,
+        capture_output=True,
     )
     assert rejected.returncode == 1, rejected.stdout + rejected.stderr
     assert "mine.py" in rejected.stderr
     assert subprocess.run(
-        ["git", "diff", "--cached", "--name-only"], cwd=downstream, env=git_test_env(),
-        text=True, capture_output=True, check=True,
+        ["git", "diff", "--cached", "--name-only"],
+        cwd=downstream,
+        env=git_test_env(),
+        text=True,
+        capture_output=True,
+        check=True,
     ).stdout.splitlines() == ["sibling.py"]
 
 
@@ -244,14 +258,17 @@ def test_hooks_still_gate_dzackgarza_repos(hook_source_repo: pathlib.Path, tmp_p
     owned = _init_downstream(tmp_path / "owned", recipe, "@echo owned-ran", remote="https://github.com/dzackgarza/foo.git")
     result = subprocess.run([str(hook_source_repo / hook_dir / hook)], cwd=owned, env=git_test_env(), text=True, capture_output=True, check=False)
     assert result.returncode == 0, result.stdout + result.stderr
-    assert f'{"Push" if hook == "pre-push" else "Staged"} syntax: 0 file(s)' in result.stdout
+    assert f"{'Push' if hook == 'pre-push' else 'Staged'} syntax: 0 file(s)" in result.stdout
 
 
 def test_hooks_pass_exact_candidate_blobs_to_project_validator(
-    hook_source_repo: pathlib.Path, tmp_path: pathlib.Path,
+    hook_source_repo: pathlib.Path,
+    tmp_path: pathlib.Path,
 ) -> None:
     project = _init_downstream(
-        tmp_path / "owned", "test-commit", "@true",
+        tmp_path / "owned",
+        "test-commit",
+        "@true",
         remote="https://github.com/dzackgarza/example.git",
     )
     (project / "scripts").mkdir()
@@ -277,64 +294,75 @@ def test_hooks_pass_exact_candidate_blobs_to_project_validator(
     subprocess.run(["git", "add", "."], cwd=project, env=git_test_env(), check=True)
     card.write_text("BROKEN in worktree only\n")
     staged = subprocess.run(
-        [str(hook_source_repo / "repo-hooks" / "pre-commit")], cwd=project,
-        env=git_test_env(), capture_output=True, text=True,
+        [str(hook_source_repo / "repo-hooks" / "pre-commit")],
+        cwd=project,
+        env=git_test_env(),
+        capture_output=True,
+        text=True,
     )
     assert staged.returncode == 0, staged.stdout + staged.stderr
     assert "Project staged: 3 candidate(s)" in staged.stdout
 
     subprocess.run(["git", "add", "card.md"], cwd=project, env=git_test_env(), check=True)
     rejected = subprocess.run(
-        [str(hook_source_repo / "repo-hooks" / "pre-commit")], cwd=project,
-        env=git_test_env(), capture_output=True, text=True,
+        [str(hook_source_repo / "repo-hooks" / "pre-commit")],
+        cwd=project,
+        env=git_test_env(),
+        capture_output=True,
+        text=True,
     )
     assert rejected.returncode == 1, rejected.stdout + rejected.stderr
 
     subprocess.run(
-        ["git", "-c", "user.name=Test", "-c", "user.email=test@example.com",
-         "-c", "core.hooksPath=/dev/null", "commit", "-q", "-m", "candidate"],
-        cwd=project, env=git_test_env(), check=True,
+        ["git", "-c", "user.name=Test", "-c", "user.email=test@example.com", "-c", "core.hooksPath=/dev/null", "commit", "-q", "-m", "candidate"],
+        cwd=project,
+        env=git_test_env(),
+        check=True,
     )
     oid = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=project, text=True).strip()
     card.write_text("repaired\n")
     subprocess.run(["git", "add", "card.md"], cwd=project, env=git_test_env(), check=True)
     subprocess.run(
-        ["git", "-c", "user.name=Test", "-c", "user.email=test@example.com",
-         "-c", "core.hooksPath=/dev/null", "commit", "-q", "-m", "repaired"],
-        cwd=project, env=git_test_env(), check=True,
+        ["git", "-c", "user.name=Test", "-c", "user.email=test@example.com", "-c", "core.hooksPath=/dev/null", "commit", "-q", "-m", "repaired"],
+        cwd=project,
+        env=git_test_env(),
+        check=True,
     )
     repaired_oid = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=project, text=True).strip()
     push = subprocess.run(
-        [str(hook_source_repo / "repo-hooks" / "pre-push")], cwd=project,
-        env=git_test_env(), input=(
-            f"refs/heads/repaired {repaired_oid} refs/heads/repaired {'0' * 40}\n"
-            f"refs/heads/broken {oid} refs/heads/broken {'0' * 40}\n"
-        ),
-        capture_output=True, text=True,
+        [str(hook_source_repo / "repo-hooks" / "pre-push")],
+        cwd=project,
+        env=git_test_env(),
+        input=(f"refs/heads/repaired {repaired_oid} refs/heads/repaired {'0' * 40}\nrefs/heads/broken {oid} refs/heads/broken {'0' * 40}\n"),
+        capture_output=True,
+        text=True,
     )
     assert push.returncode == 1, push.stdout + push.stderr
     assert "Project push: 4 candidate(s)" in push.stdout
 
 
 @pytest.mark.parametrize(("hook_dir", "hook", "recipe"), BYPASS_HOOKS)
-def test_hooks_report_only_local_syntax_failure(
-    hook_source_repo: pathlib.Path, tmp_path: pathlib.Path, hook_dir: str, hook: str, recipe: str
-) -> None:
+def test_hooks_report_only_local_syntax_failure(hook_source_repo: pathlib.Path, tmp_path: pathlib.Path, hook_dir: str, hook: str, recipe: str) -> None:
     gated = _init_downstream(tmp_path / "gated", recipe, "@exit 1", remote="https://github.com/dzackgarza/foo.git")
     (gated / "broken.py").write_text("def broken(:\\n".replace("\\n", "\n"))
     subprocess.run(["git", "add", "broken.py"], cwd=gated, env=git_test_env(), check=True)
     stdin = ""
     if hook == "pre-push":
         subprocess.run(
-            ["git", "-c", "user.name=Test", "-c", "user.email=test@example.com",
-             "-c", "core.hooksPath=/dev/null", "commit", "-q", "-m", "invalid outgoing tree"],
-            cwd=gated, env=git_test_env(), check=True,
+            ["git", "-c", "user.name=Test", "-c", "user.email=test@example.com", "-c", "core.hooksPath=/dev/null", "commit", "-q", "-m", "invalid outgoing tree"],
+            cwd=gated,
+            env=git_test_env(),
+            check=True,
         )
         sha = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=gated, text=True).strip()
         stdin = f"refs/heads/main {sha} refs/heads/main {'0' * 40}\n"
     result = subprocess.run(
-        [str(hook_source_repo / hook_dir / hook)], cwd=gated, env=git_test_env(),
-        input=stdin, text=True, capture_output=True,
+        [str(hook_source_repo / hook_dir / hook)],
+        cwd=gated,
+        env=git_test_env(),
+        input=stdin,
+        text=True,
+        capture_output=True,
     )
     assert result.returncode == 1, result.stdout + result.stderr
     assert ("outgoing-commit syntax" if hook == "pre-push" else "staged-source syntax") in result.stderr
@@ -377,7 +405,7 @@ def test_hooks_gate_a_repo_that_is_not_a_fork(hook_source_repo: pathlib.Path, tm
     result = subprocess.run([str(hook_source_repo / hook_dir / hook)], cwd=owned, env=git_test_env(), text=True, capture_output=True, check=False)
 
     assert result.returncode == 0, result.stdout + result.stderr
-    assert f'{"Push" if hook == "pre-push" else "Staged"} syntax: 0 file(s)' in result.stdout
+    assert f"{'Push' if hook == 'pre-push' else 'Staged'} syntax: 0 file(s)" in result.stdout
 
 
 @pytest.mark.parametrize(("hook_dir", "hook", "recipe"), BYPASS_HOOKS)
@@ -390,11 +418,12 @@ def test_hooks_gate_a_fork_of_another_repo_in_the_account(hook_source_repo: path
     result = subprocess.run([str(hook_source_repo / hook_dir / hook)], cwd=fork, env=git_test_env(), text=True, capture_output=True, check=False)
 
     assert result.returncode == 0, result.stdout + result.stderr
-    assert f'{"Push" if hook == "pre-push" else "Staged"} syntax: 0 file(s)' in result.stdout
+    assert f"{'Push' if hook == 'pre-push' else 'Staged'} syntax: 0 file(s)" in result.stdout
 
 
 def test_pre_push_checks_committed_tree_and_not_empty_index(
-    hook_source_repo: pathlib.Path, tmp_path: pathlib.Path,
+    hook_source_repo: pathlib.Path,
+    tmp_path: pathlib.Path,
 ) -> None:
     """A prior commit's syntax defect cannot disappear at the next push."""
     source = tmp_path / "source"
@@ -404,54 +433,78 @@ def test_pre_push_checks_committed_tree_and_not_empty_index(
     subprocess.run(["git", "init", "--bare", "-q", str(destination)], env=git_test_env(), check=True)
     subprocess.run(
         ["git", "remote", "add", "origin", "https://github.com/dzackgarza/example.git"],
-        cwd=source, env=git_test_env(), check=True,
+        cwd=source,
+        env=git_test_env(),
+        check=True,
     )
     subprocess.run(
         ["git", "config", "core.hooksPath", str(hook_source_repo / "repo-hooks")],
-        cwd=source, env=git_test_env(), check=True,
+        cwd=source,
+        env=git_test_env(),
+        check=True,
     )
     subprocess.run(
         ["git", "config", "ai-review-ci.upstream-owner", "none"],
-        cwd=source, env=git_test_env(), check=True,
+        cwd=source,
+        env=git_test_env(),
+        check=True,
     )
 
     def commit(content: str) -> str:
         (source / "module.py").write_text(content)
         subprocess.run(["git", "add", "module.py"], cwd=source, env=git_test_env(), check=True)
         subprocess.run(
-            ["git", "-c", "user.name=Test", "-c", "user.email=test@example.com",
-             "-c", "core.hooksPath=/dev/null", "commit", "-q", "-m", "candidate"],
-            cwd=source, env=git_test_env(), check=True,
+            ["git", "-c", "user.name=Test", "-c", "user.email=test@example.com", "-c", "core.hooksPath=/dev/null", "commit", "-q", "-m", "candidate"],
+            cwd=source,
+            env=git_test_env(),
+            check=True,
         )
         return subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=source, text=True).strip()
 
     original = commit("def f(x): return x\n")
     initial = subprocess.run(
         ["git", "push", str(destination), "HEAD:refs/heads/main"],
-        cwd=source, env=git_test_env(), capture_output=True, text=True,
+        cwd=source,
+        env=git_test_env(),
+        capture_output=True,
+        text=True,
     )
     assert initial.returncode == 0, initial.stdout + initial.stderr
 
     commit("def broken(:\n")
-    assert subprocess.run(
-        ["git", "diff", "--cached", "--quiet"], cwd=source, env=git_test_env(),
-    ).returncode == 0
+    assert (
+        subprocess.run(
+            ["git", "diff", "--cached", "--quiet"],
+            cwd=source,
+            env=git_test_env(),
+        ).returncode
+        == 0
+    )
 
     rejected = subprocess.run(
         ["git", "push", str(destination), "HEAD:refs/heads/main"],
-        cwd=source, env=git_test_env(), capture_output=True, text=True,
+        cwd=source,
+        env=git_test_env(),
+        capture_output=True,
+        text=True,
     )
     assert rejected.returncode != 0, rejected.stdout + rejected.stderr
     assert "module.py" in rejected.stderr
     assert "outgoing-commit syntax check failed" in rejected.stderr
-    assert subprocess.check_output(
-        ["git", "--git-dir", str(destination), "rev-parse", "refs/heads/main"],
-        text=True,
-    ).strip() == original
+    assert (
+        subprocess.check_output(
+            ["git", "--git-dir", str(destination), "rev-parse", "refs/heads/main"],
+            text=True,
+        ).strip()
+        == original
+    )
 
     commit("def f(x): return x + 1\n")
     accepted = subprocess.run(
         ["git", "push", str(destination), "HEAD:refs/heads/main"],
-        cwd=source, env=git_test_env(), capture_output=True, text=True,
+        cwd=source,
+        env=git_test_env(),
+        capture_output=True,
+        text=True,
     )
     assert accepted.returncode == 0, accepted.stdout + accepted.stderr

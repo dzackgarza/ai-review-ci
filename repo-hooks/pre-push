@@ -7,6 +7,21 @@ qc_should_gate || exit 0
 # API-dependent issue-closure confrontation or machine-wide heavy gate runs
 # during publication of an unfinished implementation.
 if python3 "$qc_hook_repo/scripts/local-check.py" --mode push --pre-push --remote "${1:-origin}"; then
+    {
+        echo "ai-review-ci hook: SKILL AUDIT REQUIRED BEFORE CLAIMING COMPLETION"
+        echo "  Compare the work in this push against the governing review skills and"
+        echo "  remediate every finding before reporting the task complete:"
+        echo "    test-guidelines         — tests prove real behavior; no mocks or masking"
+        echo "    bespoke-software-policy — which findings apply to bespoke software at all"
+        echo "    policy-index            — the POLICY.* record that owns each obligation"
+        echo "    style-guide             — the governed construction pattern for the language"
+        echo "    code-patterns           — where each behavior lives and how general it is"
+        echo "    anti-slop               — dead control flow, fallbacks, mocks, proof laundering"
+        echo "    reviewing-llm-code      — validation evasion in agent-written code, tests, docs"
+        echo "    fixing-slop             — owns the remediation workflow for those findings"
+        echo "  Load each skill matching the changed files, audit, remediate, commit, then"
+        echo "  report completion."
+    } >&2
     exit 0
 fi
 echo "Local outgoing-commit syntax check failed; see the file and line above." >&2
