@@ -109,6 +109,10 @@ repositories the gate exempts still record how long the check they ran took, and
 linked worktrees write into the shared common directory. No threshold is
 applied -- the log holds raw measurements.
 
+At exit each hook also prints the duration to standard error, for example
+`pre-commit: checks took 2.3s`, so a commit or push shows how long its checks
+took.
+
 Each record has:
 
 | Field | Meaning |
