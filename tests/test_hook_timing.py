@@ -58,6 +58,10 @@ def init_repo(path: pathlib.Path, remote: str = "https://github.com/dzackgarza/e
         run_git(["config", key, value], path)
     if remote is not None:
         run_git(["remote", "add", "origin", remote], path)
+    central = ROOT / "justfiles" / "qc-tooling.just"
+    (path / "justfile").write_text(
+        "".join(f"{recipe}:\n    @just -f {central} -d . {recipe}\n\n" for recipe in ("test-commit", "test-push"))
+    )
     return path
 
 
@@ -131,7 +135,7 @@ def test_exempt_repository_still_records_timing(tmp_path: pathlib.Path) -> None:
 def test_linked_worktree_records_into_shared_log(tmp_path: pathlib.Path) -> None:
     repo = init_repo(tmp_path / "repo")
     (repo / "module.py").write_text("x = 0\n")
-    run_git(["add", "module.py"], repo)
+    run_git(["add", "module.py", "justfile"], repo)
     run_git(["-c", "core.hooksPath=/dev/null", "commit", "-q", "-m", "base"], repo)
     worktree = tmp_path / "worktree"
     run_git(["worktree", "add", "-q", str(worktree), "-b", "feature"], repo)

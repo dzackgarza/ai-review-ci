@@ -108,11 +108,12 @@ def push_refs(remote: str, pre_push: bool) -> list[tuple[str, str | None]]:
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--mode", choices=("staged", "push"), default="staged")
-    parser.add_argument("--pre-push", action="store_true")
-    parser.add_argument("--remote", default="origin")
     args = parser.parse_args()
-    if args.pre_push and args.mode != "push":
-        parser.error("--pre-push requires --mode push")
+    # The global pre-push hook sets this variable and leaves Git's ref list on
+    # stdin; a manual `just test-push` sets neither.
+    pushed_remote = os.environ.get("AI_REVIEW_CI_PRE_PUSH_REMOTE")
+    args.pre_push = pushed_remote is not None
+    args.remote = pushed_remote or "origin"
     try:
         changes: list[tuple[str, str]] = []
         if args.mode == "staged":

@@ -4,12 +4,12 @@ set -e
 . "$(dirname -- "$(readlink -f "$0")")/qc-exempt.sh"
 qc_should_gate || exit 0
 
-# GitHub CI owns all suites and review diagnostics. In particular, no
-# API-dependent issue-closure confrontation or machine-wide heavy gate runs
-# during publication of an unfinished implementation.
-if python3 "$qc_hook_repo/scripts/local-check.py" --mode push --pre-push --remote "${1:-origin}"; then
+# The push hook runs exactly the repository's `just test-push`. Git's pre-push
+# stdin (the outgoing refs) reaches the recipe unchanged; the variable tells
+# scripts/local-check.py that stdin is that ref list and which remote is pushed.
+if AI_REVIEW_CI_PRE_PUSH_REMOTE="${1:-origin}" just test-push; then
     qc_print_directive pre-push
     exit 0
 fi
-echo "Local outgoing-commit syntax check failed; see the file and line above." >&2
+echo "ai-review-ci push gate failed: just test-push; see the output above." >&2
 exit 1

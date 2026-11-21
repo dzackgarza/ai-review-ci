@@ -4,11 +4,10 @@ set -e
 . "$(dirname -- "$(readlink -f "$0")")/qc-exempt.sh"
 qc_should_gate || exit 0
 
-# Development feedback only. No dependency installation, style, typing,
-# performance, complete test suites, or policy review in the local loop.
-if python3 "$qc_hook_repo/scripts/local-check.py"; then
+# The commit hook runs exactly the repository's `just test-commit`.
+if just test-commit; then
     qc_print_directive pre-commit
     exit 0
 fi
-echo "Local staged-source syntax check failed; see the file and line above." >&2
+echo "ai-review-ci commit gate failed: just test-commit; see the output above." >&2
 exit 1

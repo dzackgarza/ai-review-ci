@@ -61,6 +61,9 @@ def hook_source_repo(tmp_path: pathlib.Path) -> pathlib.Path:
     (repo / "scripts").mkdir()
     shutil.copy(ROOT / "scripts" / "local-check.py", repo / "scripts" / "local-check.py")
     shutil.copy(ROOT / "scripts" / "hook-timing.py", repo / "scripts" / "hook-timing.py")
+    # Downstream justfiles delegate to the central recipes, which run local-check.py.
+    (repo / "justfiles").mkdir()
+    shutil.copy(ROOT / "justfiles" / "qc-tooling.just", repo / "justfiles" / "qc-tooling.just")
     # pre-push resolves the closure-claim confrontation script (#244) relative
     # to the hook repo, so the copied layout must carry it too.
     (repo / "global-hooks").mkdir()
@@ -150,6 +153,7 @@ def test_pre_commit_preserves_pathspec_temporary_index(hook_source_repo: pathlib
     downstream = tmp_path / "pathspec-downstream"
     downstream.mkdir()
     subprocess.run(["git", "init", "-q"], cwd=downstream, env=git_test_env(), check=True)
+    (downstream / "justfile").write_text(delegating_justfile(hook_source_repo))
     for key, value in (("user.name", "Test"), ("user.email", "test@example.invalid"), ("commit.gpgsign", "false")):
         subprocess.run(["git", "config", key, value], cwd=downstream, env=git_test_env(), check=True)
     for name in ("sibling.py", "mine.py"):
@@ -205,6 +209,12 @@ def test_pre_commit_preserves_pathspec_temporary_index(hook_source_repo: pathlib
         capture_output=True,
         check=True,
     ).stdout.splitlines() == ["sibling.py"]
+
+
+def delegating_justfile(hook_source_repo: pathlib.Path) -> str:
+    """The thin downstream justfile that AGENTS.md prescribes."""
+    central = hook_source_repo / "justfiles" / "qc-tooling.just"
+    return "".join(f"{recipe}:\n    @just -f {central} -d . {recipe}\n\n" for recipe in ("test-commit", "test-push"))
 
 
 def path_with_only(tmp_path: pathlib.Path, *commands: str) -> str:
@@ -274,6 +284,7 @@ def test_hooks_pass_exact_candidate_blobs_to_project_validator(
         "@true",
         remote="https://github.com/dzackgarza/example.git",
     )
+    (project / "justfile").write_text(delegating_justfile(hook_source_repo))
     (project / "scripts").mkdir()
     validator = project / "scripts" / "local-validate.py"
     validator.write_text(
@@ -345,7 +356,7 @@ def test_hooks_pass_exact_candidate_blobs_to_project_validator(
 
 
 @pytest.mark.parametrize(("hook_dir", "hook", "recipe"), BYPASS_HOOKS)
-def test_hooks_report_only_local_syntax_failure(hook_source_repo: pathlib.Path, tmp_path: pathlib.Path, hook_dir: str, hook: str, recipe: str) -> None:
+def test_hooks_fail_when_the_repo_recipe_fails(hook_source_repo: pathlib.Path, tmp_path: pathlib.Path, hook_dir: str, hook: str, recipe: str) -> None:
     gated = _init_downstream(tmp_path / "gated", recipe, "@exit 1", remote="https://github.com/dzackgarza/foo.git")
     (gated / "broken.py").write_text("def broken(:\\n".replace("\\n", "\n"))
     subprocess.run(["git", "add", "broken.py"], cwd=gated, env=git_test_env(), check=True)
@@ -368,7 +379,7 @@ def test_hooks_report_only_local_syntax_failure(hook_source_repo: pathlib.Path, 
         capture_output=True,
     )
     assert result.returncode == 1, result.stdout + result.stderr
-    assert ("outgoing-commit syntax" if hook == "pre-push" else "staged-source syntax") in result.stderr
+    assert f"gate failed: just {recipe}" in result.stderr
     assert "red-commit" not in result.stderr
     assert "xfail" not in result.stderr
 
@@ -452,6 +463,7 @@ def test_pre_push_checks_committed_tree_and_not_empty_index(
         env=git_test_env(),
         check=True,
     )
+    (source / "justfile").write_text(delegating_justfile(hook_source_repo))
 
     def commit(content: str) -> str:
         (source / "module.py").write_text(content)
@@ -493,7 +505,7 @@ def test_pre_push_checks_committed_tree_and_not_empty_index(
     )
     assert rejected.returncode != 0, rejected.stdout + rejected.stderr
     assert "module.py" in rejected.stderr
-    assert "outgoing-commit syntax check failed" in rejected.stderr
+    assert "push gate failed: just test-push" in rejected.stderr
     assert (
         subprocess.check_output(
             ["git", "--git-dir", str(destination), "rev-parse", "refs/heads/main"],
