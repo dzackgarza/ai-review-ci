@@ -123,6 +123,9 @@ scope.
 - **`size:xs` / `size:s`** — safe to batch several independent units into one session.
 - Dispatch capability comes from `complexity:*`; batching and split decisions come from
   `size:*`. One label never substitutes for the other.
+- Neither label sets work order. A small unit that a large unit would redo is a relation
+  between two issues: absorb it, supersede it, or add a `blocked_by` edge. `itree doctor`
+  question `Q006` names the unrecorded pairs; `itree help model` has the relation table.
 
 Apply exactly one `size:*` to every issue, epics included. An epic usually rates `size:l` or
 `size:xl`, which marks it for splitting before dispatch.
