@@ -363,6 +363,20 @@ _normalize: _install-tools
 		echo "ruff normalization: no changed Python files."
 		exit 0
 	fi
+	# ruff rewrites the working tree, so a fix reaches the commit only when it is
+	# staged again: a staged file whose working tree equals its staged blob is
+	# restaged after ruff; a partially staged one is named instead.
+	restage=()
+	partial=()
+	for file in "${python_files[@]}"; do
+		if git diff --cached --quiet -- "$file"; then
+			continue
+		elif git diff --quiet -- "$file"; then
+			restage+=("$file")
+		else
+			partial+=("$file")
+		fi
+	done
 	if uvx --from ruff ruff check --fix \
 		--config {{configs}}/ruff-global.toml \
 		"${python_files[@]}"; then
@@ -382,6 +396,13 @@ _normalize: _install-tools
 		echo "ERROR: ruff format found issues in project code."
 		"{{artifacts}}/scripts/emit-triage-directive.sh"
 		exit $ec
+	fi
+	if [ "${#restage[@]}" -gt 0 ]; then
+		git add -- "${restage[@]}"
+	fi
+	if [ "${#partial[@]}" -gt 0 ]; then
+		echo "WARNING: ruff fixes not staged, since these files have unstaged changes:" >&2
+		printf '  %s\n' "${partial[@]}" >&2
 	fi
 
 # CI-only Ruff checks are read-only: normalization must not rewrite source.

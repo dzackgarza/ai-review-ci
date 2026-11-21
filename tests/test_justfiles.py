@@ -990,6 +990,49 @@ def test_common_normalization_formats_structured_text(
     assert json_file.read_text() == '{ "b": 2, "a": 1 }\n'
 
 
+def test_common_normalization_stages_what_it_formats(tmp_path: pathlib.Path) -> None:
+    project = tmp_path / "project"
+    project.mkdir()
+    init_git_repo(project)
+    (project / "README.md").write_text("# Title\n")
+    (project / "NOTES.md").write_text("# Notes\n")
+    assert run_git(project, "add", "README.md", "NOTES.md").returncode == 0
+    commit_without_hooks(project, "baseline")
+    (project / "README.md").write_text("# Title\n\n-   item\n")
+    (project / "NOTES.md").write_text("# Notes\n\n-   staged\n")
+    assert run_git(project, "add", "README.md", "NOTES.md").returncode == 0
+    # NOTES.md also has an unstaged hunk, which staging the formatted file would commit.
+    (project / "NOTES.md").write_text("# Notes\n\n-   staged\n\n-   unstaged\n")
+
+    result = run_just(ROOT / "justfiles" / "shared.just", project, "_format-structured-text")
+
+    output = result.stdout + result.stderr
+    assert result.returncode == 0, output
+    assert run_git(project, "show", ":README.md").stdout == "# Title\n\n- item\n"
+    assert run_git(project, "diff", "--quiet", "--", "README.md").returncode == 0
+    assert run_git(project, "show", ":NOTES.md").stdout == "# Notes\n\n-   staged\n"
+    assert "NOTES.md" in result.stderr
+
+
+def test_python_normalization_stages_its_fixes(tmp_path: pathlib.Path) -> None:
+    project = tmp_path / "project"
+    (project / "src").mkdir(parents=True)
+    (project / "pyproject.toml").write_text('[project]\nname = "fixture"\nversion = "0"\n')
+    init_git_repo(project)
+    (project / "src" / "module.py").write_text("x = 1\n")
+    assert run_git(project, "add", ".").returncode == 0
+    commit_without_hooks(project, "baseline")
+    (project / "src" / "module.py").write_text("x  =  [1,2]\n")
+    assert run_git(project, "add", "src/module.py").returncode == 0
+
+    result = run_just(ROOT / "justfiles" / "python.just", project, "_normalize")
+
+    output = result.stdout + result.stderr
+    assert result.returncode == 0, output
+    assert run_git(project, "show", ":src/module.py").stdout == "x = [1, 2]\n"
+    assert run_git(project, "diff", "--quiet", "--", "src/module.py").returncode == 0
+
+
 def test_common_normalization_formats_staged_text_beyond_one_argument_list(
     tmp_path: pathlib.Path,
 ) -> None:
