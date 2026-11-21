@@ -26,11 +26,11 @@ _check-links:
 
 # Reformat Markdown and structured configuration before commit.
 test-commit:
-    @python3 "{{justfile_directory()}}/../scripts/local-check.py"
+    @just -f {{infra}}/justfiles/shared.just -d . _local-check staged
 
 # Validate tracked documentation links before push.
 test-push:
-    @python3 "{{justfile_directory()}}/../scripts/local-check.py" --mode push
+    @just -f {{infra}}/justfiles/shared.just -d . _local-check push
 
 # Validate tracked documentation links in CI.
 test-ci:

@@ -877,7 +877,7 @@ _sage-mypy: _sage-qc-files
 
 # public: COMMIT gate — immediate, directly repairable feedback
 test-commit:
-    @python3 "{{justfile_directory()}}/../scripts/local-check.py"
+    @just -f {{justfiles}}/shared.just -d . _local-check staged
 
 # public: PUSH gate — commit checks, the project-owned test suite, and the
 # deterministic checks a developer can answer without leaving the local loop.
@@ -902,7 +902,7 @@ _sage-file-length:
 		xargs -0 -r -- "$linecheck_bin" --config {{configs}}/linecheck.yml --
 
 test-push:
-    @python3 "{{justfile_directory()}}/../scripts/local-check.py" --mode push
+    @just -f {{justfiles}}/shared.just -d . _local-check push
 
 _sage-ast-grep:
 	#!/usr/bin/env bash

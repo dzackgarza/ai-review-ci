@@ -13,11 +13,11 @@ justfiles := infra / "justfiles"
 
 # public: COMMIT gate — both languages' commit checks
 test-commit:
-    @python3 "{{justfile_directory()}}/../scripts/local-check.py"
+    @just -f {{justfiles}}/shared.just -d . _local-check staged
 
 # public: PUSH gate — both languages' push checks and test suites
 test-push:
-    @python3 "{{justfile_directory()}}/../scripts/local-check.py" --mode push
+    @just -f {{justfiles}}/shared.just -d . _local-check push
 
 # public: CI gate — both languages' CI gates, then the cross-language stack once
 test-ci:

@@ -59,11 +59,11 @@ def hook_source_repo(tmp_path: pathlib.Path) -> pathlib.Path:
     shutil.copy(ROOT / "repo-hooks" / "qc-exempt.sh", target_dir / "qc-exempt.sh")
     shutil.copy(ROOT / "repo-hooks" / "hook-timing.sh", target_dir / "hook-timing.sh")
     (repo / "scripts").mkdir()
-    shutil.copy(ROOT / "scripts" / "local-check.py", repo / "scripts" / "local-check.py")
     shutil.copy(ROOT / "scripts" / "hook-timing.py", repo / "scripts" / "hook-timing.py")
-    # Downstream justfiles delegate to the central recipes, which run local-check.py.
+    # Downstream justfiles delegate to the central recipes, which carry the inline syntax check.
     (repo / "justfiles").mkdir()
     shutil.copy(ROOT / "justfiles" / "qc-tooling.just", repo / "justfiles" / "qc-tooling.just")
+    shutil.copy(ROOT / "justfiles" / "shared.just", repo / "justfiles" / "shared.just")
     # pre-push resolves the closure-claim confrontation script (#244) relative
     # to the hook repo, so the copied layout must carry it too.
     (repo / "global-hooks").mkdir()
@@ -272,87 +272,6 @@ def test_hooks_still_gate_dzackgarza_repos(hook_source_repo: pathlib.Path, tmp_p
     result = subprocess.run([str(hook_source_repo / hook_dir / hook)], cwd=owned, env=git_test_env(), text=True, capture_output=True, check=False)
     assert result.returncode == 0, result.stdout + result.stderr
     assert "owned-ran" in result.stdout
-
-
-def test_hooks_pass_exact_candidate_blobs_to_project_validator(
-    hook_source_repo: pathlib.Path,
-    tmp_path: pathlib.Path,
-) -> None:
-    project = _init_downstream(
-        tmp_path / "owned",
-        "test-commit",
-        "@true",
-        remote="https://github.com/dzackgarza/example.git",
-    )
-    (project / "justfile").write_text(delegating_justfile(hook_source_repo))
-    (project / "scripts").mkdir()
-    validator = project / "scripts" / "local-validate.py"
-    validator.write_text(
-        "#!/usr/bin/env python3\n"
-        "import argparse, json, subprocess, sys\n"
-        "parser = argparse.ArgumentParser()\n"
-        "parser.add_argument('--mode', required=True)\n"
-        "args = parser.parse_args()\n"
-        "records = [json.loads(line) for line in sys.stdin]\n"
-        "print(f'Project {args.mode}: {len(records)} candidate(s)')\n"
-        "for record in records:\n"
-        "    if record['path'].endswith('.md'):\n"
-        "        revision = ':' if record['version'] == 'index' else record['version'] + ':'\n"
-        "        blob = subprocess.run(['git', 'show', revision + record['path']], check=True, capture_output=True, text=True).stdout\n"
-        "        if 'BROKEN' in blob:\n"
-        "            sys.exit(1)\n"
-    )
-    validator.chmod(0o755)
-    card = project / "card.md"
-    card.write_text("valid\n")
-    subprocess.run(["git", "add", "."], cwd=project, env=git_test_env(), check=True)
-    card.write_text("BROKEN in worktree only\n")
-    staged = subprocess.run(
-        [str(hook_source_repo / "repo-hooks" / "pre-commit")],
-        cwd=project,
-        env=git_test_env(),
-        capture_output=True,
-        text=True,
-    )
-    assert staged.returncode == 0, staged.stdout + staged.stderr
-    assert "Project staged: 3 candidate(s)" in staged.stdout
-
-    subprocess.run(["git", "add", "card.md"], cwd=project, env=git_test_env(), check=True)
-    rejected = subprocess.run(
-        [str(hook_source_repo / "repo-hooks" / "pre-commit")],
-        cwd=project,
-        env=git_test_env(),
-        capture_output=True,
-        text=True,
-    )
-    assert rejected.returncode == 1, rejected.stdout + rejected.stderr
-
-    subprocess.run(
-        ["git", "-c", "user.name=Test", "-c", "user.email=test@example.com", "-c", "core.hooksPath=/dev/null", "commit", "-q", "-m", "candidate"],
-        cwd=project,
-        env=git_test_env(),
-        check=True,
-    )
-    oid = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=project, text=True).strip()
-    card.write_text("repaired\n")
-    subprocess.run(["git", "add", "card.md"], cwd=project, env=git_test_env(), check=True)
-    subprocess.run(
-        ["git", "-c", "user.name=Test", "-c", "user.email=test@example.com", "-c", "core.hooksPath=/dev/null", "commit", "-q", "-m", "repaired"],
-        cwd=project,
-        env=git_test_env(),
-        check=True,
-    )
-    repaired_oid = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=project, text=True).strip()
-    push = subprocess.run(
-        [str(hook_source_repo / "repo-hooks" / "pre-push")],
-        cwd=project,
-        env=git_test_env(),
-        input=(f"refs/heads/repaired {repaired_oid} refs/heads/repaired {'0' * 40}\nrefs/heads/broken {oid} refs/heads/broken {'0' * 40}\n"),
-        capture_output=True,
-        text=True,
-    )
-    assert push.returncode == 1, push.stdout + push.stderr
-    assert "Project push: 4 candidate(s)" in push.stdout
 
 
 @pytest.mark.parametrize(("hook_dir", "hook", "recipe"), BYPASS_HOOKS)

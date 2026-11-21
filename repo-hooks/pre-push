@@ -6,7 +6,7 @@ qc_should_gate || exit 0
 
 # The push hook runs exactly the repository's `just test-push`. Git's pre-push
 # stdin (the outgoing refs) reaches the recipe unchanged; the variable tells
-# scripts/local-check.py that stdin is that ref list and which remote is pushed.
+# the recipe that stdin is that ref list and which remote is pushed.
 if AI_REVIEW_CI_PRE_PUSH_REMOTE="${1:-origin}" just test-push; then
     qc_print_directive pre-push
     exit 0

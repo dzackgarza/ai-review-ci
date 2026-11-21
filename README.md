@@ -88,18 +88,16 @@ just install-global-hooks
 ```
 
 The pre-commit hook runs exactly the repository's `just test-commit`, and the
-pre-push hook runs exactly its `just test-push`. The central recipes run
-`scripts/local-check.py` from this checkout, which inspects the candidate Git
-index at commit and every outgoing ref at push. At push, the hook sets
-`AI_REVIEW_CI_PRE_PUSH_REMOTE` and leaves Git's ref list on stdin for that script.
+pre-push hook runs exactly its `just test-push`. Every central profile's
+`test-commit` and `test-push` call the private `_local-check` recipe in
+`justfiles/shared.just`, which parses the candidate Git index at commit and every
+outgoing ref at push. At push, the hook sets `AI_REVIEW_CI_PRE_PUSH_REMOTE` and
+leaves Git's ref list on stdin for that recipe.
 
-A project can add an executable `scripts/local-validate.py` for cheap checks of
-its own content. `local-check.py` invokes its shebang with `--mode staged` or
-`--mode push` and sends one JSON record per changed file on stdin. Each record
-has `path` and `version`; `version` is `index` at commit or the exact candidate
-commit ID at push. The validator reads each blob with `git show :<path>` or
-`git show <version>:<path>` and exits nonzero to reject it. This hook has no
-tool installation step. Full suites and broad diagnostics remain in CI.
+A project adds its own cheap checks as extra lines in its root `test-commit` and
+`test-push` recipes, after the delegated line. There is no side-channel script.
+The hooks have no tool installation step. Full suites and broad diagnostics
+remain in CI.
 
 ### Hook timing
 

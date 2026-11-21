@@ -646,11 +646,11 @@ _doctor-preflight:
 
 # public: COMMIT gate — immediate, directly repairable feedback
 test-commit:
-    @python3 "{{justfile_directory()}}/../scripts/local-check.py"
+    @just -f {{justfiles}}/shared.just -d . _local-check staged
 
 # public: PUSH gate — commit checks plus the full project-owned test suite
 test-push:
-    @python3 "{{justfile_directory()}}/../scripts/local-check.py" --mode push
+    @just -f {{justfiles}}/shared.just -d . _local-check push
 
 # private: the Bun CI gates without the cross-language stack, which a profile that
 # composes several languages runs once (bun-python.just). `_coverage` is the

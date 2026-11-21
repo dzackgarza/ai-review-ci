@@ -3070,7 +3070,7 @@ def test_language_qc_delegates_nested_global_recipes_in_project_directory(
 
         output = result.stdout + result.stderr
         assert result.returncode == 0, output
-        expected_script = "ci-triage.py" if recipe == "test-ci" else "local-check.py"
+        expected_script = "ci-triage.py" if recipe == "test-ci" else "_local-check"
         assert expected_script in output
         assert "justfile_directory()" not in output
 
@@ -3093,7 +3093,7 @@ def test_public_gate_composition_separates_immediate_checks_from_full_suite(
     push = recipe_body(text, "test-push")
     ci = recipe_body(text, "test-ci")
 
-    assert "local-check.py" in commit and "local-check.py" in push
+    assert "_local-check" in commit and "_local-check" in push
     assert "ci-triage.py" in ci
     assert full_suite_recipe not in commit and full_suite_recipe not in push
     assert "_mypy" not in commit and "_mypy" not in push
@@ -4565,10 +4565,10 @@ def test_docs_and_configs_qc_routes_formatting_and_link_validation(tmp_path: pat
     profile_justfile = str(ROOT / "justfiles" / "docs-and-configs.just")
 
     assert commit.returncode == 0, commit.stderr
-    assert "local-check.py" in commit.stderr
+    assert "_local-check" in commit.stderr
     assert "_format-structured-text" not in commit.stderr
     assert push.returncode == 0, push.stderr
-    assert "local-check.py" in push.stderr
+    assert "_local-check" in push.stderr
     assert "_check-links" not in push.stderr
     ci = recipe_body((ROOT / "justfiles" / "docs-and-configs.just").read_text(), "test-ci")
     assert "ci-triage.py" in ci

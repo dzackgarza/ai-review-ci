@@ -9,7 +9,9 @@ import sys
 import pytest
 
 ROOT = Path(__file__).resolve().parents[1]
-LOCAL = ROOT / "scripts" / "local-check.py"
+SHARED = str(ROOT / "justfiles" / "shared.just")
+LOCAL_COMMIT = ["just", "-q", "-f", SHARED, "-d", ".", "_local-check", "staged"]
+LOCAL_PUSH = ["just", "-q", "-f", SHARED, "-d", ".", "_local-check", "push"]
 TRIAGE = ROOT / "scripts" / "ci-triage.py"
 
 
@@ -24,12 +26,12 @@ def test_local_gate_reads_index_not_worktree_and_checks_only_syntax(tmp_path: Pa
     git(tmp_path, "add", "implementation.py")
     # The unstaged file is invalid; the candidate commit is syntactically valid.
     source.write_text("def broken(:\n")
-    valid = subprocess.run([sys.executable, LOCAL], cwd=tmp_path, capture_output=True, text=True)
+    valid = subprocess.run(LOCAL_COMMIT, cwd=tmp_path, capture_output=True, text=True)
     assert valid.returncode == 0, valid.stderr
     assert "1 file(s)" in valid.stdout
     # The staged file now has an actual parse defect.
     git(tmp_path, "add", "implementation.py")
-    invalid = subprocess.run([sys.executable, LOCAL], cwd=tmp_path, capture_output=True, text=True)
+    invalid = subprocess.run(LOCAL_COMMIT, cwd=tmp_path, capture_output=True, text=True)
     assert invalid.returncode == 1
     assert "implementation.py" in invalid.stderr
 
@@ -39,11 +41,11 @@ def test_local_gate_catches_malformed_staged_config_not_typing_or_style(tmp_path
     (tmp_path / "code.py").write_text("def f( x ) :\n return {'unused': 1}\n")
     (tmp_path / "pyproject.toml").write_text("[project]\nname = 'valid'\n")
     git(tmp_path, "add", ".")
-    ok = subprocess.run([sys.executable, LOCAL], cwd=tmp_path, capture_output=True, text=True)
+    ok = subprocess.run(LOCAL_COMMIT, cwd=tmp_path, capture_output=True, text=True)
     assert ok.returncode == 0, ok.stderr
     (tmp_path / "pyproject.toml").write_text("[project\n")
     git(tmp_path, "add", "pyproject.toml")
-    bad = subprocess.run([sys.executable, LOCAL], cwd=tmp_path, capture_output=True, text=True)
+    bad = subprocess.run(LOCAL_COMMIT, cwd=tmp_path, capture_output=True, text=True)
     assert bad.returncode == 1
     assert "pyproject.toml" in bad.stderr
 
@@ -94,7 +96,7 @@ def test_push_does_not_inspect_unpublished_staged_edits(tmp_path: Path) -> None:
     (tmp_path / "not_in_push.py").write_text("def broken(:\n")
     git(tmp_path, "add", "not_in_push.py")
 
-    push = subprocess.run([sys.executable, LOCAL, "--mode", "push"],
+    push = subprocess.run(LOCAL_PUSH,
                           cwd=tmp_path, capture_output=True, text=True)
     assert push.returncode == 0, push.stdout + push.stderr
     # Initial publication checks its committed tree, never its staged overlay.
@@ -102,7 +104,7 @@ def test_push_does_not_inspect_unpublished_staged_edits(tmp_path: Path) -> None:
     assert "not_in_push.py" not in push.stderr
     assert push.stderr == ""
 
-    commit = subprocess.run([sys.executable, LOCAL],
+    commit = subprocess.run(LOCAL_COMMIT,
                             cwd=tmp_path, capture_output=True, text=True)
     assert commit.returncode == 1
     assert "not_in_push.py" in commit.stderr
@@ -346,7 +348,7 @@ def test_manual_push_check_respects_published_branch_baseline(tmp_path: Path) ->
     git(tmp_path, "branch", "--set-upstream-to=origin/feature", "feature")
 
     published = subprocess.run(
-        [sys.executable, LOCAL, "--mode", "push"],
+        LOCAL_PUSH,
         cwd=tmp_path, text=True, capture_output=True,
     )
     assert published.returncode == 0, published.stdout + published.stderr
@@ -362,7 +364,7 @@ def test_manual_push_check_respects_published_branch_baseline(tmp_path: Path) ->
         check=True,
     )
     failed = subprocess.run(
-        [sys.executable, LOCAL, "--mode", "push"],
+        LOCAL_PUSH,
         cwd=tmp_path, text=True, capture_output=True,
     )
     assert failed.returncode == 1

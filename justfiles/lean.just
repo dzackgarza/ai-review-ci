@@ -24,11 +24,11 @@
 
 # public: scan staged Lean source without compiling the project
 test-commit:
-    @python3 "{{justfile_directory()}}/../scripts/local-check.py"
+    @just -f {{justfiles}}/shared.just -d . _local-check staged
 
 # public: static Lean scans before push; no compilation
 test-push:
-    @python3 "{{justfile_directory()}}/../scripts/local-check.py" --mode push
+    @just -f {{justfiles}}/shared.just -d . _local-check push
 
 # public: build the project and run the full Lean gate in CI
 test-ci:

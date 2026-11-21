@@ -900,7 +900,7 @@ _codeql:
 
 # public: COMMIT gate — immediate, directly repairable feedback
 test-commit:
-    @python3 "{{justfile_directory()}}/../scripts/local-check.py"
+    @just -f {{justfiles}}/shared.just -d . _local-check staged
 
 # public: PUSH gate — commit checks, the project-owned test suite, and the
 # deterministic checks a developer can answer without leaving the local loop.
@@ -910,7 +910,7 @@ test-commit:
 # prose rules. Each reports the same verdict locally and in CI, so discovering
 # it here costs one edit and discovering it there costs a CI round trip.
 test-push:
-    @python3 "{{justfile_directory()}}/../scripts/local-check.py" --mode push
+    @just -f {{justfiles}}/shared.just -d . _local-check push
 
 # private: the Python CI gates without the cross-language stack, which a profile
 # that composes several languages runs once (bun-python.just). The coverage run is
