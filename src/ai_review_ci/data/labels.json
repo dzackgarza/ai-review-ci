@@ -30,6 +30,12 @@
 
     { "name": "complexity:low", "color": "2da44e", "description": "Low drift risk: concrete, checkable, composes existing work; mistakes fail fast. Not about size.", "category": "complexity" },
     { "name": "complexity:medium", "color": "d4a72c", "description": "Moderate drift risk: real modeling/theorem judgment, partial support, some weak-QC-guarded spots.", "category": "complexity" },
-    { "name": "complexity:high", "color": "cf222e", "description": "High drift risk: establishes downstream work, weakly QC-guarded, high reinvention. Not about size.", "category": "complexity" }
+    { "name": "complexity:high", "color": "cf222e", "description": "High drift risk: establishes downstream work, weakly QC-guarded, high reinvention. Not about size.", "category": "complexity" },
+
+    { "name": "size:xs", "color": "ffe3c2", "description": "Trivial scope: one focused edit in one file; no new surface or dependencies.", "category": "size" },
+    { "name": "size:s", "color": "ffc98f", "description": "Small scope: one file or module plus its tests; no new public surface.", "category": "size" },
+    { "name": "size:m", "color": "ffaa5c", "description": "Medium scope: several files in one subsystem, or one new self-contained module.", "category": "size" },
+    { "name": "size:l", "color": "f7872b", "description": "Large scope: spans subsystems or adds a public interface family; consider splitting.", "category": "size" },
+    { "name": "size:xl", "color": "e55d00", "description": "Oversized for one work unit; split into smaller work-units before dispatch.", "category": "size" }
   ]
 }

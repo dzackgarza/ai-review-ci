@@ -59,7 +59,8 @@ The taxonomy ships a common pool (`area:frontend`, `area:backend`, `area:ci`, `a
 | `complexity:high` | Establishes downstream work, weakly guarded by QC, high reinvention potential; small errors compound. |
 
 **Complexity is drift risk, not size.** It does *not* measure lines of code, effort, or
-mathematical/technical sophistication. It measures where a wrong or hollow artifact is most
+mathematical/technical sophistication. Anticipated size is a separate axis, carried by the
+`size:*` labels below. Complexity measures where a wrong or hollow artifact is most
 dangerous — rate a work unit *higher* the more of these hold:
 
 - it **establishes downstream work** (many units consume its definitions/interfaces), so an early mistake compounds;
@@ -95,13 +96,45 @@ Apply exactly one `complexity:*` to every `work-unit`. Group/`epic` issues carry
 lives on the leaf that a branch claims). Re-rate a unit if its dependency reach or the availability
 of a reusable construction changes.
 
+## `size:*` labels — anticipated amount of work
+
+Size is the *anticipated* amount of work in a task, estimated when the issue is written or
+triaged. It is orthogonal to `complexity:*`: complexity is drift risk (how dangerous a wrong
+or hollow artifact is), size is how much work the unit contains. A large mechanical refactor
+is `size:l` with `complexity:low`; a three-line interface change that downstream units lean
+on is `size:xs` with `complexity:high`.
+
+| Label | Anticipated scope |
+| --- | --- |
+| `size:xs` | One focused edit in one file; no new surface or dependencies. |
+| `size:s` | One file or small module plus its tests; no new public surface beyond it. |
+| `size:m` | Several files within one subsystem, or one new self-contained module. |
+| `size:l` | Spans subsystems or adds a public interface family; prefer splitting into work-units. |
+| `size:xl` | Too much for one work unit; must be split before dispatch. |
+
+Size is a structural estimate — files, subsystems, new public surface, new dependencies —
+not a time estimate and not a retrospective line count. Re-rate when triage reveals the real
+scope.
+
+### How size drives dispatch
+
+- **`size:xl`** — split into smaller work-units first; never dispatch as a single unit.
+- **`size:l`** — prefer splitting; if kept whole, expect several checkpoints on one branch.
+- **`size:xs` / `size:s`** — safe to batch several independent units into one session.
+- Dispatch capability comes from `complexity:*`; batching and split decisions come from
+  `size:*`. One label never substitutes for the other.
+
+Apply exactly one `size:*` to every `work-unit`. Group/`epic` issues carry none (size lives
+on the leaf a branch claims), matching `complexity:*`.
+
 ## Routing checklist when opening an issue
 
 1. Exactly one `type` label (`bug` only for observed defects).
 2. A `scope` label when the issue is an epic, a claimable work-unit, or research-gated.
 3. Exactly one `complexity:*` label on every `work-unit` (drift risk, not size).
-4. An `area:*` label naming the owning surface, when one applies.
-5. `blocker` only when it actually blocks other tracked work.
+4. Exactly one `size:*` label on every `work-unit` (anticipated scope, orthogonal to complexity).
+5. An `area:*` label naming the owning surface, when one applies.
+6. `blocker` only when it actually blocks other tracked work.
 
 To change the taxonomy itself, edit `src/ai_review_ci/data/labels.json` in this repo — never redefine labels per-repo.
 See `git-guidelines` for the issue-filing workflow.
