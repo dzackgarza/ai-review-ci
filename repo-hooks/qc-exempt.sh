@@ -12,6 +12,20 @@
 # still cleared so linked-worktree detection resolves from the caller cwd.
 unset GIT_DIR GIT_WORK_TREE GIT_PREFIX GIT_OBJECT_DIRECTORY GIT_ALTERNATE_OBJECT_DIRECTORIES GIT_COMMON_DIR
 
+# The agent directives the hooks print are version-controlled in the ai vault
+# repository, not in the hook scripts. A missing document is a broken checkout:
+# report it loudly, but a missing advisory must not block the gate's verdict.
+qc_directives_dir="$HOME/ai/hooks"
+
+qc_print_directive() {
+	qc_doc="$qc_directives_dir/$1.md"
+	if [ -f "$qc_doc" ]; then
+		cat "$qc_doc" >&2
+	else
+		echo "ai-review-ci hook: missing hook directive document: $qc_doc" >&2
+	fi
+}
+
 qc_repo_root="$(git rev-parse --show-toplevel)"
 qc_hook_file="$(readlink -f "$0")"
 qc_hook_repo="$(CDPATH= cd -- "$(dirname -- "$qc_hook_file")/.." && pwd -P)"

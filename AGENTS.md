@@ -134,11 +134,13 @@ same path, found by running the gate and reading its output, is `#409`.
 - test-commit: staged syntax; test-push: outgoing committed syntax; no dependency installation,
   complete suite, mypy, clippy, formatting, complexity, performance, slop, or
   PR policy checks.
-- A successful pre-push run also prints the skill-audit directive: the agent compares the
-  pushed work against the review skills it names (test-guidelines, bespoke-software-policy,
-  policy-index, style-guide, code-patterns, anti-slop, reviewing-llm-code) and remediates
-  via fixing-slop before claiming the task complete. The directive is advisory; hooks do
-  not run those reviews locally.
+- A successful hook run also prints the hook's agent directive: pre-commit prints
+  `hooks/pre-commit.md` and pre-push prints `hooks/pre-push.md` from the ai vault
+  repository (`~/ai`). The directives are version-controlled there; the hooks only
+  print them. A missing document is reported loudly but does not change the gate's
+  verdict. The pre-push directive requires the agent to compare the published work
+  against the review skills it names and remediate before claiming the task complete.
+  The directives are advisory; hooks do not run those reviews locally.
 - test-ci and ambient: independent checks and full suites that write structured
   diagnostic artifacts, including failures, without blocking MVP publication.
 - CI diagnostic output is evidence, not a workstream instruction. Failure
