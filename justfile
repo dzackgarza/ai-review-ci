@@ -14,7 +14,7 @@ _normalize:
 
 # Parse-check every infrastructure source: workflow YAML, runner justfile, shell wrappers
 check: _normalize
-    uv run --project {{repo}} python -c "import ast, pathlib; [ast.parse(p.read_text()) for p in pathlib.Path('src').rglob('*.py')]; [ast.parse(p.read_text()) for p in pathlib.Path('tests').rglob('*.py')]"
+    uv run --project {{repo}} python -c "import ast, pathlib; [ast.parse(p.read_text()) for p in pathlib.Path('src').rglob('*.py')]; [ast.parse(p.read_text()) for p in pathlib.Path('tests').rglob('*.py')]; [ast.parse(p.read_text()) for p in pathlib.Path('scripts').rglob('*.py')]"
     uv run --project {{repo}} python -c "import yaml, pathlib; [yaml.safe_load(p.read_text()) for p in pathlib.Path('.github/workflows').glob('*.yml')]; [yaml.safe_load(p.read_text()) for p in pathlib.Path('src/ai_review_ci/templates').glob('*.yml')]"
     just -f ci/runner.just --list >/dev/null
     just -f justfiles/shared.just --list >/dev/null
@@ -27,6 +27,7 @@ check: _normalize
     bash -n tool-artifacts/scripts/emit-test-writing-directive.sh
     sh -n repo-hooks/pre-commit
     sh -n repo-hooks/pre-push
+    sh -n repo-hooks/hook-timing.sh
 
 # Check that skill markdown links are checkout-relative and resolvable.
 check-skill-links:

@@ -1,4 +1,5 @@
 #!/usr/bin/env sh
+. "$(dirname -- "$(readlink -f "$0")")/hook-timing.sh"
 set -e
 . "$(dirname -- "$(readlink -f "$0")")/qc-exempt.sh"
 qc_should_gate || exit 0

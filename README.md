@@ -84,7 +84,7 @@ The doctor checks the development workflow and delegation without requiring bran
 Install the hooks once:
 
 ```bash
-just install-global-git-hooks
+just install-global-hooks
 ```
 
 The hooks run `scripts/local-check.py` from this checkout. They inspect the
@@ -98,6 +98,30 @@ has `path` and `version`; `version` is `index` at commit or the exact candidate
 commit ID at push. The validator reads each blob with `git show :<path>` or
 `git show <version>:<path>` and exits nonzero to reject it. This hook has no
 tool installation step. Full suites and broad diagnostics remain in CI.
+
+### Hook timing
+
+Every run of the global `pre-commit` and `pre-push` hooks appends one JSON line
+to `<git-common-dir>/ai-review-ci/timing/hooks.jsonl` in the repository that ran
+it. A commit runs the pre-commit checks and a push runs the pre-push checks, so
+the record's duration is the time those checks took. Timing is unconditional:
+repositories the gate exempts still record how long the check they ran took, and
+linked worktrees write into the shared common directory. No threshold is
+applied -- the log holds raw measurements.
+
+Each record has:
+
+| Field | Meaning |
+| --- | --- |
+| `schema` | record format version |
+| `hook` | `pre-commit` or `pre-push` |
+| `started_at` | hook start, ISO 8601 UTC |
+| `duration_ms` | wall-clock hook duration, milliseconds |
+| `exit_code` | hook exit status |
+| `worktree` | absolute worktree the hook ran in, or null outside one |
+
+The log lives under `.git/`, so Git never tracks it. `repo-hooks/hook-timing.sh`
+does the timing; `scripts/hook-timing.py` writes the record.
 
 The tiers are:
 

@@ -54,10 +54,13 @@ def hook_source_repo(tmp_path: pathlib.Path) -> pathlib.Path:
         target = target_dir / hook
         shutil.copy(ROOT / "repo-hooks" / hook, target)
         target.chmod(0o755)
-    # The hooks source their shared exemption logic next to themselves.
+    # The hooks source their shared exemption and timing logic next to
+    # themselves, and the timing helper resolves its record writer under scripts/.
     shutil.copy(ROOT / "repo-hooks" / "qc-exempt.sh", target_dir / "qc-exempt.sh")
+    shutil.copy(ROOT / "repo-hooks" / "hook-timing.sh", target_dir / "hook-timing.sh")
     (repo / "scripts").mkdir()
     shutil.copy(ROOT / "scripts" / "local-check.py", repo / "scripts" / "local-check.py")
+    shutil.copy(ROOT / "scripts" / "hook-timing.py", repo / "scripts" / "hook-timing.py")
     # pre-push resolves the closure-claim confrontation script (#244) relative
     # to the hook repo, so the copied layout must carry it too.
     (repo / "global-hooks").mkdir()
@@ -87,7 +90,7 @@ def test_ai_review_ci_hooks_skip_linked_ai_review_ci_worktrees(
     )
     (worktree / "justfile").write_text(f"{recipe}:\n    @echo should-not-run\n")
 
-    env = git_test_env(PATH=path_with_only(tmp_path, "sh", "git", "readlink", "dirname"))
+    env = git_test_env(PATH=path_with_only(tmp_path, "sh", "git", "readlink", "dirname", "date", "python3"))
     result = subprocess.run(
         [str(hook_source_repo / hook_dir / hook)],
         cwd=worktree,
@@ -235,7 +238,7 @@ def test_hooks_skip_wiki_repositories(hook_source_repo: pathlib.Path, tmp_path: 
     # skip (exit 0) before ever invoking the recipe — proven by omitting `just`
     # from PATH: a non-skipping hook would fail command-not-found.
     wiki = _init_downstream(tmp_path / "research.wiki", recipe, "@echo should-not-run")
-    env = git_test_env(PATH=path_with_only(tmp_path, "sh", "git", "readlink", "dirname"))
+    env = git_test_env(PATH=path_with_only(tmp_path, "sh", "git", "readlink", "dirname", "date", "python3"))
     result = subprocess.run([str(hook_source_repo / hook_dir / hook)], cwd=wiki, env=env, text=True, capture_output=True, check=False)
     assert result.returncode == 0, result.stdout + result.stderr
     assert "should-not-run" not in result.stdout
@@ -245,7 +248,7 @@ def test_hooks_skip_wiki_repositories(hook_source_repo: pathlib.Path, tmp_path: 
 @pytest.mark.parametrize(("hook_dir", "hook", "recipe"), BYPASS_HOOKS)
 def test_hooks_skip_repos_not_under_dzackgarza(hook_source_repo: pathlib.Path, tmp_path: pathlib.Path, hook_dir: str, hook: str, recipe: str) -> None:
     foreign = _init_downstream(tmp_path / "foreign", recipe, "@echo should-not-run", remote="https://github.com/someoneelse/foo.git")
-    env = git_test_env(PATH=path_with_only(tmp_path, "sh", "git", "readlink", "dirname"))
+    env = git_test_env(PATH=path_with_only(tmp_path, "sh", "git", "readlink", "dirname", "date", "python3"))
     result = subprocess.run([str(hook_source_repo / hook_dir / hook)], cwd=foreign, env=env, text=True, capture_output=True, check=False)
     assert result.returncode == 0, result.stdout + result.stderr
     assert "should-not-run" not in result.stdout
@@ -387,7 +390,7 @@ def test_hooks_skip_forks_of_third_party_upstreams(hook_source_repo: pathlib.Pat
     # from PATH, so a non-skipping hook would fail command-not-found.
     fork = _init_downstream(tmp_path / "sage", recipe, "@echo should-not-run", remote="https://github.com/dzackgarza/sage.git")
     _cache_upstream_owner(fork, "sagemath")
-    env = git_test_env(PATH=path_with_only(tmp_path, "sh", "git", "readlink", "dirname", "sed"))
+    env = git_test_env(PATH=path_with_only(tmp_path, "sh", "git", "readlink", "dirname", "sed", "date", "python3"))
 
     result = subprocess.run([str(hook_source_repo / hook_dir / hook)], cwd=fork, env=env, text=True, capture_output=True, check=False)
 
