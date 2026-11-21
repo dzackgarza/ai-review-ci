@@ -112,12 +112,13 @@ if [[ "$mode" == sage-docker-update ]]; then
     done
     docker top "$container" | grep -q 'sleep infinity'
     docker exec "$container" /bin/bash -c '
+        # The shared environments name the packages the image depot holds, so
+        # each update takes them from the image.
         mkdir -p /root/.julia/environments
         for environment in /opt/julia-depot/environments/*; do
             target="/root/.julia/environments/${environment##*/}"
-            if [[ ! -e "$target" ]]; then
-                cp -a "$environment" "$target"
-            fi
+            rm -rf "$target"
+            cp -a "$environment" "$target"
         done
     '
     # A link into the volumes whose checkout is gone names nothing; drop it.
@@ -181,5 +182,26 @@ case "$mode" in
         ;;
 esac
 
-exec "$HOME/bin/docker" exec -i -w "$PWD" "${env_args[@]}" \
-    "$container" "${command[@]}"
+# Killing a docker exec client leaves its process running in the container.
+# The command therefore runs as the leader of its own process group, records
+# its pid, and the launcher kills that group when it is terminated or exits.
+run_id="$$-$RANDOM$RANDOM"
+pid_file="/tmp/sage-docker-exec/$run_id.pid"
+stop_command() {
+    docker exec "$container" /bin/sh -c \
+        'if [ -f "$1" ]; then
+            pid=$(cat "$1"); rm -f "$1"
+            if [ -d "/proc/$pid" ]; then kill -TERM "-$pid"; fi
+        fi' _ "$pid_file"
+}
+trap 'stop_command; exit 143' TERM
+trap 'stop_command; exit 130' INT
+trap 'stop_command; exit 129' HUP
+trap stop_command EXIT
+exec 3<&0
+docker exec -i -w "$PWD" "${env_args[@]}" "$container" \
+    setsid -w /bin/sh -c 'mkdir -p "${1%/*}"; echo $$ > "$1"; shift; exec "$@"' _ \
+    "$pid_file" "${command[@]}" <&3 &
+status=0
+wait $! || status=$?
+exit "$status"
