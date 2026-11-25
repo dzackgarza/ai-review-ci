@@ -682,3 +682,52 @@ def test_doctor_reports_tracked_qc_suppression_files(tmp_path: pathlib.Path) -> 
     suppression = [finding["evidence"] for finding in payload["findings"] if finding["surface"] == "qc_suppression"]
     assert status == "misconfigured"
     assert [evidence.split(" ")[0] for evidence in suppression] == [".semgrepignore", "tools/vulture_whitelist.py"]
+
+
+def test_doctor_accepts_doc_attributes_in_a_justfile_the_comment_hook_accepts(tmp_path: pathlib.Path) -> None:
+    project = create_target(tmp_path, "python")
+    (project / "justfile").write_text(
+        "\n".join(
+            [
+                'ai_review_ci_schema_version := "1"',
+                'ai_review_ci_profile := "python"',
+                'ai_review_ci_ref := "main"',
+                'ai_review_ci_release_channel := "main"',
+                'ai_review_ci_workflow_template_version := "1"',
+                'ai_review_ci_local_delegation := "global-justfile"',
+                'ai_review_ci_default_branch := "main"',
+                "",
+                '[doc("List available recipes.")]',
+                "default:",
+                "    @just --list",
+                "",
+                '[doc("Run commit-tier Python QC through the central implementation.")]',
+                "test-commit:",
+                "    @just -f ~/ai-review-ci/justfiles/python.just -d . test-commit",
+                "",
+                "[no-cd]",
+                "[doc('Run push-tier Python QC; a # inside the string is text.')]",
+                "test-push:",
+                "    @just -f ~/ai-review-ci/justfiles/python.just -d . test-push",
+                "",
+                '[doc("Run CI-tier Python QC through the central implementation.")]',
+                "test-ci:",
+                "    @just -f ~/ai-review-ci/justfiles/python.just -d . test-ci",
+                "",
+                '[doc("Run the scheduled whole-tree audit through the central implementation.")]',
+                "ambient:",
+                "    @just -f ~/ai-review-ci/justfiles/python.just -d . ambient",
+                "",
+            ]
+        )
+    )
+    assert run_git(project, "add", "justfile").returncode == 0
+    hook = subprocess.run(
+        [sys.executable, ROOT / "scripts" / "check_staged_comments.py"], cwd=project, text=True, capture_output=True, check=False
+    )
+    assert hook.returncode == 0, hook.stderr
+
+    status, payload = status_for(project)
+
+    assert [finding["evidence"] for finding in payload["findings"]] == []
+    assert status == "current"
