@@ -13,7 +13,9 @@ Sage's ``sage-preparse`` prepends to a script. Those names sit in the module's
 builtins scope, so the file's own bindings take precedence and pytest does not
 collect Sage's ``TestSuite`` from the module namespace. pytest's assertion
 rewriting is applied to the lowered tree, as its import hook does for a ``.py``
-test module. The test's directory goes first on ``sys.path``, as pytest's
+test module. Rewritten bytecode is cached by the freshly prepared Python and
+compiler configuration; the module body still executes on every collection.
+The test's directory goes first on ``sys.path``, as pytest's
 default ``prepend`` import mode does for a module outside a package.
 
 pytest documents ``pytest_collect_file`` as the hook for collecting non-Python
@@ -21,13 +23,14 @@ test files (https://docs.pytest.org/en/stable/example/nonpython.html), and
 sagemath/sage#30738 proposes the same hook for Sage's own ``.sage`` files.
 """
 
-import ast
 import builtins
 import sys
 from pathlib import Path
 from types import ModuleType
 
 import pytest
+
+from qc_sage_rewrite import compile_rewritten
 
 SUFFIX = ".sage"
 
@@ -44,7 +47,6 @@ class SageSession(pytest.Module):
     r"""A ``test_*.sage`` file, lowered and executed as a Sage script."""
 
     def _getobj(self) -> ModuleType:
-        from _pytest.assertion.rewrite import rewrite_asserts
         from sage.repl import preparse
 
         directory = str(self.path.parent)
@@ -52,13 +54,12 @@ class SageSession(pytest.Module):
             sys.path.insert(0, directory)
         name = ".".join(self.path.relative_to(self.config.rootpath).with_suffix("").parts)
         lowered = preparse.preparse_file(self.path.read_text())
-        tree = ast.parse(lowered, filename=str(self.path))
-        rewrite_asserts(tree, lowered.encode("utf-8"), str(self.path), self.config)
+        code = compile_rewritten(self.path, lowered, self.config, self.config.rootpath / ".ai-review-ci/sage/rewritten")
         module = ModuleType(name)
         module.__file__ = str(self.path)
         module.__dict__["__builtins__"] = _sage_scope()
         sys.modules[name] = module
-        exec(compile(tree, str(self.path), "exec", dont_inherit=True), module.__dict__)
+        exec(code, module.__dict__)
         self.config.pluginmanager.consider_module(module)
         return module
 
