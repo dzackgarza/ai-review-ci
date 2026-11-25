@@ -39,6 +39,7 @@ directories = [
     "src.bak",
     "scripts",
     "notebooks",
+    "computations/reports",
     "preamble",
     "notes",
     ".webpack",

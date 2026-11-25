@@ -24,6 +24,8 @@ Shared diagnostic implementations remain centralized; consumers delegate
 their local syntax check and CI diagnostics here. Local and CI intentionally
 have different enforcement standards.
 
+- The gates cover reusable code that someone must maintain. One-off computations (computation reports, exploratory scripts, notebooks) are out of scope and are excluded in `tool-configs/qc-excludes.toml`. When a consumer gets findings in a directory of one-off computations, add the directory to that file. Do not fix the code.
+
 - Treat `~/ai-review-ci` as the authoritative QC implementation.
   Downstream repositories carry only thin `test-commit`, `test-push`, and `test-ci` gate recipes that delegate to this repo.
 
