@@ -1067,6 +1067,59 @@ def test_common_normalization_formats_structured_text(
     assert json_file.read_text() == '{ "b": 2, "a": 1 }\n'
 
 
+def test_common_normalization_preserves_structured_test_fixtures(
+    tmp_path: pathlib.Path,
+) -> None:
+    project = tmp_path / "project"
+    project.mkdir()
+    init_git_repo(project)
+
+    inputs = {
+        "sample.md": b"# Title\n\n-   item",
+        "sample.markdown": b"# Title\n\n-   item",
+        "sample.json": b'{"b":2,"a":1}\n',
+        "sample.jsonc": b'{"b":2,"a":1}\n',
+        "sample.yaml": b"items: [1,2]\n",
+        "sample.yml": b"items: [1,2]\n",
+    }
+    protected = {
+        f"{directory}/{name}": content
+        for directory in ("tests", "test", "pkg with space/tests/deep", "pkg/test/deep")
+        for name, content in inputs.items()
+    }
+    ordinary = {
+        "contest/sample.md": (inputs["sample.md"], b"# Title\n\n- item\n"),
+        "tests-extra/sample.json": (inputs["sample.json"], b'{ "b": 2, "a": 1 }\n'),
+        "docs/sample.yaml": (inputs["sample.yaml"], b"items: [1, 2]\n"),
+    }
+    for name, content in protected.items():
+        file = project / name
+        file.parent.mkdir(parents=True, exist_ok=True)
+        file.write_bytes(content)
+    for name, (content, _) in ordinary.items():
+        file = project / name
+        file.parent.mkdir(parents=True, exist_ok=True)
+        file.write_bytes(content)
+
+    assert run_git(project, "add", ".").returncode == 0
+    before = run_git(project, "ls-files", "--stage", "--", *protected)
+    assert before.returncode == 0, before.stderr
+
+    result = run_just(ROOT / "justfiles" / "shared.just", project, "_format-structured-text")
+    assert result.returncode == 0, result.stdout + result.stderr
+
+    for name, content in protected.items():
+        assert (project / name).read_bytes() == content, name
+    after = run_git(project, "ls-files", "--stage", "--", *protected)
+    assert after.returncode == 0, after.stderr
+    assert after.stdout == before.stdout
+    for name, (_, expected) in ordinary.items():
+        assert (project / name).read_bytes() == expected, name
+        staged = run_git(project, "show", f":{name}")
+        assert staged.returncode == 0, staged.stderr
+        assert staged.stdout.encode() == expected, name
+
+
 def test_common_normalization_formats_staged_text_beyond_one_argument_list(
     tmp_path: pathlib.Path,
 ) -> None:
