@@ -660,20 +660,10 @@ rules:
       policy_code: POLICY.NO_TYPE_ESCAPE
     patterns:
       - pattern-either:
-          - pattern: from typing import Any
-          - pattern: from typing_extensions import Any
           - pattern: from typing import Any as $A
           - pattern: from typing_extensions import Any as $A
           - pattern: typing.Any
           - pattern: Any
-      - pattern-not-inside: |
-          from $M import Any
-          ...
-          $X: TypeAlias = Any
-      - pattern-not-inside: |
-          from $M import Any
-          ...
-          type $X = Any
       - pattern-not-inside: "$X: TypeAlias = Any"
       - pattern-not-inside: "$X: TypeAlias = typing.Any"
       - pattern-not-inside: "type $X = Any"
@@ -681,16 +671,6 @@ rules:
           def __eq__(self, $P: Any) -> $R:
               ...
       - pattern-not-inside: |
-          def __contains__(self, $P: Any) -> $R:
-              ...
-      - pattern-not-inside: |
-          from $M import Any
-          ...
-          def __eq__(self, $P: Any) -> $R:
-              ...
-      - pattern-not-inside: |
-          from $M import Any
-          ...
           def __contains__(self, $P: Any) -> $R:
               ...
   - id: py-no-object-return
