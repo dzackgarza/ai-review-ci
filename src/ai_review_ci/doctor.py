@@ -930,15 +930,6 @@ def _justfile_conformance_findings(target: Path, profile: ProfileName) -> list[D
         ]
     lines = justfile.read_text(encoding="utf-8").splitlines()
     findings: list[DoctorFinding] = []
-    if not lines or not lines[0].startswith("#"):
-        findings.append(
-            DoctorFinding(
-                severity="error",
-                surface="justfile_conformance",
-                evidence=f"{justfile}:1 header-comment: justfile must begin with a comment block",
-                remediation_commands=(f"just install-qc-scaffold {profile} <target-repo>",),
-            )
-        )
     recipes = _justfile_recipes(lines)
     default = recipes.get("default")
     if default is None:
@@ -960,12 +951,12 @@ def _justfile_conformance_findings(target: Path, profile: ProfileName) -> list[D
             )
         )
     for recipe, line_no in recipes.items():
-        if not _has_private_attribute(lines, line_no) and not _has_immediate_doc_comment(lines, line_no):
+        if not _has_private_attribute(lines, line_no) and not _has_doc_attribute(lines, line_no):
             findings.append(
                 DoctorFinding(
                     severity="error",
                     surface="justfile_conformance",
-                    evidence=f"{justfile}:{line_no} public-recipe-doc: recipe `{recipe}` has no immediate # doc comment",
+                    evidence=f"{justfile}:{line_no} public-recipe-doc: recipe `{recipe}` has no [doc(\"...\")] attribute",
                     remediation_commands=(f"just install-qc-scaffold {profile} <target-repo>",),
                 )
             )
@@ -987,11 +978,13 @@ def _justfile_recipes(lines: list[str]) -> dict[str, int]:
     return recipes
 
 
-def _has_immediate_doc_comment(lines: list[str], line_no: int) -> bool:
+def _has_doc_attribute(lines: list[str], line_no: int) -> bool:
     index = line_no - 2
     while index >= 0 and lines[index].strip().startswith("["):
+        if re.match(r"\[(?:[^\]]*,\s*)?doc\(", lines[index].strip()):
+            return True
         index -= 1
-    return index >= 0 and lines[index].strip().startswith("#")
+    return False
 
 
 def _has_private_attribute(lines: list[str], line_no: int) -> bool:

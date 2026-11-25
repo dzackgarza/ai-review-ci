@@ -652,7 +652,7 @@ rules:
     metadata:
       policy_code: POLICY.NO_QC_SILENCING
   - id: py-no-any-type
-    message: 'POLICY.NO_TYPE_ESCAPE: Any is allowed only as one named type alias (X: TypeAlias = Any or type X = Any) defined in one place per repository; this per-file rule cannot check the one-place limit.'
+    message: 'POLICY.NO_TYPE_ESCAPE: Any is allowed only as the parameter of __eq__ or __contains__, or as one named type alias (X: TypeAlias = Any or type X = Any) defined in one place per repository; this per-file rule cannot check the one-place limit.'
     languages:
       - python
     severity: ERROR
@@ -677,6 +677,22 @@ rules:
       - pattern-not-inside: "$X: TypeAlias = Any"
       - pattern-not-inside: "$X: TypeAlias = typing.Any"
       - pattern-not-inside: "type $X = Any"
+      - pattern-not-inside: |
+          def __eq__(self, $P: Any) -> $R:
+              ...
+      - pattern-not-inside: |
+          def __contains__(self, $P: Any) -> $R:
+              ...
+      - pattern-not-inside: |
+          from $M import Any
+          ...
+          def __eq__(self, $P: Any) -> $R:
+              ...
+      - pattern-not-inside: |
+          from $M import Any
+          ...
+          def __contains__(self, $P: Any) -> $R:
+              ...
   - id: py-no-object-return
     message: POLICY.NO_TYPE_ESCAPE
     languages:
