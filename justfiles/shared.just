@@ -662,7 +662,7 @@ _slop:
 	echo "============================="
 	echo "=== Running: ai-slop-detector ML-based quality check ==="
 	echo "# ML classifier for detecting AI-generated code patterns and low-quality implementations"
-	if ! uvx ai-slop-detector "$(pwd -P)" \
+	if uvx ai-slop-detector "$(pwd -P)" \
 		--project \
 		--js \
 		--config {{configs}}/slopconfig.yaml \
@@ -671,6 +671,8 @@ _slop:
 		--ci-claims-strict \
 		--ci-report \
 		--no-color; then
+		:
+	else
 		ec=$?
 		echo ""
 		echo "!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!"
