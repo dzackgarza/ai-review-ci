@@ -143,6 +143,83 @@ def test_install_skills_refuses_to_replace_non_symlink(tmp_path: pathlib.Path) -
     assert not blocking_target.is_symlink()
 
 
+def test_install_skills_prunes_only_deleted_owned_links(tmp_path: pathlib.Path) -> None:
+    checkout = tmp_path / "checkout"
+    checkout.mkdir()
+    justfile = checkout / "justfile"
+    shutil.copyfile(ROOT / "justfile", justfile)
+    source = checkout / "skills"
+    source.mkdir()
+    deleted = source / "deleted"
+    retained = source / "retained"
+    for skill in (deleted, retained):
+        skill.mkdir()
+        (skill / "SKILL.md").write_text("# Skill\n")
+
+    hub = tmp_path / "skills-hub"
+    env = os.environ.copy()
+    env["AI_SKILLS_DIR"] = str(hub)
+    result = run_just(justfile, checkout, "install-skills", env=env)
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert (hub / "deleted").resolve(strict=True) == deleted
+
+    # Both absolute links installed by the recipe and relative legacy links
+    # must be recognized. A sibling path sharing the prefix is not owned.
+    relative = hub / ".relative"
+    relative.symlink_to(os.path.relpath(deleted, hub))
+    external = checkout / "skills-other" / "missing"
+    foreign = hub / "foreign"
+    foreign.symlink_to(external)
+    relative_foreign = hub / ".foreign"
+    relative_foreign.symlink_to(os.path.relpath(external, hub))
+    ordinary = hub / "ordinary"
+    ordinary.write_text("keep this file")
+    directory = hub / "directory"
+    directory.mkdir()
+    shutil.rmtree(deleted)
+
+    result = run_just(justfile, checkout, "install-skills", env=env)
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert not (hub / "deleted").is_symlink()
+    assert not relative.is_symlink()
+    assert (hub / "retained").resolve(strict=True) == retained
+    assert foreign.readlink() == external
+    assert relative_foreign.readlink() == pathlib.Path(os.path.relpath(external, hub))
+    assert ordinary.read_text() == "keep this file"
+    assert directory.is_dir() and not directory.is_symlink()
+
+    # Removing the last source directory must not install a literal "*" link.
+    shutil.rmtree(retained)
+    for _ in range(2):
+        result = run_just(justfile, checkout, "install-skills", env=env)
+        assert result.returncode == 0, result.stdout + result.stderr
+        assert set(hub.iterdir()) == {foreign, relative_foreign, ordinary, directory}
+
+
+@pytest.mark.parametrize("exists", [True, False])
+def test_install_skills_preserves_foreign_link_on_name_collision(tmp_path: pathlib.Path, exists: bool) -> None:
+    checkout = tmp_path / "checkout"
+    source = checkout / "skills" / "shared-name"
+    source.mkdir(parents=True)
+    (source / "SKILL.md").write_text("# Skill\n")
+    justfile = checkout / "justfile"
+    shutil.copyfile(ROOT / "justfile", justfile)
+    hub = tmp_path / "skills-hub"
+    hub.mkdir()
+    foreign = hub / source.name
+    outside = tmp_path / "external-skill"
+    if exists:
+        outside.mkdir()
+    foreign.symlink_to(outside)
+    env = os.environ.copy()
+    env["AI_SKILLS_DIR"] = str(hub)
+
+    result = run_just(justfile, checkout, "install-skills", env=env)
+    assert result.returncode != 0, result.stdout + result.stderr
+    assert foreign.readlink() == outside
+    assert "refusing to replace" in result.stdout + result.stderr
+
+
 def project_with_sage_file(tmp_path: pathlib.Path) -> pathlib.Path:
     project = tmp_path / "sage-project"
     project.mkdir()
