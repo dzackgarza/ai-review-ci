@@ -94,3 +94,12 @@ def test_semgrep_rule_fixture_annotations_are_not_code_comments(tmp_path: Path) 
         subprocess.run(["git", "add", "-f", "--", relative], cwd=tmp_path, check=True)
         result = subprocess.run([sys.executable, checker], cwd=tmp_path, capture_output=True, text=True)
         assert result.returncode == expected, result.stderr
+
+
+def test_justfile_doc_attribute_with_hash_after_colon_is_not_a_comment(tmp_path: Path) -> None:
+    checker = Path(__file__).resolve().parents[1] / "scripts/check_staged_comments.py"
+    subprocess.run(["git", "init", "-q"], cwd=tmp_path, check=True)
+    (tmp_path / "justfile").write_text('[doc("Build the project: see issue #1.")]\nbuild:\n    echo build\n')
+    subprocess.run(["git", "add", "-f", "--", "justfile"], cwd=tmp_path, check=True)
+    result = subprocess.run([sys.executable, checker], cwd=tmp_path, capture_output=True, text=True)
+    assert result.returncode == 0, result.stderr
