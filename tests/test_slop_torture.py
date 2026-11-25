@@ -7,15 +7,18 @@ counterparts, and asserts both directions:
 - true positives: every annotated slop line is flagged (no false negatives);
 - true negatives: no compliant line is flagged (no flag-theater noise).
 
-Three groupings from the #41 epic (was #62): runtime control flow and
+The #41 epic (was #62) covers runtime control flow and
 defensiveness, mocking and proof-laundering (semgrep rules parsed out of
 the shipped tool-configs/semgrep.yml), and complexity gaps (the real
 lizard gate with the -C/-L thresholds from justfiles/python.just).
+Issue #467 also covers the real ai-slop-detector hard-mode gate status.
 """
 
 import pathlib
+import shutil
 import subprocess
 
+from tests.test_justfiles import init_git_repo, run_just
 from tests.test_semgrep_rules import _assert_rules_match_annotations
 
 TORTURE = pathlib.Path(__file__).resolve().parent / "fixtures" / "slop-torture"
@@ -71,3 +74,28 @@ def test_lizard_gate_flags_tangled_complexity() -> None:
 def test_lizard_gate_passes_dispatch_table_shape() -> None:
     proc = _lizard(TORTURE / "complexity_clean.py")
     assert proc.returncode == 0, f"lizard flagged the compliant fixture:\n{proc.stdout}\n{proc.stderr}"
+
+
+def _run_slop_gate(tmp_path: pathlib.Path, fixture: str) -> subprocess.CompletedProcess[str]:
+    # The scanner excludes the central fixture tree. Copy the target code into
+    # a real caller checkout so the shipped recipe must scan the caller.
+    init_git_repo(tmp_path)
+    shutil.copyfile(TORTURE / fixture, tmp_path / "app.py")
+    return run_just(TORTURE.parents[2] / "justfiles" / "shared.just", tmp_path, "_slop")
+
+
+def test_slop_gate_propagates_real_scanner_failure(tmp_path: pathlib.Path) -> None:
+    proc = _run_slop_gate(tmp_path, "slop_gate_blocked.py")
+    output = proc.stdout + proc.stderr
+    assert "**Verdict**: FAIL" in output, output
+    assert "app.py" in output, output
+    assert "ERROR: ai-slop-detector found slop pattern violations" in output, output
+    assert proc.returncode == 1, output
+
+
+def test_slop_gate_accepts_real_clean_project(tmp_path: pathlib.Path) -> None:
+    proc = _run_slop_gate(tmp_path, "slop_gate_clean.py")
+    output = proc.stdout + proc.stderr
+    assert "**Verdict**: PASS" in output, output
+    assert "Analyzed: 1 files (1 clean, 0 with issues)" in output, output
+    assert proc.returncode == 0, output
