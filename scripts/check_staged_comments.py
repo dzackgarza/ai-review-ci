@@ -18,6 +18,15 @@ def blob_in(commit: bytes, path: bytes) -> bytes | None:
     return listed.split(b"\t")[0].split()[2] if listed else None
 
 
+def recipe_shebang(source: str, offset: int, value: str) -> bool:
+    line_start = source.rfind("\n", 0, offset) + 1
+    line = source[line_start:].split("\n", 1)[0]
+    if not line[:1].isspace() or not line.lstrip().startswith("#!") or not value.lstrip().startswith("#!"):
+        return False
+    previous = source[:max(line_start - 1, 0)].rsplit("\n", 1)[-1]
+    return bool(previous) and not previous[0].isspace() and not previous.startswith(("#", "[")) and ":" in previous and ":=" not in previous
+
+
 def main() -> int:
     records = subprocess.check_output(
         ["git", "diff", "--cached", "--raw", "--no-abbrev", "--no-renames", "--diff-filter=AMT", "-z"]
@@ -54,10 +63,13 @@ def main() -> int:
             if not source.startswith("#!"):
                 continue
             lexer = guess_lexer(source)
+        is_justfile = path.name.lower() == "justfile" or path.suffix == ".just"
         for offset, token, value in lexer.get_tokens_unprocessed(source):
             if token not in Comment or token in Comment.Preproc or token in Comment.PreprocFile:
                 continue
             if offset == 0 and value.startswith("#!"):
+                continue
+            if is_justfile and recipe_shebang(source, offset, value):
                 continue
             line = source.count("\n", 0, offset) + 1
             print(f"{path}:{line}: remove code comment", file=sys.stderr)
