@@ -86,6 +86,7 @@ That analogy is the triage rule: classify every claimed false positive by *whose
 
 4. **Never create per-repo suppression surfaces.** A repo-writable whitelist, ignore file, or override hook is self-service validator silence: the gated agent appends its own finding and pushes.
    All suppression stays in this repo, owner-gated.
+   `ai-review-ci doctor` reports each tracked suppression file it names (`QC_SUPPRESSION_FILES` in `src/ai_review_ci/doctor.py`) as a `qc_suppression` error.
    The boundary-crossing friction is the control.
 
 The one-line test: *if the fact is about an external framework's dispatch, declare it here once; if the fact is about the downstream repo's own types, the repo fixes its types.*
