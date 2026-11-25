@@ -14,7 +14,13 @@ from unidiff import PatchSet
 JsonDict = dict[str, Any]
 
 _TS_JS_SUFFIXES = (".ts", ".tsx", ".js", ".jsx", ".mjs", ".cjs")
-_NON_CODE_SUFFIXES = (".md", ".markdown", ".mdx")
+# Lexical bypass markers in serialized data or prose are not source directives.
+# Keep extensionless and other source paths in scope.
+_NON_CODE_SUFFIXES = (
+    ".md", ".markdown", ".mdx", ".json", ".jsonc", ".jsonl", ".ndjson",
+    ".csv", ".tsv", ".yaml", ".yml", ".xml", ".sql", ".toml", ".ini", ".cfg",
+    ".txt", ".log",
+)
 
 
 class DiffRule(BaseModel):

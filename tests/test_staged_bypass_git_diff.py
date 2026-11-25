@@ -1,5 +1,6 @@
-"""Exercise the bypass gate on patches produced by Git from damaged text."""
+"""Exercise the bypass gate on real Git patches."""
 
+import json
 import subprocess
 from contextlib import chdir
 from pathlib import Path
@@ -46,3 +47,76 @@ def test_damaged_removed_text_does_not_silence_added_bypass(damaged_repository: 
             check_staged_bypass()
     assert error.value.code == 1
     assert "app.py:2: no-coverage-pragma:" in capsys.readouterr().err
+
+
+def test_staged_data_is_not_source_but_real_bypasses_still_fail(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    git(tmp_path, "init", "--quiet")
+    noqa = "# no" + "qa"
+    cast = "as un" + "known as"
+    payload = f"{noqa}; value {cast} string"
+    quoted = json.dumps(payload)
+    data = {
+        "conversation.json": json.dumps({"content": payload}),
+        "conversation.JSON": json.dumps({"content": payload}),
+        "settings.jsonc": f"{{{quoted}: true}}",
+        "records.jsonl": json.dumps({"content": payload}),
+        "records.ndjson": json.dumps({"content": payload}),
+        "table.csv": f"content\n{quoted}",
+        "table.tsv": f"content\n{payload}",
+        "settings.yaml": f"content: {quoted}",
+        "settings.yml": f"content: {quoted}",
+        "record.xml": f"<content>{payload}</content>",
+        "fixture.sql": f"INSERT INTO messages VALUES ('{payload}');",
+        "settings.toml": f"content = {quoted}",
+        "settings.ini": f"[record]\ncontent = {payload}",
+        "settings.cfg": f"[record]\ncontent = {payload}",
+        "transcript.txt": payload,
+        "transcript.log": payload,
+        "example.md": f"`{payload}`",
+    }
+    for name, content in data.items():
+        (tmp_path / name).write_text(content + "\n")
+    git(tmp_path, "add", "--", *data)
+    with chdir(tmp_path):
+        check_staged_bypass()
+    assert "No bypass comments detected" in capsys.readouterr().out
+
+    python_source = "\n".join((
+        f"import os  {noqa}",
+        "value: int = 'text'  # type: ign" + "ore",
+        "pass  # pragma: no cov" + "er",
+        "",
+    ))
+    ts_source = "\n".join((
+        f"const value = 1 {cast} string;",
+        "// @ts-ign" + "ore",
+        "const wrong: number = 'text';",
+        "// @ts-expect-err" + "or",
+        "const other: number = 'text';",
+        "// eslint-dis" + "able-next-line no-console",
+        "console.log(value);",
+        "// istanbul ign" + "ore next",
+        "export function f() {}",
+        "",
+    ))
+    (tmp_path / "app.py").write_text(python_source)
+    (tmp_path / "app.ts").write_text(ts_source)
+    (tmp_path / "script").write_text(f"#!/usr/bin/env python3\nimport os  {noqa}\n")
+    git(tmp_path, "add", "app.py", "app.ts", "script")
+    with chdir(tmp_path), pytest.raises(SystemExit) as error:
+        check_staged_bypass()
+    assert error.value.code == 1
+    findings = [line for line in capsys.readouterr().err.splitlines() if line.startswith("- ")]
+    assert findings == [
+        "- app.py:1: no-noqa: POLICY.NO_QC_SILENCING",
+        "- app.py:2: no-type-ignore: POLICY.NO_QC_SILENCING",
+        "- app.py:3: no-coverage-pragma: POLICY.NO_QC_SILENCING",
+        "- app.ts:1: no-double-cast: POLICY.NO_TYPE_ESCAPE",
+        "- app.ts:2: no-ts-ignore: POLICY.NO_QC_SILENCING",
+        "- app.ts:4: no-unjustified-ts-expect-error: POLICY.NO_QC_SILENCING",
+        "- app.ts:6: no-eslint-disable: POLICY.NO_QC_SILENCING",
+        "- app.ts:8: no-istanbul-ignore: POLICY.NO_QC_SILENCING",
+        "- script:2: no-noqa: POLICY.NO_QC_SILENCING",
+    ]
