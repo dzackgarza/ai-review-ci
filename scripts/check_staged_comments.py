@@ -75,6 +75,8 @@ def main() -> int:
                 continue
             if is_justfile and recipe_shebang(source, offset, value):
                 continue
+            if is_justfile and source[source.rfind("\n", 0, offset) + 1:].startswith("["):
+                continue
             line = source.count("\n", 0, offset) + 1
             print(f"{path}:{line}: remove code comment", file=sys.stderr)
             failed = True
