@@ -67,3 +67,17 @@ def test_merge_does_not_reject_files_taken_unchanged_from_the_merged_branch(tmp_
     assert result.returncode == 1
     assert "resolved.py:2: remove code comment" in result.stderr
     assert "taken.py" not in result.stderr
+
+
+def test_justfile_shebang_recipe_is_not_a_comment(tmp_path: Path) -> None:
+    checker = Path(__file__).resolve().parents[1] / "scripts/check_staged_comments.py"
+    subprocess.run(["git", "init", "-q"], cwd=tmp_path, check=True)
+    path = tmp_path / "justfile"
+    recipe = 'build:\n    #!/usr/bin/env bash\n    set -euo pipefail\n    echo "#"\n'
+    for source, expected in [(recipe, 0), (recipe + "    # note\n", 1)]:
+        path.write_text(source)
+        subprocess.run(["git", "add", "-f", "--", "justfile"], cwd=tmp_path, check=True)
+        result = subprocess.run([sys.executable, checker], cwd=tmp_path, capture_output=True, text=True)
+        assert result.returncode == expected, result.stderr
+        if expected:
+            assert "justfile:5: remove code comment" in result.stderr
