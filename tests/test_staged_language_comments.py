@@ -32,7 +32,7 @@ def test_staged_language_comments(tmp_path: Path, filename: str, code: str, comm
     path = tmp_path / filename
     for source, expected in [(code, 0), (code + "\n" + comment, 1)]:
         path.write_text(source + "\n")
-        subprocess.run(["git", "add", "--", filename], cwd=tmp_path, check=True)
+        subprocess.run(["git", "add", "-f", "--", filename], cwd=tmp_path, check=True)
         result = subprocess.run([sys.executable, checker], cwd=tmp_path, capture_output=True, text=True)
         assert result.returncode == expected, result.stderr
         if expected:

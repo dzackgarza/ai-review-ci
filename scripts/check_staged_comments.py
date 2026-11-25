@@ -23,8 +23,16 @@ def main() -> int:
             continue
         source = data.decode("utf-8", errors="surrogateescape")
         try:
-            if path.suffix in {".sage", ".pyi", ".pyx", ".pxd"}:
+            if path.suffix in {".sage", ".pyi"}:
+                lexer = get_lexer_by_name("python")
+            elif path.suffix in {".pyx", ".pxd", ".pxi"}:
                 lexer = get_lexer_by_name("cython")
+            elif path.suffix == ".M2":
+                lexer = get_lexer_by_name("macaulay2")
+            elif path.suffix == ".tikz":
+                lexer = get_lexer_by_name("tex")
+            elif path.suffix == ".lean":
+                lexer = get_lexer_by_name("lean4")
             elif path.name.lower() == "justfile" or path.suffix == ".just":
                 lexer = get_lexer_by_name("make")
             else:
