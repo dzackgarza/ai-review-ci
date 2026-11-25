@@ -49,11 +49,11 @@ _format-structured-text:
 	# paths (path="_includes/x" -> path="\_includes/x"), rewrites emphasis
 	# delimiters (*x* -> _x_), and reformats embedded code blocks. flowmark is
 	# the canonical markdown formatter.
-	# Markdown under a test directory is fixture/spec data (golden inputs and
-	# expected outputs), not authored prose. Reformatting it would rewrite the
-	# very bytes a test asserts on -- corrupting the suite -- so it is never
-	# normalized. This is by artifact kind and applies to every project; the test
-	# directory's own source (e.g. .py) is still linted/type-checked as normal.
+	# Markdown, JSON and YAML under any test/ or tests/ directory are fixture/spec
+	# data (golden inputs and expected outputs), not authored prose/config.
+	# Reformatting them can rewrite the very bytes a test asserts on. Exclude
+	# these artifacts from this formatter only; test source (e.g. .py) is still
+	# linted/type-checked as normal.
 	# Vendored, generated, and fixture trees (qc-excludes.toml) hold bytes another
 	# party owns -- a cited source, a golden input -- and are never formatted.
 	exclude_dirs_output="$(uv run {{artifacts}}/scripts/read_qc_excludes.py {{configs}}/qc-excludes.toml)"
@@ -75,6 +75,7 @@ _format-structured-text:
 	while IFS= read -r -d '' file; do
 		case "$file" in
 			AGENTS.md|*/AGENTS.md) ;;
+			test/*|*/test/*|tests/*|*/tests/*) ;;
 			assets/attachments/extracted/*|assets/attachments/*_extracted.md) ;;
 			*.md|*.markdown) md_files+=("$file") ;;
 			*.json|*.jsonc|*.yaml|*.yml) data_files+=("$file") ;;
