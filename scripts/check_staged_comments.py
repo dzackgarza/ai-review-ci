@@ -8,14 +8,27 @@ from pygments.token import Comment
 from pygments.util import ClassNotFound
 
 
+def merge_heads() -> list[bytes]:
+    merge_head = Path(subprocess.check_output(["git", "rev-parse", "--git-path", "MERGE_HEAD"]).decode().strip())
+    return merge_head.read_bytes().split() if merge_head.exists() else []
+
+
+def blob_in(commit: bytes, path: bytes) -> bytes | None:
+    listed = subprocess.check_output(["git", "ls-tree", "-z", commit, "--", path]).split(b"\0")[0]
+    return listed.split(b"\t")[0].split()[2] if listed else None
+
+
 def main() -> int:
     records = subprocess.check_output(
         ["git", "diff", "--cached", "--raw", "--no-abbrev", "--no-renames", "--diff-filter=AMT", "-z"]
     ).split(b"\0")
+    heads = merge_heads()
     failed = False
     for header, raw_path in zip(records[::2], records[1::2]):
         _, mode, _, blob, _ = header.split()
         if not mode.startswith(b"100"):
+            continue
+        if any(blob_in(head, raw_path) == blob for head in heads):
             continue
         path = Path(os.fsdecode(raw_path))
         data = subprocess.check_output(["git", "cat-file", "blob", blob])
