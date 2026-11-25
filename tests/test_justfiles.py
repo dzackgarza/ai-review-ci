@@ -4842,6 +4842,23 @@ def test_global_stub_library_resolves_from_a_downstream_project(tmp_path: pathli
     assert 'named "sarif_pydantic"' not in output, output
 
 
+def test_biome_recipes_pin_the_config_schema_version(tmp_path: pathlib.Path) -> None:
+    config = json.loads((ROOT / "tool-configs" / "biome.json").read_text())
+    version = config["$schema"].split("/")[-2]
+    result = subprocess.run(
+        ["just", "--justfile", str(ROOT / "justfiles" / "bun.just"), "-d", str(tmp_path),
+         "--dry-run", "_biome", "_normalize"],
+        text=True, capture_output=True, check=True,
+    )
+    commands = [
+        line for line in (result.stdout + result.stderr).splitlines()
+        if "with-central-biome-config.sh" in line and "biome check" in line
+    ]
+    assert len(commands) == 2, commands
+    for command in commands:
+        assert f"bun x --package @biomejs/biome@{version} biome check" in command, command
+
+
 def test_biome_applies_central_parser_options_to_project_files(tmp_path: pathlib.Path) -> None:
     project = tmp_path / "biome-project"
     (project / "src").mkdir(parents=True)
@@ -4853,6 +4870,7 @@ def test_biome_applies_central_parser_options_to_project_files(tmp_path: pathlib
     result = run_just(ROOT / "justfiles" / "bun.just", project, "_biome")
 
     assert result.returncode == 0, result.stdout + result.stderr
+    assert "configuration schema version does not match" not in result.stdout + result.stderr
     assert not (project / "biome.json").exists()
 
 
