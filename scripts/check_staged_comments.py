@@ -7,6 +7,8 @@ from pygments.lexers import get_lexer_by_name, get_lexer_for_filename, guess_lex
 from pygments.token import Comment
 from pygments.util import ClassNotFound
 
+SEMGREP_RULE_FIXTURES = Path("tests/fixtures/semgrep")
+
 
 def merge_heads() -> list[bytes]:
     merge_head = Path(subprocess.check_output(["git", "rev-parse", "--git-path", "MERGE_HEAD"]).decode().strip())
@@ -40,6 +42,8 @@ def main() -> int:
         if any(blob_in(head, raw_path) == blob for head in heads):
             continue
         path = Path(os.fsdecode(raw_path))
+        if path.parent == SEMGREP_RULE_FIXTURES:
+            continue
         data = subprocess.check_output(["git", "cat-file", "blob", blob])
         if b"\0" in data:
             continue

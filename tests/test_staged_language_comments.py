@@ -81,3 +81,16 @@ def test_justfile_shebang_recipe_is_not_a_comment(tmp_path: Path) -> None:
         assert result.returncode == expected, result.stderr
         if expected:
             assert "justfile:5: remove code comment" in result.stderr
+
+
+def test_semgrep_rule_fixture_annotations_are_not_code_comments(tmp_path: Path) -> None:
+    checker = Path(__file__).resolve().parents[1] / "scripts/check_staged_comments.py"
+    subprocess.run(["git", "init", "-q"], cwd=tmp_path, check=True)
+    source = "# ruleid: py-no-type-ignore\nx: int = f()  # type: ignore\n"
+    for relative, expected in [("tests/fixtures/semgrep/a.py", 0), ("tests/fixtures/other/a.py", 1)]:
+        path = tmp_path / relative
+        path.parent.mkdir(parents=True)
+        path.write_text(source)
+        subprocess.run(["git", "add", "-f", "--", relative], cwd=tmp_path, check=True)
+        result = subprocess.run([sys.executable, checker], cwd=tmp_path, capture_output=True, text=True)
+        assert result.returncode == expected, result.stderr
