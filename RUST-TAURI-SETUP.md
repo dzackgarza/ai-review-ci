@@ -89,12 +89,57 @@ unused, and that blocks the CI tier.
 
   This is the reference enforcement for the no-silencing policy in Rust; `#[expect(lint,
   reason = "...")]` remains available and rustc warns when the expectation is unfulfilled.
-- **Nothing in `bun-python` gates Rust.** `cargo check` inside the `typecheck` script
-  fails on the GitHub runner because Tauri's Linux inputs (WebKitGTK, GLib headers) are
-  not installed: `failed to run custom build command for glib-sys`. Keep Rust out of the
-  TypeScript script, and know that the crate is then unchecked in CI until a Rust gate
-  exists (tracked as dzackgarza/math-pdf-reader#3; the runner needs
-  `libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf`).
+- **Delegate the Rust checks and provision Tauri's Linux dependencies in CI.** The
+  `bun-python` profile does not discover Rust on its own. Keep `cargo check` out of
+  the TypeScript `typecheck` script: without the WebKitGTK and GLib development
+  packages, the runner fails to build `glib-sys`. The caller's justfile can use the
+  existing central Rust recipes without introducing another QC profile:
+
+  ```just
+  desktop-rust-checks:
+      @just -f ~/ai-review-ci/justfiles/rust.just -d . _rustfmt
+      @just -f ~/ai-review-ci/justfiles/rust.just -d . _clippy
+
+  test-ci:
+      @just -f ~/ai-review-ci/justfiles/bun-python.just -d . test-ci
+      @just desktop-rust-checks
+
+  ci-setup-desktop:
+      sudo apt-get update
+      sudo apt-get install -y libwebkit2gtk-4.1-dev libxdo-dev libssl-dev libayatana-appindicator3-dev librsvg2-dev
+  ```
+
+  Extend the existing `test-ci` recipe rather than defining it twice. The `-d .`
+  arguments keep the checks in the caller's repository. To run the Rust tests as
+  well, add `@just -f ~/ai-review-ci/justfiles/rust.just -d . _cargo-test` to
+  `desktop-rust-checks`. The original working setup also called
+  `desktop-rust-checks` from `test-push`; under the current development-phase
+  contract, keep the local commit and push gates syntax-only and run the full Rust
+  checks in CI.
+
+  In `.github/workflows/review-pr.yml`, pass the provisioning recipe to the
+  reusable QC workflow (retain the rest of the existing workflow):
+
+  ```yaml
+  jobs:
+    qc-ci:
+      uses: dzackgarza/ai-review-ci/.github/workflows/_qc.yml@main
+      permissions:
+        contents: read
+        issues: read
+      with:
+        tier: test-ci
+        profile: bun-python
+        infra_ref: main
+        setup_recipe: ci-setup-desktop
+  ```
+
+  `_qc.yml` invokes `just "$QC_SETUP_RECIPE"` before dependency validation and
+  the QC tier. The caller owns the domain-specific system packages; the central
+  recipes own Rust formatting and linting. This pattern ran successfully in
+  [math-pdf-reader's QC job](https://github.com/dzackgarza/math-pdf-reader/actions/runs/35869038044)
+  (the WebKitGTK provisioning and Rust Clippy check both completed); it resolves
+  the former limitation tracked in `dzackgarza/math-pdf-reader#3`.
 - **`frontendDist` must exist** even when the window loads a remote URL such as the local
   server; point it at a directory holding one placeholder `index.html`.
 - **A window that loads `http://127.0.0.1:<port>`** needs `beforeDevCommand` to start the
