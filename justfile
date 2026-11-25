@@ -97,7 +97,7 @@ install-global-hooks:
     git config --global core.hooksPath "$global_hooks_dir"
     git config --global core.hooksPath
 
-# Symlink every skill in skills/ into the user's skills directory (AI_SKILLS_DIR).
+# Link current skills and prune dangling links owned by this checkout.
 install-skills:
     #!/usr/bin/env bash
     set -euo pipefail
@@ -106,18 +106,43 @@ install-skills:
         exit 1
     fi
     skills_dir="$AI_SKILLS_DIR"
+    source_dir="$(realpath -m -- "{{ skills_source_dir }}")"
     mkdir -p "$skills_dir"
+    shopt -s nullglob
 
-    for skill in "{{ skills_source_dir }}"/*/; do
+    for skill in "$source_dir"/*/; do
         skill="${skill%/}"
         name="$(basename "$skill")"
         target="$skills_dir/$name"
-        if [[ -e "$target" && ! -L "$target" ]]; then
+        if [[ -L "$target" ]]; then
+            resolved="$(realpath -m -- "$target")"
+            skill_path="$(realpath -m -- "$skill")"
+            if [[ "$resolved" == "$skill_path" ]]; then
+                continue
+            fi
+            if [[ "$resolved" != "$source_dir/"* ]]; then
+                echo "Error: refusing to replace skill link owned by another source: $target" >&2
+                exit 1
+            fi
+        elif [[ -e "$target" ]]; then
             echo "Error: refusing to replace non-symlink skill: $target"
             exit 1
         fi
-        ln -snf "$skill" "$target"
+        ln -snf -- "$skill" "$target"
         echo "$target -> $skill"
+    done
+
+    # Resolve relative links and missing targets; compare directory boundaries,
+    # not just a prefix (e.g. skills-other is not owned by skills).
+    shopt -s dotglob
+    for target in "$skills_dir"/*; do
+        if [[ -L "$target" && ! -e "$target" ]]; then
+            resolved="$(realpath -m -- "$target")"
+            if [[ "$resolved" == "$source_dir/"* ]]; then
+                rm -- "$target"
+                echo "Pruned deleted skill link: $target"
+            fi
+        fi
     done
 
 # Link this machine's Docker-backed Sage launchers into ~/.local/bin.
