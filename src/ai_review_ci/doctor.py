@@ -19,15 +19,12 @@ from ai_review_ci.install import AMBIENT_WORKFLOW, DEVELOPMENT_WORKFLOW, PR_WORK
 from ai_review_ci.labels import Label, RemoteLabel, compute_label_actions, load_taxonomy
 
 SCHEMA_VERSION: Literal[1] = 1
-# A Sage repository's acceptance suite runs in the reusable acceptance workflow, never
-# in the push or CI tiers (#478), so a Sage repository with the suite must call it.
 ACCEPTANCE_SUITE = Path("tests") / "acceptance"
 ACCEPTANCE_WORKFLOW = "acceptance.yml"
 ACCEPTANCE_REUSABLE_WORKFLOW = "dzackgarza/ai-review-ci/.github/workflows/_acceptance.yml"
 REUSABLE_WORKFLOW_PREFIX = "dzackgarza/ai-review-ci/.github/workflows/"
-# The workflow_call workflows under this repository's .github/workflows/. GitHub
-# rejects a run whose job calls any other name before a job starts (#431).
 REUSABLE_WORKFLOWS = ("_acceptance.yml", "_gates.yml", "_qc.yml")
+QC_SUPPRESSION_FILES = (".semgrepignore", "vulture_whitelist.py", "whitelist.py", "lizard-whitelist.txt", "semgrep-exceptions.toml", "qc-excludes.toml")
 MISSING_JUSTFILE_NAME = ".ai-review-ci-missing-justfile"
 JUSTFILE_CONTRACT_VARIABLES = {
     "schema_version": "ai_review_ci_schema_version",
@@ -53,6 +50,7 @@ FindingSurface = Literal[
     "justfile_conformance",
     "branch_protection",
     "label_alignment",
+    "qc_suppression",
 ]
 BranchProtectionState = Literal["not_applicable", "compliant", "missing", "missing_contexts", "unverifiable"]
 LabelAlignmentState = Literal["not_applicable", "compliant", "misaligned", "unverifiable"]
@@ -789,6 +787,25 @@ def _label_alignment_findings(observation: LabelAlignmentObservation) -> list[Do
     return []
 
 
+def _qc_suppression_findings(target: Path) -> list[DoctorFinding]:
+    """A tracked QC suppression or whitelist file is a per-repo suppression surface."""
+    tracked = subprocess.run(
+        ["git", "-C", str(target), "ls-files", "-z", *(f"**/{name}" for name in QC_SUPPRESSION_FILES), *QC_SUPPRESSION_FILES],
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout.split("\0")
+    return [
+        DoctorFinding(
+            severity="error",
+            surface="qc_suppression",
+            evidence=f"{path} is a per-repo QC suppression surface; all suppression lives in ai-review-ci",
+            remediation_commands=(f"trash {path}", "open an ai-review-ci issue with the dispatch evidence if a shared whitelist entry is needed"),
+        )
+        for path in sorted(set(tracked) - {""})
+    ]
+
+
 def _findings(
     *,
     target_root: Path,
@@ -896,6 +913,7 @@ def _findings(
             )
         )
     findings.extend(_label_alignment_findings(label_alignment))
+    findings.extend(_qc_suppression_findings(target_root))
     return findings
 
 

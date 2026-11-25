@@ -311,7 +311,6 @@ def test_doctor_classifies_missing_workflow_as_misconfigured(tmp_path: pathlib.P
 
 
 def test_doctor_requires_the_scheduled_ambient_workflow(tmp_path: pathlib.Path) -> None:
-    # The ambient tier is the only whole-tree semgrep; a repo without it has none.
     project = create_target(tmp_path, "python")
     (project / ".github" / "workflows" / "ambient.yml").unlink()
 
@@ -323,8 +322,6 @@ def test_doctor_requires_the_scheduled_ambient_workflow(tmp_path: pathlib.Path) 
 
 
 def test_doctor_requires_the_acceptance_workflow_for_an_acceptance_suite(tmp_path: pathlib.Path) -> None:
-    # The push and CI tiers leave tests/acceptance/ to _acceptance.yml (#478); a repo
-    # with the suite and no workflow calling it would never run the suite at all.
     project = create_target(tmp_path, "sage")
     suite = project / "tests" / "acceptance" / "test_family.sage"
     suite.parent.mkdir(parents=True)
@@ -351,8 +348,6 @@ def test_doctor_requires_the_acceptance_workflow_for_an_acceptance_suite(tmp_pat
 
 
 def test_doctor_reports_a_trigger_calling_a_reusable_workflow_ai_review_ci_does_not_provide(tmp_path: pathlib.Path) -> None:
-    # #431: GitHub rejects a run whose job calls a deleted reusable workflow before any
-    # job starts, so a stale installed trigger fails every push and leaves no log.
     project = create_target(tmp_path, "python")
     stale = project / ".github" / "workflows" / "review-slop.yml"
     stale.write_text(
@@ -375,7 +370,6 @@ def test_doctor_reports_a_trigger_calling_a_reusable_workflow_ai_review_ci_does_
 
 def test_doctor_knows_every_reusable_workflow_ai_review_ci_provides() -> None:
     workflows = {path.name: yaml.safe_load(path.read_text()) for path in (ROOT / ".github" / "workflows").glob("*.yml")}
-    # PyYAML reads the bare key `on` as the boolean True.
     provided = {name for name, data in workflows.items() if isinstance(data[True], dict) and "workflow_call" in data[True]}
 
     assert set(REUSABLE_WORKFLOWS) == provided
@@ -588,16 +582,11 @@ def _compliant_contract() -> QcJustfileContract:
 
 
 def test_label_alignment_flags_missing_drifted_variant_and_ignores_extras() -> None:
-    # #216: compare live labels against the canonical taxonomy on name + color +
-    # description. Missing, drifted, and case/spelling variants are misalignments;
-    # extra repo-specific labels are NOT flagged.
     canonical = load_taxonomy()
     by_name = {label.name: label for label in canonical}
     bug = by_name["bug"]
     enhancement = by_name["enhancement"]
     remote = {label.name: RemoteLabel(name=label.name, color=label.color, description=label.description) for label in canonical}
-    # drift `enhancement`'s color; delete `bug`, re-add it only as a case variant `Bug`;
-    # add an extra repo-specific label that must be ignored.
     remote["enhancement"] = RemoteLabel(name="enhancement", color="000000", description=enhancement.description)
     del remote["bug"]
     remote["Bug"] = RemoteLabel(name="Bug", color=bug.color, description=bug.description)
@@ -608,7 +597,7 @@ def test_label_alignment_flags_missing_drifted_variant_and_ignores_extras() -> N
     assert observation.observed_state == "misaligned"
     assert observation.drifted == ("enhancement",)
     assert any(v.canonical == "bug" and "Bug" in v.remote_variants for v in observation.variants)
-    assert "bug" not in observation.missing  # bug is a variant, not merely missing
+    assert "bug" not in observation.missing
     assert "kilo-triaged" not in observation.missing
     assert "kilo-triaged" not in observation.drifted
 
@@ -627,14 +616,9 @@ def test_label_alignment_compliant_when_repo_carries_canonical_set_exactly() -> 
 
 
 def test_label_alignment_misalignment_is_a_required_error_feeding_global_status() -> None:
-    # Mirror the qc-doctor contract: a real misalignment is a required (error) finding,
-    # so it drives global_status to misconfigured (doctor exits nonzero / qc-doctor fails).
     canonical = load_taxonomy()
     by_name = {label.name: label for label in canonical}
     remote = {label.name: RemoteLabel(name=label.name, color=label.color, description=label.description) for label in canonical}
-    # Exercise all three misalignment kinds so the finding message names each:
-    # a case variant (bug -> Bug), a missing label (enhancement removed entirely),
-    # and a drifted color (chore).
     del remote["bug"]
     remote["Bug"] = RemoteLabel(name="Bug", color=by_name["bug"].color, description=by_name["bug"].description)
     del remote["enhancement"]
@@ -682,3 +666,19 @@ def test_active_findings_are_noncompliant_with_no_exception_path(tmp_path: pathl
 
 def test_docs_and_configs_profile_is_doctor_compatible() -> None:
     assert ProfileAdapter.validate_python("docs-and-configs") == "docs-and-configs"
+
+
+def test_doctor_reports_tracked_qc_suppression_files(tmp_path: pathlib.Path) -> None:
+    project = create_target(tmp_path, "python")
+    (project / ".semgrepignore").write_text("src/\n")
+    (project / "tools").mkdir()
+    (project / "tools" / "vulture_whitelist.py").write_text("unused_name\n")
+    (project / "untracked_whitelist.py").write_text("x\n")
+    (project / "whitelist.py").write_text("y\n")
+    assert run_git(project, "add", ".semgrepignore", "tools/vulture_whitelist.py").returncode == 0
+
+    status, payload = status_for(project)
+
+    suppression = [finding["evidence"] for finding in payload["findings"] if finding["surface"] == "qc_suppression"]
+    assert status == "misconfigured"
+    assert [evidence.split(" ")[0] for evidence in suppression] == [".semgrepignore", "tools/vulture_whitelist.py"]
