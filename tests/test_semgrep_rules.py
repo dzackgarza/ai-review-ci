@@ -160,4 +160,4 @@ PYTHON_TYPE_ESCAPE_RULES = ("py-no-type-ignore", "py-no-any-type", "py-no-object
 
 
 def test_python_type_escape_rules_flag_suppressions_and_opaque_types() -> None:
-    _assert_rules_match_annotations(PYTHON_TYPE_ESCAPE_RULES, "type_escape.py")
+    _assert_rules_match_annotations(PYTHON_TYPE_ESCAPE_RULES, "type_escape*.py")

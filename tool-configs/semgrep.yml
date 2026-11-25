@@ -652,15 +652,31 @@ rules:
     metadata:
       policy_code: POLICY.NO_QC_SILENCING
   - id: py-no-any-type
-    message: POLICY.NO_TYPE_ESCAPE
+    message: 'POLICY.NO_TYPE_ESCAPE: Any is allowed only as one named type alias (X: TypeAlias = Any or type X = Any) defined in one place per repository; this per-file rule cannot check the one-place limit.'
     languages:
       - python
     severity: ERROR
-    pattern-either:
-      - pattern-regex: ^\s*from\s+(typing|typing_extensions)\s+import\b[^#\n]*\bAny\b
-      - pattern: typing.Any
     metadata:
       policy_code: POLICY.NO_TYPE_ESCAPE
+    patterns:
+      - pattern-either:
+          - pattern: from typing import Any
+          - pattern: from typing_extensions import Any
+          - pattern: from typing import Any as $A
+          - pattern: from typing_extensions import Any as $A
+          - pattern: typing.Any
+          - pattern: Any
+      - pattern-not-inside: |
+          from $M import Any
+          ...
+          $X: TypeAlias = Any
+      - pattern-not-inside: |
+          from $M import Any
+          ...
+          type $X = Any
+      - pattern-not-inside: "$X: TypeAlias = Any"
+      - pattern-not-inside: "$X: TypeAlias = typing.Any"
+      - pattern-not-inside: "type $X = Any"
   - id: py-no-object-return
     message: POLICY.NO_TYPE_ESCAPE
     languages:

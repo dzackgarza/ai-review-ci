@@ -1,11 +1,19 @@
 import typing
 
-# ruleid: py-no-any-type
-from typing import Any, cast
-# ruleid: py-no-any-type
-from typing_extensions import Any as AnyType
+# ok: py-no-any-type
+from typing import Any, TypeAlias, cast
 # ok: py-no-any-type
 from typing import Anything, Protocol
+
+# ok: py-no-any-type
+JsonValue: TypeAlias = Any
+# ok: py-no-any-type
+type Payload = Any
+
+
+# ruleid: py-no-any-type
+def untyped(value: Any) -> int:
+    return cast(int, value)
 
 
 # ruleid: py-no-any-type
