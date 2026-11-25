@@ -27,6 +27,7 @@ infra := justfile_directory() / ".."
 configs := infra / "tool-configs"
 artifacts := infra / "tool-artifacts"
 justfiles := infra / "justfiles"
+biome_package := "@biomejs/biome@2.6.4"
 
 # Every config filename these QC tools discover on their own. A project that carries any
 # of them diverges its local run from canonical CI (#292). Each list is the tool's own
@@ -173,7 +174,7 @@ _biome:
 	[ -d src ] && dirs+=(src)
 	[ -d tests ] && dirs+=(tests)
 	[ ${#dirs[@]} -eq 0 ] && dirs=(.)
-	"{{artifacts}}/scripts/with-central-biome-config.sh" {{configs}}/biome.json bun x --package @biomejs/biome biome check "${dirs[@]}"
+	"{{artifacts}}/scripts/with-central-biome-config.sh" {{configs}}/biome.json bun x --package {{biome_package}} biome check "${dirs[@]}"
 
 _ast-grep:
 	#!/usr/bin/env bash
@@ -618,7 +619,7 @@ _normalize: _eslint-deps
 		echo "No staged JavaScript, TypeScript, or Vue files found"
 		exit 0
 	fi
-	if "{{artifacts}}/scripts/with-central-biome-config.sh" {{configs}}/biome.json bun x --package @biomejs/biome biome check --write --unsafe "${files[@]}"; then
+	if "{{artifacts}}/scripts/with-central-biome-config.sh" {{configs}}/biome.json bun x --package {{biome_package}} biome check --write --unsafe "${files[@]}"; then
 		:
 	else
 		ec=$?
