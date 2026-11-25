@@ -22,7 +22,6 @@ LINT_STAGED_CONFIG = TypeAdapter(dict[str, list[str]])
 def private_recipe_failure_mode(monkeypatch: pytest.MonkeyPatch) -> None:
     """Private-recipe tests exercise CI-style directives unless overridden."""
     monkeypatch.setenv("AI_REVIEW_CI_FAILURE_MODE", "triage")
-    # Temporary fixture repositories do not contain the enclosing CI refs.
     monkeypatch.delenv("DIFF_COVER_BASE", raising=False)
     monkeypatch.delenv("QC_TIER", raising=False)
 
@@ -163,8 +162,6 @@ def test_install_skills_prunes_only_deleted_owned_links(tmp_path: pathlib.Path) 
     assert result.returncode == 0, result.stdout + result.stderr
     assert (hub / "deleted").resolve(strict=True) == deleted
 
-    # Both absolute links installed by the recipe and relative legacy links
-    # must be recognized. A sibling path sharing the prefix is not owned.
     relative = hub / ".relative"
     relative.symlink_to(os.path.relpath(deleted, hub))
     external = checkout / "skills-other" / "missing"
@@ -188,7 +185,6 @@ def test_install_skills_prunes_only_deleted_owned_links(tmp_path: pathlib.Path) 
     assert ordinary.read_text() == "keep this file"
     assert directory.is_dir() and not directory.is_symlink()
 
-    # Removing the last source directory must not install a literal "*" link.
     shutil.rmtree(retained)
     for _ in range(2):
         result = run_just(justfile, checkout, "install-skills", env=env)
@@ -459,9 +455,6 @@ def test_sage_syntax_uses_tools_from_the_sage_virtual_environment(
     sage_bin_dir = tmp_path / "sage-venv" / "bin"
     sage_bin_dir.mkdir(parents=True)
     (sage_bin_dir / "python").symlink_to(pathlib.Path(sys.executable))
-    # A source-tree launcher: it lives outside the venv, answers `-c` by
-    # running the venv interpreter, and fails any other invocation, so the
-    # gate must preparse and compile with the venv tools, not through sage.
     launcher_dir = tmp_path / "sage-src"
     launcher_dir.mkdir()
     sage = launcher_dir / "sage"
@@ -864,8 +857,6 @@ def test_knip_config_does_not_blanket_ignore_owned_typescript(tmp_path: pathlib.
     assert "**/__tests__/**" not in shipped["ignore"]
     assert "**/scripts/**" not in shipped["ignore"]
 
-    # The shipped config must be the deterministic output of the sync script
-    # (no hand edits): regenerating in place yields no change.
     repo = tmp_path / "repo"
     qc_root = repo / "tool-configs"
     qc_root.mkdir(parents=True)
@@ -1123,8 +1114,6 @@ def test_common_normalization_preserves_structured_test_fixtures(
 def test_common_normalization_formats_staged_text_beyond_one_argument_list(
     tmp_path: pathlib.Path,
 ) -> None:
-    # Importing a record corpus stages ~160k Markdown cards in one commit; the
-    # formatter command line then exceeds ARG_MAX ("Argument list too long").
     project = tmp_path / "project"
     records = project / "records"
     records.mkdir(parents=True)
@@ -1164,8 +1153,6 @@ def test_common_normalization_formats_staged_text_beyond_one_argument_list(
 def test_common_normalization_leaves_declared_corpus_directories_to_their_scheduled_job(
     tmp_path: pathlib.Path,
 ) -> None:
-    # A record corpus (lattice-database: 160k cards) is formatted by its own
-    # nightly job; the commit gate formats everything else that is staged.
     project = tmp_path / "project"
     corpus = project / "cards"
     corpus.mkdir(parents=True)
@@ -1268,8 +1255,6 @@ def test_shared_ast_grep_excludes_user_authored_scripts_and_notebooks(
     script_dir.mkdir(parents=True)
     notebook_dir.mkdir(parents=True)
     (source_dir / "app.py").write_text("VALUE = 1\n")
-    # The rule is intentionally real and blocking. A generic AST scan must
-    # not turn an exploratory research artifact into a defect in that artifact.
     (script_dir / "derivation.py").write_text("CONFIG_VALUE = Field(default=1)\n")
     (notebook_dir / "exploration.py").write_text("CONFIG_VALUE = Field(default=1)\n")
 
@@ -1289,10 +1274,6 @@ def test_python_ast_grep_uses_official_cli_and_central_rules(
 
     result = run_just(ROOT / "justfiles" / "python.just", project, "_ast-grep")
 
-    # no-field-default carries POLICY.RUNTIME_DEFAULT, a hard bridge-burning
-    # policy. A policy-bearing rule must BAN the pattern (block the gate), not
-    # emit an ignorable warning. The gate blocks on error[ findings, so the rule
-    # must be error-tier and the scan must exit nonzero.
     output = result.stdout + result.stderr
     assert result.returncode != 0, output
     assert "no-field-default" in output
@@ -1318,10 +1299,6 @@ def test_python_ast_grep_reports_boolean_parameter_in_target_repository(
 def test_python_ast_grep_blocks_dynamic_import(
     tmp_path: pathlib.Path,
 ) -> None:
-    # POLICY.CRITICAL_DEPENDENCY is enforced for TypeScript (await import(...))
-    # via no-dynamic-import. Python's equivalent dynamic-import forms —
-    # importlib.import_module(...) and __import__(...) — are the same policy
-    # violation and must block the Python gate equivalently, not go unaudited.
     project = tmp_path / "python-dynamic-import-project"
     project.mkdir()
     (project / "app.py").write_text(
@@ -1341,8 +1318,6 @@ def test_python_ast_grep_blocks_dynamic_import(
 
     output = result.stdout + result.stderr
     assert result.returncode != 0, output
-    # Assert the Python rule id specifically, not a loose prefix that the
-    # TypeScript no-dynamic-import rule would also satisfy.
     assert "no-dynamic-import-python" in output
 
 
@@ -1461,8 +1436,6 @@ def test_semgrep_autofix_defers_unfixed_findings_to_push_tier(
 
 
 def test_semgrep_autofix_scans_only_the_staged_files(tmp_path: pathlib.Path) -> None:
-    # The commit tier is a fast check of what is being committed; the whole tree is
-    # the CI tier's. Committing one file to lattice-database scanned all 161k files.
     project = tmp_path / "staged-scope-project"
     project.mkdir()
     (project / "settled.py").write_text("def settled() -> int:\n    return 1\n")
@@ -1485,8 +1458,6 @@ def test_semgrep_autofix_scans_only_the_staged_files(tmp_path: pathlib.Path) -> 
 
 @pytest.mark.parametrize("profile", ["python", "sage", "rust", "bun", "bun-python"])
 def test_ambient_tier_semgrep_scans_files_no_change_touched(tmp_path: pathlib.Path, profile: str) -> None:
-    # The commit tier scans staged files and test-ci scans the diff, so the
-    # scheduled ambient tier is the only scan of the whole tree.
     project = tmp_path / "ambient-project"
     source = project / "source"
     source.mkdir(parents=True)
@@ -1495,7 +1466,6 @@ def test_ambient_tier_semgrep_scans_files_no_change_touched(tmp_path: pathlib.Pa
     assert run_git(project, "add", ".").returncode == 0
     commit_without_hooks(project, "base")
     revision = run_git(project, "rev-parse", "HEAD").stdout.strip()
-    # A CI runner exports a base; the ambient tier must not narrow to its empty diff.
     environment = {**os.environ, "DIFF_COVER_BASE": revision, "QC_TIER": "test-ci"}
 
     result = run_just(ROOT / "justfiles" / "shared.just", project, "_ambient-semgrep", env=environment)
@@ -1583,7 +1553,6 @@ def test_semgrep_scans_only_changed_files_in_ci(tmp_path: pathlib.Path) -> None:
     project = tmp_path / "downstream"
     source = project / "source"
     source.mkdir(parents=True)
-    # A real ERROR in an unchanged file must not enter differential scans.
     (source / "legacy.ts").write_text("export const legacy = incoming || 'ambient'\n")
     existing_violation = "export const retained = incoming || 'retained'\n"
     changed = source / "changed.ts"
@@ -1599,7 +1568,6 @@ def test_semgrep_scans_only_changed_files_in_ci(tmp_path: pathlib.Path) -> None:
     commit_without_hooks(project, "change")
     revision = run_git(project, "rev-parse", "HEAD").stdout.strip()
     command = ["just", "--justfile", str(ROOT / "justfiles/shared.just"), "-d", ".", "_semgrep"]
-    # The fixture supplies its own baseline, never the hosted outer repo's ref.
     environment = {**os.environ, "DIFF_COVER_BASE": base, "QC_TIER": "test-ci"}
     result = subprocess.run(command, cwd=project, env=environment, text=True, capture_output=True)
     assert result.returncode == 0, result.stdout + result.stderr
@@ -1613,7 +1581,6 @@ def test_semgrep_scans_only_changed_files_in_ci(tmp_path: pathlib.Path) -> None:
         assert finding["extra"]["severity"] == "ERROR"
         assert finding["start"]["line"] == 1
 
-    # New ERROR findings still block despite the existing baseline violation.
     changed.write_text(changed.read_text() + "export const added = incoming || 'added'\n")
     assert run_git(project, "add", ".").returncode == 0
     commit_without_hooks(project, "new violation")
@@ -1714,6 +1681,29 @@ def test_semgrep_ignores_exported_html_under_notebooks(
     assert "fermat-periods-nbviewer.html" not in output
 
 
+def test_semgrep_ignores_generated_yarn_and_labextension_output(
+    tmp_path: pathlib.Path,
+) -> None:
+    project = tmp_path / "semgrep-generated-js-project"
+    extension = project / "subrepos" / "sage-syntax"
+    generated = (
+        extension / ".pnp.cjs",
+        extension / ".pnp.loader.mjs",
+        extension / ".yarn" / "releases" / "yarn-4.cjs",
+        extension / "sage_syntax" / "labextension" / "static" / "509.js",
+    )
+    for path in generated:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text("function f(o) {\n    const offset = o.offset || 0;\n    return offset;\n}\n")
+
+    result = run_just(ROOT / "justfiles" / "shared.just", project, "_semgrep")
+
+    output = result.stdout + result.stderr
+    assert result.returncode == 0, output
+    for path in generated:
+        assert path.name not in output, f"{path} was scanned:\n{output}"
+
+
 def test_semgrep_preserves_tracked_ignore_and_fails_loud_on_backup_failure(
     tmp_path: pathlib.Path,
 ) -> None:
@@ -1728,8 +1718,6 @@ def test_semgrep_preserves_tracked_ignore_and_fails_loud_on_backup_failure(
     sentinel = "tests/fixtures/user-owned-exclusion/**\n"
     tracked_ignore.write_text(sentinel)
 
-    # Force the backup step to fail with a real on-PATH mktemp shim — no mock of
-    # the recipe itself. The recipe must detect the failure before overwriting.
     shim_dir = tmp_path / "shim"
     shim_dir.mkdir()
     mktemp_shim = shim_dir / "mktemp"
@@ -2110,10 +2098,6 @@ def test_aislop_surfaces_warnings_without_blocking(tmp_path: pathlib.Path) -> No
 
 
 def test_aislop_fails_closed_on_unexpected_schema(tmp_path: pathlib.Path) -> None:
-    # A parseable-but-unexpected aislop response (no numeric summary counts,
-    # no diagnostics array) must NOT be treated as clean: the numeric guards
-    # would otherwise fall through and pass the gate. The recipe must fail
-    # closed on scanner schema/tooling drift.
     project = tmp_path / "aislop-project"
     project.mkdir()
     payload = {"schemaVersion": "1", "score": 100, "note": "no summary or diagnostics"}
@@ -2131,12 +2115,8 @@ def test_aislop_fails_closed_on_unexpected_schema(tmp_path: pathlib.Path) -> Non
 
 
 def test_repo_aislop_config_disables_print_debug_rule() -> None:
-    # The repo's own .aislop/config.yml must parse and keep python-print-debug
-    # off (owner policy: prints are signal here, not slop). This is the whole
-    # payload of the aislop-signal cleanup — guard it against silent breakage.
     config = yaml.safe_load((ROOT / ".aislop" / "config.yml").read_text())
     assert config["rules"]["ai-slop/python-print-debug"] == "off"
-    # No score gate: scores are golfable, so nothing gates on them.
     assert "failBelow" not in (config.get("ci") or {})
 
 
@@ -4100,7 +4080,6 @@ def test_python_diff_scoped_recipes_accept_metadata_only_changes(
         check=True,
         capture_output=True,
     )
-    # A bare runner has no global identity; committing without one exits 128.
     subprocess.run(["git", "config", "user.email", "qc@example.invalid"], cwd=project, check=True, capture_output=True)
     subprocess.run(["git", "config", "user.name", "QC Fixture"], cwd=project, check=True, capture_output=True)
     subprocess.run(["git", "add", "."], cwd=project, check=True, capture_output=True)
@@ -4519,8 +4498,6 @@ def test_rust_normalization_formats_nested_manifest_project(
 def test_rust_normalization_formats_a_workspace_and_its_members(
     tmp_path: pathlib.Path,
 ) -> None:
-    # Two members: cargo fmt takes a lone member for a virtual manifest, and finds no targets
-    # for one with two unless it is asked for all of them.
     project = tmp_path / "rust-workspace"
     project.mkdir(parents=True)
     (project / "Cargo.toml").write_text('[workspace]\nmembers = ["server", "desktop"]\nresolver = "2"\n')
@@ -4552,12 +4529,6 @@ def test_rust_normalization_formats_a_workspace_and_its_members(
         assert formatted == "pub fn value() -> u8 {\n    42\n}\n"
 
 
-# Regression for #17: just >= 1.46 binds JUST_WORKING_DIRECTORY to
-# -d/--working-directory, which then requires --justfile — so any consumer that
-# exported JUST_WORKING_DIRECTORY (the old delegated-gate routing hint) could no
-# longer run a bare public gate. The scaffolds resolve this by routing with an
-# explicit `-d .` and never exporting JUST_WORKING_DIRECTORY, so the bare
-# entrypoint keeps working. These tests lock both halves of that contract.
 
 SCAFFOLD_DELEGATES = {
     "python": ("python.just",),
@@ -4625,8 +4596,6 @@ def test_scaffold_bare_just_entrypoint_survives_working_directory_binding(
         check=False,
     )
     output = result.stdout + result.stderr
-    # The bug manifested as a just arg-parse failure ("required ... --justfile")
-    # before any recipe ran; a clean parse + route is the fix.
     assert result.returncode == 0, output
     for justfile_name in SCAFFOLD_DELEGATES[language]:
         assert f"-f ~/ai-review-ci/justfiles/{justfile_name}" in output
@@ -4642,9 +4611,6 @@ def test_scaffold_does_not_export_working_directory_routing_hint(language: str) 
     assert "JUST_WORKING_DIRECTORY" not in scaffold
 
 
-# Historical Just versions rejected JUST_WORKING_DIRECTORY at argument parsing.
-# That external bug is not an invariant: the owned scaffold entrypoints above
-# must route correctly on current Just releases.
 
 
 def test_docs_and_configs_qc_routes_formatting_and_link_validation(tmp_path: pathlib.Path) -> None:
@@ -4706,11 +4672,6 @@ def test_docs_and_configs_qc_routes_formatting_and_link_validation(tmp_path: pat
     assert "lychee --no-progress" in links.stderr
 
 
-# Config filenames each QC tool actually discovers, read from the tools themselves:
-#   biome      — ConfigName::BIOME_JSON in biome_fs/src/fs.rs
-#   eslint     — FLAT_CONFIG_FILENAMES in eslint/lib/config/config-loader.js (v10: flat config only)
-#   knip       — https://knip.dev/overview/configuration#location
-#   lint-staged— CONFIG_FILE_NAMES in lint-staged/lib/loadConfig.js
 LOCAL_QC_OVERRIDE_FILES = (
     "biome.json",
     "biome.jsonc",
@@ -4788,10 +4749,6 @@ def test_ts_preflight_rejects_qc_config_embedded_in_the_package_manifest(tmp_pat
     assert f"package.json#{key}" in output, output
 
 
-# setup.cfg and tox.ini are config-discovery surfaces for QC tools this repo supplies
-# configs for: mypy (mypy.defaults.SHARED_CONFIG_NAMES), coverage.py, and import-linter.
-# pytest and pyright are deliberately absent — global QC passes them no config, so a
-# project-local one is not an override of anything (#292).
 SHARED_MANIFEST_OVERRIDES = (
     ("setup.cfg", "[mypy]\nwarn_return_any = True\n"),
     ("setup.cfg", "[coverage:run]\nbranch = True\n"),
@@ -4881,8 +4838,6 @@ def test_global_stub_library_resolves_from_a_downstream_project(tmp_path: pathli
 
     result = run_just(ROOT / "justfiles" / "python.just", project, "_mypy")
 
-    # Scoped to the stubbed module itself. A stub that re-exports third-party types
-    # can still report those, which is a property of the stub, not of path resolution.
     output = result.stdout + result.stderr
     assert 'named "sarif_pydantic"' not in output, output
 
