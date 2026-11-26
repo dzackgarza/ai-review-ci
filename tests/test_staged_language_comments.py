@@ -103,3 +103,12 @@ def test_justfile_doc_attribute_with_hash_after_colon_is_not_a_comment(tmp_path:
     subprocess.run(["git", "add", "-f", "--", "justfile"], cwd=tmp_path, check=True)
     result = subprocess.run([sys.executable, checker], cwd=tmp_path, capture_output=True, text=True)
     assert result.returncode == 0, result.stderr
+
+
+def test_markdown_fenced_code_is_not_source(tmp_path: Path) -> None:
+    checker = Path(__file__).resolve().parents[1] / "scripts/check_staged_comments.py"
+    subprocess.run(["git", "init", "-q"], cwd=tmp_path, check=True)
+    (tmp_path / "conversation.md").write_text("## assistant\n\n```python\nx = 1\n# recorded note\n```\n")
+    subprocess.run(["git", "add", "-f", "--", "conversation.md"], cwd=tmp_path, check=True)
+    result = subprocess.run([sys.executable, checker], cwd=tmp_path, capture_output=True, text=True)
+    assert result.returncode == 0, result.stderr
