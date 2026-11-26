@@ -1,20 +1,5 @@
-# Shared exemption logic for the pre-commit and pre-push hooks. Sourced, not executed.
-#
-# Both hooks ask the same question — does this QC system govern this repository? — and
-# the answer must not drift between them, so it is written once here.
-#
-# Sets qc_repo_root and qc_hook_repo for the caller, and defines qc_should_gate: returns
-# 0 when the hook should run its gate, 1 when the repository is outside this system.
-
-# Keep GIT_INDEX_FILE: git commit --only supplies a temporary commit index,
-# and downstream pre-commit gates must inspect/mutate that snapshot rather than
-# unrelated staged work in the shared index. Repository-location variables are
-# still cleared so linked-worktree detection resolves from the caller cwd.
 unset GIT_DIR GIT_WORK_TREE GIT_PREFIX GIT_OBJECT_DIRECTORY GIT_ALTERNATE_OBJECT_DIRECTORIES GIT_COMMON_DIR
 
-# The agent directives the hooks print are version-controlled in the ai vault
-# repository, not in the hook scripts. A missing document is a broken checkout:
-# report it loudly, but a missing advisory must not block the gate's verdict.
 qc_directives_dir="$HOME/ai/hooks"
 
 qc_print_directive() {
@@ -39,13 +24,10 @@ qc_common_dir() {
 	CDPATH= cd -- "$qc_dir" && pwd -P
 }
 
-# owner/name from either the SSH or the HTTPS form of a GitHub remote.
 qc_github_slug() {
 	printf '%s' "$1" | sed -E 's#^.*github\.com[:/]##; s#\.git$##'
 }
 
-# Consult only local Git config during commits and pushes. An uncached fork
-# classification must never initiate a network call in the local feedback loop.
 qc_upstream_owner() {
     if qc_cached="$(git -C "$qc_repo_root" config --get ai-review-ci.upstream-owner)"; then
         case "$qc_cached" in
@@ -73,15 +55,12 @@ qc_has_gate_recipes() {
 }
 
 qc_should_gate() {
-	# ai-review-ci's own tree: the gates run from CI and from its own recipes, not from
-	# hooks that would recurse into the implementation under test.
 	if [ "$(qc_common_dir "$qc_repo_root")" = "$(qc_common_dir "$qc_hook_repo")" ]; then
 		return 1
 	fi
 
 	qc_remote="$(git -C "$qc_repo_root" config --get remote.origin.url 2>/dev/null || true)"
 
-	# Wiki repositories carry GitHub's layout and never a justfile.
 	case "${qc_repo_root##*/}" in
 		*.wiki)
 			echo "ai-review-ci hook: wiki repository — QC does not apply; proceeding without verification." >&2
