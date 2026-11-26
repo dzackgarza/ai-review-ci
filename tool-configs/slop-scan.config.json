@@ -3,6 +3,7 @@
     "**/*.generated.*",
     "**/*.min.*",
     "**/tests/fixtures/**",
+    "**/test/fixtures/**",
     "**/test/highlight/**",
     "**/test/tags/**",
     "**/examples/**",
