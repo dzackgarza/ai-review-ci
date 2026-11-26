@@ -138,6 +138,14 @@ During implementation, use narrowly targeted tests for the active capability.
 Complete suites are CI work.
 Refactoring, typing, optimization, deduplication and style cleanup are later roadmap phases, executed by fresh agents rather than interrupting implementation.
 
+### Lean QC prerequisites
+
+`lean-no-sorry` and the composed `lean-qc` require ripgrep (`rg`) on `PATH`.
+The reusable `_qc.yml` workflow installs ripgrep; callers outside that workflow must provide it themselves.
+The shared `lean-no-sorry` recipe checks this dependency before discovery, including when invoked through `lean-qc`.
+Missing ripgrep and discovery errors are operational failures, not clean scans.
+Keep this check at the scanner entry point, rather than adding a global installation requirement to local syntax-only gates that do not run the scanner.
+
 ## Canonical operations
 
 Install or update the label taxonomy:

@@ -323,19 +323,52 @@ def test_lean_no_sorry_ignores_comments_and_strings_but_not_terms(tmp_path: path
     assert "Words.lean" not in output
 
 
-def test_lean_no_sorry_fails_when_rg_cannot_run(tmp_path: pathlib.Path) -> None:
-    """A clean tree must not be reported clean by a scan that never ran (#361)."""
+@pytest.mark.parametrize("recipe", ["lean-no-sorry", "lean-qc"])
+@pytest.mark.parametrize("proof", ["trivial", "sorry"])
+def test_lean_no_sorry_fails_when_rg_cannot_run(
+    tmp_path: pathlib.Path, recipe: str, proof: str,
+) -> None:
+    """Both public routes require ripgrep even outside the hosted workflow (#361)."""
     project = tmp_path / "lean-project"
     project.mkdir()
-    (project / "Clean.lean").write_text("theorem fine : True := trivial\n")
-    env = os.environ.copy()
-    env["PATH"] = path_with_only(tmp_path, "just", "bash", "env")
+    (project / "Example.lean").write_text(f"theorem example : True := by {proof}\n")
+    env = os.environ | {"PATH": path_with_only(tmp_path, "just", "bash", "env", "python3")}
+
+    result = run_just(ROOT / "justfiles" / "lean.just", project, recipe, env=env)
+
+    output = result.stdout + result.stderr
+    assert result.returncode != 0, output
+    assert "No sorry declarations" not in output
+    assert "requires rg (ripgrep)" in output
+    assert "https://github.com/BurntSushi/ripgrep" in output
+
+
+def test_lean_no_sorry_propagates_real_rg_discovery_error(tmp_path: pathlib.Path) -> None:
+    project = tmp_path / "lean-project"
+    project.mkdir()
+    (project / "Broken.lean").write_text("theorem broken : True := by sorry\n")
+    config = tmp_path / "ripgrep.conf"
+    config.write_text("--glob\n[invalid\n")
+    env = os.environ | {"RIPGREP_CONFIG_PATH": str(config)}
 
     result = run_just(ROOT / "justfiles" / "lean.just", project, "lean-no-sorry", env=env)
 
     output = result.stdout + result.stderr
-    assert result.returncode != 0, output
-    assert "rg" in output
+    assert result.returncode == 2, output
+    assert "rg exited 2" in output
+    assert "No sorry declarations" not in output
+
+
+def test_lean_no_sorry_accepts_empty_selection(tmp_path: pathlib.Path) -> None:
+    project = tmp_path / "lean-project"
+    project.mkdir()
+    (project / "quarantined.conjecture.lean").write_text("theorem later : True := by sorry\n")
+
+    result = run_just(ROOT / "justfiles" / "lean.just", project, "lean-no-sorry")
+
+    output = result.stdout + result.stderr
+    assert result.returncode == 0, output
+    assert "No sorry declarations" in output
 
 
 def test_no_bypass_ignores_preexisting_markers_when_staging_other_changes(

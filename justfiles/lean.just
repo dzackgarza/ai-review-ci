@@ -70,6 +70,10 @@ lean-no-sorry:
 	#!/usr/bin/env bash
 	set -euo pipefail
 	echo "=== Running: Lean no-sorry scan ==="
+	if ! command -v rg >/dev/null 2>&1; then
+		echo "ERROR: Lean no-sorry scan requires rg (ripgrep); install it from https://github.com/BurntSushi/ripgrep" >&2
+		exit 127
+	fi
 	# The shipped `answer(...)` elaborator (AiReviewCi/Answer.lean) legitimately
 	# manipulates the `sorry` syntax; it carries no unproved proof. Consumers get it
 	# under `.lake` (already unscanned); this glob also covers ai-review-ci's own tree
