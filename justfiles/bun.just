@@ -58,8 +58,8 @@ _eslint-deps:
 	# config file's location — NODE_PATH is ignored for ESM. Global installs
 	# are invisible to the config loader.
 	# All other tools run ephemerally via bun x (see tool-provisioning-and-environment-hygiene).
-	cd {{configs}}
-	bun install --frozen-lockfile
+	cd "{{configs}}"
+	flock --exclusive . bun install --frozen-lockfile
 
 _normalize-common:
 	#!/usr/bin/env bash
