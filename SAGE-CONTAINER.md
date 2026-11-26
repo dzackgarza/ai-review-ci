@@ -48,6 +48,56 @@ start or update `sage-research`. Use the host commands listed below, including
 volumes across updates. Host launcher installation is owned by
 [`just install-sage-launchers`](justfile) in this repository.
 
+## Set up another host
+
+A host runs the same environment once these steps hold. Remove what the image
+replaces before the pull: a host copy of Sage, GAP, Julia, Lean or the research
+checkouts beside the image doubles the disk use, and the image (40 GB unpacked)
+plus its volumes (about 10 GB) need room on their own.
+
+1. Inventory the host. List host installs that duplicate the image
+   (`docker/research-environment.Dockerfile` in `dzackgarza/sage` names them),
+   and for each research checkout in `~/gitclones` its unpushed commits,
+   uncommitted changes and linked worktrees. Find who owns a directory before
+   calling it unused: `pacman -Qo PATH` (an AUR package can own a whole `/opt`
+   tree that `/usr/bin` links into).
+2. Remove the host duplicates.
+3. Install rootless Docker into `~/bin` with the
+   [rootless installer](https://docs.docker.com/engine/security/rootless/)
+   (`FORCE_ROOTLESS_INSTALL=1` when a rootful daemon also runs). The installer
+   switches the CLI to its `rootless` context; switch back with
+   `docker context use default` when the rootful daemon's containers still
+   matter. The launcher reaches the rootless daemon through `DOCKER_HOST` on its
+   own.
+4. Select the overlay2 store before the first pull, as rack does, and restart
+   the daemon (`systemctl --user restart docker`):
+
+   ```json
+   { "features": { "containerd-snapshotter": false } }
+   ```
+
+   in `~/.config/docker/daemon.json`. The containerd store keeps the
+   compressed layers (14 GB) beside the unpacked image.
+5. `just install-sage-launchers`, then `sage-docker-update`. On a laptop the
+   pull may drop; run it again, and finished layers are kept. The update creates
+   the container and the volumes and then stops at the first real directory in
+   `~/gitclones` that has a volume checkout's name.
+6. Move each such checkout into
+   `~/.local/share/docker/volumes/sage-repos/_data/NAME` in place of the image's
+   copy (`mv` keeps its branches, refs and local files), then run
+   `git worktree repair` for its linked worktrees. Fetch branches that exist only
+   in a Dropbox copy into the volume checkout; leave the Dropbox copy where it
+   is, because moving it out of Dropbox deletes it on every synced machine.
+   Ignored files that a host environment generated, such as
+   `sage-julia-bridge`'s `julia_env/Manifest.toml`, come from the image's copy.
+7. Write the image's revision into `~/.local/share/docker/volumes/sage-tree/image-revision`
+   when that file is missing and `/sage` is at that revision; without it the
+   next update copies `.venv` and `builddir` from the image again
+   ([#518](https://github.com/dzackgarza/ai-review-ci/issues/518)).
+8. Run `sage-docker-update` again; it links every volume checkout into
+   `~/gitclones`. Then run the computations of **Verified computations** on
+   the host commands.
+
 ## Host workspace
 
 The `sage-research` runtime mounts these persistent volumes:
