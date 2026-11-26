@@ -8,7 +8,7 @@
   },
   "declaration": {
     "path": "/example/python-target/justfile",
-    "sha256": "098ccd89f37e1ff7474701c27925a02c74e094d3ce1a9b392704d94415ae6ed4",
+    "sha256": "e8f5ad26294ea7754c4b333a502dedd450a33651bbd2ed1d15e9bdd69d32a566",
     "justfile_contract": {
       "schema_version": 1,
       "profile": "python",
@@ -19,7 +19,7 @@
       "default_branch": "main"
     }
   },
-  "declaration_hash": "098ccd89f37e1ff7474701c27925a02c74e094d3ce1a9b392704d94415ae6ed4",
+  "declaration_hash": "e8f5ad26294ea7754c4b333a502dedd450a33651bbd2ed1d15e9bdd69d32a566",
   "declared_profile": "python",
   "effective_profile": "python",
   "workflow_refs": {
@@ -35,11 +35,22 @@
         "pr-description-checklist"
       ],
       "observed_gates": [
-        "qc-ci",
         "delegation-conformance",
         "deterministic-diff",
-        "qc-doctor",
-        "pr-description-checklist"
+        "pr-description-checklist",
+        "qc-ci",
+        "qc-doctor"
+      ]
+    },
+    "ambient.yml": {
+      "path": "/example/python-target/.github/workflows/ambient.yml",
+      "required_ref": "main",
+      "observed_ref": "main",
+      "required_gates": [
+        "ambient"
+      ],
+      "observed_gates": [
+        "ambient"
       ]
     }
   },
@@ -76,6 +87,17 @@
         "delegates_to_global_qc": true,
         "caller_root_preserved": true
       }
+    },
+    "ambient": {
+      "required_justfiles": [
+        "python.just"
+      ],
+      "observed": {
+        "present": true,
+        "command": "just -f ~/ai-review-ci/justfiles/python.just -d . ambient\n",
+        "delegates_to_global_qc": true,
+        "caller_root_preserved": true
+      }
     }
   },
   "branch_protection": {
@@ -86,9 +108,7 @@
       "qc-doctor / qc-doctor",
       "pr-description-checklist / pr-description-checklist"
     ],
-    "observed_contexts": [
-      "qc-ci / qc"
-    ],
+    "observed_contexts": [],
     "observed_state": "not_applicable",
     "evidence": "target repository has no origin remote"
   },
@@ -129,18 +149,34 @@
         "bun.lock or bun.lockb"
       ]
     },
-    "rust": {
-      "profile": "rust",
+    "bun-python": {
+      "profile": "bun-python",
       "required_paths": [
-        "Cargo.toml"
+        "pyproject.toml",
+        "package.json"
       ],
       "missing_paths": [
-        "Cargo.toml"
+        "package.json",
+        "bun.lock or bun.lockb"
+      ]
+    },
+    "docs-and-configs": {
+      "profile": "docs-and-configs",
+      "required_paths": [],
+      "missing_paths": []
+    },
+    "rust": {
+      "profile": "rust",
+      "required_paths": [],
+      "missing_paths": [
+        "at least one Cargo.toml file"
       ]
     },
     "sage": {
       "profile": "sage",
-      "required_paths": [],
+      "required_paths": [
+        "pyproject.toml"
+      ],
       "missing_paths": [
         "at least one .sage file"
       ]
@@ -149,9 +185,10 @@
   "findings": [],
   "invalidation_inputs": [
     "target_head:0000000000000000000000000000000000000000",
-    "justfile_contract_sha256:098ccd89f37e1ff7474701c27925a02c74e094d3ce1a9b392704d94415ae6ed4",
-    "justfile:057c325c857b467d56dcd952fd026801a7aa94b0ba7bf95b63eb5189f97d8f6f",
-    ".github/workflows/review-pr.yml:510b96871022e2a45efcd8465e598000136c1e1dcebeaca9aa3207cf39038165"
+    "justfile_contract_sha256:e8f5ad26294ea7754c4b333a502dedd450a33651bbd2ed1d15e9bdd69d32a566",
+    "justfile:e8f5ad26294ea7754c4b333a502dedd450a33651bbd2ed1d15e9bdd69d32a566",
+    ".github/workflows/ambient.yml:19f2ac9a26b10c99272e930e6b0b87e37fdb480c3071c3198bfb02c16729ad60",
+    ".github/workflows/review-pr.yml:7b81f38514cb95c03e5b127b95db1c3b2deb95fdd9ce145e78e985559e36dca8"
   ],
   "installation_state": "compliant",
   "global_status": "current"
