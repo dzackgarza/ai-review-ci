@@ -61,6 +61,10 @@ def hook_source_repo(tmp_path: pathlib.Path) -> pathlib.Path:
     (repo / "scripts").mkdir()
     shutil.copy(ROOT / "scripts" / "local-check.py", repo / "scripts" / "local-check.py")
     shutil.copy(ROOT / "scripts" / "hook-timing.py", repo / "scripts" / "hook-timing.py")
+    shutil.copy(ROOT / "scripts" / "check_staged_comments.py", repo / "scripts" / "check_staged_comments.py")
+    shutil.copy(ROOT / "pyproject.toml", repo / "pyproject.toml")
+    shutil.copy(ROOT / "uv.lock", repo / "uv.lock")
+    shutil.copytree(ROOT / "src", repo / "src")
     (repo / "justfiles").mkdir()
     shutil.copy(ROOT / "justfiles" / "qc-tooling.just", repo / "justfiles" / "qc-tooling.just")
     shutil.copy(ROOT / "justfiles" / "shared.just", repo / "justfiles" / "shared.just")
@@ -91,7 +95,7 @@ def test_ai_review_ci_hooks_skip_linked_ai_review_ci_worktrees(
     )
     (worktree / "justfile").write_text(f"{recipe}:\n    @echo should-not-run\n")
 
-    env = git_test_env(PATH=path_with_only(tmp_path, "sh", "git", "readlink", "dirname", "date", "python3"))
+    env = git_test_env(PATH=path_with_only(tmp_path, "sh", "git", "readlink", "dirname", "date", "python3", "uv"))
     result = subprocess.run(
         hook_command(hook_source_repo / hook_dir / hook, worktree),
         cwd=worktree,
@@ -244,7 +248,7 @@ BYPASS_HOOKS = [
 @pytest.mark.parametrize(("hook_dir", "hook", "recipe"), BYPASS_HOOKS)
 def test_hooks_skip_wiki_repositories(hook_source_repo: pathlib.Path, tmp_path: pathlib.Path, hook_dir: str, hook: str, recipe: str) -> None:
     wiki = _init_downstream(tmp_path / "research.wiki", recipe, "@echo should-not-run")
-    env = git_test_env(PATH=path_with_only(tmp_path, "sh", "git", "readlink", "dirname", "date", "python3"))
+    env = git_test_env(PATH=path_with_only(tmp_path, "sh", "git", "readlink", "dirname", "date", "python3", "uv"))
     result = subprocess.run(hook_command(hook_source_repo / hook_dir / hook, wiki), cwd=wiki, env=env, text=True, capture_output=True, check=False)
     assert result.returncode == 0, result.stdout + result.stderr
     assert "should-not-run" not in result.stdout
@@ -254,7 +258,7 @@ def test_hooks_skip_wiki_repositories(hook_source_repo: pathlib.Path, tmp_path: 
 @pytest.mark.parametrize(("hook_dir", "hook", "recipe"), BYPASS_HOOKS)
 def test_hooks_skip_repos_not_under_dzackgarza(hook_source_repo: pathlib.Path, tmp_path: pathlib.Path, hook_dir: str, hook: str, recipe: str) -> None:
     foreign = _init_downstream(tmp_path / "foreign", recipe, "@echo should-not-run", remote="https://github.com/someoneelse/foo.git")
-    env = git_test_env(PATH=path_with_only(tmp_path, "sh", "git", "readlink", "dirname", "date", "python3"))
+    env = git_test_env(PATH=path_with_only(tmp_path, "sh", "git", "readlink", "dirname", "date", "python3", "uv"))
     result = subprocess.run(hook_command(hook_source_repo / hook_dir / hook, foreign), cwd=foreign, env=env, text=True, capture_output=True, check=False)
     assert result.returncode == 0, result.stdout + result.stderr
     assert "should-not-run" not in result.stdout
@@ -309,16 +313,63 @@ def _cache_upstream_owner(repo: pathlib.Path, owner: str) -> None:
 
 
 @pytest.mark.parametrize(("hook_dir", "hook", "recipe"), BYPASS_HOOKS)
-def test_hooks_skip_forks_of_third_party_upstreams(hook_source_repo: pathlib.Path, tmp_path: pathlib.Path, hook_dir: str, hook: str, recipe: str) -> None:
-    fork = _init_downstream(tmp_path / "sage", recipe, "@echo should-not-run", remote="https://github.com/dzackgarza/sage.git")
+@pytest.mark.parametrize("has_justfile", [False, True])
+def test_hooks_skip_unwired_forks_of_third_party_upstreams(hook_source_repo: pathlib.Path, tmp_path: pathlib.Path, hook_dir: str, hook: str, recipe: str, has_justfile: bool) -> None:
+    fork = _init_downstream(tmp_path / "sage", "build", "@exit 1", remote="https://github.com/dzackgarza/sage.git")
+    if not has_justfile:
+        (fork / "justfile").unlink()
+        (tmp_path / "justfile").write_text(f"{recipe}:\n    @exit 1\n")
     _cache_upstream_owner(fork, "sagemath")
-    env = git_test_env(PATH=path_with_only(tmp_path, "sh", "git", "readlink", "dirname", "sed", "date", "python3"))
 
-    result = subprocess.run(hook_command(hook_source_repo / hook_dir / hook, fork), cwd=fork, env=env, text=True, capture_output=True, check=False)
+    result = subprocess.run(hook_command(hook_source_repo / hook_dir / hook, fork), cwd=fork, env=git_test_env(), text=True, capture_output=True, check=False)
 
     assert result.returncode == 0, result.stdout + result.stderr
-    assert "should-not-run" not in result.stdout
     assert "fork of sagemath" in result.stderr
+
+
+@pytest.mark.parametrize(("hook_dir", "hook", "recipe"), BYPASS_HOOKS)
+@pytest.mark.parametrize("filename", ["justfile", "Justfile", ".justfile"])
+def test_hooks_gate_qc_wired_third_party_forks(hook_source_repo: pathlib.Path, tmp_path: pathlib.Path, hook_dir: str, hook: str, recipe: str, filename: str) -> None:
+    fork = _init_downstream(tmp_path / "flowmark", recipe, "@exit 1", remote="https://github.com/dzackgarza/flowmark.git")
+    (fork / "justfile").unlink()
+    (fork / filename).write_text(delegating_justfile(hook_source_repo))
+    _cache_upstream_owner(fork, "jlevy")
+    (fork / "broken.py").write_text("def broken(:\n")
+    subprocess.run(["git", "add", "broken.py"], cwd=fork, env=git_test_env(), check=True)
+    stdin = ""
+    if hook == "pre-push":
+        subprocess.run(["git", "-c", "user.name=Test", "-c", "user.email=test@example.com", "-c", "core.hooksPath=/dev/null", "commit", "-qm", "invalid outgoing tree"], cwd=fork, env=git_test_env(), check=True)
+        sha = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=fork, text=True).strip()
+        stdin = f"refs/heads/main {sha} refs/heads/main {'0' * 40}\n"
+    result = subprocess.run(hook_command(hook_source_repo / hook_dir / hook, fork), cwd=fork, env=git_test_env(), input=stdin, text=True, capture_output=True, check=False)
+    assert result.returncode == 1, result.stdout + result.stderr
+    assert "broken.py" in result.stderr
+    assert f"gate failed: just {recipe}" in result.stderr
+
+
+@pytest.mark.parametrize(("hook_dir", "hook", "recipe"), BYPASS_HOOKS)
+def test_hooks_accept_valid_qc_wired_third_party_forks(hook_source_repo: pathlib.Path, tmp_path: pathlib.Path, hook_dir: str, hook: str, recipe: str) -> None:
+    fork = _init_downstream(tmp_path / "flowmark", recipe, "@true", remote="https://github.com/dzackgarza/flowmark.git")
+    _cache_upstream_owner(fork, "jlevy")
+    (fork / "justfile").write_text("[private]\n" + f"{recipe}:\n    @echo gate-ran\n")
+    result = subprocess.run(hook_command(hook_source_repo / hook_dir / hook, fork), cwd=fork, env=git_test_env(), text=True, capture_output=True, check=False)
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert "gate-ran" in result.stdout
+
+
+@pytest.mark.parametrize(("hook_dir", "hook", "recipe"), BYPASS_HOOKS)
+@pytest.mark.parametrize("malformed", [False, True])
+def test_hooks_do_not_exempt_incomplete_fork_gate_config(hook_source_repo: pathlib.Path, tmp_path: pathlib.Path, hook_dir: str, hook: str, recipe: str, malformed: bool) -> None:
+    other_recipe = "test-push" if recipe == "test-commit" else "test-commit"
+    fork = _init_downstream(tmp_path / "flowmark", other_recipe, "@true", remote="https://github.com/dzackgarza/flowmark.git")
+    _cache_upstream_owner(fork, "jlevy")
+    if malformed:
+        (fork / "justfile").write_text("test-commit: [\n")
+    result = subprocess.run(hook_command(hook_source_repo / hook_dir / hook, fork), cwd=fork, env=git_test_env(), text=True, capture_output=True, check=False)
+    assert result.returncode == 1, result.stdout + result.stderr
+    assert f"gate failed: just {recipe}" in result.stderr
+    if malformed:
+        assert "cannot inspect fork's justfile" in result.stderr
 
 
 @pytest.mark.parametrize(("hook_dir", "hook", "recipe"), BYPASS_HOOKS)
@@ -439,7 +490,7 @@ def test_pre_push_rejects_configured_lfs_without_executable(
 ) -> None:
     repo = _init_downstream(tmp_path / "downstream", "test-push", "@echo should-not-run")
     subprocess.run(["git", "config", "filter.lfs.required", "true"], cwd=repo, env=git_test_env(), check=True)
-    env = git_test_env(PATH=path_with_only(tmp_path, "sh", "git", "readlink", "dirname", "date", "python3"))
+    env = git_test_env(PATH=path_with_only(tmp_path, "sh", "git", "readlink", "dirname", "date", "python3", "uv"))
     result = subprocess.run(
         hook_command(hook_source_repo / "repo-hooks" / "pre-push", repo),
         cwd=repo,

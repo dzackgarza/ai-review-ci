@@ -57,6 +57,21 @@ qc_upstream_owner() {
     return 1
 }
 
+qc_has_gate_recipes() {
+    for qc_justfile in "$qc_repo_root"/[Jj][Uu][Ss][Tt][Ff][Ii][Ll][Ee] "$qc_repo_root"/.[Jj][Uu][Ss][Tt][Ff][Ii][Ll][Ee]; do
+        [ -f "$qc_justfile" ] || continue
+        if just --show test-commit >/dev/null 2>&1 || just --show test-push >/dev/null 2>&1; then
+            return 0
+        fi
+        if ! just --summary >/dev/null; then
+            echo "ai-review-ci hook: cannot inspect fork's justfile; gating normally." >&2
+            return 0
+        fi
+        return 1
+    done
+    return 1
+}
+
 qc_should_gate() {
 	# ai-review-ci's own tree: the gates run from CI and from its own recipes, not from
 	# hooks that would recurse into the implementation under test.
@@ -89,15 +104,14 @@ qc_should_gate() {
 			;;
 	esac
 
-	# A fork of a third-party project sits under the account but is upstream's code: it
-	# carries upstream's layout, will never be QC-wired, and is entirely exempt
-	# (ai-review-ci#372). A fork of another repository in the account is still our code
-	# and stays gated.
 	if qc_parent_owner="$(qc_upstream_owner "$qc_remote")"; then
 		case "$qc_parent_owner" in
 			"" | dzackgarza) ;;
 			*)
-				echo "ai-review-ci hook: fork of $qc_parent_owner — upstream's code, QC not owned here; proceeding without verification." >&2
+				if qc_has_gate_recipes; then
+					return 0
+				fi
+				echo "ai-review-ci hook: fork of $qc_parent_owner — no local QC gate recipes; proceeding without verification." >&2
 				return 1
 				;;
 		esac
