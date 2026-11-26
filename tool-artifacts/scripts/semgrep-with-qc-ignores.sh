@@ -12,10 +12,21 @@ shift
 
 ignore_file=".semgrepignore"
 had_preexisting=0
-ignore_backup=""
-if [ -e "$ignore_file" ]; then
+backup_dir=""
+if [ -e "$ignore_file" ] || [ -L "$ignore_file" ]; then
+	if [ ! -f "$ignore_file" ] && [ ! -L "$ignore_file" ]; then
+		echo "ERROR: $ignore_file is not a regular file or symlink; original is untouched." >&2
+		exit 1
+	fi
 	had_preexisting=1
-	if ! ignore_backup="$(mktemp)" || ! cp "$ignore_file" "$ignore_backup"; then
+	if ! backup_dir="$(mktemp -d)"; then
+		echo "ERROR: failed to allocate a backup for $ignore_file; original is untouched." >&2
+		exit 1
+	fi
+	# Copy the directory entry, not a symlink's target. Do not remove the
+	# original until the backup succeeds.
+	if ! cp -a -- "$ignore_file" "$backup_dir/original"; then
+		rm -rf -- "$backup_dir"
 		echo "ERROR: failed to back up the existing $ignore_file; aborting before the QC exclude set overwrites it." >&2
 		exit 1
 	fi
@@ -23,13 +34,19 @@ fi
 
 restore_semgrepignore() {
 	if [ "$had_preexisting" -eq 1 ]; then
-		mv -f "$ignore_backup" "$ignore_file"
+		mv -fT -- "$backup_dir/original" "$ignore_file"
+		rmdir -- "$backup_dir"
 	else
-		rm -f "$ignore_file"
+		rm -f -- "$ignore_file"
 	fi
 }
 trap restore_semgrepignore EXIT
 
+# Unlink before writing, so even a dangling symlink cannot redirect writes
+# outside the checkout.
+if [ "$had_preexisting" -eq 1 ]; then
+	rm -f -- "$ignore_file"
+fi
 uv run "$read_excludes_script" "$excludes_config" >"$ignore_file"
 printf '%s\n' '*.html' '**/*.html' '.pnp.cjs' '.pnp.loader.mjs' >>"$ignore_file"
 
