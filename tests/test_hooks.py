@@ -21,6 +21,7 @@ def git_test_env(**updates: str) -> dict[str, str]:
     env = os.environ.copy()
     for key in GIT_HOOK_ENV_KEYS:
         env.pop(key, None)
+    env.update(GIT_CONFIG_GLOBAL="/dev/null", GIT_CONFIG_NOSYSTEM="1")
     env.update(updates)
     return env
 
@@ -54,19 +55,15 @@ def hook_source_repo(tmp_path: pathlib.Path) -> pathlib.Path:
         target = target_dir / hook
         shutil.copy(ROOT / "repo-hooks" / hook, target)
         target.chmod(0o755)
-    # The hooks source their shared exemption and timing logic next to
-    # themselves, and the timing helper resolves its record writer under scripts/.
     shutil.copy(ROOT / "repo-hooks" / "qc-exempt.sh", target_dir / "qc-exempt.sh")
     shutil.copy(ROOT / "repo-hooks" / "hook-timing.sh", target_dir / "hook-timing.sh")
+    shutil.copy(ROOT / "repo-hooks" / "lfs-hooks.sh", target_dir / "lfs-hooks.sh")
     (repo / "scripts").mkdir()
     shutil.copy(ROOT / "scripts" / "local-check.py", repo / "scripts" / "local-check.py")
     shutil.copy(ROOT / "scripts" / "hook-timing.py", repo / "scripts" / "hook-timing.py")
-    # Downstream justfiles delegate to the central recipes, which run local-check.py.
     (repo / "justfiles").mkdir()
     shutil.copy(ROOT / "justfiles" / "qc-tooling.just", repo / "justfiles" / "qc-tooling.just")
     shutil.copy(ROOT / "justfiles" / "shared.just", repo / "justfiles" / "shared.just")
-    # pre-push resolves the closure-claim confrontation script (#244) relative
-    # to the hook repo, so the copied layout must carry it too.
     (repo / "global-hooks").mkdir()
     shutil.copy(ROOT / "global-hooks" / "confront_closes.py", repo / "global-hooks" / "confront_closes.py")
     return repo
@@ -96,7 +93,7 @@ def test_ai_review_ci_hooks_skip_linked_ai_review_ci_worktrees(
 
     env = git_test_env(PATH=path_with_only(tmp_path, "sh", "git", "readlink", "dirname", "date", "python3"))
     result = subprocess.run(
-        [str(hook_source_repo / hook_dir / hook)],
+        hook_command(hook_source_repo / hook_dir / hook, worktree),
         cwd=worktree,
         input="",
         env=env,
@@ -129,7 +126,7 @@ def test_ai_review_ci_hooks_still_run_in_downstream_repos(
     (downstream / "justfile").write_text(f"{recipe}:\n    @echo downstream-ran\n")
 
     result = subprocess.run(
-        [str(hook_source_repo / hook_dir / hook)],
+        hook_command(hook_source_repo / hook_dir / hook, downstream),
         cwd=downstream,
         input="",
         env=git_test_env(),
@@ -168,7 +165,6 @@ def test_pre_commit_preserves_pathspec_temporary_index(hook_source_repo: pathlib
     )
     subprocess.run(["git", "config", "core.hooksPath", str(hooks_path)], cwd=downstream, env=git_test_env(), check=True)
 
-    # Invalid staged sibling is outside the temporary --only index.
     (downstream / "sibling.py").write_text("def broken(:\\n".replace("\\n", "\n"))
     subprocess.run(["git", "add", "sibling.py"], cwd=downstream, env=git_test_env(), check=True)
     (downstream / "mine.py").write_text("def f(x): return x + 1\\n".replace("\\n", "\n"))
@@ -190,8 +186,6 @@ def test_pre_commit_preserves_pathspec_temporary_index(hook_source_repo: pathlib
         check=True,
     ).stdout.splitlines() == ["sibling.py"]
 
-    # An invalid candidate for --only must be rejected, while the unrelated
-    # staged sibling remains precisely as it was.
     (downstream / "mine.py").write_text("def broken(:\\n".replace("\\n", "\n"))
     rejected = subprocess.run(
         ["git", "commit", "--only", "mine.py", "-m", "invalid candidate"],
@@ -210,6 +204,10 @@ def test_pre_commit_preserves_pathspec_temporary_index(hook_source_repo: pathlib
         capture_output=True,
         check=True,
     ).stdout.splitlines() == ["sibling.py"]
+
+
+def hook_command(hook: pathlib.Path, repo: pathlib.Path) -> list[str]:
+    return [str(hook), str(repo), str(repo)] if hook.name == "pre-push" else [str(hook)]
 
 
 def delegating_justfile(hook_source_repo: pathlib.Path) -> str:
@@ -245,12 +243,9 @@ BYPASS_HOOKS = [
 
 @pytest.mark.parametrize(("hook_dir", "hook", "recipe"), BYPASS_HOOKS)
 def test_hooks_skip_wiki_repositories(hook_source_repo: pathlib.Path, tmp_path: pathlib.Path, hook_dir: str, hook: str, recipe: str) -> None:
-    # A .wiki repository is categorically outside the QC regime. The hook must
-    # skip (exit 0) before ever invoking the recipe — proven by omitting `just`
-    # from PATH: a non-skipping hook would fail command-not-found.
     wiki = _init_downstream(tmp_path / "research.wiki", recipe, "@echo should-not-run")
     env = git_test_env(PATH=path_with_only(tmp_path, "sh", "git", "readlink", "dirname", "date", "python3"))
-    result = subprocess.run([str(hook_source_repo / hook_dir / hook)], cwd=wiki, env=env, text=True, capture_output=True, check=False)
+    result = subprocess.run(hook_command(hook_source_repo / hook_dir / hook, wiki), cwd=wiki, env=env, text=True, capture_output=True, check=False)
     assert result.returncode == 0, result.stdout + result.stderr
     assert "should-not-run" not in result.stdout
     assert "wiki repository" in result.stderr
@@ -260,7 +255,7 @@ def test_hooks_skip_wiki_repositories(hook_source_repo: pathlib.Path, tmp_path: 
 def test_hooks_skip_repos_not_under_dzackgarza(hook_source_repo: pathlib.Path, tmp_path: pathlib.Path, hook_dir: str, hook: str, recipe: str) -> None:
     foreign = _init_downstream(tmp_path / "foreign", recipe, "@echo should-not-run", remote="https://github.com/someoneelse/foo.git")
     env = git_test_env(PATH=path_with_only(tmp_path, "sh", "git", "readlink", "dirname", "date", "python3"))
-    result = subprocess.run([str(hook_source_repo / hook_dir / hook)], cwd=foreign, env=env, text=True, capture_output=True, check=False)
+    result = subprocess.run(hook_command(hook_source_repo / hook_dir / hook, foreign), cwd=foreign, env=env, text=True, capture_output=True, check=False)
     assert result.returncode == 0, result.stdout + result.stderr
     assert "should-not-run" not in result.stdout
     assert "not under the dzackgarza account" in result.stderr
@@ -268,9 +263,8 @@ def test_hooks_skip_repos_not_under_dzackgarza(hook_source_repo: pathlib.Path, t
 
 @pytest.mark.parametrize(("hook_dir", "hook", "recipe"), BYPASS_HOOKS)
 def test_hooks_still_gate_dzackgarza_repos(hook_source_repo: pathlib.Path, tmp_path: pathlib.Path, hook_dir: str, hook: str, recipe: str) -> None:
-    # A repository under the dzackgarza account is gated normally: the recipe runs.
     owned = _init_downstream(tmp_path / "owned", recipe, "@echo owned-ran", remote="https://github.com/dzackgarza/foo.git")
-    result = subprocess.run([str(hook_source_repo / hook_dir / hook)], cwd=owned, env=git_test_env(), text=True, capture_output=True, check=False)
+    result = subprocess.run(hook_command(hook_source_repo / hook_dir / hook, owned), cwd=owned, env=git_test_env(), text=True, capture_output=True, check=False)
     assert result.returncode == 0, result.stdout + result.stderr
     assert "owned-ran" in result.stdout
 
@@ -291,7 +285,7 @@ def test_hooks_fail_when_the_repo_recipe_fails(hook_source_repo: pathlib.Path, t
         sha = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=gated, text=True).strip()
         stdin = f"refs/heads/main {sha} refs/heads/main {'0' * 40}\n"
     result = subprocess.run(
-        [str(hook_source_repo / hook_dir / hook)],
+        hook_command(hook_source_repo / hook_dir / hook, gated),
         cwd=gated,
         env=git_test_env(),
         input=stdin,
@@ -316,14 +310,11 @@ def _cache_upstream_owner(repo: pathlib.Path, owner: str) -> None:
 
 @pytest.mark.parametrize(("hook_dir", "hook", "recipe"), BYPASS_HOOKS)
 def test_hooks_skip_forks_of_third_party_upstreams(hook_source_repo: pathlib.Path, tmp_path: pathlib.Path, hook_dir: str, hook: str, recipe: str) -> None:
-    # A fork under the account carries upstream's layout and will never be QC-wired
-    # (#372). The hook must skip before invoking the recipe — proven by omitting `just`
-    # from PATH, so a non-skipping hook would fail command-not-found.
     fork = _init_downstream(tmp_path / "sage", recipe, "@echo should-not-run", remote="https://github.com/dzackgarza/sage.git")
     _cache_upstream_owner(fork, "sagemath")
     env = git_test_env(PATH=path_with_only(tmp_path, "sh", "git", "readlink", "dirname", "sed", "date", "python3"))
 
-    result = subprocess.run([str(hook_source_repo / hook_dir / hook)], cwd=fork, env=env, text=True, capture_output=True, check=False)
+    result = subprocess.run(hook_command(hook_source_repo / hook_dir / hook, fork), cwd=fork, env=env, text=True, capture_output=True, check=False)
 
     assert result.returncode == 0, result.stdout + result.stderr
     assert "should-not-run" not in result.stdout
@@ -332,11 +323,10 @@ def test_hooks_skip_forks_of_third_party_upstreams(hook_source_repo: pathlib.Pat
 
 @pytest.mark.parametrize(("hook_dir", "hook", "recipe"), BYPASS_HOOKS)
 def test_hooks_gate_a_repo_that_is_not_a_fork(hook_source_repo: pathlib.Path, tmp_path: pathlib.Path, hook_dir: str, hook: str, recipe: str) -> None:
-    # The cached not-a-fork answer must not read as an exemption.
     owned = _init_downstream(tmp_path / "owned", recipe, "@echo owned-ran", remote="https://github.com/dzackgarza/foo.git")
     _cache_upstream_owner(owned, "none")
 
-    result = subprocess.run([str(hook_source_repo / hook_dir / hook)], cwd=owned, env=git_test_env(), text=True, capture_output=True, check=False)
+    result = subprocess.run(hook_command(hook_source_repo / hook_dir / hook, owned), cwd=owned, env=git_test_env(), text=True, capture_output=True, check=False)
 
     assert result.returncode == 0, result.stdout + result.stderr
     assert "owned-ran" in result.stdout
@@ -344,12 +334,10 @@ def test_hooks_gate_a_repo_that_is_not_a_fork(hook_source_repo: pathlib.Path, tm
 
 @pytest.mark.parametrize(("hook_dir", "hook", "recipe"), BYPASS_HOOKS)
 def test_hooks_gate_a_fork_of_another_repo_in_the_account(hook_source_repo: pathlib.Path, tmp_path: pathlib.Path, hook_dir: str, hook: str, recipe: str) -> None:
-    # Forking within the account leaves it our own code, so it stays gated. The
-    # exemption is about whose code it is, not about the repo being a fork.
     fork = _init_downstream(tmp_path / "own-fork", recipe, "@echo owned-ran", remote="https://github.com/dzackgarza/own-fork.git")
     _cache_upstream_owner(fork, "dzackgarza")
 
-    result = subprocess.run([str(hook_source_repo / hook_dir / hook)], cwd=fork, env=git_test_env(), text=True, capture_output=True, check=False)
+    result = subprocess.run(hook_command(hook_source_repo / hook_dir / hook, fork), cwd=fork, env=git_test_env(), text=True, capture_output=True, check=False)
 
     assert result.returncode == 0, result.stdout + result.stderr
     assert "owned-ran" in result.stdout
@@ -361,12 +349,13 @@ def test_pre_push_checks_committed_tree_and_not_empty_index(
 ) -> None:
     """A prior commit's syntax defect cannot disappear at the next push."""
     source = tmp_path / "source"
-    destination = tmp_path / "remote.git"
+    destination = tmp_path / "dzackgarza" / "remote.git"
+    destination.parent.mkdir()
     source.mkdir()
     subprocess.run(["git", "init", "-q", "-b", "main"], cwd=source, env=git_test_env(), check=True)
     subprocess.run(["git", "init", "--bare", "-q", str(destination)], env=git_test_env(), check=True)
     subprocess.run(
-        ["git", "remote", "add", "origin", "https://github.com/dzackgarza/example.git"],
+        ["git", "remote", "add", "origin", str(destination)],
         cwd=source,
         env=git_test_env(),
         check=True,
@@ -443,3 +432,23 @@ def test_pre_push_checks_committed_tree_and_not_empty_index(
         text=True,
     )
     assert accepted.returncode == 0, accepted.stdout + accepted.stderr
+
+
+def test_pre_push_rejects_configured_lfs_without_executable(
+    hook_source_repo: pathlib.Path, tmp_path: pathlib.Path
+) -> None:
+    repo = _init_downstream(tmp_path / "downstream", "test-push", "@echo should-not-run")
+    subprocess.run(["git", "config", "filter.lfs.required", "true"], cwd=repo, env=git_test_env(), check=True)
+    env = git_test_env(PATH=path_with_only(tmp_path, "sh", "git", "readlink", "dirname", "date", "python3"))
+    result = subprocess.run(
+        hook_command(hook_source_repo / "repo-hooks" / "pre-push", repo),
+        cwd=repo,
+        input="",
+        env=env,
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+    assert result.returncode == 1, result.stdout + result.stderr
+    assert "Git LFS is configured but git-lfs is not installed" in result.stderr
+    assert "should-not-run" not in result.stdout

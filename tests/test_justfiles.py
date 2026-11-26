@@ -3504,6 +3504,60 @@ def test_pytest_with_coverage_generates_xml_without_total_threshold(
     assert "Coverage XML report:" in output
 
 
+def test_diff_cover_resolves_local_and_remote_base_refs(tmp_path: pathlib.Path) -> None:
+    """Exercise the shared recipe against a clone with only a remote-tracking base."""
+    upstream = tmp_path / "upstream"
+    upstream.mkdir()
+    init_git_repo(upstream)
+    assert run_git(upstream, "branch", "-M", "main").returncode == 0
+    (upstream / "pyproject.toml").write_text(
+        '[project]\nname = "diff-cover-project"\nversion = "0.1.0"\n'
+        'requires-python = ">=3.14"\n\n[build-system]\n'
+        'requires = ["setuptools"]\nbuild-backend = "setuptools.build_meta"\n'
+    )
+    source = upstream / "diff_cover_project.py"
+    source.write_text("def value() -> int:\n    return 1\n")
+    (upstream / "tests").mkdir()
+    test = upstream / "tests" / "test_value.py"
+    test.write_text("from diff_cover_project import value\n\ndef test_value():\n    assert value() == 1\n")
+    assert run_git(upstream, "add", ".").returncode == 0
+    commit_without_hooks(upstream, "main baseline")
+    assert run_git(upstream, "switch", "-c", "feature").returncode == 0
+    source.write_text("def value() -> int:\n    return 2\n")
+    test.write_text("from diff_cover_project import value\n\ndef test_value():\n    assert value() == 2\n")
+    assert run_git(upstream, "add", ".").returncode == 0
+    commit_without_hooks(upstream, "covered feature change")
+
+    project = tmp_path / "clone"
+    cloned = run_git(tmp_path, "clone", "--branch", "feature", str(upstream), str(project))
+    assert cloned.returncode == 0, cloned.stderr
+    assert run_git(project, "show-ref", "--verify", "refs/heads/main").returncode != 0
+    assert run_git(project, "show-ref", "--verify", "refs/remotes/origin/main").returncode == 0
+    env = os.environ | {"XDG_CACHE_HOME": str(tmp_path / "cache")}
+    justfile = ROOT / "justfiles" / "python.just"
+    coverage = run_just(justfile, project, "_pytest_with_coverage", env=env)
+    assert coverage.returncode == 0, coverage.stdout + coverage.stderr
+
+    remote = run_just(justfile, project, "_diff-cover", env=env)
+    assert remote.returncode == 0, remote.stdout + remote.stderr
+    assert "origin/main...HEAD" in remote.stdout
+    assert "diff_cover_project.py (100%)" in remote.stdout
+
+    # A local base takes precedence over a different remote-tracking base.
+    # Here main has advanced to HEAD: the actual coverage report must have no diff.
+    assert run_git(project, "branch", "main", "HEAD").returncode == 0
+    local = run_just(justfile, project, "_diff-cover", env=env)
+    assert local.returncode == 0, local.stdout + local.stderr
+    assert re.search(r"(?<!origin/)main\.\.\.HEAD", local.stdout)
+    assert "No lines with coverage information in this diff" in local.stdout
+
+    assert run_git(project, "branch", "-D", "main").returncode == 0
+    assert run_git(project, "update-ref", "-d", "refs/remotes/origin/main").returncode == 0
+    missing = run_just(justfile, project, "_diff-cover", env=env)
+    assert missing.returncode != 0, missing.stdout + missing.stderr
+    assert "'main'" in missing.stderr and "'origin/main'" in missing.stderr
+
+
 def test_bun_coverage_consumes_declared_script_and_normalizes_lcov(
     tmp_path: pathlib.Path,
 ) -> None:
@@ -4842,6 +4896,23 @@ def test_global_stub_library_resolves_from_a_downstream_project(tmp_path: pathli
     assert 'named "sarif_pydantic"' not in output, output
 
 
+def test_biome_recipes_pin_the_config_schema_version(tmp_path: pathlib.Path) -> None:
+    config = json.loads((ROOT / "tool-configs" / "biome.json").read_text())
+    version = config["$schema"].split("/")[-2]
+    result = subprocess.run(
+        ["just", "--justfile", str(ROOT / "justfiles" / "bun.just"), "-d", str(tmp_path),
+         "--dry-run", "_biome", "_normalize"],
+        text=True, capture_output=True, check=True,
+    )
+    commands = [
+        line for line in (result.stdout + result.stderr).splitlines()
+        if "with-central-biome-config.sh" in line and "biome check" in line
+    ]
+    assert len(commands) == 2, commands
+    for command in commands:
+        assert f"bun x --package @biomejs/biome@{version} biome check" in command, command
+
+
 def test_biome_applies_central_parser_options_to_project_files(tmp_path: pathlib.Path) -> None:
     project = tmp_path / "biome-project"
     (project / "src").mkdir(parents=True)
@@ -4853,6 +4924,50 @@ def test_biome_applies_central_parser_options_to_project_files(tmp_path: pathlib
     result = run_just(ROOT / "justfiles" / "bun.just", project, "_biome")
 
     assert result.returncode == 0, result.stdout + result.stderr
+    assert "configuration schema version does not match" not in result.stdout + result.stderr
+    assert not (project / "biome.json").exists()
+
+
+@pytest.mark.parametrize("write", [False, True])
+def test_biome_preserves_structured_text_and_fixture_inputs(tmp_path: pathlib.Path, write: bool) -> None:
+    project = tmp_path / "bun-project"
+    project.mkdir()
+    init_git_repo(project)
+    frontmatter = "---\ntitle: Coble surfaces\n---\n\n# Coble surfaces\n"
+    protected = {
+        "src/book.md": frontmatter,
+        "src/book.markdown": frontmatter,
+        "src/book.qmd": frontmatter,
+        "src/settings.yaml": "key:    value\n",
+        "src/settings.yml": "key:    value\n",
+        "src/test/fixtures/example.ts": "export const bad={x:1}\n",
+        "tests/fixtures/example.ts": "export const bad={x:1}\n",
+        "test/fixtures/example.ts": "export const bad={x:1}\n",
+    }
+    for name, content in protected.items():
+        file = project / name
+        file.parent.mkdir(parents=True, exist_ok=True)
+        file.write_text(content)
+    owned = project / "src" / "owned.ts"
+    formatted = "export const a = { b: 1 };\n"
+    owned.write_text("export const a={b:1}\n" if write else formatted)
+
+    if write:
+        config = ROOT / "tool-configs" / "biome.json"
+        version = json.loads(config.read_text())["$schema"].split("/")[-2]
+        result = subprocess.run(
+            [str(ROOT / "tool-artifacts" / "scripts" / "with-central-biome-config.sh"),
+             str(config), "bun", "x", "--package", f"@biomejs/biome@{version}",
+             "biome", "check", "--write", "."],
+            cwd=project, text=True, capture_output=True, check=False,
+        )
+    else:
+        result = run_just(ROOT / "justfiles" / "bun.just", project, "_biome")
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    for name, content in protected.items():
+        assert (project / name).read_text() == content, name
+    assert owned.read_text() == formatted
     assert not (project / "biome.json").exists()
 
 

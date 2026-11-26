@@ -10,6 +10,7 @@
     "**/coverage.xml",
     "**/codeql-report.sarif",
     "**/tests/fixtures/**",
+    "**/test/fixtures/**",
     "**/test/highlight/**",
     "**/test/tags/**",
     "**/examples/**",

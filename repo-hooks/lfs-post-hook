@@ -1,0 +1,7 @@
+#!/usr/bin/env sh
+set -e
+. "$(dirname -- "$(readlink -f "$0")")/lfs-hooks.sh"
+
+if lfs_hooks_enabled; then
+    exec git lfs "${0##*/}" "$@"
+fi

@@ -50,6 +50,15 @@ configs: list[ToolConfig] = [
             "**",
             "!tsconfig.json",
             "!**/tsconfig.json",
+            # The wrapper installs this config at the target root temporarily.
+            "!biome.json",
+            # Flowmark owns Pandoc/Quarto Markdown; Prettier owns YAML.
+            # Biome's CommonMark grammar must not reinterpret their source.
+            "!**/*.md",
+            "!**/*.markdown",
+            "!**/*.qmd",
+            "!**/*.yaml",
+            "!**/*.yml",
         ],
     },
     {
