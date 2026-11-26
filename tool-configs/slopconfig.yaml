@@ -63,6 +63,7 @@ reporting:
     fail_on_critical: true
 ignore:
 - '**/tests/fixtures/**'
+- '**/test/fixtures/**'
 - '**/test/highlight/**'
 - '**/test/tags/**'
 - '**/examples/**'

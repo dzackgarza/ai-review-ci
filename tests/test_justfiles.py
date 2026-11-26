@@ -4928,6 +4928,49 @@ def test_biome_applies_central_parser_options_to_project_files(tmp_path: pathlib
     assert not (project / "biome.json").exists()
 
 
+@pytest.mark.parametrize("write", [False, True])
+def test_biome_preserves_structured_text_and_fixture_inputs(tmp_path: pathlib.Path, write: bool) -> None:
+    project = tmp_path / "bun-project"
+    project.mkdir()
+    init_git_repo(project)
+    frontmatter = "---\ntitle: Coble surfaces\n---\n\n# Coble surfaces\n"
+    protected = {
+        "src/book.md": frontmatter,
+        "src/book.markdown": frontmatter,
+        "src/book.qmd": frontmatter,
+        "src/settings.yaml": "key:    value\n",
+        "src/settings.yml": "key:    value\n",
+        "src/test/fixtures/example.ts": "export const bad={x:1}\n",
+        "tests/fixtures/example.ts": "export const bad={x:1}\n",
+        "test/fixtures/example.ts": "export const bad={x:1}\n",
+    }
+    for name, content in protected.items():
+        file = project / name
+        file.parent.mkdir(parents=True, exist_ok=True)
+        file.write_text(content)
+    owned = project / "src" / "owned.ts"
+    formatted = "export const a = { b: 1 };\n"
+    owned.write_text("export const a={b:1}\n" if write else formatted)
+
+    if write:
+        config = ROOT / "tool-configs" / "biome.json"
+        version = json.loads(config.read_text())["$schema"].split("/")[-2]
+        result = subprocess.run(
+            [str(ROOT / "tool-artifacts" / "scripts" / "with-central-biome-config.sh"),
+             str(config), "bun", "x", "--package", f"@biomejs/biome@{version}",
+             "biome", "check", "--write", "."],
+            cwd=project, text=True, capture_output=True, check=False,
+        )
+    else:
+        result = run_just(ROOT / "justfiles" / "bun.just", project, "_biome")
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    for name, content in protected.items():
+        assert (project / name).read_text() == content, name
+    assert owned.read_text() == formatted
+    assert not (project / "biome.json").exists()
+
+
 def test_biome_still_blocks_unformatted_files(tmp_path: pathlib.Path) -> None:
     project = tmp_path / "biome-project"
     (project / "src").mkdir(parents=True)
