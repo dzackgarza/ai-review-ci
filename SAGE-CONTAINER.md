@@ -70,6 +70,46 @@ retaining the volumes. Python runs from `/sage/.venv`; Julia uses its writable
 depot before the image's `/opt/julia-depot`. Its initial global environment
 comes from the image, and subsequent package changes belong to the volume.
 
+## Launcher behaviour
+
+[scripts/sage-docker](scripts/sage-docker) is one script; the name it is
+called by selects the command.
+
+- **Rootless Docker.** The launcher talks to the rootless daemon at
+  `unix:///run/user/$UID/docker.sock` through `$HOME/bin/docker`. Root in the
+  container is the host user, so files written under `/home/dzack` keep their
+  owner, and the image's own `HOME` (`/root`), with the Julia and Catlab
+  environments the image build resolved, is used as built.
+- **Checkouts in volumes.** The fork is the `sage-tree` volume at `/sage` and
+  every research repository is in the `sage-repos` volume under `/repos`.
+  Docker fills a named volume from the image only when it creates the volume.
+  The host reaches the checkouts through `~/gitclones` symlinks into
+  `~/.local/share/docker/volumes`, so agents edit, commit and push them with
+  ordinary tools and the container runs what they edit. A real directory in
+  `~/gitclones` with the name of a volume checkout stops the update: its work
+  must move into the volume checkout first. A link whose volume checkout is
+  gone is removed.
+- **Is the local image current?** The update asks the registry for the tag's
+  index digest (`Docker-Content-Digest` of the manifest request) and compares
+  it with the local image's `RepoDigests`. Both the overlay2 store and the
+  containerd store record the index digest there. `docker image inspect
+  --format '{{.Descriptor.Digest}}'` is not used: the overlay2 store has no
+  `Descriptor` field. An image that is not current is removed before the pull,
+  together with its container, so an update never holds two images on disk.
+- **The `sage-tree` volume after a new image.** The volume shadows the image's
+  `/sage` and still holds the previous image's checkout, `.venv` and
+  `builddir`. The update fast-forwards the checkout to the image's
+  `org.opencontainers.image.revision` and takes `.venv` and `builddir` from the
+  image. A dirty checkout, or one that cannot fast-forward, stops the update.
+- **Julia.** The shared environments in `/root/.julia/environments` name the
+  packages that the image depot holds, so each update copies them from
+  `/opt/julia-depot`. `JULIA_DEPOT_PATH` puts the writable volume depot in front
+  of the read-only image depot; its trailing empty entry keeps the stdlib depot.
+- **Termination.** Killing a `docker exec` client leaves its process running in
+  the container. The command therefore runs as the leader of its own process
+  group and records its pid, and the launcher kills that group when it is
+  terminated or exits.
+
 ## Verified computations
 
 | Consumer | Expected result verified on the host |
