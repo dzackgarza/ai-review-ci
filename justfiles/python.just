@@ -93,22 +93,26 @@ _python-qc-files:
 	}
 	if [[ ${QC_TIER:-} != ambient ]] && git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
 		changed_files=()
+		diff_paths="$(mktemp)"
+		trap 'rm -f -- "$diff_paths"' EXIT
+		git diff --cached --name-only --diff-filter=ACMR -z -- . >"$diff_paths"
 		while IFS= read -r -d '' file; do
 			[[ -f "$file" ]] || continue
 			is_python_qc_target "$file" || continue
 			changed_files+=("$file")
-		done < <(git diff --cached --name-only --diff-filter=ACMR -z -- .)
+		done <"$diff_paths"
 		if [ ${#changed_files[@]} -eq 0 ]; then
 			base_ref="${DIFF_COVER_BASE:-}"
 			if [ -z "$base_ref" ]; then
 				base_ref="$(git rev-parse --abbrev-ref --symbolic-full-name '@{u}' 2>/dev/null || true)"
 			fi
 			if [ -n "$base_ref" ] && git rev-parse --verify "${base_ref}^{commit}" >/dev/null 2>&1; then
+				git diff --name-only --diff-filter=ACMR -z "${base_ref}...HEAD" -- . >"$diff_paths"
 				while IFS= read -r -d '' file; do
 					[[ -f "$file" ]] || continue
 					is_python_qc_target "$file" || continue
 					changed_files+=("$file")
-				done < <(git diff --name-only --diff-filter=ACMR -z "${base_ref}...HEAD" -- .)
+				done <"$diff_paths"
 			fi
 		fi
 		if [ ${#changed_files[@]} -gt 0 ]; then
