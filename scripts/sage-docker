@@ -13,6 +13,15 @@ docker() { "$HOME/bin/docker" "$@"; }
 volumes=(sage-tree:/sage sage-repos:/repos sage-julia:/root/.julia)
 volume_root="$HOME/.local/share/docker/volumes"
 checkout_root="$HOME/gitclones"
+jupyter_port=8888
+run_options=(--init --restart unless-stopped --name "$container" --entrypoint /bin/sleep
+    --env "PATH=$container_path" --env "JULIA_DEPOT_PATH=$julia_depot"
+    --publish "127.0.0.1:$jupyter_port:$jupyter_port"
+    --mount type=bind,src=/home/dzack,dst=/home/dzack)
+for volume in "${volumes[@]}"; do
+    run_options+=(--mount "type=volume,src=${volume%%:*},dst=${volume#*:}")
+done
+run_config=$(printf '%s\n' "$image" "${run_options[@]}" | sha256sum | cut -d' ' -f1)
 
 mode=${0##*/}
 if [[ "$mode" == sage-docker-update ]]; then
@@ -79,14 +88,12 @@ if [[ "$mode" == sage-docker-update ]]; then
         rmdir "$staging"
         printf '%s\n' "$image_revision" > "$volume_root/sage-tree/image-revision"
     fi
+    if [[ -n "$current" && "$(docker inspect --format '{{index .Config.Labels "sage-docker.config"}}' "$container")" != "$run_config" ]]; then
+        docker rm -f "$container"
+        current=
+    fi
     if [[ -z "$current" ]]; then
-        mounts=(--mount type=bind,src=/home/dzack,dst=/home/dzack)
-        for volume in "${volumes[@]}"; do
-            mounts+=(--mount "type=volume,src=${volume%%:*},dst=${volume#*:}")
-        done
-        docker run -d --init --restart unless-stopped --name "$container" --entrypoint /bin/sleep \
-            --env "PATH=$container_path" --env "JULIA_DEPOT_PATH=$julia_depot" \
-            "${mounts[@]}" "$image" infinity
+        docker run -d --label "sage-docker.config=$run_config" "${run_options[@]}" "$image" infinity
     elif [[ $(docker inspect --format '{{.State.Running}}' "$container") == false ]]; then
         docker start "$container"
     fi
@@ -157,6 +164,15 @@ case "$mode" in
         else
             command=("$sage_bin/python" "$@")
         fi
+        ;;
+    jupyter)
+        command=(jupyter "$@")
+        case ${1:-} in
+            lab|server|notebook)
+                command+=(--ip=0.0.0.0 "--port=$jupyter_port" --no-browser --allow-root)
+                ;;
+        esac
+        env_args+=(-e "JUPYTER_CONFIG_DIR=$HOME/.jupyter")
         ;;
     julia|gap|M2|Singular|coxiter|lean|lake|elan|normaliz|polymake)
         command=("$mode" "$@")

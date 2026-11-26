@@ -88,7 +88,9 @@ plus its volumes (about 10 GB) need room on their own.
    `git worktree repair` for its linked worktrees. Fetch branches that exist only
    in a Dropbox copy into the volume checkout; leave the Dropbox copy where it
    is, because moving it out of Dropbox deletes it on every synced machine.
-   Ignored files that a host environment generated, such as
+   The update checks only `~/gitclones`; a research checkout elsewhere, such
+   as `~/research`, moves the same way and is replaced by a link to its volume
+   checkout. Ignored files that a host environment generated, such as
    `sage-julia-bridge`'s `julia_env/Manifest.toml`, come from the image's copy.
 7. Write the image's revision into `~/.local/share/docker/volumes/sage-tree/image-revision`
    when that file is missing and `/sage` is at that revision; without it the
@@ -113,8 +115,8 @@ volumes directly. Existing `~/research`, `~/sage-julia-bridge` and
 `~/sage-mypy-plugin` paths also reach their relocated checkouts. The move
 preserved the original directory identities, HEADs, refs and local changes.
 
-Host commands `sage`, `sage-docker-python`, `sage-docker-preparse`, `julia`,
-`gap`, `M2`, `Singular`, `coxiter`, `normaliz`, `polymake`, `lean`, `lake` and
+Host commands `sage`, `sage-docker-python`, `sage-docker-preparse`, `jupyter`,
+`julia`, `gap`, `M2`, `Singular`, `coxiter`, `normaliz`, `polymake`, `lean`, `lake` and
 `elan` run in this runtime. `sage-docker-update` refreshes the runtime while
 retaining the volumes. Python runs from `/sage/.venv`; Julia uses its writable
 depot before the image's `/opt/julia-depot`. Its initial global environment
@@ -145,6 +147,18 @@ called by selects the command.
   `packagesDir` of `../../.local/share/lean/...`, then resolve as the image
   build resolved them. Other directories keep their host path through the
   `/home/dzack` mount.
+- **Jupyter.** The container publishes `127.0.0.1:8888`, and the host
+  `jupyter` command runs Jupyter in the container with the host's
+  `~/.jupyter` as its configuration directory. `jupyter lab`, `jupyter server`
+  and `jupyter notebook` get `--ip=0.0.0.0 --port=8888 --no-browser
+  --allow-root` after the caller's arguments, so the server listens where the
+  published port reaches it; a different port is overridden. The kernels are
+  the image's (`sagemath`, `julia`, `python3`). No host process may hold port
+  8888 when the container is created.
+- **Container configuration.** The container carries a hash of its run
+  options as the `sage-docker.config` label. An update recreates a container
+  whose label differs, so a change to the mounts, environment or published
+  ports reaches hosts with their next update.
 - **Is the local image current?** The update asks the registry for the tag's
   index digest (`Docker-Content-Digest` of the manifest request) and compares
   it with the local image's `RepoDigests`. Both the overlay2 store and the
