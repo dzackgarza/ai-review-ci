@@ -167,6 +167,15 @@ case "$mode" in
         ;;
 esac
 
+workdir=$(pwd -P)
+for volume in "${volumes[@]}"; do
+    source_root="$volume_root/${volume%%:*}/_data"
+    if [[ "$workdir" == "$source_root" || "$workdir" == "$source_root"/* ]]; then
+        workdir="${volume#*:}${workdir#"$source_root"}"
+        break
+    fi
+done
+
 run_id="$$-$RANDOM$RANDOM"
 pid_file="/tmp/sage-docker-exec/$run_id.pid"
 stop_command() {
@@ -181,7 +190,7 @@ trap 'stop_command; exit 130' INT
 trap 'stop_command; exit 129' HUP
 trap stop_command EXIT
 exec 3<&0
-docker exec -i -w "$PWD" "${env_args[@]}" "$container" \
+docker exec -i -w "$workdir" "${env_args[@]}" "$container" \
     setsid -w /bin/sh -c 'mkdir -p "${1%/*}"; echo $$ > "$1"; shift; exec "$@"' _ \
     "$pid_file" "${command[@]}" <&3 &
 status=0

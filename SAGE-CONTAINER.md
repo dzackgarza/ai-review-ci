@@ -139,6 +139,12 @@ called by selects the command.
   `~/gitclones` with the name of a volume checkout stops the update: its work
   must move into the volume checkout first. A link whose volume checkout is
   gone is removed.
+- **Work directory.** A command started inside a volume's host directory runs
+  in that volume's container path: `~/gitclones/lean-cas-dsl` runs in
+  `/repos/lean-cas-dsl`. Relative paths in a checkout, such as a Lean
+  `packagesDir` of `../../.local/share/lean/...`, then resolve as the image
+  build resolved them. Other directories keep their host path through the
+  `/home/dzack` mount.
 - **Is the local image current?** The update asks the registry for the tag's
   index digest (`Docker-Content-Digest` of the manifest request) and compares
   it with the local image's `RepoDigests`. Both the overlay2 store and the
@@ -170,7 +176,7 @@ called by selects the command.
 | Oscar/Hecke | The number field defined by `x^2-2` has degree `2`; its generator squares to `2` |
 | Sage Julia bridge | `1 // 2` converts to Sage's exact rational; Oscar's `ZZ(2)^10` converts to `1024` |
 | Research session preamble | `ZZ(2)**10` is `1024` |
-| Lean and Lake | Both select the installed Lean `4.33.0` toolchain |
+| Lean and Lake | Both select the image's Lean `4.37.0-rc1` toolchain; from `~/gitclones/lean-cas-dsl`, `lake env lean` imports the shared Mathlib |
 
 ## Deployed image and verification
 
