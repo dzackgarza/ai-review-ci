@@ -1691,6 +1691,9 @@ def test_semgrep_scans_tests_tree_for_banned_test_patterns(tmp_path: pathlib.Pat
         )
     )
 
+    init_git_repo(project)
+    assert run_git(project, "add", "tests/test_thing.py").returncode == 0
+
     result = run_just(ROOT / "justfiles" / "shared.just", project, "_semgrep")
 
     output = result.stdout + result.stderr
