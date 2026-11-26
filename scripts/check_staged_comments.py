@@ -42,7 +42,7 @@ def main() -> int:
         if any(blob_in(head, raw_path) == blob for head in heads):
             continue
         path = Path(os.fsdecode(raw_path))
-        if path.parent == SEMGREP_RULE_FIXTURES:
+        if path.parent == SEMGREP_RULE_FIXTURES or path.suffix.lower() in {".md", ".markdown"}:
             continue
         data = subprocess.check_output(["git", "cat-file", "blob", blob])
         if b"\0" in data:
