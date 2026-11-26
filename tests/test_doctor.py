@@ -2,6 +2,7 @@ import json
 import pathlib
 import subprocess
 import sys
+import tempfile
 from typing import Any
 
 import pytest
@@ -253,12 +254,23 @@ def test_doctor_schema_artifact_matches_exported_contract() -> None:
     assert schema == DoctorReport.model_json_schema()
 
 
-def test_doctor_golden_example_validates_against_owned_model() -> None:
-    report = DoctorReport.model_validate_json(DOCTOR_EXAMPLE.read_text(encoding="utf-8"))
+def render_doctor_example(tmp_path: pathlib.Path) -> bytes:
+    report = doctor_report(create_target(tmp_path, "python"))
+    actual_head = report.target.head
+    example_head = "0" * 40
+    report.target.head = example_head
+    report.invalidation_inputs = tuple(
+        f"target_head:{example_head}" if entry == f"target_head:{actual_head}" else entry
+        for entry in report.invalidation_inputs
+    )
+    root = json.dumps(report.target.root, ensure_ascii=False)[1:-1]
+    return (report.model_dump_json(indent=2).replace(root, "/example/python-target") + "\n").encode("utf-8")
 
-    assert report.schema_version == 1
-    assert report.global_status == "current"
-    assert report.effective_profile == "python"
+
+def test_doctor_golden_example_matches_fresh_scaffold(tmp_path: pathlib.Path) -> None:
+    assert DOCTOR_EXAMPLE.read_bytes() == render_doctor_example(tmp_path), (
+        "Regenerate the example with: uv run python -m tests.test_doctor"
+    )
 
 
 def test_doctor_classifies_outdated_workflow_refs_as_stale(tmp_path: pathlib.Path) -> None:
@@ -727,3 +739,8 @@ def test_doctor_accepts_doc_attributes_in_a_justfile_the_comment_hook_accepts(tm
 
     assert [finding["evidence"] for finding in payload["findings"]] == []
     assert status == "current"
+
+
+if __name__ == "__main__":
+    with tempfile.TemporaryDirectory() as directory:
+        DOCTOR_EXAMPLE.write_bytes(render_doctor_example(pathlib.Path(directory)))
