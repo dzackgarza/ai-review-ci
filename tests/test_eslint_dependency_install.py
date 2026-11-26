@@ -1,7 +1,8 @@
 """Concurrent downstream callers must serialize their shared Bun install."""
 
+from __future__ import annotations
+
 import fcntl
-import json
 import os
 import shutil
 import subprocess
@@ -16,27 +17,11 @@ ROOT = Path(__file__).resolve().parents[1]
 def test_shared_eslint_install_is_serialized(tmp_path: Path) -> None:
     central = tmp_path / "central"
     configs = central / "tool-configs"
-    configs.mkdir(parents=True)
+    shutil.copytree(ROOT / "tests" / "fixtures" / "eslint-install", central)
     justfiles = central / "justfiles"
     justfiles.mkdir()
     shutil.copy(ROOT / "justfiles" / "bun.just", justfiles / "bun.just")
 
-    package = central / "fixture-plugin"
-    package.mkdir()
-    (package / "package.json").write_text('{"name":"fixture-eslint-plugin","version":"1.0.0"}\n')
-    (configs / "package.json").write_text(
-        json.dumps(
-            {
-                "name": "shared-tool-config",
-                "private": True,
-                "devDependencies": {"fixture-eslint-plugin": "file:../fixture-plugin"},
-                "scripts": {"postinstall": "bash install-probe.sh"},
-            }
-        )
-    )
-    (configs / "install-probe.sh").write_text(
-        "set -eu\nmkdir installing\necho start >> events\nwhile [ ! -e release ]; do sleep 0.02; done\necho end >> events\nrmdir installing\ntest ! -e fail-install\n"
-    )
     subprocess.run(
         ["bun", "install", "--ignore-scripts"],
         cwd=configs,
