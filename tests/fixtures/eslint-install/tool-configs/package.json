@@ -1,0 +1,10 @@
+{
+  "name": "shared-tool-config",
+  "private": true,
+  "devDependencies": {
+    "fixture-eslint-plugin": "file:../fixture-plugin"
+  },
+  "scripts": {
+    "postinstall": "bash install-probe.sh"
+  }
+}

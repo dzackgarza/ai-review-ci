@@ -1,12 +1,5 @@
 rules:
   - id: no-nullish-coalescing
-    # POLICY.RUNTIME_DEFAULT targets fail-soft *defaults*: a missing/malformed
-    # value silently backfilled with a stub. Match `??` only in default-value
-    # position (right operand is a literal stub), not where `??`/`||` is used
-    # as a boolean connective in a guard or predicate (#120). Position, not the
-    # bare operator, is the signal — matching every `??` produced 80 findings on
-    # one small repo, mostly boolean logic, inviting reward-hacking removal of
-    # the operator instead of removing the fallback.
     message: POLICY.RUNTIME_DEFAULT
     languages:
       - typescript
@@ -16,20 +9,12 @@ rules:
       - pattern: $X ?? $FALLBACK
       - metavariable-regex:
           metavariable: $FALLBACK
-          # Match a literal-stub right operand — the fail-soft default shape.
-          # Empty literals ("", '', ``, [], {}) are ambiguous fail-open containers
-          # (missing input / failed fetch / parse failure / no result), NOT valid
-          # owned-boundary normalization, so they flag too (#130, POLICY.FAIL_OPEN).
-          # Non-literal operands (function calls, identifiers, boolean connectives)
-          # do not match and are not flagged (#120 precision).
           regex: '^(?:"[^"]*"|\x27[^\x27]*\x27|\x60[^\x60]*\x60|-?[0-9]+(?:\.[0-9]+)?|true|false|null|\[[\s\S]*\]|\{[\s\S]*\})$'
     metadata:
       policy_code: POLICY.RUNTIME_DEFAULT
   - id: no-const-assignment
     message: POLICY.NO_HIDDEN_CONFIG
     paths:
-      # A test file is no configuration surface: its constants are the fixed
-      # inputs of a proof (#363).
       exclude:
         - '*config*'
         - '*.config.*'
@@ -43,8 +28,6 @@ rules:
     severity: ERROR
     patterns:
       - pattern-either:
-          # A configuration word is one whole `_`-separated segment after the
-          # first, in the singular or the plural: PORT in EXPORT is none (#363).
           - pattern-regex: (?m)^(?:export\s+)?const\s+[A-Z][A-Z0-9]*(?:_[A-Z0-9]+)*_(?:URL|URI|ENDPOINT|HOST|PORT|SERVER|DATABASE|COMMAND|CWD|PATH|DIR|DIRECTORY|TIMEOUT|RETRY|RETRIES|THRESHOLD|SECRET|TOKEN)S?(?:_[A-Z0-9]+)*\s*=\s*(?:["'`][^"'`]*["'`]|[0-9]+(?:\.[0-9]+)?|\[[^\n]*\]|\{[^\n]*\})
           - pattern-regex: (?m)^(?:export\s+)?const\s+[A-Z][A-Z0-9_]*\s*=\s*["'`](?:https?://|file://)[^"'`]*["'`]
     metadata:
@@ -72,9 +55,6 @@ rules:
     metadata:
       policy_code: POLICY.NO_HIDDEN_CONFIG
   - id: no-double-cast
-    # #46: arbitrary double casts stay blocked. Runtime/type-surface mismatches
-    # must use the explicit runtimeBoundaryCast form below so the local code
-    # carries both a runtime predicate and source-backed issue/URL justification.
     pattern: $X as $T as $Z
     message: POLICY.NO_TYPE_ESCAPE
     languages:
@@ -91,9 +71,6 @@ rules:
     metadata:
       policy_code: POLICY.NO_TYPE_ESCAPE
   - id: no-unproven-boundary-cast
-    # #46 sanctioned boundary form:
-    # runtimeBoundaryCast<T>(value, predicate, "issue/url-backed reason").
-    # The predicate is runtime evidence; the reason links the known mismatch.
     message: POLICY.NO_TYPE_ESCAPE
     languages:
       - typescript
@@ -224,7 +201,6 @@ rules:
     metadata:
       policy_code: POLICY.CRITICAL_DEPENDENCY
   - id: py-no-hardcoded-env-var
-    # A value that the program computes is not hidden configuration (#452).
     patterns:
       - pattern: os.environ[$KEY] = $VALUE
       - metavariable-regex:
@@ -237,15 +213,12 @@ rules:
     metadata:
       policy_code: POLICY.NO_HIDDEN_CONFIG
   - id: ts-no-hardcoded-env-var
-    # A value that the program computes is not hidden configuration: a
-    # template with an expression, an identifier, a call (#452).
     patterns:
       - pattern-either:
           - pattern: process.env.$KEY = $VALUE
           - pattern: process.env[$KEY] = $VALUE
       - metavariable-regex:
           metavariable: $VALUE
-          # Semgrep gives a template literal without its closing backtick.
           regex: '^(?:"[^"]*"|\x27[^\x27]*\x27|\x60[^\x60$]*\x60?)$'
     message: POLICY.NO_HIDDEN_CONFIG
     languages:
@@ -255,7 +228,6 @@ rules:
     metadata:
       policy_code: POLICY.NO_HIDDEN_CONFIG
   - id: rust-no-hardcoded-env-var
-    # A value that the program computes is not hidden configuration (#452).
     patterns:
       - pattern-either:
           - pattern: env::set_var($KEY, $VALUE)
@@ -270,12 +242,6 @@ rules:
     metadata:
       policy_code: POLICY.NO_HIDDEN_CONFIG
   - id: py-no-bare-except
-    # A bare "except:\n    pass" clause fragment never parses as a semgrep
-    # python pattern, so the rule silently matched nothing (caught by the
-    # slop-torture suite, #41). The try-wrapped forms fire; the match is
-    # reported at the try: line. Typed handlers and continue / return None
-    # bodies discard errors just as silently as bare except-pass, so all
-    # those shapes match (POLICY.NO_ERROR_DISCARD).
     pattern-either:
       - pattern: "try:\n    ...\nexcept:\n    pass"
       - pattern: "try:\n    ...\nexcept $EXC:\n    pass"
@@ -337,12 +303,6 @@ rules:
     metadata:
       policy_code: POLICY.NO_SKIP_MASK
   - id: py-xfail-without-open-issue-gate
-    # POLICY.NO_SKIP_MASK exception (user grant 2026-07-09): xfail is
-    # sanctioned ONLY as an open-issue red proof gate — strict=True and a
-    # reason citing the tracked issue (#N; qc_xfail_issues fails collection
-    # once that issue is closed).
-    # Everything else (bare xfail, non-strict xfail, no issue citation)
-    # remains a violation.
     patterns:
       - pattern-either:
           - pattern: '@pytest.mark.xfail'
@@ -356,8 +316,6 @@ rules:
     metadata:
       policy_code: POLICY.NO_SKIP_MASK
   - id: ts-no-or-default
-    # See no-nullish-coalescing: flag `||` only in default-value position
-    # (right operand is a literal stub), not as a boolean connective (#120).
     message: POLICY.RUNTIME_DEFAULT
     languages:
       - typescript
@@ -367,12 +325,6 @@ rules:
       - pattern: $X || $FALLBACK
       - metavariable-regex:
           metavariable: $FALLBACK
-          # Match a literal-stub right operand — the fail-soft default shape.
-          # Empty literals ("", '', ``, [], {}) are ambiguous fail-open containers
-          # (missing input / failed fetch / parse failure / no result), NOT valid
-          # owned-boundary normalization, so they flag too (#130, POLICY.FAIL_OPEN).
-          # Non-literal operands (function calls, identifiers, boolean connectives)
-          # do not match and are not flagged (#120 precision).
           regex: '^(?:"[^"]*"|\x27[^\x27]*\x27|\x60[^\x60]*\x60|-?[0-9]+(?:\.[0-9]+)?|true|false|null|\[[\s\S]*\]|\{[\s\S]*\})$'
     metadata:
       policy_code: POLICY.RUNTIME_DEFAULT
@@ -557,9 +509,6 @@ rules:
     metadata:
       policy_code: POLICY.NO_TYPE_ESCAPE
   - id: rs-no-serde-default
-    # A bare attribute pattern matches every item and expression in a Rust file
-    # under semgrep 1.177 (#420); the regex form matches only a serde attribute
-    # that carries `default`, bare or with a value, alone or among other options.
     pattern-regex: '#\[serde\([^\]]*\bdefault\b'
     message: POLICY.RUNTIME_DEFAULT
     languages:
@@ -568,9 +517,6 @@ rules:
     metadata:
       policy_code: POLICY.RUNTIME_DEFAULT
   - id: rs-no-allow-attr
-    # A bare attribute pattern matches every item and expression in a Rust file
-    # under semgrep 1.177 (#420); the regex form, like the other rs-* rules,
-    # matches only the outer or inner allow attribute. `#[expect(..)]` stays allowed.
     pattern-regex: '#!?\[allow\('
     message: POLICY.NO_QC_SILENCING
     languages:
@@ -697,14 +643,47 @@ rules:
     pattern-regex: ^\s*from\s+typing\s+import.*?\b(Dict|List|Tuple|Set|Type|Optional|Union|Callable|Iterable|Mapping|Sequence)\b
     metadata:
       policy_code: POLICY.NO_LEGACY_SHIM
-
-  # --- Lean referent rules (lean-lattices referent audit, #309) ---------------
-  # Semgrep has no Lean parser; these are generic pattern-regex tripwires over
-  # *.lean scoped by path. They flag engineering shims graduated to mathematical
-  # placement; the reviewer demands the standard referent rather than a rename.
+  - id: py-no-type-ignore
+    message: POLICY.NO_QC_SILENCING
+    languages:
+      - python
+    severity: ERROR
+    pattern-regex: '#\s*type:\s*ignore\b'
+    metadata:
+      policy_code: POLICY.NO_QC_SILENCING
+  - id: py-no-any-type
+    message: 'POLICY.NO_TYPE_ESCAPE: Any is allowed only as the parameter of __eq__ or __contains__, or as one named type alias (X: TypeAlias = Any or type X = Any) defined in one place per repository; this per-file rule cannot check the one-place limit.'
+    languages:
+      - python
+    severity: ERROR
+    metadata:
+      policy_code: POLICY.NO_TYPE_ESCAPE
+    patterns:
+      - pattern-either:
+          - pattern: from typing import Any as $A
+          - pattern: from typing_extensions import Any as $A
+          - pattern: typing.Any
+          - pattern: Any
+      - pattern-not-inside: "$X: TypeAlias = Any"
+      - pattern-not-inside: "$X: TypeAlias = typing.Any"
+      - pattern-not-inside: "type $X = Any"
+      - pattern-not-inside: |
+          def __eq__(self, $P: Any) -> $R:
+              ...
+      - pattern-not-inside: |
+          def __contains__(self, $P: Any) -> $R:
+              ...
+  - id: py-no-object-return
+    message: POLICY.NO_TYPE_ESCAPE
+    languages:
+      - python
+    severity: ERROR
+    pattern: |
+      def $F(...) -> object:
+          ...
+    metadata:
+      policy_code: POLICY.NO_TYPE_ESCAPE
   - id: lean-no-axiom
-    # Axioms in library roots assert what must be proved or quarantined;
-    # *.conjecture files are the sanctioned non-compiled home.
     pattern-regex: (?m)^\s*(?:@\[[^\]]*\]\s*)?axiom\s
     message: POLICY.NO_UNGROUNDED_MATH_NAME
     languages:
@@ -719,9 +698,6 @@ rules:
     metadata:
       policy_code: POLICY.NO_UNGROUNDED_MATH_NAME
   - id: lean-shim-suffix-decl
-    # Record nouns standing where a governing mathematical object belongs
-    # (DiscrepancyData, FundamentalDomainWitness, VinbergInput, ...). The fix
-    # names the object (divisor, chamber, compactification), never the record.
     pattern-regex: (?m)^\s*(?:noncomputable\s+)?(?:structure|inductive|class|abbrev|def)\s+\w+(?:Data|Datum|Witness|Input|Spec|Model|Contract|Record|Info|Manager|Helper|Wrapper|Capability)\b
     message: POLICY.NO_UNGROUNDED_MATH_NAME
     languages:
@@ -737,9 +713,6 @@ rules:
     metadata:
       policy_code: POLICY.NO_UNGROUNDED_MATH_NAME
   - id: lean-has-wrapper
-    # Predicate wrappers around total constructions (HasSignature episode): a
-    # total invariant is a functor, not a Has*. Lean 4 Mathlib retired most
-    # Has* naming, so repo-local hits are high-signal.
     pattern-regex: (?m)^\s*(?:structure|class|def|abbrev)\s+Has[A-Z]
     message: POLICY.NO_UNGROUNDED_MATH_NAME
     languages:
@@ -751,9 +724,6 @@ rules:
     metadata:
       policy_code: POLICY.NO_UNGROUNDED_MATH_NAME
   - id: lean-nonempty-field
-    # Nonempty (...) structure fields propositionally truncate chosen data
-    # (the Nonempty (CatCommSq ...) episode): comparison cells must be carried,
-    # and composition must compose them.
     pattern-regex: (?m)^\s+\w+\s*:\s*Nonempty\s*\(
     message: POLICY.NO_UNGROUNDED_MATH_NAME
     languages:
@@ -765,8 +735,6 @@ rules:
     metadata:
       policy_code: POLICY.NO_UNGROUNDED_MATH_NAME
   - id: lean-bare-prop-field
-    # A structure field of type exactly Prop is an unconstrained proposition
-    # slot (KSBAModuliProperness.proper episode): state the real condition.
     pattern-regex: (?m)^\s+\w+\s*:\s*Prop\s*$
     message: POLICY.NO_UNGROUNDED_MATH_NAME
     languages:
@@ -778,13 +746,6 @@ rules:
     metadata:
       policy_code: POLICY.NO_UNGROUNDED_MATH_NAME
   - id: lean-exists-implication
-    # `∃ x, P x → Q` is a vacuous propositional truncation of the intended
-    # `∃ x, P x ∧ Q`: it is trivially satisfied by any x with ¬P x, so it states
-    # nothing (the ExistsImplication misformalisation). High precision — fires
-    # only when the antecedent is a bare relation/membership with no ∧/∨ before
-    # the arrow, so function-type binders (`∃ f : α → β,`) and honest conjunctions
-    # (`∃ x, P ∧ Q`) do not match. Elaboration-exact coverage (isProp antecedent)
-    # needs a Lean linter; this catches the common human-written shape.
     pattern-regex: (?m)∃\s*[^,→\n]+,\s*[^,∧∨\n]*(?:<|≤|≥|>|∈|∣|≠)[^,∧∨→\n]*→
     message: POLICY.NO_UNGROUNDED_MATH_NAME
     languages:
@@ -799,8 +760,6 @@ rules:
     metadata:
       policy_code: POLICY.NO_UNGROUNDED_MATH_NAME
   - id: lean-isotropy-as-torsion
-    # 2 • x = 0 is 2-torsion, not isotropy (b(x,x) = 0) — the NikulinGluing
-    # episode. Scoped to form/lattice paths.
     pattern-regex: 2\s*[•·]\s*\w+\s*=\s*0
     message: POLICY.NO_UNGROUNDED_MATH_NAME
     languages:
@@ -815,9 +774,6 @@ rules:
     metadata:
       policy_code: POLICY.NO_UNGROUNDED_MATH_NAME
   - id: lean-truncating-division-on-forms
-    # Quadratic refinements require exact divisibility witnesses, never integer
-    # division (quadRefinement := form x x / 2 episode). Single-line defs only;
-    # the reviewer owns multi-line bodies.
     pattern-regex: (?m)def\s+\w*(?:[qQ]uad|[eE]ven|[rR]efine)\w*[^\n]*\/\s*2
     message: POLICY.NO_UNGROUNDED_MATH_NAME
     languages:
@@ -829,9 +785,6 @@ rules:
     metadata:
       policy_code: POLICY.NO_UNGROUNDED_MATH_NAME
   - id: lean-epistemic-on-math-surface
-    # unknown/pending constructors on mathematical inductives put resolver
-    # epistemics into classifier fibers; undecidedness lives in the backend
-    # realization index. Match-arm consumption (| unknown =>) is not flagged.
     pattern-regex: (?m)^\s*\|\s*(?:unknown|pending|partial|failed)\b(?!\s*=>)
     message: POLICY.NO_UNGROUNDED_MATH_NAME
     languages:

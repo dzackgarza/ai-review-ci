@@ -63,11 +63,15 @@ reporting:
     fail_on_critical: true
 ignore:
 - '**/tests/fixtures/**'
+- '**/test/fixtures/**'
 - '**/test/highlight/**'
 - '**/test/tags/**'
 - '**/examples/**'
 - '**/bindings/**'
+- '**/generated/**'
 - '**/node_modules/**'
+- '**/.yarn/**'
+- '**/labextension/**'
 - '**/.venv/**'
 - '**/.pytest_cache/**'
 - '**/.import_linter_cache/**'
@@ -99,6 +103,7 @@ ignore:
 - '**/src.bak/**'
 - '**/scripts/**'
 - '**/notebooks/**'
+- '**/computations/reports/**'
 - '**/preamble/**'
 - '**/notes/**'
 - '**/.webpack/**'

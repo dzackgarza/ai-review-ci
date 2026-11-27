@@ -2,10 +2,12 @@
 . "$(dirname -- "$(readlink -f "$0")")/hook-timing.sh"
 set -e
 . "$(dirname -- "$(readlink -f "$0")")/qc-exempt.sh"
-qc_should_gate || exit 0
-
-# The commit hook runs exactly the repository's `just test-commit`.
+check_comments() {
+    uv run --project "$qc_hook_repo" --locked python "$qc_hook_repo/scripts/check_staged_comments.py"
+}
+qc_should_gate || { check_comments; exit $?; }
 if just test-commit; then
+    check_comments
     qc_print_directive pre-commit
     exit 0
 fi

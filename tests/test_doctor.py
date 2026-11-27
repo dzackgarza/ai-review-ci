@@ -2,6 +2,7 @@ import json
 import pathlib
 import subprocess
 import sys
+import tempfile
 from typing import Any
 
 import pytest
@@ -253,12 +254,23 @@ def test_doctor_schema_artifact_matches_exported_contract() -> None:
     assert schema == DoctorReport.model_json_schema()
 
 
-def test_doctor_golden_example_validates_against_owned_model() -> None:
-    report = DoctorReport.model_validate_json(DOCTOR_EXAMPLE.read_text(encoding="utf-8"))
+def render_doctor_example(tmp_path: pathlib.Path) -> bytes:
+    report = doctor_report(create_target(tmp_path, "python"))
+    actual_head = report.target.head
+    example_head = "0" * 40
+    report.target.head = example_head
+    report.invalidation_inputs = tuple(
+        f"target_head:{example_head}" if entry == f"target_head:{actual_head}" else entry
+        for entry in report.invalidation_inputs
+    )
+    root = json.dumps(report.target.root, ensure_ascii=False)[1:-1]
+    return (report.model_dump_json(indent=2).replace(root, "/example/python-target") + "\n").encode("utf-8")
 
-    assert report.schema_version == 1
-    assert report.global_status == "current"
-    assert report.effective_profile == "python"
+
+def test_doctor_golden_example_matches_fresh_scaffold(tmp_path: pathlib.Path) -> None:
+    assert DOCTOR_EXAMPLE.read_bytes() == render_doctor_example(tmp_path), (
+        "Regenerate the example with: uv run python -m tests.test_doctor"
+    )
 
 
 def test_doctor_classifies_outdated_workflow_refs_as_stale(tmp_path: pathlib.Path) -> None:
@@ -311,7 +323,6 @@ def test_doctor_classifies_missing_workflow_as_misconfigured(tmp_path: pathlib.P
 
 
 def test_doctor_requires_the_scheduled_ambient_workflow(tmp_path: pathlib.Path) -> None:
-    # The ambient tier is the only whole-tree semgrep; a repo without it has none.
     project = create_target(tmp_path, "python")
     (project / ".github" / "workflows" / "ambient.yml").unlink()
 
@@ -322,9 +333,118 @@ def test_doctor_requires_the_scheduled_ambient_workflow(tmp_path: pathlib.Path) 
     assert "ambient.yml is missing" in payload["findings"][0]["evidence"]
 
 
+@pytest.mark.parametrize(
+    ("job_name", "changes", "expected"),
+    [
+        ("qc-ci", {"profile": None}, ("missing required input(s): profile",)),
+        ("deterministic-diff", {"profile": None}, ("missing required input(s): profile",)),
+        ("qc-ci", {"fail_below": 90}, ("undeclared input(s): fail_below",)),
+        ("qc-ci", {"profile": None, "fail_below": 90},
+         ("missing required input(s): profile", "undeclared input(s): fail_below")),
+    ],
+)
+def test_doctor_rejects_reusable_workflow_inputs(
+    tmp_path: pathlib.Path, job_name: str, changes: dict[str, int | None], expected: tuple[str, ...],
+) -> None:
+    project = create_target(tmp_path, "python")
+    workflow = project / ".github" / "workflows" / "review-pr.yml"
+    data = yaml.safe_load(workflow.read_text())
+    data["on"] = data.pop(True)
+    inputs = data["jobs"][job_name]["with"]
+    for name, value in changes.items():
+        if value is None:
+            del inputs[name]
+        else:
+            inputs[name] = value
+    workflow.write_text(yaml.safe_dump(data))
+
+    status, payload = status_for(project)
+
+    assert status == "misconfigured"
+    findings = [finding for finding in payload["findings"] if finding["surface"] == "workflow"]
+    assert len(findings) == 1
+    finding = findings[0]
+    assert finding["severity"] == "error"
+    assert f"{workflow} job {job_name} calls " in finding["evidence"]
+    assert all(fragment in finding["evidence"] for fragment in expected)
+    assert finding["remediation_commands"]
+
+
+def test_doctor_checks_every_reusable_workflow_job(tmp_path: pathlib.Path) -> None:
+    project = create_target(tmp_path, "python")
+    workflow = project / ".github" / "workflows" / "other.yaml"
+    workflow.write_text(
+        "name: Other\non: {push: {}}\njobs:\n"
+        "  missing-with:\n"
+        "    uses: dzackgarza/ai-review-ci/.github/workflows/_qc.yml@main\n"
+        "  acceptance:\n"
+        "    uses: dzackgarza/ai-review-ci/.github/workflows/_acceptance.yml@main\n"
+        "    with: {infra_ref: main, setup_recipe: provision, shards: '{}', unexpected: true}\n"
+        "  valid-optional:\n"
+        "    uses: dzackgarza/ai-review-ci/.github/workflows/_qc.yml@main\n"
+        "    with: {tier: ambient, profile: python, run_gh_boundary: false}\n"
+        "  external:\n"
+        "    uses: other/repo/.github/workflows/_qc.yml@main\n"
+        "    with: {different: true}\n"
+    )
+
+    status, payload = status_for(project)
+    assert status == "misconfigured"
+    evidence = [finding["evidence"] for finding in payload["findings"]]
+    assert len(evidence) == 2
+    assert any("job missing-with" in item and "missing required input(s): profile, tier" in item for item in evidence)
+    assert any(
+        "job acceptance" in item and "missing required input(s): image" in item
+        and "undeclared input(s): unexpected" in item for item in evidence
+    )
+
+
+def test_doctor_ci_does_not_hide_workflow_input_errors_behind_remote_warnings(tmp_path: pathlib.Path) -> None:
+    project = create_target(tmp_path, "python")
+    assert run_git(project, "remote", "add", "origin", "https://example.invalid/owner/repo.git").returncode == 0
+    workflow = project / ".github" / "workflows" / "review-pr.yml"
+    workflow.write_text(workflow.read_text().replace("      profile: 'python'\n", "", 1))
+    result = subprocess.run(
+        [sys.executable, "-m", "ai_review_ci.cli", "doctor-ci", "--target", str(project), "--json"],
+        cwd=ROOT, text=True, capture_output=True, check=False,
+    )
+    assert result.returncode == 1, result.stdout + result.stderr
+    payload = json.loads(result.stdout)
+    assert payload["global_status"] == "misconfigured"
+    assert any(
+        finding["surface"] == "workflow" and "missing required input(s): profile" in finding["evidence"]
+        for finding in payload["findings"]
+    )
+    assert any(finding["severity"] == "warning" for finding in payload["findings"])
+
+
+@pytest.mark.gh_boundary
+def test_doctor_resolves_historical_workflow_at_pinned_ref(tmp_path: pathlib.Path) -> None:
+    project = create_target(tmp_path, "python")
+    workflow = project / ".github" / "workflows" / "pinned.yml"
+    # This immutable revision predates the setup_cache_period input.
+    old_ref = "22f5887c43ad1d026aeee4d3790adf2a0f76f33f"
+    caller = (
+        "name: Pinned\non: {push: {}}\njobs:\n  qc:\n"
+        "    uses: dzackgarza/ai-review-ci/.github/workflows/_qc.yml@"
+        + old_ref + "\n    with: {tier: ambient, profile: python, setup_cache_period: weekly}\n"
+    )
+    workflow.write_text(caller)
+    status, payload = status_for(project)
+    assert status == "misconfigured"
+    assert len(payload["findings"]) == 1
+    assert "undeclared input(s): setup_cache_period" in payload["findings"][0]["evidence"]
+
+    workflow.write_text(caller.replace(old_ref, "main"))
+    assert status_for(project)[0] == "current"
+
+    workflow.write_text(caller.replace(old_ref, "0000000000000000000000000000000000000000"))
+    status, payload = status_for(project)
+    assert status == "misconfigured"
+    assert "cannot verify reusable workflow inputs" in payload["findings"][0]["evidence"]
+
+
 def test_doctor_requires_the_acceptance_workflow_for_an_acceptance_suite(tmp_path: pathlib.Path) -> None:
-    # The push and CI tiers leave tests/acceptance/ to _acceptance.yml (#478); a repo
-    # with the suite and no workflow calling it would never run the suite at all.
     project = create_target(tmp_path, "sage")
     suite = project / "tests" / "acceptance" / "test_family.sage"
     suite.parent.mkdir(parents=True)
@@ -337,7 +457,7 @@ def test_doctor_requires_the_acceptance_workflow_for_an_acceptance_suite(tmp_pat
     workflow.write_text(
         "name: Acceptance\non: {push: {}}\njobs:\n  acceptance:\n"
         "    uses: dzackgarza/ai-review-ci/.github/workflows/_acceptance.yml@main\n"
-        "    with: {setup_recipe: ci-provision-sage, shards: '{\"test_family.sage\": 1}'}\n"
+        "    with: {infra_ref: main, image: ghcr.io/example/repo-sage:py314, setup_recipe: ci-provision-sage, shards: '{\"test_family.sage\": 1}'}\n"
     )
     called_status, called = status_for(project)
 
@@ -351,8 +471,6 @@ def test_doctor_requires_the_acceptance_workflow_for_an_acceptance_suite(tmp_pat
 
 
 def test_doctor_reports_a_trigger_calling_a_reusable_workflow_ai_review_ci_does_not_provide(tmp_path: pathlib.Path) -> None:
-    # #431: GitHub rejects a run whose job calls a deleted reusable workflow before any
-    # job starts, so a stale installed trigger fails every push and leaves no log.
     project = create_target(tmp_path, "python")
     stale = project / ".github" / "workflows" / "review-slop.yml"
     stale.write_text(
@@ -375,7 +493,6 @@ def test_doctor_reports_a_trigger_calling_a_reusable_workflow_ai_review_ci_does_
 
 def test_doctor_knows_every_reusable_workflow_ai_review_ci_provides() -> None:
     workflows = {path.name: yaml.safe_load(path.read_text()) for path in (ROOT / ".github" / "workflows").glob("*.yml")}
-    # PyYAML reads the bare key `on` as the boolean True.
     provided = {name for name, data in workflows.items() if isinstance(data[True], dict) and "workflow_call" in data[True]}
 
     assert set(REUSABLE_WORKFLOWS) == provided
@@ -384,7 +501,7 @@ def test_doctor_knows_every_reusable_workflow_ai_review_ci_provides() -> None:
 def test_doctor_requires_ambient_recipe_delegation(tmp_path: pathlib.Path) -> None:
     project = create_target(tmp_path, "sage")
     scaffold = (ROOT / "scaffolds" / "sage" / "justfile").read_text()
-    without_ambient, separator, _ = scaffold.partition("\n# Run the scheduled whole-tree audit")
+    without_ambient, separator, _ = scaffold.partition('\n[doc("Run the scheduled whole-tree audit')
     assert separator
     (project / "justfile").write_text(without_ambient + "\n")
 
@@ -434,11 +551,11 @@ def test_doctor_reports_justfile_baseline_violations(tmp_path: pathlib.Path) -> 
                 "test-commit:",
                 "    @just -f ~/ai-review-ci/justfiles/python.just -d . test-commit",
                 "",
-                "# Run push-tier Python QC through the central implementation.",
+                '[doc("Run push-tier Python QC through the central implementation.")]',
                 "test-push:",
                 "    @just -f ~/ai-review-ci/justfiles/python.just -d . test-push",
                 "",
-                "# Run CI-tier Python QC through the central implementation.",
+                '[doc("Run CI-tier Python QC through the central implementation.")]',
                 "test-ci:",
                 "    @just -f ~/ai-review-ci/justfiles/python.just -d . test-ci",
                 "",
@@ -451,9 +568,8 @@ def test_doctor_reports_justfile_baseline_violations(tmp_path: pathlib.Path) -> 
     assert status == "misconfigured"
     justfile_findings = [finding for finding in payload["findings"] if finding["surface"] == "justfile_conformance"]
     assert [finding["evidence"].split(" ", 1)[1] for finding in justfile_findings] == [
-        "header-comment: justfile must begin with a comment block",
         "default-recipe: no default recipe; bare just must list recipes",
-        "public-recipe-doc: recipe `test-commit` has no immediate # doc comment",
+        "public-recipe-doc: recipe `test-commit` has no [doc(\"...\")] attribute",
     ]
 
 
@@ -469,17 +585,16 @@ def test_check_justfile_cli_reports_baseline_violations(tmp_path: pathlib.Path) 
                 'ai_review_ci_workflow_template_version := "1"',
                 'ai_review_ci_local_delegation := "global-justfile"',
                 'ai_review_ci_default_branch := "main"',
-                "# Delegates Python QC.",
                 "",
-                "# Run commit-tier Python QC through the central implementation.",
+                '[doc("Run commit-tier Python QC through the central implementation.")]',
                 "test-commit:",
                 "    @just -f ~/ai-review-ci/justfiles/python.just -d . test-commit",
                 "",
-                "# Run push-tier Python QC through the central implementation.",
+                '[doc("Run push-tier Python QC through the central implementation.")]',
                 "test-push:",
                 "    @just -f ~/ai-review-ci/justfiles/python.just -d . test-push",
                 "",
-                "# Run CI-tier Python QC through the central implementation.",
+                '[doc("Run CI-tier Python QC through the central implementation.")]',
                 "test-ci:",
                 "    @just -f ~/ai-review-ci/justfiles/python.just -d . test-ci",
                 "",
@@ -504,7 +619,6 @@ def test_doctor_justfile_parser_accepts_parameter_defaults_and_recipe_attributes
     (project / "justfile").write_text(
         "\n".join(
             [
-                "# Delegates Python QC.",
                 'ai_review_ci_schema_version := "1"',
                 'ai_review_ci_profile := "python"',
                 'ai_review_ci_ref := "main"',
@@ -514,25 +628,25 @@ def test_doctor_justfile_parser_accepts_parameter_defaults_and_recipe_attributes
                 'ai_review_ci_default_branch := "main"',
                 'api_url := "https://example.invalid:443"',
                 "",
-                "# List available recipes.",
+                '[doc("List available recipes.")]',
                 "[no-cd]",
                 "default:",
                 "    @just --list",
                 "",
-                "# Run commit-tier Python QC through the central implementation.",
+                '[doc("Run commit-tier Python QC through the central implementation.")]',
                 "[no-cd]",
                 'test-commit mode="fast":',
                 "    @just -f ~/ai-review-ci/justfiles/python.just -d . test-commit",
                 "",
-                "# Run push-tier Python QC through the central implementation.",
+                '[doc("Run push-tier Python QC through the central implementation.")]',
                 "test-push:",
                 "    @just -f ~/ai-review-ci/justfiles/python.just -d . test-push",
                 "",
-                "# Run CI-tier Python QC through the central implementation.",
+                '[doc("Run CI-tier Python QC through the central implementation.")]',
                 "test-ci:",
                 "    @just -f ~/ai-review-ci/justfiles/python.just -d . test-ci",
                 "",
-                "# Run the scheduled whole-tree audit through the central implementation.",
+                '[doc("Run the scheduled whole-tree audit through the central implementation.")]',
                 "ambient:",
                 "    @just -f ~/ai-review-ci/justfiles/python.just -d . ambient",
                 "",
@@ -548,7 +662,6 @@ def test_doctor_justfile_parser_accepts_parameter_defaults_and_recipe_attributes
 
 def test_justfile_parser_accepts_trailing_dash_recipe_names_and_indented_private_attributes() -> None:
     lines = [
-        "# Example justfile.",
         "test-recipe-:",
         "    @true",
         "",
@@ -557,8 +670,8 @@ def test_justfile_parser_accepts_trailing_dash_recipe_names_and_indented_private
         "    @true",
     ]
 
-    assert _justfile_recipes(lines)["test-recipe-"] == 2
-    assert _has_private_attribute(lines, 6)
+    assert _justfile_recipes(lines)["test-recipe-"] == 1
+    assert _has_private_attribute(lines, 5)
 
 
 def test_doctor_classifies_non_github_remote_branch_protection_as_unverifiable(tmp_path: pathlib.Path) -> None:
@@ -588,16 +701,11 @@ def _compliant_contract() -> QcJustfileContract:
 
 
 def test_label_alignment_flags_missing_drifted_variant_and_ignores_extras() -> None:
-    # #216: compare live labels against the canonical taxonomy on name + color +
-    # description. Missing, drifted, and case/spelling variants are misalignments;
-    # extra repo-specific labels are NOT flagged.
     canonical = load_taxonomy()
     by_name = {label.name: label for label in canonical}
     bug = by_name["bug"]
     enhancement = by_name["enhancement"]
     remote = {label.name: RemoteLabel(name=label.name, color=label.color, description=label.description) for label in canonical}
-    # drift `enhancement`'s color; delete `bug`, re-add it only as a case variant `Bug`;
-    # add an extra repo-specific label that must be ignored.
     remote["enhancement"] = RemoteLabel(name="enhancement", color="000000", description=enhancement.description)
     del remote["bug"]
     remote["Bug"] = RemoteLabel(name="Bug", color=bug.color, description=bug.description)
@@ -608,7 +716,7 @@ def test_label_alignment_flags_missing_drifted_variant_and_ignores_extras() -> N
     assert observation.observed_state == "misaligned"
     assert observation.drifted == ("enhancement",)
     assert any(v.canonical == "bug" and "Bug" in v.remote_variants for v in observation.variants)
-    assert "bug" not in observation.missing  # bug is a variant, not merely missing
+    assert "bug" not in observation.missing
     assert "kilo-triaged" not in observation.missing
     assert "kilo-triaged" not in observation.drifted
 
@@ -627,14 +735,9 @@ def test_label_alignment_compliant_when_repo_carries_canonical_set_exactly() -> 
 
 
 def test_label_alignment_misalignment_is_a_required_error_feeding_global_status() -> None:
-    # Mirror the qc-doctor contract: a real misalignment is a required (error) finding,
-    # so it drives global_status to misconfigured (doctor exits nonzero / qc-doctor fails).
     canonical = load_taxonomy()
     by_name = {label.name: label for label in canonical}
     remote = {label.name: RemoteLabel(name=label.name, color=label.color, description=label.description) for label in canonical}
-    # Exercise all three misalignment kinds so the finding message names each:
-    # a case variant (bug -> Bug), a missing label (enhancement removed entirely),
-    # and a drifted color (chore).
     del remote["bug"]
     remote["Bug"] = RemoteLabel(name="Bug", color=by_name["bug"].color, description=by_name["bug"].description)
     del remote["enhancement"]
@@ -682,3 +785,73 @@ def test_active_findings_are_noncompliant_with_no_exception_path(tmp_path: pathl
 
 def test_docs_and_configs_profile_is_doctor_compatible() -> None:
     assert ProfileAdapter.validate_python("docs-and-configs") == "docs-and-configs"
+
+
+def test_doctor_reports_tracked_qc_suppression_files(tmp_path: pathlib.Path) -> None:
+    project = create_target(tmp_path, "python")
+    (project / ".semgrepignore").write_text("src/\n")
+    (project / "tools").mkdir()
+    (project / "tools" / "vulture_whitelist.py").write_text("unused_name\n")
+    (project / "untracked_whitelist.py").write_text("x\n")
+    (project / "whitelist.py").write_text("y\n")
+    assert run_git(project, "add", ".semgrepignore", "tools/vulture_whitelist.py").returncode == 0
+
+    status, payload = status_for(project)
+
+    suppression = [finding["evidence"] for finding in payload["findings"] if finding["surface"] == "qc_suppression"]
+    assert status == "misconfigured"
+    assert [evidence.split(" ")[0] for evidence in suppression] == [".semgrepignore", "tools/vulture_whitelist.py"]
+
+
+def test_doctor_accepts_doc_attributes_in_a_justfile_the_comment_hook_accepts(tmp_path: pathlib.Path) -> None:
+    project = create_target(tmp_path, "python")
+    (project / "justfile").write_text(
+        "\n".join(
+            [
+                'ai_review_ci_schema_version := "1"',
+                'ai_review_ci_profile := "python"',
+                'ai_review_ci_ref := "main"',
+                'ai_review_ci_release_channel := "main"',
+                'ai_review_ci_workflow_template_version := "1"',
+                'ai_review_ci_local_delegation := "global-justfile"',
+                'ai_review_ci_default_branch := "main"',
+                "",
+                '[doc("List available recipes.")]',
+                "default:",
+                "    @just --list",
+                "",
+                '[doc("Run commit-tier Python QC through the central implementation.")]',
+                "test-commit:",
+                "    @just -f ~/ai-review-ci/justfiles/python.just -d . test-commit",
+                "",
+                "[no-cd]",
+                "[doc('Run push-tier Python QC; a # inside the string is text.')]",
+                "test-push:",
+                "    @just -f ~/ai-review-ci/justfiles/python.just -d . test-push",
+                "",
+                '[doc("Run CI-tier Python QC through the central implementation.")]',
+                "test-ci:",
+                "    @just -f ~/ai-review-ci/justfiles/python.just -d . test-ci",
+                "",
+                '[doc("Run the scheduled whole-tree audit through the central implementation.")]',
+                "ambient:",
+                "    @just -f ~/ai-review-ci/justfiles/python.just -d . ambient",
+                "",
+            ]
+        )
+    )
+    assert run_git(project, "add", "justfile").returncode == 0
+    hook = subprocess.run(
+        [sys.executable, ROOT / "scripts" / "check_staged_comments.py"], cwd=project, text=True, capture_output=True, check=False
+    )
+    assert hook.returncode == 0, hook.stderr
+
+    status, payload = status_for(project)
+
+    assert [finding["evidence"] for finding in payload["findings"]] == []
+    assert status == "current"
+
+
+if __name__ == "__main__":
+    with tempfile.TemporaryDirectory() as directory:
+        DOCTOR_EXAMPLE.write_bytes(render_doctor_example(pathlib.Path(directory)))

@@ -25,8 +25,6 @@ ROOT = pathlib.Path(__file__).resolve().parents[1]
 SEMGREP_CONFIG = ROOT / "tool-configs" / "semgrep.yml"
 FIXTURES = pathlib.Path(__file__).resolve().parent / "fixtures" / "semgrep"
 
-# The fail-soft-default rules whose precision #120 is about. Position, not the
-# bare ``||`` / ``??`` operator, must be the signal.
 RUNTIME_DEFAULT_RULES = ("ts-no-or-default", "no-nullish-coalescing")
 
 _ANNOTATION = re.compile(r"(?://|#)\s*(ruleid|ok):\s*([\w-]+)")
@@ -156,3 +154,10 @@ HARDCODED_ENV_VAR_RULES = ("ts-no-hardcoded-env-var", "py-no-hardcoded-env-var",
 def test_hardcoded_env_var_rules_flag_only_literal_values() -> None:
     """#452: an environment variable set to a computed value is not hidden configuration."""
     _assert_rules_match_annotations(HARDCODED_ENV_VAR_RULES, "hardcoded_env_var.*")
+
+
+PYTHON_TYPE_ESCAPE_RULES = ("py-no-type-ignore", "py-no-any-type", "py-no-object-return")
+
+
+def test_python_type_escape_rules_flag_suppressions_and_opaque_types() -> None:
+    _assert_rules_match_annotations(PYTHON_TYPE_ESCAPE_RULES, "type_escape*.py")

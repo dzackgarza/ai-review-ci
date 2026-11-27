@@ -15,7 +15,7 @@ GitHub CI and are retained in independently inspectable logs.
 
 A stabilized phase requires a deliberate human adoption of a frozen baseline.
 Until then, the issue-first PR lifecycle, PR review and quality-enforcement
-sections later in this document are **inactive**. There is no implicit promotion
+sections later in this document are inactive. There is no implicit promotion
 to stabilization when an agent believes code looks ready.
 
 ## QC Delegation
@@ -23,6 +23,8 @@ to stabilization when an agent believes code looks ready.
 Shared diagnostic implementations remain centralized; consumers delegate
 their local syntax check and CI diagnostics here. Local and CI intentionally
 have different enforcement standards.
+
+- The gates cover reusable code that someone must maintain. One-off computations (computation reports, exploratory scripts, notebooks) are out of scope and are excluded in `tool-configs/qc-excludes.toml`. When a consumer gets findings in a directory of one-off computations, add the directory to that file. Do not fix the code.
 
 - Treat `~/ai-review-ci` as the authoritative QC implementation.
   Downstream repositories carry only thin `test-commit`, `test-push`, and `test-ci` gate recipes that delegate to this repo.
@@ -86,6 +88,7 @@ That analogy is the triage rule: classify every claimed false positive by *whose
 
 4. **Never create per-repo suppression surfaces.** A repo-writable whitelist, ignore file, or override hook is self-service validator silence: the gated agent appends its own finding and pushes.
    All suppression stays in this repo, owner-gated.
+   `ai-review-ci doctor` reports each tracked suppression file it names (`QC_SUPPRESSION_FILES` in `src/ai_review_ci/doctor.py`) as a `qc_suppression` error.
    The boundary-crossing friction is the control.
 
 The one-line test: *if the fact is about an external framework's dispatch, declare it here once; if the fact is about the downstream repo's own types, the repo fixes its types.*
@@ -103,12 +106,12 @@ published", "this depends on an unreleased plugin", and "a shared config referen
 first-party tool" are observations about a deliberate architecture, not findings. Before
 writing any of them up, establish that something actually broke.
 
-**Do not open an issue that names no observed failure.** An issue against QC configuration
+Do not open an issue that names no observed failure. An issue against QC configuration
 needs the command, the output, and the downstream symptom. Reading a config line and
 inferring a problem from where the package lives is not a finding, and it costs an owner
 the triage that discovers there was never anything to fix.
 
-**Establish that the surface is live before proposing changes to it.** A config file with no
+Establish that the surface is live before proposing changes to it. A config file with no
 reference anywhere in this repository injects nothing into any downstream, whatever it
 contains.
 
@@ -179,7 +182,7 @@ The `automated-reviews` checkout is the contract.
 Before requesting review or merging, the PR body must state:
 
 - Which `POLICY.*` records the change touches or risks.
-- That no **Invalid local fix** from those records was introduced — no new fallback, runtime default, optional core-state, swallowed error, or partial-success path added to make required work look successful after it should have failed loudly.
+- That no invalid local fix from those records was introduced — no new fallback, runtime default, optional core-state, swallowed error, or partial-success path added to make required work look successful after it should have failed loudly.
 
 Empty and falsy literals are not exceptions.
 A fallback whose value is a placeholder — the canonical `POLICY.FAIL_OPEN` record names `None`, `[]`, `{}`, and `false`; empty strings behave the same way — is a `POLICY.FAIL_OPEN` violation, not "safe boundary normalization."
@@ -187,10 +190,10 @@ Genuinely optional product state is represented as an explicit typed/semantic st
 
 ## Tier 1 — PRs that change the QC tooling itself
 
-Any PR touching `tool-configs/`, the detectors, or QC `justfiles/` additionally must carry an **adversarial regression-lock**:
+Any PR touching `tool-configs/`, the detectors, or QC `justfiles/` also carries an adversarial regression-lock:
 
-- A fixture (`// ruleid:` or equivalent) proving each previously-flagged banned pattern **still fires** after the change.
-  A precision fix narrows by **position** — excluding genuine boolean/control-flow uses — never by **value**. No fallback value is reclassified as safe.
+- A fixture (`// ruleid:` or equivalent) proving each previously-flagged banned pattern still fires after the change.
+  A precision fix narrows by position (excluding genuine boolean/control-flow uses), not by value. No fallback value is reclassified as safe.
 - An explicit statement that the change weakens no `POLICY.*` and converts no true finding into scanner silence.
 
 This is the gate PR #143 would have failed: a `ruleid` fixture on `?? ""` / `?? []` / `?? {}` makes any future empty-literal whitelist a red test.

@@ -48,6 +48,58 @@ start or update `sage-research`. Use the host commands listed below, including
 volumes across updates. Host launcher installation is owned by
 [`just install-sage-launchers`](justfile) in this repository.
 
+## Set up another host
+
+A host runs the same environment once these steps hold. Remove what the image
+replaces before the pull: a host copy of Sage, GAP, Julia, Lean or the research
+checkouts beside the image doubles the disk use, and the image (40 GB unpacked)
+plus its volumes (about 10 GB) need room on their own.
+
+1. Inventory the host. List host installs that duplicate the image
+   (`docker/research-environment.Dockerfile` in `dzackgarza/sage` names them),
+   and for each research checkout in `~/gitclones` its unpushed commits,
+   uncommitted changes and linked worktrees. Find who owns a directory before
+   calling it unused: `pacman -Qo PATH` (an AUR package can own a whole `/opt`
+   tree that `/usr/bin` links into).
+2. Remove the host duplicates.
+3. Install rootless Docker into `~/bin` with the
+   [rootless installer](https://docs.docker.com/engine/security/rootless/)
+   (`FORCE_ROOTLESS_INSTALL=1` when a rootful daemon also runs). The installer
+   switches the CLI to its `rootless` context; switch back with
+   `docker context use default` when the rootful daemon's containers still
+   matter. The launcher reaches the rootless daemon through `DOCKER_HOST` on its
+   own.
+4. Select the overlay2 store before the first pull, as rack does, and restart
+   the daemon (`systemctl --user restart docker`):
+
+   ```json
+   { "features": { "containerd-snapshotter": false } }
+   ```
+
+   in `~/.config/docker/daemon.json`. The containerd store keeps the
+   compressed layers (14 GB) beside the unpacked image.
+5. `just install-sage-launchers`, then `sage-docker-update`. On a laptop the
+   pull may drop; run it again, and finished layers are kept. The update creates
+   the container and the volumes and then stops at the first real directory in
+   `~/gitclones` that has a volume checkout's name.
+6. Move each such checkout into
+   `~/.local/share/docker/volumes/sage-repos/_data/NAME` in place of the image's
+   copy (`mv` keeps its branches, refs and local files), then run
+   `git worktree repair` for its linked worktrees. Fetch branches that exist only
+   in a Dropbox copy into the volume checkout; leave the Dropbox copy where it
+   is, because moving it out of Dropbox deletes it on every synced machine.
+   The update checks only `~/gitclones`; a research checkout elsewhere, such
+   as `~/research`, moves the same way and is replaced by a link to its volume
+   checkout. Ignored files that a host environment generated, such as
+   `sage-julia-bridge`'s `julia_env/Manifest.toml`, come from the image's copy.
+7. Write the image's revision into `~/.local/share/docker/volumes/sage-tree/image-revision`
+   when that file is missing and `/sage` is at that revision; without it the
+   next update copies `.venv` and `builddir` from the image again
+   ([#518](https://github.com/dzackgarza/ai-review-ci/issues/518)).
+8. Run `sage-docker-update` again; it links every volume checkout into
+   `~/gitclones`. Then run the computations of **Verified computations** on
+   the host commands.
+
 ## Host workspace
 
 The `sage-research` runtime mounts these persistent volumes:
@@ -63,12 +115,73 @@ volumes directly. Existing `~/research`, `~/sage-julia-bridge` and
 `~/sage-mypy-plugin` paths also reach their relocated checkouts. The move
 preserved the original directory identities, HEADs, refs and local changes.
 
-Host commands `sage`, `sage-docker-python`, `sage-docker-preparse`, `julia`,
-`gap`, `M2`, `Singular`, `coxiter`, `normaliz`, `polymake`, `lean`, `lake` and
+Host commands `sage`, `sage-docker-python`, `sage-docker-preparse`, `jupyter`,
+`julia`, `gap`, `M2`, `Singular`, `coxiter`, `normaliz`, `polymake`, `lean`, `lake` and
 `elan` run in this runtime. `sage-docker-update` refreshes the runtime while
 retaining the volumes. Python runs from `/sage/.venv`; Julia uses its writable
 depot before the image's `/opt/julia-depot`. Its initial global environment
 comes from the image, and subsequent package changes belong to the volume.
+
+## Launcher behaviour
+
+[scripts/sage-docker](scripts/sage-docker) is one script; the name it is
+called by selects the command.
+
+- **Rootless Docker.** The launcher talks to the rootless daemon at
+  `unix:///run/user/$UID/docker.sock` through `$HOME/bin/docker`. Root in the
+  container is the host user, so files written under `/home/dzack` keep their
+  owner, and the image's own `HOME` (`/root`), with the Julia and Catlab
+  environments the image build resolved, is used as built.
+- **Checkouts in volumes.** The fork is the `sage-tree` volume at `/sage` and
+  every research repository is in the `sage-repos` volume under `/repos`.
+  Docker fills a named volume from the image only when it creates the volume.
+  The host reaches the checkouts through `~/gitclones` symlinks into
+  `~/.local/share/docker/volumes`, so agents edit, commit and push them with
+  ordinary tools and the container runs what they edit. A real directory in
+  `~/gitclones` with the name of a volume checkout stops the update: its work
+  must move into the volume checkout first. A link whose volume checkout is
+  gone is removed.
+- **Work directory.** A command started inside a volume's host directory runs
+  in that volume's container path: `~/gitclones/lean-cas-dsl` runs in
+  `/repos/lean-cas-dsl`. Relative paths in a checkout, such as a Lean
+  `packagesDir` of `../../.local/share/lean/...`, then resolve as the image
+  build resolved them. Other directories keep their host path through the
+  `/home/dzack` mount.
+- **Jupyter.** The container publishes `127.0.0.1:8888`, and the host
+  `jupyter` command runs Jupyter in the container with the host's
+  `~/.jupyter` as its configuration directory. `jupyter lab`, `jupyter server`
+  and `jupyter notebook` get `--ip=0.0.0.0 --port=8888 --no-browser
+  --allow-root` after the caller's arguments, so the server listens where the
+  published port reaches it; a different port is overridden. The kernels are
+  the image's (`sagemath`, `julia`, `python3`). No host process may hold port
+  8888 when the container is created.
+- **Container configuration.** The container carries a hash of its run
+  options as the `sage-docker.config` label. An update recreates a container
+  whose label differs, so a change to the mounts, environment or published
+  ports reaches hosts with their next update.
+- **Is the local image current?** The update asks the registry for the tag's
+  index digest (`Docker-Content-Digest` of the manifest request) and compares
+  it with the local image's `RepoDigests`. Both the overlay2 store and the
+  containerd store record the index digest there. `docker image inspect
+  --format '{{.Descriptor.Digest}}'` is not used: the overlay2 store has no
+  `Descriptor` field. An image that is not current is removed before the pull,
+  together with its container, so an update never holds two images on disk.
+- **The `sage-tree` volume after a new image.** The volume shadows the image's
+  `/sage` and still holds the previous image's checkout, `.venv` and
+  `builddir`. The update fast-forwards the checkout to the image's
+  `org.opencontainers.image.revision` and takes `.venv`, `builddir` and the
+  build's untracked records (`.research-revisions`, `.spinor-base-revision`,
+  `.spinor-source-revision`) from the image. The dirty-checkout check excludes
+  those records. Any other uncommitted change, or a checkout that cannot
+  fast-forward, stops the update.
+- **Julia.** The shared environments in `/root/.julia/environments` name the
+  packages that the image depot holds, so each update copies them from
+  `/opt/julia-depot`. `JULIA_DEPOT_PATH` puts the writable volume depot in front
+  of the read-only image depot; its trailing empty entry keeps the stdlib depot.
+- **Termination.** Killing a `docker exec` client leaves its process running in
+  the container. The command therefore runs as the leader of its own process
+  group and records its pid, and the launcher kills that group when it is
+  terminated or exits.
 
 ## Verified computations
 
@@ -80,7 +193,7 @@ comes from the image, and subsequent package changes belong to the volume.
 | Oscar/Hecke | The number field defined by `x^2-2` has degree `2`; its generator squares to `2` |
 | Sage Julia bridge | `1 // 2` converts to Sage's exact rational; Oscar's `ZZ(2)^10` converts to `1024` |
 | Research session preamble | `ZZ(2)**10` is `1024` |
-| Lean and Lake | Both select the installed Lean `4.33.0` toolchain |
+| Lean and Lake | Both select the image's Lean `4.37.0-rc1` toolchain; from `~/gitclones/lean-cas-dsl`, `lake env lean` imports the shared Mathlib |
 
 ## Deployed image and verification
 

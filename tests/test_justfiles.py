@@ -22,7 +22,6 @@ LINT_STAGED_CONFIG = TypeAdapter(dict[str, list[str]])
 def private_recipe_failure_mode(monkeypatch: pytest.MonkeyPatch) -> None:
     """Private-recipe tests exercise CI-style directives unless overridden."""
     monkeypatch.setenv("AI_REVIEW_CI_FAILURE_MODE", "triage")
-    # Temporary fixture repositories do not contain the enclosing CI refs.
     monkeypatch.delenv("DIFF_COVER_BASE", raising=False)
     monkeypatch.delenv("QC_TIER", raising=False)
 
@@ -163,8 +162,6 @@ def test_install_skills_prunes_only_deleted_owned_links(tmp_path: pathlib.Path) 
     assert result.returncode == 0, result.stdout + result.stderr
     assert (hub / "deleted").resolve(strict=True) == deleted
 
-    # Both absolute links installed by the recipe and relative legacy links
-    # must be recognized. A sibling path sharing the prefix is not owned.
     relative = hub / ".relative"
     relative.symlink_to(os.path.relpath(deleted, hub))
     external = checkout / "skills-other" / "missing"
@@ -188,7 +185,6 @@ def test_install_skills_prunes_only_deleted_owned_links(tmp_path: pathlib.Path) 
     assert ordinary.read_text() == "keep this file"
     assert directory.is_dir() and not directory.is_symlink()
 
-    # Removing the last source directory must not install a literal "*" link.
     shutil.rmtree(retained)
     for _ in range(2):
         result = run_just(justfile, checkout, "install-skills", env=env)
@@ -327,19 +323,52 @@ def test_lean_no_sorry_ignores_comments_and_strings_but_not_terms(tmp_path: path
     assert "Words.lean" not in output
 
 
-def test_lean_no_sorry_fails_when_rg_cannot_run(tmp_path: pathlib.Path) -> None:
-    """A clean tree must not be reported clean by a scan that never ran (#361)."""
+@pytest.mark.parametrize("recipe", ["lean-no-sorry", "lean-qc"])
+@pytest.mark.parametrize("proof", ["trivial", "sorry"])
+def test_lean_no_sorry_fails_when_rg_cannot_run(
+    tmp_path: pathlib.Path, recipe: str, proof: str,
+) -> None:
+    """Both public routes require ripgrep even outside the hosted workflow (#361)."""
     project = tmp_path / "lean-project"
     project.mkdir()
-    (project / "Clean.lean").write_text("theorem fine : True := trivial\n")
-    env = os.environ.copy()
-    env["PATH"] = path_with_only(tmp_path, "just", "bash", "env")
+    (project / "Example.lean").write_text(f"theorem example : True := by {proof}\n")
+    env = os.environ | {"PATH": path_with_only(tmp_path, "just", "bash", "env", "python3")}
+
+    result = run_just(ROOT / "justfiles" / "lean.just", project, recipe, env=env)
+
+    output = result.stdout + result.stderr
+    assert result.returncode != 0, output
+    assert "No sorry declarations" not in output
+    assert "requires rg (ripgrep)" in output
+    assert "https://github.com/BurntSushi/ripgrep" in output
+
+
+def test_lean_no_sorry_propagates_real_rg_discovery_error(tmp_path: pathlib.Path) -> None:
+    project = tmp_path / "lean-project"
+    project.mkdir()
+    (project / "Broken.lean").write_text("theorem broken : True := by sorry\n")
+    config = tmp_path / "ripgrep.conf"
+    config.write_text("--glob\n[invalid\n")
+    env = os.environ | {"RIPGREP_CONFIG_PATH": str(config)}
 
     result = run_just(ROOT / "justfiles" / "lean.just", project, "lean-no-sorry", env=env)
 
     output = result.stdout + result.stderr
-    assert result.returncode != 0, output
-    assert "rg" in output
+    assert result.returncode == 2, output
+    assert "rg exited 2" in output
+    assert "No sorry declarations" not in output
+
+
+def test_lean_no_sorry_accepts_empty_selection(tmp_path: pathlib.Path) -> None:
+    project = tmp_path / "lean-project"
+    project.mkdir()
+    (project / "quarantined.conjecture.lean").write_text("theorem later : True := by sorry\n")
+
+    result = run_just(ROOT / "justfiles" / "lean.just", project, "lean-no-sorry")
+
+    output = result.stdout + result.stderr
+    assert result.returncode == 0, output
+    assert "No sorry declarations" in output
 
 
 def test_no_bypass_ignores_preexisting_markers_when_staging_other_changes(
@@ -459,9 +488,6 @@ def test_sage_syntax_uses_tools_from_the_sage_virtual_environment(
     sage_bin_dir = tmp_path / "sage-venv" / "bin"
     sage_bin_dir.mkdir(parents=True)
     (sage_bin_dir / "python").symlink_to(pathlib.Path(sys.executable))
-    # A source-tree launcher: it lives outside the venv, answers `-c` by
-    # running the venv interpreter, and fails any other invocation, so the
-    # gate must preparse and compile with the venv tools, not through sage.
     launcher_dir = tmp_path / "sage-src"
     launcher_dir.mkdir()
     sage = launcher_dir / "sage"
@@ -864,8 +890,6 @@ def test_knip_config_does_not_blanket_ignore_owned_typescript(tmp_path: pathlib.
     assert "**/__tests__/**" not in shipped["ignore"]
     assert "**/scripts/**" not in shipped["ignore"]
 
-    # The shipped config must be the deterministic output of the sync script
-    # (no hand edits): regenerating in place yields no change.
     repo = tmp_path / "repo"
     qc_root = repo / "tool-configs"
     qc_root.mkdir(parents=True)
@@ -1067,11 +1091,62 @@ def test_common_normalization_formats_structured_text(
     assert json_file.read_text() == '{ "b": 2, "a": 1 }\n'
 
 
+def test_common_normalization_preserves_structured_test_fixtures(
+    tmp_path: pathlib.Path,
+) -> None:
+    project = tmp_path / "project"
+    project.mkdir()
+    init_git_repo(project)
+
+    inputs = {
+        "sample.md": b"# Title\n\n-   item",
+        "sample.markdown": b"# Title\n\n-   item",
+        "sample.json": b'{"b":2,"a":1}\n',
+        "sample.jsonc": b'{"b":2,"a":1}\n',
+        "sample.yaml": b"items: [1,2]\n",
+        "sample.yml": b"items: [1,2]\n",
+    }
+    protected = {
+        f"{directory}/{name}": content
+        for directory in ("tests", "test", "pkg with space/tests/deep", "pkg/test/deep")
+        for name, content in inputs.items()
+    }
+    ordinary = {
+        "contest/sample.md": (inputs["sample.md"], b"# Title\n\n- item\n"),
+        "tests-extra/sample.json": (inputs["sample.json"], b'{ "b": 2, "a": 1 }\n'),
+        "docs/sample.yaml": (inputs["sample.yaml"], b"items: [1, 2]\n"),
+    }
+    for name, content in protected.items():
+        file = project / name
+        file.parent.mkdir(parents=True, exist_ok=True)
+        file.write_bytes(content)
+    for name, (content, _) in ordinary.items():
+        file = project / name
+        file.parent.mkdir(parents=True, exist_ok=True)
+        file.write_bytes(content)
+
+    assert run_git(project, "add", ".").returncode == 0
+    before = run_git(project, "ls-files", "--stage", "--", *protected)
+    assert before.returncode == 0, before.stderr
+
+    result = run_just(ROOT / "justfiles" / "shared.just", project, "_format-structured-text")
+    assert result.returncode == 0, result.stdout + result.stderr
+
+    for name, content in protected.items():
+        assert (project / name).read_bytes() == content, name
+    after = run_git(project, "ls-files", "--stage", "--", *protected)
+    assert after.returncode == 0, after.stderr
+    assert after.stdout == before.stdout
+    for name, (_, expected) in ordinary.items():
+        assert (project / name).read_bytes() == expected, name
+        staged = run_git(project, "show", f":{name}")
+        assert staged.returncode == 0, staged.stderr
+        assert staged.stdout.encode() == expected, name
+
+
 def test_common_normalization_formats_staged_text_beyond_one_argument_list(
     tmp_path: pathlib.Path,
 ) -> None:
-    # Importing a record corpus stages ~160k Markdown cards in one commit; the
-    # formatter command line then exceeds ARG_MAX ("Argument list too long").
     project = tmp_path / "project"
     records = project / "records"
     records.mkdir(parents=True)
@@ -1111,8 +1186,6 @@ def test_common_normalization_formats_staged_text_beyond_one_argument_list(
 def test_common_normalization_leaves_declared_corpus_directories_to_their_scheduled_job(
     tmp_path: pathlib.Path,
 ) -> None:
-    # A record corpus (lattice-database: 160k cards) is formatted by its own
-    # nightly job; the commit gate formats everything else that is staged.
     project = tmp_path / "project"
     corpus = project / "cards"
     corpus.mkdir(parents=True)
@@ -1215,8 +1288,6 @@ def test_shared_ast_grep_excludes_user_authored_scripts_and_notebooks(
     script_dir.mkdir(parents=True)
     notebook_dir.mkdir(parents=True)
     (source_dir / "app.py").write_text("VALUE = 1\n")
-    # The rule is intentionally real and blocking. A generic AST scan must
-    # not turn an exploratory research artifact into a defect in that artifact.
     (script_dir / "derivation.py").write_text("CONFIG_VALUE = Field(default=1)\n")
     (notebook_dir / "exploration.py").write_text("CONFIG_VALUE = Field(default=1)\n")
 
@@ -1236,10 +1307,6 @@ def test_python_ast_grep_uses_official_cli_and_central_rules(
 
     result = run_just(ROOT / "justfiles" / "python.just", project, "_ast-grep")
 
-    # no-field-default carries POLICY.RUNTIME_DEFAULT, a hard bridge-burning
-    # policy. A policy-bearing rule must BAN the pattern (block the gate), not
-    # emit an ignorable warning. The gate blocks on error[ findings, so the rule
-    # must be error-tier and the scan must exit nonzero.
     output = result.stdout + result.stderr
     assert result.returncode != 0, output
     assert "no-field-default" in output
@@ -1265,10 +1332,6 @@ def test_python_ast_grep_reports_boolean_parameter_in_target_repository(
 def test_python_ast_grep_blocks_dynamic_import(
     tmp_path: pathlib.Path,
 ) -> None:
-    # POLICY.CRITICAL_DEPENDENCY is enforced for TypeScript (await import(...))
-    # via no-dynamic-import. Python's equivalent dynamic-import forms —
-    # importlib.import_module(...) and __import__(...) — are the same policy
-    # violation and must block the Python gate equivalently, not go unaudited.
     project = tmp_path / "python-dynamic-import-project"
     project.mkdir()
     (project / "app.py").write_text(
@@ -1288,8 +1351,6 @@ def test_python_ast_grep_blocks_dynamic_import(
 
     output = result.stdout + result.stderr
     assert result.returncode != 0, output
-    # Assert the Python rule id specifically, not a loose prefix that the
-    # TypeScript no-dynamic-import rule would also satisfy.
     assert "no-dynamic-import-python" in output
 
 
@@ -1408,8 +1469,6 @@ def test_semgrep_autofix_defers_unfixed_findings_to_push_tier(
 
 
 def test_semgrep_autofix_scans_only_the_staged_files(tmp_path: pathlib.Path) -> None:
-    # The commit tier is a fast check of what is being committed; the whole tree is
-    # the CI tier's. Committing one file to lattice-database scanned all 161k files.
     project = tmp_path / "staged-scope-project"
     project.mkdir()
     (project / "settled.py").write_text("def settled() -> int:\n    return 1\n")
@@ -1432,8 +1491,6 @@ def test_semgrep_autofix_scans_only_the_staged_files(tmp_path: pathlib.Path) -> 
 
 @pytest.mark.parametrize("profile", ["python", "sage", "rust", "bun", "bun-python"])
 def test_ambient_tier_semgrep_scans_files_no_change_touched(tmp_path: pathlib.Path, profile: str) -> None:
-    # The commit tier scans staged files and test-ci scans the diff, so the
-    # scheduled ambient tier is the only scan of the whole tree.
     project = tmp_path / "ambient-project"
     source = project / "source"
     source.mkdir(parents=True)
@@ -1442,7 +1499,6 @@ def test_ambient_tier_semgrep_scans_files_no_change_touched(tmp_path: pathlib.Pa
     assert run_git(project, "add", ".").returncode == 0
     commit_without_hooks(project, "base")
     revision = run_git(project, "rev-parse", "HEAD").stdout.strip()
-    # A CI runner exports a base; the ambient tier must not narrow to its empty diff.
     environment = {**os.environ, "DIFF_COVER_BASE": revision, "QC_TIER": "test-ci"}
 
     result = run_just(ROOT / "justfiles" / "shared.just", project, "_ambient-semgrep", env=environment)
@@ -1530,7 +1586,6 @@ def test_semgrep_scans_only_changed_files_in_ci(tmp_path: pathlib.Path) -> None:
     project = tmp_path / "downstream"
     source = project / "source"
     source.mkdir(parents=True)
-    # A real ERROR in an unchanged file must not enter differential scans.
     (source / "legacy.ts").write_text("export const legacy = incoming || 'ambient'\n")
     existing_violation = "export const retained = incoming || 'retained'\n"
     changed = source / "changed.ts"
@@ -1546,7 +1601,6 @@ def test_semgrep_scans_only_changed_files_in_ci(tmp_path: pathlib.Path) -> None:
     commit_without_hooks(project, "change")
     revision = run_git(project, "rev-parse", "HEAD").stdout.strip()
     command = ["just", "--justfile", str(ROOT / "justfiles/shared.just"), "-d", ".", "_semgrep"]
-    # The fixture supplies its own baseline, never the hosted outer repo's ref.
     environment = {**os.environ, "DIFF_COVER_BASE": base, "QC_TIER": "test-ci"}
     result = subprocess.run(command, cwd=project, env=environment, text=True, capture_output=True)
     assert result.returncode == 0, result.stdout + result.stderr
@@ -1560,7 +1614,6 @@ def test_semgrep_scans_only_changed_files_in_ci(tmp_path: pathlib.Path) -> None:
         assert finding["extra"]["severity"] == "ERROR"
         assert finding["start"]["line"] == 1
 
-    # New ERROR findings still block despite the existing baseline violation.
     changed.write_text(changed.read_text() + "export const added = incoming || 'added'\n")
     assert run_git(project, "add", ".").returncode == 0
     commit_without_hooks(project, "new violation")
@@ -1661,6 +1714,29 @@ def test_semgrep_ignores_exported_html_under_notebooks(
     assert "fermat-periods-nbviewer.html" not in output
 
 
+def test_semgrep_ignores_generated_yarn_and_labextension_output(
+    tmp_path: pathlib.Path,
+) -> None:
+    project = tmp_path / "semgrep-generated-js-project"
+    extension = project / "subrepos" / "sage-syntax"
+    generated = (
+        extension / ".pnp.cjs",
+        extension / ".pnp.loader.mjs",
+        extension / ".yarn" / "releases" / "yarn-4.cjs",
+        extension / "sage_syntax" / "labextension" / "static" / "509.js",
+    )
+    for path in generated:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text("function f(o) {\n    const offset = o.offset || 0;\n    return offset;\n}\n")
+
+    result = run_just(ROOT / "justfiles" / "shared.just", project, "_semgrep")
+
+    output = result.stdout + result.stderr
+    assert result.returncode == 0, output
+    for path in generated:
+        assert path.name not in output, f"{path} was scanned:\n{output}"
+
+
 def test_semgrep_preserves_tracked_ignore_and_fails_loud_on_backup_failure(
     tmp_path: pathlib.Path,
 ) -> None:
@@ -1675,8 +1751,6 @@ def test_semgrep_preserves_tracked_ignore_and_fails_loud_on_backup_failure(
     sentinel = "tests/fixtures/user-owned-exclusion/**\n"
     tracked_ignore.write_text(sentinel)
 
-    # Force the backup step to fail with a real on-PATH mktemp shim — no mock of
-    # the recipe itself. The recipe must detect the failure before overwriting.
     shim_dir = tmp_path / "shim"
     shim_dir.mkdir()
     mktemp_shim = shim_dir / "mktemp"
@@ -2057,10 +2131,6 @@ def test_aislop_surfaces_warnings_without_blocking(tmp_path: pathlib.Path) -> No
 
 
 def test_aislop_fails_closed_on_unexpected_schema(tmp_path: pathlib.Path) -> None:
-    # A parseable-but-unexpected aislop response (no numeric summary counts,
-    # no diagnostics array) must NOT be treated as clean: the numeric guards
-    # would otherwise fall through and pass the gate. The recipe must fail
-    # closed on scanner schema/tooling drift.
     project = tmp_path / "aislop-project"
     project.mkdir()
     payload = {"schemaVersion": "1", "score": 100, "note": "no summary or diagnostics"}
@@ -2078,12 +2148,8 @@ def test_aislop_fails_closed_on_unexpected_schema(tmp_path: pathlib.Path) -> Non
 
 
 def test_repo_aislop_config_disables_print_debug_rule() -> None:
-    # The repo's own .aislop/config.yml must parse and keep python-print-debug
-    # off (owner policy: prints are signal here, not slop). This is the whole
-    # payload of the aislop-signal cleanup — guard it against silent breakage.
     config = yaml.safe_load((ROOT / ".aislop" / "config.yml").read_text())
     assert config["rules"]["ai-slop/python-print-debug"] == "off"
-    # No score gate: scores are golfable, so nothing gates on them.
     assert "failBelow" not in (config.get("ci") or {})
 
 
@@ -2375,13 +2441,14 @@ def test_eslint_flat_config_imports_with_declared_tool_config_deps(
     assert "**/central-owned/**" in ignores
 
 
+@pytest.mark.parametrize("generated_dir", [".webpack/main", "src/generated"])
 def test_eslint_ignores_generated_typescript_but_reports_authored_violation(
-    tmp_path: pathlib.Path,
+    tmp_path: pathlib.Path, generated_dir: str,
 ) -> None:
     tool_config = tmp_path / "tool-configs"
     project = tmp_path / "downstream"
     authored = project / "src"
-    generated = project / ".webpack" / "main"
+    generated = project / generated_dir
     tool_config.mkdir()
     authored.mkdir(parents=True)
     generated.mkdir(parents=True)
@@ -2429,7 +2496,7 @@ def test_eslint_ignores_generated_typescript_but_reports_authored_violation(
     output = lint.stdout + lint.stderr
     assert lint.returncode != 0, output
     assert "src/owned.ts" in output
-    assert ".webpack/main/generated.ts" not in output
+    assert f"{generated_dir}/generated.ts" not in output
     assert "@typescript-eslint/no-explicit-any" in output
 
 
@@ -3471,6 +3538,60 @@ def test_pytest_with_coverage_generates_xml_without_total_threshold(
     assert "Coverage XML report:" in output
 
 
+def test_diff_cover_resolves_local_and_remote_base_refs(tmp_path: pathlib.Path) -> None:
+    """Exercise the shared recipe against a clone with only a remote-tracking base."""
+    upstream = tmp_path / "upstream"
+    upstream.mkdir()
+    init_git_repo(upstream)
+    assert run_git(upstream, "branch", "-M", "main").returncode == 0
+    (upstream / "pyproject.toml").write_text(
+        '[project]\nname = "diff-cover-project"\nversion = "0.1.0"\n'
+        'requires-python = ">=3.14"\n\n[build-system]\n'
+        'requires = ["setuptools"]\nbuild-backend = "setuptools.build_meta"\n'
+    )
+    source = upstream / "diff_cover_project.py"
+    source.write_text("def value() -> int:\n    return 1\n")
+    (upstream / "tests").mkdir()
+    test = upstream / "tests" / "test_value.py"
+    test.write_text("from diff_cover_project import value\n\ndef test_value():\n    assert value() == 1\n")
+    assert run_git(upstream, "add", ".").returncode == 0
+    commit_without_hooks(upstream, "main baseline")
+    assert run_git(upstream, "switch", "-c", "feature").returncode == 0
+    source.write_text("def value() -> int:\n    return 2\n")
+    test.write_text("from diff_cover_project import value\n\ndef test_value():\n    assert value() == 2\n")
+    assert run_git(upstream, "add", ".").returncode == 0
+    commit_without_hooks(upstream, "covered feature change")
+
+    project = tmp_path / "clone"
+    cloned = run_git(tmp_path, "clone", "--branch", "feature", str(upstream), str(project))
+    assert cloned.returncode == 0, cloned.stderr
+    assert run_git(project, "show-ref", "--verify", "refs/heads/main").returncode != 0
+    assert run_git(project, "show-ref", "--verify", "refs/remotes/origin/main").returncode == 0
+    env = os.environ | {"XDG_CACHE_HOME": str(tmp_path / "cache")}
+    justfile = ROOT / "justfiles" / "python.just"
+    coverage = run_just(justfile, project, "_pytest_with_coverage", env=env)
+    assert coverage.returncode == 0, coverage.stdout + coverage.stderr
+
+    remote = run_just(justfile, project, "_diff-cover", env=env)
+    assert remote.returncode == 0, remote.stdout + remote.stderr
+    assert "origin/main...HEAD" in remote.stdout
+    assert "diff_cover_project.py (100%)" in remote.stdout
+
+    # A local base takes precedence over a different remote-tracking base.
+    # Here main has advanced to HEAD: the actual coverage report must have no diff.
+    assert run_git(project, "branch", "main", "HEAD").returncode == 0
+    local = run_just(justfile, project, "_diff-cover", env=env)
+    assert local.returncode == 0, local.stdout + local.stderr
+    assert re.search(r"(?<!origin/)main\.\.\.HEAD", local.stdout)
+    assert "No lines with coverage information in this diff" in local.stdout
+
+    assert run_git(project, "branch", "-D", "main").returncode == 0
+    assert run_git(project, "update-ref", "-d", "refs/remotes/origin/main").returncode == 0
+    missing = run_just(justfile, project, "_diff-cover", env=env)
+    assert missing.returncode != 0, missing.stdout + missing.stderr
+    assert "'main'" in missing.stderr and "'origin/main'" in missing.stderr
+
+
 def test_bun_coverage_consumes_declared_script_and_normalizes_lcov(
     tmp_path: pathlib.Path,
 ) -> None:
@@ -4047,7 +4168,6 @@ def test_python_diff_scoped_recipes_accept_metadata_only_changes(
         check=True,
         capture_output=True,
     )
-    # A bare runner has no global identity; committing without one exits 128.
     subprocess.run(["git", "config", "user.email", "qc@example.invalid"], cwd=project, check=True, capture_output=True)
     subprocess.run(["git", "config", "user.name", "QC Fixture"], cwd=project, check=True, capture_output=True)
     subprocess.run(["git", "add", "."], cwd=project, check=True, capture_output=True)
@@ -4466,8 +4586,6 @@ def test_rust_normalization_formats_nested_manifest_project(
 def test_rust_normalization_formats_a_workspace_and_its_members(
     tmp_path: pathlib.Path,
 ) -> None:
-    # Two members: cargo fmt takes a lone member for a virtual manifest, and finds no targets
-    # for one with two unless it is asked for all of them.
     project = tmp_path / "rust-workspace"
     project.mkdir(parents=True)
     (project / "Cargo.toml").write_text('[workspace]\nmembers = ["server", "desktop"]\nresolver = "2"\n')
@@ -4499,12 +4617,6 @@ def test_rust_normalization_formats_a_workspace_and_its_members(
         assert formatted == "pub fn value() -> u8 {\n    42\n}\n"
 
 
-# Regression for #17: just >= 1.46 binds JUST_WORKING_DIRECTORY to
-# -d/--working-directory, which then requires --justfile — so any consumer that
-# exported JUST_WORKING_DIRECTORY (the old delegated-gate routing hint) could no
-# longer run a bare public gate. The scaffolds resolve this by routing with an
-# explicit `-d .` and never exporting JUST_WORKING_DIRECTORY, so the bare
-# entrypoint keeps working. These tests lock both halves of that contract.
 
 SCAFFOLD_DELEGATES = {
     "python": ("python.just",),
@@ -4572,8 +4684,6 @@ def test_scaffold_bare_just_entrypoint_survives_working_directory_binding(
         check=False,
     )
     output = result.stdout + result.stderr
-    # The bug manifested as a just arg-parse failure ("required ... --justfile")
-    # before any recipe ran; a clean parse + route is the fix.
     assert result.returncode == 0, output
     for justfile_name in SCAFFOLD_DELEGATES[language]:
         assert f"-f ~/ai-review-ci/justfiles/{justfile_name}" in output
@@ -4589,9 +4699,6 @@ def test_scaffold_does_not_export_working_directory_routing_hint(language: str) 
     assert "JUST_WORKING_DIRECTORY" not in scaffold
 
 
-# Historical Just versions rejected JUST_WORKING_DIRECTORY at argument parsing.
-# That external bug is not an invariant: the owned scaffold entrypoints above
-# must route correctly on current Just releases.
 
 
 def test_docs_and_configs_qc_routes_formatting_and_link_validation(tmp_path: pathlib.Path) -> None:
@@ -4653,11 +4760,6 @@ def test_docs_and_configs_qc_routes_formatting_and_link_validation(tmp_path: pat
     assert "lychee --no-progress" in links.stderr
 
 
-# Config filenames each QC tool actually discovers, read from the tools themselves:
-#   biome      — ConfigName::BIOME_JSON in biome_fs/src/fs.rs
-#   eslint     — FLAT_CONFIG_FILENAMES in eslint/lib/config/config-loader.js (v10: flat config only)
-#   knip       — https://knip.dev/overview/configuration#location
-#   lint-staged— CONFIG_FILE_NAMES in lint-staged/lib/loadConfig.js
 LOCAL_QC_OVERRIDE_FILES = (
     "biome.json",
     "biome.jsonc",
@@ -4735,10 +4837,6 @@ def test_ts_preflight_rejects_qc_config_embedded_in_the_package_manifest(tmp_pat
     assert f"package.json#{key}" in output, output
 
 
-# setup.cfg and tox.ini are config-discovery surfaces for QC tools this repo supplies
-# configs for: mypy (mypy.defaults.SHARED_CONFIG_NAMES), coverage.py, and import-linter.
-# pytest and pyright are deliberately absent — global QC passes them no config, so a
-# project-local one is not an override of anything (#292).
 SHARED_MANIFEST_OVERRIDES = (
     ("setup.cfg", "[mypy]\nwarn_return_any = True\n"),
     ("setup.cfg", "[coverage:run]\nbranch = True\n"),
@@ -4828,10 +4926,25 @@ def test_global_stub_library_resolves_from_a_downstream_project(tmp_path: pathli
 
     result = run_just(ROOT / "justfiles" / "python.just", project, "_mypy")
 
-    # Scoped to the stubbed module itself. A stub that re-exports third-party types
-    # can still report those, which is a property of the stub, not of path resolution.
     output = result.stdout + result.stderr
     assert 'named "sarif_pydantic"' not in output, output
+
+
+def test_biome_recipes_pin_the_config_schema_version(tmp_path: pathlib.Path) -> None:
+    config = json.loads((ROOT / "tool-configs" / "biome.json").read_text())
+    version = config["$schema"].split("/")[-2]
+    result = subprocess.run(
+        ["just", "--justfile", str(ROOT / "justfiles" / "bun.just"), "-d", str(tmp_path),
+         "--dry-run", "_biome", "_normalize"],
+        text=True, capture_output=True, check=True,
+    )
+    commands = [
+        line for line in (result.stdout + result.stderr).splitlines()
+        if "with-central-biome-config.sh" in line and "biome check" in line
+    ]
+    assert len(commands) == 2, commands
+    for command in commands:
+        assert f"bun x --package @biomejs/biome@{version} biome check" in command, command
 
 
 def test_biome_applies_central_parser_options_to_project_files(tmp_path: pathlib.Path) -> None:
@@ -4845,7 +4958,98 @@ def test_biome_applies_central_parser_options_to_project_files(tmp_path: pathlib
     result = run_just(ROOT / "justfiles" / "bun.just", project, "_biome")
 
     assert result.returncode == 0, result.stdout + result.stderr
+    assert "configuration schema version does not match" not in result.stdout + result.stderr
     assert not (project / "biome.json").exists()
+
+
+@pytest.mark.parametrize("write", [False, True])
+def test_biome_preserves_structured_text_and_fixture_inputs(tmp_path: pathlib.Path, write: bool) -> None:
+    project = tmp_path / "bun-project"
+    project.mkdir()
+    init_git_repo(project)
+    frontmatter = "---\ntitle: Coble surfaces\n---\n\n# Coble surfaces\n"
+    protected = {
+        "src/book.md": frontmatter,
+        "src/book.markdown": frontmatter,
+        "src/book.qmd": frontmatter,
+        "src/settings.yaml": "key:    value\n",
+        "src/settings.yml": "key:    value\n",
+        "src/test/fixtures/example.ts": "export const bad={x:1}\n",
+        "tests/fixtures/example.ts": "export const bad={x:1}\n",
+        "test/fixtures/example.ts": "export const bad={x:1}\n",
+    }
+    for name, content in protected.items():
+        file = project / name
+        file.parent.mkdir(parents=True, exist_ok=True)
+        file.write_text(content)
+    owned = project / "src" / "owned.ts"
+    formatted = "export const a = { b: 1 };\n"
+    owned.write_text("export const a={b:1}\n" if write else formatted)
+
+    if write:
+        config = ROOT / "tool-configs" / "biome.json"
+        version = json.loads(config.read_text())["$schema"].split("/")[-2]
+        result = subprocess.run(
+            [str(ROOT / "tool-artifacts" / "scripts" / "with-central-biome-config.sh"),
+             str(config), "bun", "x", "--package", f"@biomejs/biome@{version}",
+             "biome", "check", "--write", "."],
+            cwd=project, text=True, capture_output=True, check=False,
+        )
+    else:
+        result = run_just(ROOT / "justfiles" / "bun.just", project, "_biome")
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    for name, content in protected.items():
+        assert (project / name).read_text() == content, name
+    assert owned.read_text() == formatted
+    assert not (project / "biome.json").exists()
+
+
+@pytest.mark.parametrize("include_authored", [False, True])
+def test_bun_normalize_preserves_generator_output(
+    tmp_path: pathlib.Path, include_authored: bool
+) -> None:
+    project = tmp_path / "bun-project"
+    generated = project / "src" / "generated" / "openapi.ts"
+    generated.parent.mkdir(parents=True)
+    init_git_repo(project)
+    spec = project / "openapi.json"
+    spec.write_text(json.dumps({
+        "openapi": "3.1.0",
+        "info": {"title": "Fixture", "version": "1.0.0"},
+        "paths": {"/version": {"get": {"responses": {"200": {
+            "description": "OK",
+            "content": {"application/json": {"schema": {"type": "string"}}},
+        }}}}},
+    }))
+    generator = [
+        "bun", "x", "--package", "openapi-typescript@7.13.0",
+        "openapi-typescript", str(spec), "--default-non-nullable=false",
+    ]
+    before = subprocess.check_output(generator, cwd=project)
+    generated.write_bytes(before)
+    authored = project / "src" / "generated-client.js"
+    if include_authored:
+        authored.write_text("export const value={x:1}\n")
+    assert run_git(project, "add", ".").returncode == 0
+
+    commit_check = run_just(ROOT / "justfiles" / "bun.just", project, "test-commit")
+    assert commit_check.returncode == 0, commit_check.stdout + commit_check.stderr
+    assert generated.read_bytes() == before
+    result = run_just(ROOT / "justfiles" / "bun.just", project, "_normalize")
+
+    assert generated.read_bytes() == before, result.stdout + result.stderr
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert subprocess.check_output(generator, cwd=project) == generated.read_bytes()
+    assert run_git(project, "diff", "--exit-code", "--", str(generated)).returncode == 0
+    if include_authored:
+        assert authored.read_text() == "export const value = { x: 1 };\n"
+        result = run_just(ROOT / "justfiles" / "bun.just", project, "_biome")
+        assert result.returncode == 0, result.stdout + result.stderr
+        authored.write_text("export const value={x:1}\n")
+        result = run_just(ROOT / "justfiles" / "bun.just", project, "_biome")
+        assert result.returncode != 0
+        assert "generated-client.js format" in result.stdout + result.stderr
 
 
 def test_biome_still_blocks_unformatted_files(tmp_path: pathlib.Path) -> None:

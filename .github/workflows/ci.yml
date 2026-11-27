@@ -25,3 +25,19 @@ jobs:
     with:
       tier: test-ci
       profile: python
+  sage-syntax-boundary:
+    runs-on: ubuntu-latest
+    container: ghcr.io/dzackgarza/sage:develop
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: extractions/setup-just@v4
+        with:
+          github-token: ${{ github.token }}
+          just-version: '1.59.0'
+      - uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: false
+      - name: Check real Sage syntax gates
+        run: uv run --no-project --python 3.14 --with pytest==9.1.1 python -m pytest -q tests/test_sage_local_check.py -m sage_boundary

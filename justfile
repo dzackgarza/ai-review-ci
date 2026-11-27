@@ -1,18 +1,15 @@
 qc-type := "qc-tooling"
 repo := justfile_directory()
-# One hook implementation. install-global-hooks (core.hooksPath, every repo) and
-# install-repo-hooks (a single repo's .git/hooks) differ in where they link, never
-# in what they link: a second copy of a gate this safety-critical drifts silently.
 global_hooks_source_dir := repo / "repo-hooks"
 repo_hooks_source_dir := repo / "repo-hooks"
 scaffold_source_dir := repo / "scaffolds"
 skills_source_dir := repo / "skills"
 
-# Normalize infrastructure files before parse checks inspect them
+[doc("Normalize infrastructure files before parse checks inspect them")]
 _normalize:
     just -f {{repo}}/justfiles/shared.just -d . _format-structured-text
 
-# Parse-check every infrastructure source: workflow YAML, runner justfile, shell wrappers
+[doc("Parse-check every infrastructure source: workflow YAML, runner justfile, shell wrappers")]
 check: _normalize
     uv run --project {{repo}} python -c "import ast, pathlib; [ast.parse(p.read_text()) for p in pathlib.Path('src').rglob('*.py')]; [ast.parse(p.read_text()) for p in pathlib.Path('tests').rglob('*.py')]; [ast.parse(p.read_text()) for p in pathlib.Path('scripts').rglob('*.py')]"
     uv run --project {{repo}} python -c "import yaml, pathlib; [yaml.safe_load(p.read_text()) for p in pathlib.Path('.github/workflows').glob('*.yml')]; [yaml.safe_load(p.read_text()) for p in pathlib.Path('src/ai_review_ci/templates').glob('*.yml')]"
@@ -28,43 +25,42 @@ check: _normalize
     sh -n repo-hooks/pre-commit
     sh -n repo-hooks/pre-push
     sh -n repo-hooks/hook-timing.sh
+    sh -n repo-hooks/lfs-hooks.sh
+    sh -n repo-hooks/lfs-post-hook
 
-# Check that skill markdown links are checkout-relative and resolvable.
+[doc("Check that skill markdown links are checkout-relative and resolvable.")]
 check-skill-links:
     uv run tool-artifacts/scripts/check_skill_links.py
 
-# Commit gate: immediate, directly repairable feedback.
+[doc("Commit gate: immediate, directly repairable feedback.")]
 test-commit:
     just -f {{repo}}/justfiles/qc-tooling.just -d . test-commit
 
-# Push gate: same minimal staged syntax checks as commit; CI owns suites.
+[doc("Push gate: same minimal staged syntax checks as commit; CI owns suites.")]
 test-push:
     just -f {{repo}}/justfiles/qc-tooling.just -d . test-push
 
-# CI records independent correctness and quality diagnostics; it does not
-# enforce them during development.
+[doc("CI records independent correctness and quality diagnostics; it does not enforce them during development.")]
 test-ci:
     just -f {{repo}}/justfiles/qc-tooling.just -d . test-ci
 
-# Ambient gate: full-repo deferred-debt audit, run on a schedule (ambient.yml),
-# never in the PR/push gate. Delegates to the qc-tooling profile.
+[doc("Ambient gate: full-repo deferred-debt audit, run on a schedule (ambient.yml), never in the PR/push gate. Delegates to the qc-tooling profile.")]
 ambient:
     just -f {{repo}}/justfiles/qc-tooling.just -d . ambient
 
-# gh-boundary gate: run this repository's real GitHub API tests through the
-# canonical Python profile; _qc.yml scopes GH_TOKEN to this recipe's step alone.
+[doc("gh-boundary gate: run this repository's real GitHub API tests through the canonical Python profile; _qc.yml scopes GH_TOKEN to this recipe's step alone.")]
 test-gh-boundary:
     just -f {{repo}}/justfiles/python.just -d . test-gh-boundary
 
-# Install the complete QC enforcement surface into a target repo.
+[doc("Install the complete QC enforcement surface into a target repo.")]
 install repo branch profile target=".":
     uv run ai-review-ci install --target {{target}} --repo {{repo}} --branch {{branch}} --profile {{profile}}
 
-# Create/update the canonical label taxonomy on a target repo (idempotent).
+[doc("Create/update the canonical label taxonomy on a target repo (idempotent).")]
 install-labels repo:
     uv run ai-review-ci install-labels --repo {{repo}}
 
-# Install globally managed Git hooks for this user.
+[doc("Install globally managed Git hooks for this user.")]
 install-global-hooks:
     #!/usr/bin/env bash
     set -euo pipefail
@@ -74,7 +70,7 @@ install-global-hooks:
     fi
     global_hooks_dir="$GIT_GLOBAL_HOOKS_DIR"
 
-    for hook in pre-commit pre-push; do
+    for hook in pre-commit pre-push post-checkout post-commit post-merge; do
         source="{{ global_hooks_source_dir }}/$hook"
         if [[ ! -x "$source" ]]; then
             echo "Error: missing executable global hook source: $source"
@@ -84,7 +80,7 @@ install-global-hooks:
 
     mkdir -p "$global_hooks_dir"
 
-    for hook in pre-commit pre-push; do
+    for hook in pre-commit pre-push post-checkout post-commit post-merge; do
         source="{{ global_hooks_source_dir }}/$hook"
         target="$global_hooks_dir/$hook"
         if [[ -e "$target" && ! -L "$target" ]]; then
@@ -97,7 +93,7 @@ install-global-hooks:
     git config --global core.hooksPath "$global_hooks_dir"
     git config --global core.hooksPath
 
-# Link current skills and prune dangling links owned by this checkout.
+[doc("Link current skills and prune dangling links owned by this checkout.")]
 install-skills:
     #!/usr/bin/env bash
     set -euo pipefail
@@ -132,8 +128,6 @@ install-skills:
         echo "$target -> $skill"
     done
 
-    # Resolve relative links and missing targets; compare directory boundaries,
-    # not just a prefix (e.g. skills-other is not owned by skills).
     shopt -s dotglob
     for target in "$skills_dir"/*; do
         if [[ -L "$target" && ! -e "$target" ]]; then
@@ -145,12 +139,12 @@ install-skills:
         fi
     done
 
-# Link this machine's Docker-backed Sage launchers into ~/.local/bin.
+[doc("Link this machine's Docker-backed Sage launchers into ~/.local/bin.")]
 install-sage-launchers:
     #!/usr/bin/env bash
     set -euo pipefail
     mkdir -p "$HOME/.local/bin" "$HOME/.cache/sage-docker-tmp"
-    for name in sage sage-docker-python sage-docker-preparse sage-docker-update julia gap M2 Singular coxiter lean lake elan normaliz polymake; do
+    for name in sage sage-docker-python sage-docker-preparse sage-docker-update jupyter julia gap M2 Singular coxiter lean lake elan normaliz polymake; do
         target="$HOME/.local/bin/$name"
         if [[ -e "$target" && ! -L "$target" ]]; then
             echo "Error: refusing to replace non-symlink launcher: $target"
@@ -160,7 +154,7 @@ install-sage-launchers:
         echo "$target -> {{ repo }}/scripts/sage-docker"
     done
 
-# Install repo-local hook symlinks into a target repository.
+[doc("Install repo-local hook symlinks into a target repository.")]
 install-repo-hooks target=".":
     #!/usr/bin/env bash
     set -euo pipefail
@@ -189,7 +183,7 @@ install-repo-hooks target=".":
 
     echo "$hooks_dir"
 
-# Copy a repo-local QC delegation scaffold into a target repository.
+[doc("Copy a repo-local QC delegation scaffold into a target repository.")]
 install-qc-scaffold profile target=".":
     #!/usr/bin/env bash
     set -euo pipefail

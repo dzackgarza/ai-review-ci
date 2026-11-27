@@ -1,61 +1,17 @@
-# justfile — Cross-language (shared) quality control recipes
-#
-# This file contains QC recipes that are language-agnostic.
-# Language-specific justfiles call this file explicitly and compose its
-# recipes into their `test` chain alongside language-specific recipes.
-#
-# Language justfiles:
-#   python.just  — Python QC (calls this file)
-#   bun.just     — TypeScript QC (calls this file)
-#   rust.just    — Rust QC (calls this file)
-#   sage.just    — SageMath QC (calls this file, delegates to Python)
-#
-# CONFIGS:
-#   tool-configs/semgrep.yml       → semgrep local rules (--config flag)
-#   tool-configs/jscpd.json        → jscpd (--config flag)
-#   tool-configs/slopconfig.yaml   → ai-slop-detector (--config flag)
-
 infra := justfile_directory() / ".."
 configs := infra / "tool-configs"
 artifacts := infra / "tool-artifacts"
 
-# ── Fast local feedback loop ──────────────────────────────────────
-
-# private: the body of every template's `test-commit` and `test-push`; the parsing
-# lives in scripts/local-check.py (mode `staged` or `push`) because it outgrew a
-# recipe body. No tool installation, suite, formatter, type checker or style
-# scanner runs here; CI owns those. The global pre-push hook sets
-# AI_REVIEW_CI_PRE_PUSH_REMOTE and leaves
-# Git's outgoing-ref list on stdin; a manual `just test-push` sets neither and
-# compares HEAD with its tracked upstream.
 [private]
 _local-check mode:
 	@python3 {{infra}}/scripts/local-check.py {{mode}}
 
-# ── Cross-language recipes ────────────────────────────────────────
-
 _format-structured-text:
 	#!/usr/bin/env bash
 	set -euo pipefail
-	# Keep GIT_INDEX_FILE through staged-file discovery: pathspec commits provide
-	# a temporary commit index, and selecting from the shared index would format
-	# unrelated sibling-staged files. Repository-location Git variables are
-	# cleared only after the commit input list has been captured below.
 	echo "============================="
 	echo "=== Running: structured text formatting ==="
 	echo "# Formats Markdown (flowmark), JSON, and YAML (prettier) before agents spend time on whitespace"
-	# Markdown is formatted by flowmark, NOT prettier. Prettier's CommonMark
-	# formatter corrupts pandoc markdown: it escapes underscores in attribute
-	# paths (path="_includes/x" -> path="\_includes/x"), rewrites emphasis
-	# delimiters (*x* -> _x_), and reformats embedded code blocks. flowmark is
-	# the canonical markdown formatter.
-	# Markdown under a test directory is fixture/spec data (golden inputs and
-	# expected outputs), not authored prose. Reformatting it would rewrite the
-	# very bytes a test asserts on -- corrupting the suite -- so it is never
-	# normalized. This is by artifact kind and applies to every project; the test
-	# directory's own source (e.g. .py) is still linted/type-checked as normal.
-	# Vendored, generated, and fixture trees (qc-excludes.toml) hold bytes another
-	# party owns -- a cited source, a golden input -- and are never formatted.
 	exclude_dirs_output="$(uv run {{artifacts}}/scripts/read_qc_excludes.py {{configs}}/qc-excludes.toml)"
 	exclude_pathspecs=()
 	if [ -n "$exclude_dirs_output" ]; then
@@ -63,8 +19,6 @@ _format-structured-text:
 			exclude_pathspecs+=(":(exclude,glob)**/$dir/**")
 		done <<<"$exclude_dirs_output"
 	fi
-	# A repository's record corpus is formatted by that repository's own scheduled
-	# job: its justfile names the directories in ai_review_ci_format_scheduled_dirs.
 	if just --variables | tr ' ' '\n' | grep -x ai_review_ci_format_scheduled_dirs >/dev/null; then
 		for dir in $(just --evaluate ai_review_ci_format_scheduled_dirs); do
 			exclude_pathspecs+=(":(exclude)$dir")
@@ -75,15 +29,12 @@ _format-structured-text:
 	while IFS= read -r -d '' file; do
 		case "$file" in
 			AGENTS.md|*/AGENTS.md) ;;
+			test/*|*/test/*|tests/*|*/tests/*) ;;
 			assets/attachments/extracted/*|assets/attachments/*_extracted.md) ;;
 			*.md|*.markdown) md_files+=("$file") ;;
 			*.json|*.jsonc|*.yaml|*.yml) data_files+=("$file") ;;
 		esac
 	done < <(git diff --cached --name-only --diff-filter=ACMR -z -- . "${exclude_pathspecs[@]}")
-	# The formatter rewrites the working tree, so its output reaches the commit only
-	# when it is staged again. A file whose working tree equals its staged blob is
-	# restaged; a partially staged file is not, since that would stage its unstaged
-	# hunks, and it is named so its formatted working tree is not mistaken for new work.
 	commit_index="${GIT_INDEX_FILE:-}"
 	restage=()
 	partial=()
@@ -95,16 +46,11 @@ _format-structured-text:
 		fi
 	done
 	repository_root="$(git rev-parse --show-toplevel)"
-	# git-sourced uvx tools must not inherit repository-location variables: they
-	# can otherwise redirect their own fetch at the host repository and fail.
-	# The selected file lists above already preserve the temporary commit index.
 	unset GIT_DIR GIT_INDEX_FILE GIT_WORK_TREE GIT_PREFIX GIT_OBJECT_DIRECTORY GIT_ALTERNATE_OBJECT_DIRECTORIES GIT_COMMON_DIR
 	if [ "${#md_files[@]}" -eq 0 ] && [ "${#data_files[@]}" -eq 0 ]; then
 		echo "No staged Markdown, JSON, or YAML files found"
 		exit 0
 	fi
-	# xargs splits each list into command lines that fit ARG_MAX: a corpus import
-	# stages more files than one argument list holds. A failed batch fails xargs.
 	if [ "${#md_files[@]}" -gt 0 ]; then
 		printf '%s\0' "${md_files[@]}" | xargs -0 \
 			uvx --from 'git+https://github.com/dzackgarza/flowmark.git' flowmark \
@@ -123,16 +69,12 @@ _format-structured-text:
 		printf '  %s\n' "${partial[@]}" >&2
 	fi
 
-# Commit tier: it scans only the staged files, so it takes no machine-wide heavy-gate
-# slot and a commit never queues behind another repository's suite.
 _semgrep-autofix:
 	#!/usr/bin/env bash
 	set -euo pipefail
 	echo "============================="
 	echo "=== Running: semgrep auto-fix ==="
 	echo "# Applies Semgrep autofixes to the staged files; the ambient tier scans the whole tree"
-	# The commit tier checks what is being committed. The whole tree is scanned by
-	# the scheduled ambient tier (QC_TIER=ambient _semgrep), not on every commit.
 	exclude_dirs_output="$(uv run {{artifacts}}/scripts/read_qc_excludes.py {{configs}}/qc-excludes.toml)"
 	exclude_pathspecs=(":(exclude,glob)**/*.html")
 	exclude_args=("--exclude=*.html" "--exclude=**/*.html")
@@ -142,7 +84,6 @@ _semgrep-autofix:
 			exclude_args+=("--exclude=$dir")
 		done <<<"$exclude_dirs_output"
 	fi
-	# A repository's record corpus is formatted and scanned by its own scheduled jobs.
 	if just --variables | tr ' ' '\n' | grep -x ai_review_ci_format_scheduled_dirs >/dev/null; then
 		for dir in $(just --evaluate ai_review_ci_format_scheduled_dirs); do
 			exclude_pathspecs+=(":(exclude)$dir")
@@ -155,22 +96,14 @@ _semgrep-autofix:
 		echo "semgrep autofix: no staged files."
 		exit 0
 	fi
-	# An autofix rewrites the working tree, so it reaches the commit only when staged
-	# again: a file whose working tree equals its staged blob is restaged after the scan.
 	restage=()
 	while IFS= read -r -d '' file; do
 		if git diff --quiet -- "$file"; then
 			restage+=("$file")
 		fi
 	done <"$staged_manifest"
-	# This gate applies autofixes; CI-tier verification owns the remaining findings, so
-	# printing them here is advisory output the caller cannot act on. Measured at 177 lines
-	# and 8.4 KB per run in one repository — on every commit, in every repository. Agent
-	# callers carry that into their conversation, so capture it and print a summary instead,
-	# replaying the whole thing only when the scan actually fails.
 	scan_log="$(mktemp -t semgrep-autofix.XXXXXX)"
 	trap 'rm -f -- "$scan_log" "$staged_manifest"' EXIT
-	# xargs batches a large staged set (a corpus import) under ARG_MAX.
 	if xargs -0 "{{artifacts}}/scripts/semgrep-with-qc-ignores.sh" \
 		"{{artifacts}}/scripts/read_qc_excludes.py" \
 		"{{configs}}/qc-excludes.toml" \
@@ -212,7 +145,6 @@ _check-envrc:
 	echo "=== Running: environment config check ==="
 	echo "# Validates .envrc presence and env var hygiene"
 	failed=0
-	# 1. .envrc must exist
 	if [ ! -f ".envrc" ]; then
 		echo "ERROR: No .envrc file in project root."
 		echo "       Create an .envrc with all required environment variables,"
@@ -220,7 +152,6 @@ _check-envrc:
 		"{{artifacts}}/scripts/emit-triage-directive.sh"
 		exit 1
 	fi
-	# 2. DIRENV_CONFIGURED_CORRECTLY must be set
 	if [ -z "${DIRENV_CONFIGURED_CORRECTLY:-}" ]; then
 		echo "ERROR: DIRENV_CONFIGURED_CORRECTLY is not set."
 		echo "       The repo's .envrc must either use 'source_up' to inherit"
@@ -233,7 +164,6 @@ _check-envrc:
 		"{{artifacts}}/scripts/emit-triage-directive.sh"
 		exit 1
 	fi
-	# 3. No .env files except *.example templates — real env var definitions belong in .envrc
 	if find . -maxdepth 3 -name '.env*' -not -name '.envrc' -not -name '*.example' -type f -not -path '*/.git/*' -not -path '*/node_modules/*' 2>/dev/null | grep -q .; then
 		echo "ERROR: Found .env files — these are env var definitions that belong in .envrc."
 		find . -maxdepth 3 -name '.env*' -not -name '.envrc' -not -name '*.example' -type f -not -path '*/.git/*' -not -path '*/node_modules/*' 2>/dev/null
@@ -241,7 +171,6 @@ _check-envrc:
 		"{{artifacts}}/scripts/emit-triage-directive.sh"
 		exit 1
 	fi
-	# 4. Shell scripts must not define env vars via 'export VAR=value'
 	for script in $(find . -maxdepth 3 -name '*.sh' -type f -not -path '*/.git/*' -not -path '*/node_modules/*' 2>/dev/null); do
 		if grep -n '^[[:space:]]*export [A-Za-z_][A-Za-z0-9_]*=' "$script" 2>/dev/null; then
 			echo "ERROR: $script defines environment variables via 'export VAR=value'."
@@ -251,7 +180,6 @@ _check-envrc:
 			exit 1
 		fi
 	done
-	# 5. Justfile must not define env vars — they belong in .envrc
 	for jf in "justfile" "Justfile"; do
 		[ ! -f "$jf" ] && continue
 		if grep -n '^export ' "$jf" 2>/dev/null; then
@@ -283,8 +211,6 @@ _check-no-local-qc-override:
 	echo "=== Running: local QC override detection ==="
 	echo "# Detects local config files that would override or duplicate global QC"
 	failed=0
-	# Shared tool configs that must NOT exist in project root.
-	# Global QC owns these tool configs — local copies are forbidden overrides.
 	for config in \
 		semgrep.yml \
 		.jscpd.json \
@@ -359,7 +285,6 @@ _semgrep:
 	if revision="$(git rev-parse --verify HEAD 2>/dev/null)" && [ -z "$(git status --porcelain)" ]; then
 		report_dir="$(git rev-parse --git-path ai-review-ci/semgrep)/$revision"
 	else
-		# Uncommitted callers remain supported; this report claims no committed identity.
 		if ! report_dir="$(mktemp -d -t ai-review-ci-semgrep.XXXXXX)"; then
 			echo "ERROR: semgrep cannot allocate its required review report directory" >&2
 			"{{artifacts}}/scripts/emit-triage-directive.sh"
@@ -368,22 +293,8 @@ _semgrep:
 	fi
 	mkdir -p "$report_dir"
 	report_dir="$(cd "$report_dir" && pwd -P)"
-	# Never reuse a prior successful report for an evaluation that now fails.
 	rm -f "$report_dir/head.raw.json" "$report_dir/head.json" "$report_dir/base.raw.json"
 	echo "semgrep review reports: $report_dir"
-	# #214: with no project .semgrepignore, semgrep falls back to its bundled
-	# default template, which excludes tests/ — silently killing the
-	# test-antipattern rules (py-no-monkeypatch and its NO_MOCK_PROOF /
-	# NO_SKIP_MASK siblings) that are designed to fire IN test files. Ship the
-	# QC-authoritative ignore set from the single-source-of-truth exclusion list
-	# (vendor/generated dirs only — it does NOT list tests/) so tests/ is scanned.
-	# This also overrides any repo-committed .semgrepignore for the scan
-	# (no-repo-writable-QC-suppression). Restore prior state on exit.
-	# "a tracked file pre-existed" and "we made a backup" are DISTINCT facts.
-	# The restore trap must never conflate them: an empty backup handle must
-	# not license rm-ing a tracked file we did not create. Back up BEFORE the
-	# overwrite below and fail loud if the backup cannot be made, rather than
-	# proceeding into a trap that could delete the user's tracked file.
 	ignore_file=".semgrepignore"
 	had_preexisting=0
 	ignore_backup=""
@@ -401,16 +312,14 @@ _semgrep:
 	fi
 	restore_semgrepignore() {
 		if [ "$had_preexisting" -eq 1 ]; then
-			# A tracked file pre-existed: restore it, never remove it.
 			mv -f "$ignore_backup" "$ignore_file"
 		else
-			# We created it ourselves; removing it is safe.
 			rm -f "$ignore_file"
 		fi
 	}
 	trap restore_semgrepignore EXIT
 	uv run {{artifacts}}/scripts/read_qc_excludes.py {{configs}}/qc-excludes.toml > "$ignore_file"
-	printf '%s\n' '*.html' '**/*.html' >> "$ignore_file"
+	printf '%s\n' '*.html' '**/*.html' '.pnp.cjs' '.pnp.loader.mjs' >> "$ignore_file"
 	if [[ ${QC_TIER:-} != ambient && -n ${DIFF_COVER_BASE:-} ]] && git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
 		if ! git rev-parse --verify "${DIFF_COVER_BASE}^{commit}" >/dev/null 2>&1; then
 			echo "ERROR: semgrep: DIFF_COVER_BASE does not resolve: $DIFF_COVER_BASE" >&2
@@ -463,8 +372,6 @@ _semgrep:
 		}
 		trap cleanup_semgrep_diff EXIT
 		scan_rc=0
-		# Explicit filenames retain normal language dispatch: generic Lean rules
-		# still apply, while unrelated parsers do not reinterpret Lean as Python.
 		uvx --from semgrep semgrep scan \
 			--json \
 			--config={{configs}}/semgrep.yml \
@@ -515,7 +422,6 @@ _semgrep:
 		--json-output="$findings_json" || scan_rc=$?
 	cp "$findings_json" "$report_dir/head.raw.json"
 	[ "$scan_rc" -eq 0 ] || exit "$scan_rc"
-	# Preserve both raw and exception-filtered findings, including WARNING/INFO.
 	trap 'cp "$findings_json" "$report_dir/head.json"; rm -f "$findings_json"; restore_semgrepignore' EXIT
 	if uv run {{artifacts}}/scripts/semgrep_exceptions.py {{configs}}/semgrep-exceptions.toml "$findings_json"; then
 		:
@@ -574,16 +480,10 @@ _vibecheck:
 	#!/usr/bin/env bash
 	set -euo pipefail
 	source "{{artifacts}}/scripts/heavy-gate-lock.sh"
-	# Strip git env vars the pre-commit hook inherits from `git commit`; left
-	# set, they redirect uvx's git-sourced tool fetch (vibecheck) at the host
-	# project's .git and it fails with "Git operation failed".
 	unset GIT_DIR GIT_INDEX_FILE GIT_WORK_TREE GIT_PREFIX GIT_OBJECT_DIRECTORY GIT_ALTERNATE_OBJECT_DIRECTORIES GIT_COMMON_DIR
 	echo "============================="
 	echo "=== Running: vibecheck anti-slop pattern detection ==="
 	echo "# Runs qinnovates/vibecheck-slop-stopper via uvx against the project root"
-	# vibecheck delegates file discovery to ripgrep. Install the QC-owned
-	# exclusions as a temporary project-root .ignore file so ripgrep excludes
-	# user-authored research scripts and notebooks before it parses them.
 	ignore_file=".ignore"
 	had_preexisting_ignore=0
 	ignore_backup=""
@@ -686,7 +586,6 @@ _slop:
 	#!/usr/bin/env bash
 	set -euo pipefail
 	source "{{artifacts}}/scripts/heavy-gate-lock.sh"
-	# Preflight: verify the ML model file exists (centrally owned artifact)
 	model_file="{{artifacts}}/models/slop_classifier.pkl"
 	if [ ! -f "$model_file" ]; then
 		echo "ERROR: ai-slop-detector ML model not found: $model_file"
@@ -771,10 +670,6 @@ _aislop:
 		"{{artifacts}}/scripts/emit-triage-directive.sh"
 		exit 1
 	fi
-	# Fail closed on an unexpected-but-parseable schema: if summary.errors /
-	# summary.warnings are not numbers, or diagnostics is not an array, the
-	# numeric guards below would silently fall through and treat the scan as
-	# clean. Treat a schema mismatch as a QC TOOLING failure, not a pass.
 	if ! printf '%s' "$raw_output" | jq -e '(.summary.errors | type == "number") and (.summary.warnings | type == "number") and (.diagnostics | type == "array")' >/dev/null 2>&1; then
 		printf '%s\n' "$raw_output"
 		echo ""
@@ -845,11 +740,6 @@ _aislop:
 		exit 1
 	fi
 
-# ── Config Sync ───────────────────────────────────────────────────
-# Sync qc-excludes.toml into every tool config (biome, eslint, knip,
-# jscpd, slop-scan, pyright, and justfile-rust _rust-qc-files).
-
-# Run this whenever qc-excludes.toml changes.
 _sync-qc-excludes:
 	#!/usr/bin/env bash
 	set -euo pipefail
@@ -857,12 +747,6 @@ _sync-qc-excludes:
 	uv run {{artifacts}}/scripts/sync_qc_excludes.py {{configs}}/qc-excludes.toml
 	echo "Done. Commit the updated configs."
 
-# ── Entry Points ──────────────────────────────────────────────────
-
-# Push/CI-tier cross-language stack. `_no-bypass` is NOT here — it is a
-# commit-tier check invoked directly by each language's `test-commit` recipe.
-# private: whole-tree semgrep for the scheduled ambient tier. QC_TIER=ambient makes
-# _semgrep ignore DIFF_COVER_BASE and scan every file.
 _ambient-semgrep:
 	#!/usr/bin/env bash
 	set -euo pipefail

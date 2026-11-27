@@ -10,6 +10,7 @@ dependencies = [
     { name = "automated-reviews" },
     { name = "cyclopts" },
     { name = "pydantic" },
+    { name = "pygments" },
     { name = "pytest" },
     { name = "pyyaml" },
     { name = "unidiff" },
@@ -20,6 +21,7 @@ dev = [
     { name = "pyyaml" },
     { name = "types-pyyaml" },
     { name = "types-unidiff" },
+    { name = "websocket-client" },
 ]
 
 [package.metadata]
@@ -27,6 +29,7 @@ requires-dist = [
     { name = "automated-reviews", git = "https://github.com/dzackgarza/automated-reviews.git?rev=main" },
     { name = "cyclopts" },
     { name = "pydantic", specifier = ">=2" },
+    { name = "pygments", specifier = ">=2.21.0" },
     { name = "pytest", specifier = ">=9.1.1" },
     { name = "pyyaml", specifier = ">=6.0.3" },
     { name = "unidiff", specifier = ">=0.7.5" },
@@ -37,6 +40,7 @@ dev = [
     { name = "pyyaml" },
     { name = "types-pyyaml" },
     { name = "types-unidiff", specifier = ">=0.7.0.20260518" },
+    { name = "websocket-client", specifier = ">=1.9.2" },
 ]
 
 [[package]]
@@ -356,4 +360,13 @@ source = { registry = "https://pypi.org/simple" }
 sdist = { url = "https://files.pythonhosted.org/packages/9f/7a/f891dba8225c20cce4417443073e67f33e01fae9715a6477f59eb32654ae/unidiff-1.0.1.tar.gz", hash = "sha256:d9425bc516390c54743a1045b2c1c97f02d245a913a241dd499f958adb2df998", size = 31800, upload-time = "2026-09-15T01:39:10.847Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/af/c9/a0529375e0162327fd1cb0dc6785c7a6e56dfae011c2d7b57d611ff84347/unidiff-1.0.1-py3-none-any.whl", hash = "sha256:5e2ca461eda8a4c761ad0922e3e8a65742f359dc60301a3a055b70fd7c158680", size = 18733, upload-time = "2026-09-15T01:39:09.395Z" },
+]
+
+[[package]]
+name = "websocket-client"
+version = "1.9.2"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/d8/cb/a5abcc2891249f393827c650c6296660ce40374ac22d99ab9aea41f9d2a2/websocket_client-1.9.2.tar.gz", hash = "sha256:0fcb57545848be86992e128218fd96dd87a6769ffdb1a968dff79632b85604d0", size = 84110, upload-time = "2026-08-31T14:08:40.964Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/d5/d2/cc4dc1271e464942db7ee278baae2daa99ee77cb2af744025c04da585a3e/websocket_client-1.9.2-py3-none-any.whl", hash = "sha256:e1a673830a9c7bfa47b1cd3d5e4178f4c9651d80a4eab02c9c23a1c3ec6250ce", size = 95786, upload-time = "2026-08-31T14:08:39.899Z" },
 ]

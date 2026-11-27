@@ -109,8 +109,10 @@ def test_push_records_pre_push_duration(tmp_path: pathlib.Path) -> None:
     (repo / "module.py").write_text("x = 1\n")
     run_git(["add", "module.py"], repo)
     run_git(["-c", "core.hooksPath=/dev/null", "commit", "-q", "-m", "add module"], repo)
-    destination = tmp_path / "remote.git"
+    destination = tmp_path / "dzackgarza" / "remote.git"
+    destination.parent.mkdir()
     run_git(["init", "--bare", "-q", str(destination)], tmp_path)
+    run_git(["remote", "set-url", "origin", str(destination)], repo)
 
     result = run_git(["push", str(destination), "main"], repo, check=False)
 
@@ -167,8 +169,10 @@ def test_push_prints_the_duration_it_logged(tmp_path: pathlib.Path) -> None:
     (repo / "module.py").write_text("x = 1\n")
     run_git(["add", "module.py"], repo)
     run_git(["-c", "core.hooksPath=/dev/null", "commit", "-q", "-m", "add module"], repo)
-    destination = tmp_path / "remote.git"
+    destination = tmp_path / "dzackgarza" / "remote.git"
+    destination.parent.mkdir()
     run_git(["init", "--bare", "-q", str(destination)], tmp_path)
+    run_git(["remote", "set-url", "origin", str(destination)], repo)
 
     result = run_git(["push", str(destination), "main"], repo, check=False)
 
