@@ -83,6 +83,28 @@ def test_justfile_shebang_recipe_is_not_a_comment(tmp_path: Path) -> None:
             assert "justfile:5: remove code comment" in result.stderr
 
 
+def test_pep723_inline_script_metadata_is_not_a_comment(tmp_path: Path) -> None:
+    checker = Path(__file__).resolve().parents[1] / "scripts/check_staged_comments.py"
+    subprocess.run(["git", "init", "-q"], cwd=tmp_path, check=True)
+    path = tmp_path / "docs_query.py"
+    script = (
+        "#!/usr/bin/env -S uv run --script\n"
+        "# /// script\n"
+        '# requires-python = ">=3.12"\n'
+        '# dependencies = ["networkx>=3.4"]\n'
+        "# ///\n"
+        "import networkx\n"
+        "graph = networkx.DiGraph()\n"
+    )
+    for source, expected in [(script, 0), (script + "# note\n", 1)]:
+        path.write_text(source)
+        subprocess.run(["git", "add", "-f", "--", "docs_query.py"], cwd=tmp_path, check=True)
+        result = subprocess.run([sys.executable, checker], cwd=tmp_path, capture_output=True, text=True)
+        assert result.returncode == expected, result.stderr
+        if expected:
+            assert "docs_query.py:8: remove code comment" in result.stderr
+
+
 def test_semgrep_rule_fixture_annotations_are_not_code_comments(tmp_path: Path) -> None:
     checker = Path(__file__).resolve().parents[1] / "scripts/check_staged_comments.py"
     subprocess.run(["git", "init", "-q"], cwd=tmp_path, check=True)
