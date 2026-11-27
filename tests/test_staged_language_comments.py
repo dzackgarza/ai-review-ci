@@ -112,3 +112,73 @@ def test_markdown_fenced_code_is_not_source(tmp_path: Path) -> None:
     subprocess.run(["git", "add", "-f", "--", "conversation.md"], cwd=tmp_path, check=True)
     result = subprocess.run([sys.executable, checker], cwd=tmp_path, capture_output=True, text=True)
     assert result.returncode == 0, result.stderr
+
+
+@pytest.mark.parametrize("newline", ["\n", "\r\n"])
+def test_script_metadata_passes_pre_commit_but_staged_explanatory_comment_fails(
+    tmp_path: Path, newline: str
+) -> None:
+    root = Path(__file__).resolve().parents[1]
+    hook = root / "repo-hooks/pre-commit"
+    subprocess.run(["git", "init", "-q"], cwd=tmp_path, check=True)
+    subprocess.run(["git", "config", "core.autocrlf", "false"], cwd=tmp_path, check=True)
+    (tmp_path / "justfile").write_text(
+        f'test-commit:\n    @just -f "{root / "justfiles/python.just"}" -d . test-commit\n'
+    )
+    script = tmp_path / "query.py"
+    source = newline.join([
+        "#!/usr/bin/env -S uv run --script",
+        "# /// script",
+        '# requires-python = ">=3.12"',
+        "# dependencies = [",
+        '#   "torch",',
+        "# ]",
+        "#",
+        "# [tool.uv.sources]",
+        '# torch = { index = "pytorch-cpu" }',
+        "# [[tool.uv.index]]",
+        '# name = "pytorch-cpu"',
+        '# url = "https://download.pytorch.org/whl/cpu"',
+        "# explicit = true",
+        "# ///",
+        "print(42)",
+        "",
+    ])
+    script.write_bytes(source.encode())
+    script.chmod(0o755)
+    subprocess.run(["git", "add", "--", script.name], cwd=tmp_path, check=True)
+
+    script.write_bytes((source + "# explanation" + newline).encode())
+    accepted = subprocess.run([hook], cwd=tmp_path, capture_output=True, text=True)
+    assert accepted.returncode == 0, accepted.stdout + accepted.stderr
+
+    subprocess.run(["git", "add", "--", script.name], cwd=tmp_path, check=True)
+    rejected = subprocess.run([hook], cwd=tmp_path, capture_output=True, text=True)
+    assert rejected.returncode == 1, rejected.stdout + rejected.stderr
+    assert f"{script.name}:16: remove code comment" in rejected.stderr
+
+
+@pytest.mark.parametrize(("filename", "source", "line"), [
+    ("a.py", '# /// script\n# dependencies = []\nprint(42)\n', 1),
+    ("a.py", '# /// script\n# not TOML\n# ///\nprint(42)\n', 1),
+    ("a.py", '# /// script\n# dependencies = 42\n# ///\nprint(42)\n', 1),
+    ("a.py", '# /// custom\n# dependencies = []\n# ///\nprint(42)\n', 1),
+    ("a.py", '# /// script\n# dependencies = []\n# ///\n# ordinary comment\nprint(42)\n', 4),
+    ("a.py", '# /// script\n# dependencies = []\n# ///\n\n# /// script\n# dependencies = []\n# ///\nprint(42)\n', 1),
+    ("a.py", '# /// script\n#dependencies = []\n# ///\nprint(42)\n', 1),
+    ("a.py", 'if True:\n    # /// script\n    # dependencies = []\n    # ///\n    print(42)\n', 2),
+    ("a.py", 'text = """\n# /// script\n# ///\n"""\n# ordinary comment\n', 5),
+    ("a.py", "text = \"\"\"\n# /// script\n# [tool]\n# text = '''\n# \"\"\"\n# ordinary comment\n# '''\n# ///\n", 6),
+    ("a.sh", '# /// script\n# dependencies = []\n# ///\necho 42\n', 1),
+    ("a.sage", '# /// script\n# dependencies = []\n# ///\nprint(42)\n', 1),
+])
+def test_metadata_like_comments_are_not_exempt(
+    tmp_path: Path, filename: str, source: str, line: int
+) -> None:
+    checker = Path(__file__).resolve().parents[1] / "scripts/check_staged_comments.py"
+    subprocess.run(["git", "init", "-q"], cwd=tmp_path, check=True)
+    (tmp_path / filename).write_text(source)
+    subprocess.run(["git", "add", "--", filename], cwd=tmp_path, check=True)
+    result = subprocess.run([sys.executable, checker], cwd=tmp_path, capture_output=True, text=True)
+    assert result.returncode == 1, result.stdout + result.stderr
+    assert f"{filename}:{line}: remove code comment" in result.stderr
