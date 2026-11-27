@@ -21,6 +21,7 @@ dev = [
     "PyYAML",
     "types-PyYAML",
     "types-unidiff>=0.7.0.20260518",
+    "websocket-client>=1.9.2",
 ]
 
 [build-system]

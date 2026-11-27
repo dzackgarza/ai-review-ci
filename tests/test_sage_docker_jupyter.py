@@ -1,48 +1,68 @@
-"""The host's jupyter command serves the research container's kernels on 127.0.0.1."""
+"""The JupyterLab server on 127.0.0.1:8888 runs cells in the research container's Sage and Julia kernels."""
 
 import json
-from pathlib import Path
-import secrets
-import subprocess
-import time
-import urllib.error
 import urllib.request
+import uuid
+
+import websocket
 
 
-ROOT = Path(__file__).resolve().parents[1]
-PORT = 8888
+SERVER = "127.0.0.1:8888"
 
 
-def _kernelspecs(token: str) -> dict[str, dict[str, str]] | None:
-    url = f"http://127.0.0.1:{PORT}/api/kernelspecs?token={token}"
+def _request(method: str, path: str, body: dict[str, str] | None = None) -> dict[str, str]:
+    data = None if body is None else json.dumps(body).encode()
+    request = urllib.request.Request(f"http://{SERVER}{path}", data=data, method=method)
+    with urllib.request.urlopen(request, timeout=60) as response:
+        payload = response.read()
+    return json.loads(payload) if payload else {}
+
+
+def _cell_stdout(kernel_name: str, code: str) -> str:
+    kernel_id = _request("POST", "/api/kernels", {"name": kernel_name})["id"]
     try:
-        with urllib.request.urlopen(url, timeout=5) as response:
-            return json.load(response)["kernelspecs"]
-    except (urllib.error.URLError, ConnectionError, TimeoutError):
-        return None
-
-
-def test_jupyter_server_lists_container_kernels(tmp_path: Path) -> None:
-    jupyter = tmp_path / "jupyter"
-    jupyter.symlink_to(ROOT / "scripts" / "sage-docker")
-    token = secrets.token_hex(16)
-
-    server = subprocess.Popen(
-        [str(jupyter), "server", f"--IdentityProvider.token={token}"],
-        cwd=Path.home(), stdin=subprocess.DEVNULL,
-        stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True,
-    )
-    try:
-        specs = None
-        deadline = time.monotonic() + 120
-        while specs is None and server.poll() is None and time.monotonic() < deadline:
-            time.sleep(1)
-            specs = _kernelspecs(token)
+        channel = websocket.create_connection(
+            f"ws://{SERVER}/api/kernels/{kernel_id}/channels", timeout=900,
+        )
+        msg_id = uuid.uuid4().hex
+        channel.send(json.dumps({
+            "header": {"msg_id": msg_id, "msg_type": "execute_request", "username": "test",
+                       "session": uuid.uuid4().hex, "version": "5.3"},
+            "parent_header": {}, "metadata": {}, "channel": "shell",
+            "content": {"code": code, "silent": False, "store_history": False,
+                        "user_expressions": {}, "allow_stdin": False},
+        }))
+        stdout = []
+        status = None
+        idle = False
+        while status is None or not idle:
+            message = json.loads(channel.recv())
+            if message["parent_header"].get("msg_id") != msg_id:
+                continue
+            kind = message["msg_type"]
+            if kind == "stream" and message["content"]["name"] == "stdout":
+                stdout.append(message["content"]["text"])
+            elif kind == "error":
+                raise AssertionError(message["content"]["traceback"])
+            elif kind == "execute_reply":
+                status = message["content"]["status"]
+            elif kind == "status" and message["content"]["execution_state"] == "idle":
+                idle = True
+        channel.close()
     finally:
-        server.terminate()
-        output, _ = server.communicate(timeout=30)
+        _request("DELETE", f"/api/kernels/{kernel_id}")
+    assert status == "ok"
+    return "".join(stdout).strip()
 
-    assert specs is not None, output
-    assert {"sagemath", "julia"} <= set(specs), sorted(specs)
-    assert specs["sagemath"]["spec"]["argv"][0].startswith("/sage/.venv/"), specs["sagemath"]
-    assert specs["julia"]["spec"]["argv"][0].startswith("/opt/julia/"), specs["julia"]
+
+def test_sage_kernel_computes_a_determinant() -> None:
+    assert _cell_stdout("sagemath", "print(matrix(QQ, [[2, 1], [1, 2]]).det())") == "3"
+
+
+def test_julia_kernel_computes_with_oscar() -> None:
+    stdout = _cell_stdout(
+        "julia",
+        'using Oscar; Qx, x = polynomial_ring(QQ, :x); K, a = number_field(x^2 - 2); '
+        'println(degree(K), " ", a^2 == 2)',
+    )
+    assert stdout.splitlines()[-1] == "2 true", stdout
