@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Parse the Python, JSON and TOML files a commit stages or a push publishes.
+"""Parse the Python, Sage, JSON and TOML files a commit stages or a push publishes.
 
 Usage: local-check.py staged|push. Reads blobs from Git, never the working tree.
 The pre-push hook sets AI_REVIEW_CI_PRE_PUSH_REMOTE and leaves the outgoing refs
@@ -9,13 +9,29 @@ on stdin; a manual push check compares HEAD with its tracked upstream.
 import ast
 import json
 import os
+import shutil
 import subprocess
 import sys
 import tomllib
 
 MODE = sys.argv[1]
 REMOTE = os.environ.get("AI_REVIEW_CI_PRE_PUSH_REMOTE")
-SYNTAX_SUFFIXES = (".py", ".pyi", ".json", ".toml")
+SYNTAX_SUFFIXES = (".py", ".pyi", ".json", ".toml", ".sage")
+
+
+def parse_sage(candidates: list[tuple[str, str]]) -> int:
+	"""Preparse and compile candidate blobs using the installed Sage runtime."""
+	sage = shutil.which(os.environ.get("SAGE_BIN", "sage"))
+	if sage is None:
+		raise ValueError("Sage syntax checking requires executable SAGE_BIN or sage on PATH")
+	# Resolve the launcher on the host before changing directories. Running the
+	# tracked helper relative to its own directory also works in the Sage Docker
+	# launcher; the caller's worktree need not be mounted, as blobs use stdin.
+	return subprocess.run(
+		[os.path.abspath(sage), "check-sage-syntax.py"],
+		input=json.dumps(candidates), text=True,
+		cwd=os.path.dirname(os.path.abspath(__file__)), check=False,
+	).returncode
 
 
 def git(*args):
@@ -107,15 +123,27 @@ except (ValueError, UnicodeError, subprocess.CalledProcessError) as error:
 	sys.exit(f"Cannot inspect candidate source: {error}")
 
 checked = errors = 0
+sage_candidates = []
 for path, version in dict.fromkeys(changes):
 	if not path.endswith(SYNTAX_SUFFIXES):
 		continue
 	try:
-		parse(path, git("show", f":{path}" if version == "index" else f"{version}:{path}"))
+		content = git("show", f":{path}" if version == "index" else f"{version}:{path}")
+		if path.endswith(".sage"):
+			sage_candidates.append((path, content.decode("utf-8-sig")))
+		else:
+			parse(path, content)
 	except (SyntaxError, UnicodeError, json.JSONDecodeError, tomllib.TOMLDecodeError, subprocess.CalledProcessError) as error:
 		print(f"{path}: {error}", file=sys.stderr)
 		errors += 1
 	checked += 1
+if sage_candidates:
+	try:
+		if parse_sage(sage_candidates):
+			errors += 1
+	except (OSError, ValueError) as error:
+		print(f"Sage syntax checking failed: {error}", file=sys.stderr)
+		errors += 1
 if errors:
 	sys.exit(1)
 print(f"{'Push' if MODE == 'push' else 'Staged'} syntax: {checked} file(s) checked; no errors.")

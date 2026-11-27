@@ -122,8 +122,9 @@ The log lives under `.git/`, so Git never tracks it.
 
 The tiers are:
 
-- test-commit: validate staged Python, JSON and TOML syntax; test-push: validate outgoing committed changes only, with no type checker, formatter, external dependency installation, test suite, code-style scanner, or performance restriction.
-  Lean, Sage, Rust and Bun source is not subjected to a compile or type gate locally.
+- test-commit: validate staged Python, Sage, JSON and TOML syntax; test-push: validate outgoing committed changes only, with no type checker, formatter, external dependency installation, test suite, code-style scanner, or performance restriction.
+  Changed .sage blobs are preparsed and syntax-compiled (never executed) using the installed Sage launcher: SAGE_BIN if set, otherwise sage on PATH. No Sage invocation is needed when no .sage blob changed.
+  Lean, Rust and Bun source is not subjected to a compile or type gate locally.
 
 - test-ci: run the complete project test suite and individual correctness and code-quality checks on CI; retain each result as a JSON record, individual log, and GitHub job summary.
   Recognized test failures and source-location diagnostics receive stable finding IDs in results.json; unrecognized tool output remains a check-level failure linked to its full log.
