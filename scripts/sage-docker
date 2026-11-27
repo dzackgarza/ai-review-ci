@@ -13,6 +13,7 @@ docker() { "$HOME/bin/docker" "$@"; }
 volumes=(sage-tree:/sage sage-repos:/repos sage-julia:/root/.julia)
 volume_root="$HOME/.local/share/docker/volumes"
 checkout_root="$HOME/gitclones"
+image_products=(.venv builddir .research-revisions .spinor-base-revision .spinor-source-revision)
 jupyter_port=8888
 run_options=(--init --restart unless-stopped --name "$container" --entrypoint /bin/sleep
     --env "PATH=$container_path" --env "JULIA_DEPOT_PATH=$julia_depot"
@@ -64,7 +65,7 @@ if [[ "$mode" == sage-docker-update ]]; then
     image_revision=$(docker image inspect "$image" | jq -er \
         '.[0].Config.Labels["org.opencontainers.image.revision"]')
     if [[ -d "$tree/.git" && "$(cat "$volume_root/sage-tree/image-revision" 2>/dev/null)" != "$image_revision" ]]; then
-        if [[ -n "$(git -C "$tree" status --porcelain)" ]]; then
+        if [[ -n "$(git -C "$tree" status --porcelain -- . "${image_products[@]/#/:(exclude)}")" ]]; then
             printf 'the sage-tree checkout %s has uncommitted changes; commit them before updating to %s\n' \
                 "$tree" "$image_revision" >&2
             exit 1
@@ -77,11 +78,11 @@ if [[ "$mode" == sage-docker-update ]]; then
         fi
         staging=$(mktemp -d "$volume_root/sage-tree/image-products.XXXXXX")
         source_container=$(docker create "$image")
-        for product in .venv builddir; do
+        for product in "${image_products[@]}"; do
             docker cp "$source_container:/sage/$product" "$staging/$product"
         done
         docker rm "$source_container"
-        for product in .venv builddir; do
+        for product in "${image_products[@]}"; do
             trash "$tree/$product"
             mv "$staging/$product" "$tree/$product"
         done

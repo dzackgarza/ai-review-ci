@@ -38,6 +38,8 @@ def test_update_replaces_the_previous_image_build_records(tmp_path: Path) -> Non
         check=True,
     )
     subprocess.run(["git", "-C", str(tree), "checkout", "--quiet", PREVIOUS_IMAGE_REVISION], check=True)
+    (tree / ".venv").mkdir()
+    (tree / "builddir").mkdir()
     (tree / ".research-revisions").write_text("research 605806b3b73b92caea3f4735e0b0d96db0f297df\n")
     (tree / ".spinor-base-revision").write_text(f"{PREVIOUS_IMAGE_REVISION}\n")
     (tree / ".spinor-source-revision").write_text(f"{PREVIOUS_IMAGE_REVISION}\n")

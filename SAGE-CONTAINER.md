@@ -169,8 +169,11 @@ called by selects the command.
 - **The `sage-tree` volume after a new image.** The volume shadows the image's
   `/sage` and still holds the previous image's checkout, `.venv` and
   `builddir`. The update fast-forwards the checkout to the image's
-  `org.opencontainers.image.revision` and takes `.venv` and `builddir` from the
-  image. A dirty checkout, or one that cannot fast-forward, stops the update.
+  `org.opencontainers.image.revision` and takes `.venv`, `builddir` and the
+  build's untracked records (`.research-revisions`, `.spinor-base-revision`,
+  `.spinor-source-revision`) from the image. The dirty-checkout check excludes
+  those records. Any other uncommitted change, or a checkout that cannot
+  fast-forward, stops the update.
 - **Julia.** The shared environments in `/root/.julia/environments` name the
   packages that the image depot holds, so each update copies them from
   `/opt/julia-depot`. `JULIA_DEPOT_PATH` puts the writable volume depot in front
