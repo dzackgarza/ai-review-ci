@@ -6,6 +6,7 @@ directories = [
     "test/tags",
     "examples",
     "bindings",
+    "generated", # Reserved for generator-owned output, not authored source.
     "node_modules",
     ".yarn",
     "labextension",
