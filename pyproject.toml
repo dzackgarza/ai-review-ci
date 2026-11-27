@@ -42,5 +42,10 @@ include_external_packages = true
 [tool.hatch.build.targets.wheel]
 packages = ["src/ai_review_ci"]
 
+[tool.hatch.build.targets.wheel.force-include]
+".github/workflows/_acceptance.yml" = "ai_review_ci/reusable_workflows/_acceptance.yml"
+".github/workflows/_gates.yml" = "ai_review_ci/reusable_workflows/_gates.yml"
+".github/workflows/_qc.yml" = "ai_review_ci/reusable_workflows/_qc.yml"
+
 [tool.uv.sources]
 automated-reviews = { git = "https://github.com/dzackgarza/automated-reviews.git", rev = "main" }
