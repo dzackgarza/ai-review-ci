@@ -2441,13 +2441,14 @@ def test_eslint_flat_config_imports_with_declared_tool_config_deps(
     assert "**/central-owned/**" in ignores
 
 
+@pytest.mark.parametrize("generated_dir", [".webpack/main", "src/generated"])
 def test_eslint_ignores_generated_typescript_but_reports_authored_violation(
-    tmp_path: pathlib.Path,
+    tmp_path: pathlib.Path, generated_dir: str,
 ) -> None:
     tool_config = tmp_path / "tool-configs"
     project = tmp_path / "downstream"
     authored = project / "src"
-    generated = project / ".webpack" / "main"
+    generated = project / generated_dir
     tool_config.mkdir()
     authored.mkdir(parents=True)
     generated.mkdir(parents=True)
@@ -2495,7 +2496,7 @@ def test_eslint_ignores_generated_typescript_but_reports_authored_violation(
     output = lint.stdout + lint.stderr
     assert lint.returncode != 0, output
     assert "src/owned.ts" in output
-    assert ".webpack/main/generated.ts" not in output
+    assert f"{generated_dir}/generated.ts" not in output
     assert "@typescript-eslint/no-explicit-any" in output
 
 
@@ -5002,6 +5003,53 @@ def test_biome_preserves_structured_text_and_fixture_inputs(tmp_path: pathlib.Pa
         assert (project / name).read_text() == content, name
     assert owned.read_text() == formatted
     assert not (project / "biome.json").exists()
+
+
+@pytest.mark.parametrize("include_authored", [False, True])
+def test_bun_normalize_preserves_generator_output(
+    tmp_path: pathlib.Path, include_authored: bool
+) -> None:
+    project = tmp_path / "bun-project"
+    generated = project / "src" / "generated" / "openapi.ts"
+    generated.parent.mkdir(parents=True)
+    init_git_repo(project)
+    spec = project / "openapi.json"
+    spec.write_text(json.dumps({
+        "openapi": "3.1.0",
+        "info": {"title": "Fixture", "version": "1.0.0"},
+        "paths": {"/version": {"get": {"responses": {"200": {
+            "description": "OK",
+            "content": {"application/json": {"schema": {"type": "string"}}},
+        }}}}},
+    }))
+    generator = [
+        "bun", "x", "--package", "openapi-typescript@7.13.0",
+        "openapi-typescript", str(spec), "--default-non-nullable=false",
+    ]
+    before = subprocess.check_output(generator, cwd=project)
+    generated.write_bytes(before)
+    authored = project / "src" / "generated-client.js"
+    if include_authored:
+        authored.write_text("export const value={x:1}\n")
+    assert run_git(project, "add", ".").returncode == 0
+
+    commit_check = run_just(ROOT / "justfiles" / "bun.just", project, "test-commit")
+    assert commit_check.returncode == 0, commit_check.stdout + commit_check.stderr
+    assert generated.read_bytes() == before
+    result = run_just(ROOT / "justfiles" / "bun.just", project, "_normalize")
+
+    assert generated.read_bytes() == before, result.stdout + result.stderr
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert subprocess.check_output(generator, cwd=project) == generated.read_bytes()
+    assert run_git(project, "diff", "--exit-code", "--", str(generated)).returncode == 0
+    if include_authored:
+        assert authored.read_text() == "export const value = { x: 1 };\n"
+        result = run_just(ROOT / "justfiles" / "bun.just", project, "_biome")
+        assert result.returncode == 0, result.stdout + result.stderr
+        authored.write_text("export const value={x:1}\n")
+        result = run_just(ROOT / "justfiles" / "bun.just", project, "_biome")
+        assert result.returncode != 0
+        assert "generated-client.js format" in result.stdout + result.stderr
 
 
 def test_biome_still_blocks_unformatted_files(tmp_path: pathlib.Path) -> None:

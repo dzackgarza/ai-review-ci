@@ -609,12 +609,22 @@ _normalize: _eslint-deps
 	echo "============================="
 	echo "=== Running: biome format, lint, and import sorting (auto-fix) ==="
 	echo "# Auto-applies safe and unsafe fixes, formatting, and import sorting"
+	exclude_dirs_output="$(uv run {{artifacts}}/scripts/read_qc_excludes.py {{configs}}/qc-excludes.toml)"
+	exclude_pathspecs=()
+	if [ -n "$exclude_dirs_output" ]; then
+		while IFS= read -r dir; do
+			exclude_pathspecs+=(":(exclude,glob)**/$dir/**")
+		done <<< "$exclude_dirs_output"
+	fi
+	staged_manifest="$(mktemp)"
+	trap 'rm -f "$staged_manifest"' EXIT
+	git diff --cached --name-only --diff-filter=ACMR -z -- . "${exclude_pathspecs[@]}" > "$staged_manifest"
 	files=()
 	while IFS= read -r -d '' file; do
 		case "$file" in
 			*.js|*.jsx|*.mjs|*.cjs|*.ts|*.tsx|*.mts|*.cts|*.vue) files+=("$file") ;;
 		esac
-	done < <(git diff --cached --name-only --diff-filter=ACMR -z)
+	done < "$staged_manifest"
 	if [ ${#files[@]} -eq 0 ]; then
 		echo "No staged JavaScript, TypeScript, or Vue files found"
 		exit 0
