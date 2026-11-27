@@ -7,6 +7,7 @@ import subprocess
 import sys
 from collections.abc import Mapping, Sequence
 from importlib.metadata import version
+from importlib.resources import files
 from pathlib import Path
 from typing import Annotated, Any, Literal
 
@@ -553,25 +554,94 @@ def _workflow_files(target: Path) -> list[Path]:
     return sorted([*workflows.glob("*.yml"), *workflows.glob("*.yaml")])
 
 
-def _unprovided_reusable_workflow_findings(target: Path) -> list[DoctorFinding]:
+def _reusable_workflow_inputs(name: str, ref: str) -> dict[str, dict[str, object]]:
+    """Read the canonical input declarations, not a second hand-maintained schema."""
+    if ref == "main":
+        resource = files("ai_review_ci") / "reusable_workflows" / name
+        # Editable installs use the source workflow; wheels carry the same bytes.
+        if resource.is_file():
+            text = resource.read_text(encoding="utf-8")
+        else:
+            text = (Path(__file__).resolve().parents[2] / ".github" / "workflows" / name).read_text(encoding="utf-8")
+    else:
+        result = subprocess.run(
+            ["gh", "api", "--method", "GET", f"repos/dzackgarza/ai-review-ci/contents/.github/workflows/{name}",
+             "-f", f"ref={ref}", "-H", "Accept: application/vnd.github.raw+json"],
+            text=True, capture_output=True, timeout=30,
+        )
+        if result.returncode != 0:
+            raise ValueError(result.stderr.strip() or f"gh api exited {result.returncode}")
+        text = result.stdout
+    data = yaml.safe_load(text)
+    # PyYAML's YAML 1.1 resolver treats unquoted GitHub Actions 'on' as True.
+    event = data["on"] if "on" in data else data[True]
+    if event == "workflow_call" or (isinstance(event, list) and "workflow_call" in event):
+        return {}
+    call = TypeAdapter(dict[str, object]).validate_python(event)["workflow_call"]
+    if call is None:
+        return {}
+    inputs = TypeAdapter(dict[str, object]).validate_python(call).get("inputs", {})
+    return TypeAdapter(dict[str, dict[str, object]]).validate_python(inputs)
+
+
+def _reusable_workflow_findings(target: Path) -> list[DoctorFinding]:
     findings: list[DoctorFinding] = []
+    contracts: dict[tuple[str, str], dict[str, dict[str, object]] | str] = {}
     for path in _workflow_files(target):
         jobs = TypeAdapter(dict[str, dict[str, Any]]).validate_python(_yaml_mapping(path)["jobs"])
         for job_name, job in jobs.items():
             uses = str(job["uses"]) if "uses" in job else ""
             if not uses.startswith(REUSABLE_WORKFLOW_PREFIX):
                 continue
-            name = uses.removeprefix(REUSABLE_WORKFLOW_PREFIX).split("@", 1)[0]
-            if name in REUSABLE_WORKFLOWS:
-                continue
-            findings.append(
-                DoctorFinding(
-                    severity="error",
-                    surface="workflow",
-                    evidence=f"{path} job {job_name} calls {uses}; ai-review-ci provides no reusable workflow {name}",
-                    remediation_commands=(f"delete job {job_name} from {path}, and delete {path} if no job remains",),
+            name, _, ref = uses.removeprefix(REUSABLE_WORKFLOW_PREFIX).partition("@")
+            location = f"{path} job {job_name} calls {uses}"
+            if name not in REUSABLE_WORKFLOWS:
+                findings.append(
+                    DoctorFinding(
+                        severity="error",
+                        surface="workflow",
+                        evidence=f"{location}; ai-review-ci provides no reusable workflow {name}",
+                        remediation_commands=(f"delete job {job_name} from {path}, and delete {path} if no job remains",),
+                    )
                 )
-            )
+                continue
+            key = (name, ref)
+            if key not in contracts:
+                try:
+                    if not ref:
+                        raise ValueError("missing workflow ref")
+                    contracts[key] = _reusable_workflow_inputs(name, ref)
+                except (OSError, subprocess.TimeoutExpired, ValueError, KeyError, TypeError, yaml.YAMLError) as error:
+                    contracts[key] = str(error)
+            contract = contracts[key]
+            if isinstance(contract, str):
+                findings.append(
+                    DoctorFinding(
+                        severity="error",
+                        surface="workflow",
+                        evidence=f"{location}; cannot verify reusable workflow inputs: {contract}",
+                        remediation_commands=(f"verify the ref and access to {uses}",),
+                    )
+                )
+                continue
+            supplied = TypeAdapter(dict[str, object]).validate_python(job.get("with", {}))
+            required = {input_name for input_name, declaration in contract.items() if declaration.get("required") is True}
+            missing = sorted(required - supplied.keys())
+            undeclared = sorted(supplied.keys() - contract.keys())
+            problems = []
+            if missing:
+                problems.append(f"missing required input(s): {', '.join(missing)}")
+            if undeclared:
+                problems.append(f"undeclared input(s): {', '.join(undeclared)}")
+            if problems:
+                findings.append(
+                    DoctorFinding(
+                        severity="error",
+                        surface="workflow",
+                        evidence=f"{location}; {'; '.join(problems)}",
+                        remediation_commands=(f"edit {path} job {job_name}'s with block to match {uses}",),
+                    )
+                )
     return findings
 
 
@@ -880,7 +950,7 @@ def _findings(
                     ),
                 )
             )
-    findings.extend(_unprovided_reusable_workflow_findings(target_root))
+    findings.extend(_reusable_workflow_findings(target_root))
     for recipe, observation in justfile_delegation.items():
         observed = observation.observed
         if not observed.present or not observed.delegates_to_global_qc or not observed.caller_root_preserved:
@@ -1001,6 +1071,9 @@ def _classify(contract: JustfileContractDeclaration, findings: list[DoctorFindin
         return "uninstalled", "misconfigured"
     if not findings:
         return "compliant", "current"
+    # A local contract error must not be downgraded by advisory remote warnings.
+    if any(finding.severity == "error" for finding in findings):
+        return "noncompliant", "misconfigured"
     if any(finding.surface in ("branch_protection", "label_alignment") and finding.severity == "warning" for finding in findings):
         return "unknown", "unverifiable"
     if any(finding.surface == "workflow_ref" for finding in findings):

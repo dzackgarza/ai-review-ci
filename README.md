@@ -70,6 +70,11 @@ ai-review-ci doctor --target . --json
 ```
 
 The doctor checks the development workflow and delegation without requiring branch protection or label alignment.
+For every ai-review-ci reusable workflow job it checks the caller's `with:` keys against
+the callee's `workflow_call.inputs`, reporting missing required inputs and undeclared
+inputs. For `@main` it uses the canonical workflows from the installed tool version
+(the source checkout for an editable install); other refs are resolved through
+`gh api` at the specified ref. An unresolvable contract is an error, not a successful check.
 Stabilized installations retain the stricter release checks.
 
 ## Global Git hooks

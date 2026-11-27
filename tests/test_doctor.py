@@ -333,6 +333,117 @@ def test_doctor_requires_the_scheduled_ambient_workflow(tmp_path: pathlib.Path) 
     assert "ambient.yml is missing" in payload["findings"][0]["evidence"]
 
 
+@pytest.mark.parametrize(
+    ("job_name", "changes", "expected"),
+    [
+        ("qc-ci", {"profile": None}, ("missing required input(s): profile",)),
+        ("deterministic-diff", {"profile": None}, ("missing required input(s): profile",)),
+        ("qc-ci", {"fail_below": 90}, ("undeclared input(s): fail_below",)),
+        ("qc-ci", {"profile": None, "fail_below": 90},
+         ("missing required input(s): profile", "undeclared input(s): fail_below")),
+    ],
+)
+def test_doctor_rejects_reusable_workflow_inputs(
+    tmp_path: pathlib.Path, job_name: str, changes: dict[str, int | None], expected: tuple[str, ...],
+) -> None:
+    project = create_target(tmp_path, "python")
+    workflow = project / ".github" / "workflows" / "review-pr.yml"
+    data = yaml.safe_load(workflow.read_text())
+    data["on"] = data.pop(True)
+    inputs = data["jobs"][job_name]["with"]
+    for name, value in changes.items():
+        if value is None:
+            del inputs[name]
+        else:
+            inputs[name] = value
+    workflow.write_text(yaml.safe_dump(data))
+
+    status, payload = status_for(project)
+
+    assert status == "misconfigured"
+    findings = [finding for finding in payload["findings"] if finding["surface"] == "workflow"]
+    assert len(findings) == 1
+    finding = findings[0]
+    assert finding["severity"] == "error"
+    assert f"{workflow} job {job_name} calls " in finding["evidence"]
+    assert all(fragment in finding["evidence"] for fragment in expected)
+    assert finding["remediation_commands"]
+
+
+def test_doctor_checks_every_reusable_workflow_job(tmp_path: pathlib.Path) -> None:
+    project = create_target(tmp_path, "python")
+    workflow = project / ".github" / "workflows" / "other.yaml"
+    workflow.write_text(
+        "name: Other\non: {push: {}}\njobs:\n"
+        "  missing-with:\n"
+        "    uses: dzackgarza/ai-review-ci/.github/workflows/_qc.yml@main\n"
+        "  acceptance:\n"
+        "    uses: dzackgarza/ai-review-ci/.github/workflows/_acceptance.yml@main\n"
+        "    with: {infra_ref: main, setup_recipe: provision, shards: '{}', unexpected: true}\n"
+        "  valid-optional:\n"
+        "    uses: dzackgarza/ai-review-ci/.github/workflows/_qc.yml@main\n"
+        "    with: {tier: ambient, profile: python, run_gh_boundary: false}\n"
+        "  external:\n"
+        "    uses: other/repo/.github/workflows/_qc.yml@main\n"
+        "    with: {different: true}\n"
+    )
+
+    status, payload = status_for(project)
+    assert status == "misconfigured"
+    evidence = [finding["evidence"] for finding in payload["findings"]]
+    assert len(evidence) == 2
+    assert any("job missing-with" in item and "missing required input(s): profile, tier" in item for item in evidence)
+    assert any(
+        "job acceptance" in item and "missing required input(s): image" in item
+        and "undeclared input(s): unexpected" in item for item in evidence
+    )
+
+
+def test_doctor_ci_does_not_hide_workflow_input_errors_behind_remote_warnings(tmp_path: pathlib.Path) -> None:
+    project = create_target(tmp_path, "python")
+    assert run_git(project, "remote", "add", "origin", "https://example.invalid/owner/repo.git").returncode == 0
+    workflow = project / ".github" / "workflows" / "review-pr.yml"
+    workflow.write_text(workflow.read_text().replace("      profile: 'python'\n", "", 1))
+    result = subprocess.run(
+        [sys.executable, "-m", "ai_review_ci.cli", "doctor-ci", "--target", str(project), "--json"],
+        cwd=ROOT, text=True, capture_output=True, check=False,
+    )
+    assert result.returncode == 1, result.stdout + result.stderr
+    payload = json.loads(result.stdout)
+    assert payload["global_status"] == "misconfigured"
+    assert any(
+        finding["surface"] == "workflow" and "missing required input(s): profile" in finding["evidence"]
+        for finding in payload["findings"]
+    )
+    assert any(finding["severity"] == "warning" for finding in payload["findings"])
+
+
+@pytest.mark.gh_boundary
+def test_doctor_resolves_historical_workflow_at_pinned_ref(tmp_path: pathlib.Path) -> None:
+    project = create_target(tmp_path, "python")
+    workflow = project / ".github" / "workflows" / "pinned.yml"
+    # This immutable revision predates the setup_cache_period input.
+    old_ref = "22f5887c43ad1d026aeee4d3790adf2a0f76f33f"
+    caller = (
+        "name: Pinned\non: {push: {}}\njobs:\n  qc:\n"
+        "    uses: dzackgarza/ai-review-ci/.github/workflows/_qc.yml@"
+        + old_ref + "\n    with: {tier: ambient, profile: python, setup_cache_period: weekly}\n"
+    )
+    workflow.write_text(caller)
+    status, payload = status_for(project)
+    assert status == "misconfigured"
+    assert len(payload["findings"]) == 1
+    assert "undeclared input(s): setup_cache_period" in payload["findings"][0]["evidence"]
+
+    workflow.write_text(caller.replace(old_ref, "main"))
+    assert status_for(project)[0] == "current"
+
+    workflow.write_text(caller.replace(old_ref, "0000000000000000000000000000000000000000"))
+    status, payload = status_for(project)
+    assert status == "misconfigured"
+    assert "cannot verify reusable workflow inputs" in payload["findings"][0]["evidence"]
+
+
 def test_doctor_requires_the_acceptance_workflow_for_an_acceptance_suite(tmp_path: pathlib.Path) -> None:
     project = create_target(tmp_path, "sage")
     suite = project / "tests" / "acceptance" / "test_family.sage"
@@ -346,7 +457,7 @@ def test_doctor_requires_the_acceptance_workflow_for_an_acceptance_suite(tmp_pat
     workflow.write_text(
         "name: Acceptance\non: {push: {}}\njobs:\n  acceptance:\n"
         "    uses: dzackgarza/ai-review-ci/.github/workflows/_acceptance.yml@main\n"
-        "    with: {setup_recipe: ci-provision-sage, shards: '{\"test_family.sage\": 1}'}\n"
+        "    with: {infra_ref: main, image: ghcr.io/example/repo-sage:py314, setup_recipe: ci-provision-sage, shards: '{\"test_family.sage\": 1}'}\n"
     )
     called_status, called = status_for(project)
 
