@@ -144,6 +144,60 @@ During implementation, use narrowly targeted tests for the active capability.
 Complete suites are CI work.
 Refactoring, typing, optimization, deduplication and style cleanup are later roadmap phases, executed by fresh agents rather than interrupting implementation.
 
+### Pytest timing history
+
+Keep timing history out of Git: timings are observations of executions, not
+source files. Local runs accumulate independently in the caller's ignored
+`.ai-review-ci/python/pytest-history/` and `.ai-review-ci/sage/pytest-history/`
+directories; they remain there until removed locally. CI distributes its own
+records as GitHub Actions artifacts, not as repository commits or branch caches.
+
+This covers the Python and bun-python profiles, the Sage profile (including
+coverage and focused runs), the optional Python GitHub-boundary test step
+regardless of caller profile, and Sage acceptance shards. Other profiles and
+tiers do not gain a pytest run merely by enabling history retention.
+
+The reusable workflows `.github/workflows/_qc.yml` and
+`.github/workflows/_acceptance.yml` publish the JSONL records from the central
+pytest recipes after testing, including after test failures when the upload
+step can execute. QC artifacts are named
+`RUN_ID-RUN_ATTEMPT-TIER-PROFILE-python-pytest-history` or
+`RUN_ID-RUN_ATTEMPT-TIER-PROFILE-sage-pytest-history`.
+Acceptance shards publish
+`RUN_ID-RUN_ATTEMPT-sage-pytest-history-SHARD_NAME-SHARD_INDEX` independently
+of the JUnit summary artifacts. The requested retention period is 90 days,
+subject to GitHub's repository and organization limits and earlier deletion.
+No artifact is created if no history was produced. Cancellation, runner
+failure or upload failure can prevent retention.
+
+From a fresh checkout, find the consuming repository's workflow run for the
+revision of interest (for push runs, filter by the tested commit):
+
+```bash
+gh run list --repo OWNER/REPO --commit SHA
+# Select RUN_ID and the exact history artifact name from the run's Artifacts.
+history="$(mktemp -d)"
+gh run download RUN_ID --repo OWNER/REPO --name ARTIFACT_NAME --dir "$history"
+uv run "$HOME/ai-review-ci/tool-artifacts/scripts/pytest_history.py" "$history"
+```
+
+Download the other relevant artifacts into the same history directory to
+compare runs; the reader accepts optional test-node substrings after the
+directory argument. The Actions run page identifies the run and attempt;
+for a pull request the actual checkout can be a merge commit rather than
+the PR head. Check the full `commit` in each JSONL session record to identify
+the tested revision. A dirty session records its base HEAD, not a unique
+identity for the modified tree; an unversioned session has no commit.
+An interrupted session lacks a finish record. Neither dirty runs nor
+unfinished tests establish a complete result for an exact revision.
+Compare durations under comparable runner, dependency and test-selection
+conditions: the history itself does not establish environment equivalence.
+
+This is a finite cross-checkout retention policy, not a permanent archive:
+local-only runs, runs before adoption, and expired or deleted CI artifacts
+cannot be retrieved through this mechanism. Keep a downloaded copy outside
+Git if longer retention is needed.
+
 ### Lean QC prerequisites
 
 `lean-no-sorry` and the composed `lean-qc` require ripgrep (`rg`) on `PATH`.
