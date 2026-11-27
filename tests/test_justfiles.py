@@ -786,6 +786,75 @@ def test_qc_file_selection_fails_loudly_when_exclusion_lookup_fails(
     assert "forced exclusion lookup failure" in output
 
 
+@pytest.mark.parametrize("failure", ["index", "merge-base"])
+@pytest.mark.parametrize(
+    ("justfile_name", "recipe"),
+    [("python.just", "_python-qc-files"), ("sage.just", "_sage-mypy")],
+)
+def test_mypy_python_discovery_propagates_git_diff_failure(
+    tmp_path: pathlib.Path, failure: str, justfile_name: str, recipe: str,
+) -> None:
+    project = tmp_path / "project"
+    project.mkdir()
+    init_git_repo(project)
+    (project / "app.py").write_text("value = 1\n")
+    assert run_git(project, "add", "app.py").returncode == 0
+    env = os.environ.copy()
+    if failure == "index":
+        (project / ".git" / "index").write_bytes(b"corrupt index\n")
+        diagnostic = "index file"
+    else:
+        commit_without_hooks(project, "base")
+        base = run_git(project, "rev-parse", "HEAD")
+        assert base.returncode == 0, base.stderr
+        assert run_git(project, "checkout", "--orphan", "unrelated").returncode == 0
+        (project / "app.py").write_text("value = 2\n")
+        assert run_git(project, "add", "app.py").returncode == 0
+        commit_without_hooks(project, "unrelated")
+        env["DIFF_COVER_BASE"] = base.stdout.strip()
+        diagnostic = "no merge base"
+
+    sage_files = run_just(ROOT / "justfiles" / "sage.just", project, "_sage-qc-files", env=env)
+    assert sage_files.returncode == 0, sage_files.stdout + sage_files.stderr
+    result = run_just(ROOT / "justfiles" / justfile_name, project, recipe, env=env)
+
+    assert diagnostic in result.stderr.lower(), result.stdout + result.stderr
+    assert result.returncode != 0, result.stdout + result.stderr
+    assert "mypy: no Python or Sage files to check." not in result.stdout
+
+
+def test_sage_mypy_propagates_ripgrep_discovery_failure(tmp_path: pathlib.Path) -> None:
+    project = tmp_path / "project"
+    project.mkdir()
+    init_git_repo(project)
+    (project / "example.sage").write_text("x = 1\n")
+    config = tmp_path / "ripgrep.conf"
+    config.write_text("--invalid-ripgrep-test-flag\n")
+    env = os.environ | {"RIPGREP_CONFIG_PATH": str(config)}
+    python_files = run_just(ROOT / "justfiles" / "python.just", project, "_python-qc-files", env=env)
+    assert python_files.returncode == 0, python_files.stdout + python_files.stderr
+
+    result = run_just(ROOT / "justfiles" / "sage.just", project, "_sage-mypy", env=env)
+
+    assert result.returncode != 0, result.stdout + result.stderr
+    assert "--invalid-ripgrep-test-flag" in result.stderr
+    assert "mypy: no Python or Sage files to check." not in result.stdout
+
+
+def test_sage_mypy_reports_a_genuinely_empty_selection(tmp_path: pathlib.Path) -> None:
+    project = tmp_path / "project"
+    project.mkdir()
+    init_git_repo(project)
+    env = os.environ.copy()
+    env.pop("SAGE_BIN", None)
+    env.pop("SAGE_PYTHON_BIN", None)
+
+    result = run_just(ROOT / "justfiles" / "sage.just", project, "_sage-mypy", env=env)
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert "mypy: no Python or Sage files to check." in result.stdout
+
+
 def test_tsc_requires_ags_when_tsconfig_declares_ags(tmp_path: pathlib.Path) -> None:
     project = tmp_path / "ags-project"
     project.mkdir()

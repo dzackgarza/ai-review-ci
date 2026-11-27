@@ -693,17 +693,13 @@ _sage-diff-cover:
 		exit $ec
 	fi
 
-_sage-mypy: _sage-qc-files
+_sage-mypy:
 	#!/usr/bin/env bash
 	set -euo pipefail
 	echo "============================="
 	echo "=== Running: mypy static type analysis (Sage-aware) ==="
 	echo "# Type checks Python and preparsed Sage files; test files are never targets"
 	source "{{artifacts}}/scripts/test-file-paths.sh"
-	sage_python="$(just --justfile {{justfile()}} -d . _sage-python)"
-	# The category plugin imports sage.all, which runs the venv's gap; see _sage-pytest-run.
-	export PATH="$(dirname "$sage_python"):$PATH"
-	export MYPYPATH="{{infra}}/typings${MYPYPATH:+:$MYPYPATH}"
 	python_files_output="$(just -f {{justfiles}}/python.just -d . _python-qc-files)"
 	python_files=()
 	if [ -n "$python_files_output" ]; then
@@ -720,6 +716,14 @@ _sage-mypy: _sage-qc-files
 		is_test_file "$pf" && continue
 		mypy_targets+=("$pf")
 	done
+	if [ "${#mypy_targets[@]}" -eq 0 ] && [ "${#sage_files[@]}" -eq 0 ]; then
+		echo "mypy: no Python or Sage files to check."
+		exit 0
+	fi
+	sage_python="$(just --justfile {{justfile()}} -d . _sage-python)"
+	# The category plugin imports sage.all, which runs the venv's gap; see _sage-pytest-run.
+	export PATH="$(dirname "$sage_python"):$PATH"
+	export MYPYPATH="{{infra}}/typings${MYPYPATH:+:$MYPYPATH}"
 	if [ "${#sage_files[@]}" -gt 0 ]; then
 		sage_preparse="$(just --justfile {{justfile()}} -d . _sage-preparse-bin)"
 		sage_preparse_dir="$(mktemp -d "${TMPDIR:-/tmp}/qc-mypy-sage.XXXXXX")"
