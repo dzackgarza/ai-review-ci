@@ -1,13 +1,16 @@
 import os
+import re
 import subprocess
 import sys
 from pathlib import Path
 
 from pygments.lexers import get_lexer_by_name, get_lexer_for_filename, guess_lexer
+from pygments.lexers.python import PythonLexer
 from pygments.token import Comment
 from pygments.util import ClassNotFound
 
 SEMGREP_RULE_FIXTURES = Path("tests/fixtures/semgrep")
+PEP723_BLOCK = re.compile(r"(?m)^# /// (?P<type>[a-zA-Z0-9-]+)$\s(?P<content>(^#(| .*)$\s)+)^# ///$")
 
 
 def merge_heads() -> list[bytes]:
@@ -18,6 +21,11 @@ def merge_heads() -> list[bytes]:
 def blob_in(commit: bytes, path: bytes) -> bytes | None:
     listed = subprocess.check_output(["git", "ls-tree", "-z", commit, "--", path]).split(b"\0")[0]
     return listed.split(b"\t")[0].split()[2] if listed else None
+
+
+def script_metadata_span(source: str) -> range:
+    blocks = [block for block in PEP723_BLOCK.finditer(source) if block.group("type") == "script"]
+    return range(*blocks[0].span()) if len(blocks) == 1 else range(0)
 
 
 def recipe_shebang(source: str, offset: int, value: str) -> bool:
@@ -68,10 +76,13 @@ def main() -> int:
                 continue
             lexer = guess_lexer(source)
         is_justfile = path.name.lower() == "justfile" or path.suffix == ".just"
+        script_metadata = script_metadata_span(source) if isinstance(lexer, PythonLexer) else range(0)
         for offset, token, value in lexer.get_tokens_unprocessed(source):
             if token not in Comment or token in Comment.Preproc or token in Comment.PreprocFile:
                 continue
             if offset == 0 and value.startswith("#!"):
+                continue
+            if offset in script_metadata:
                 continue
             if is_justfile and recipe_shebang(source, offset, value):
                 continue
