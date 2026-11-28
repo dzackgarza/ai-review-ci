@@ -80,8 +80,11 @@ plus its volumes (about 10 GB) need room on their own.
    compressed layers (14 GB) beside the unpacked image.
 5. `just install-sage-launchers`, then `sage-docker-update`. On a laptop the
    pull may drop; run it again, and finished layers are kept. The update creates
-   the container and the volumes and then stops at the first real directory in
-   `~/gitclones` that has a volume checkout's name.
+   the container and the volumes, records the image revision for a newly
+   created `sage-tree` volume, and then stops at the first real directory in
+   `~/gitclones` that has a volume checkout's name. The revision marker
+   prevents a subsequent update with the same image from copying the build
+   products again.
 6. Move each such checkout into
    `~/.local/share/docker/volumes/sage-repos/_data/NAME` in place of the image's
    copy (`mv` keeps its branches, refs and local files), then run
@@ -92,11 +95,7 @@ plus its volumes (about 10 GB) need room on their own.
    as `~/research`, moves the same way and is replaced by a link to its volume
    checkout. Ignored files that a host environment generated, such as
    `sage-julia-bridge`'s `julia_env/Manifest.toml`, come from the image's copy.
-7. Write the image's revision into `~/.local/share/docker/volumes/sage-tree/image-revision`
-   when that file is missing and `/sage` is at that revision; without it the
-   next update copies `.venv` and `builddir` from the image again
-   ([#518](https://github.com/dzackgarza/ai-review-ci/issues/518)).
-8. Run `sage-docker-update` again; it links every volume checkout into
+7. Run `sage-docker-update` again; it links every volume checkout into
    `~/gitclones`. Then run the computations of **Verified computations** on
    the host commands.
 

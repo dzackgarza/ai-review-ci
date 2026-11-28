@@ -295,31 +295,18 @@ _semgrep:
 	report_dir="$(cd "$report_dir" && pwd -P)"
 	rm -f "$report_dir/head.raw.json" "$report_dir/head.json" "$report_dir/base.raw.json"
 	echo "semgrep review reports: $report_dir"
-	ignore_file=".semgrepignore"
-	had_preexisting=0
-	ignore_backup=""
-	if [ -e "$ignore_file" ]; then
-		had_preexisting=1
-		if ! ignore_backup="$(mktemp)" || ! cp "$ignore_file" "$ignore_backup"; then
-			echo ""
-			echo "!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!"
-			echo "  ERROR: failed to back up the existing $ignore_file."
-			echo "  Aborting before the QC exclude set overwrites it — the tracked file is untouched."
-			echo "!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!"
-			"{{artifacts}}/scripts/emit-triage-directive.sh"
-			exit 1
-		fi
-	fi
-	restore_semgrepignore() {
-		if [ "$had_preexisting" -eq 1 ]; then
-			mv -f "$ignore_backup" "$ignore_file"
+	scan_semgrep() {
+		if "{{artifacts}}/scripts/semgrep-with-qc-ignores.sh" \
+			"{{artifacts}}/scripts/read_qc_excludes.py" \
+			"{{configs}}/qc-excludes.toml" \
+			-- uvx --from semgrep semgrep scan "$@"; then
+			return 0
 		else
-			rm -f "$ignore_file"
+			local rc=$?
+			"{{artifacts}}/scripts/emit-triage-directive.sh" >&2
+			return "$rc"
 		fi
 	}
-	trap restore_semgrepignore EXIT
-	uv run {{artifacts}}/scripts/read_qc_excludes.py {{configs}}/qc-excludes.toml > "$ignore_file"
-	printf '%s\n' '*.html' '**/*.html' '.pnp.cjs' '.pnp.loader.mjs' >> "$ignore_file"
 	if [[ ${QC_TIER:-} != ambient && -n ${DIFF_COVER_BASE:-} ]] && git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
 		if ! git rev-parse --verify "${DIFF_COVER_BASE}^{commit}" >/dev/null 2>&1; then
 			echo "ERROR: semgrep: DIFF_COVER_BASE does not resolve: $DIFF_COVER_BASE" >&2
@@ -346,7 +333,7 @@ _semgrep:
 			return 0
 		}
 		changed_manifest="$(mktemp)"
-		trap 'rm -f "$changed_manifest"; restore_semgrepignore' EXIT
+		trap 'rm -f "$changed_manifest"' EXIT
 		git diff --name-only --diff-filter=ACMR -z "${DIFF_COVER_BASE}...HEAD" -- . > "$changed_manifest"
 		changed_files=()
 		while IFS= read -r -d '' file; do
@@ -368,11 +355,10 @@ _semgrep:
 		cleanup_semgrep_diff() {
 			rm -f "$head_json" "$base_json"
 			git worktree remove --force "$base_tree" >/dev/null 2>&1 || rm -rf "$base_tree"
-			restore_semgrepignore
 		}
 		trap cleanup_semgrep_diff EXIT
 		scan_rc=0
-		uvx --from semgrep semgrep scan \
+		scan_semgrep \
 			--json \
 			--config={{configs}}/semgrep.yml \
 			--config=p/ci \
@@ -394,7 +380,7 @@ _semgrep:
 			(
 				cd "$base_tree"
 				scan_rc=0
-				uvx --from semgrep semgrep scan \
+				scan_semgrep \
 					--json \
 					--config={{configs}}/semgrep.yml \
 					--config=p/ci \
@@ -413,8 +399,8 @@ _semgrep:
 	fi
 	scan_rc=0
 	findings_json="$(mktemp)"
-	trap 'rm -f "$findings_json"; restore_semgrepignore' EXIT
-	uvx --from semgrep semgrep scan \
+	trap 'rm -f "$findings_json"' EXIT
+	scan_semgrep \
 		--config={{configs}}/semgrep.yml \
 		--config=p/ci \
 		--exclude=codeql-db \
@@ -422,7 +408,7 @@ _semgrep:
 		--json-output="$findings_json" || scan_rc=$?
 	cp "$findings_json" "$report_dir/head.raw.json"
 	[ "$scan_rc" -eq 0 ] || exit "$scan_rc"
-	trap 'cp "$findings_json" "$report_dir/head.json"; rm -f "$findings_json"; restore_semgrepignore' EXIT
+	trap 'cp "$findings_json" "$report_dir/head.json"; rm -f "$findings_json"' EXIT
 	if uv run {{artifacts}}/scripts/semgrep_exceptions.py {{configs}}/semgrep-exceptions.toml "$findings_json"; then
 		:
 	else

@@ -1691,6 +1691,9 @@ def test_semgrep_scans_tests_tree_for_banned_test_patterns(tmp_path: pathlib.Pat
         )
     )
 
+    init_git_repo(project)
+    assert run_git(project, "add", "tests/test_thing.py").returncode == 0
+
     result = run_just(ROOT / "justfiles" / "shared.just", project, "_semgrep")
 
     output = result.stdout + result.stderr
@@ -1737,8 +1740,45 @@ def test_semgrep_ignores_generated_yarn_and_labextension_output(
         assert path.name not in output, f"{path} was scanned:\n{output}"
 
 
+@pytest.mark.parametrize("recipe", ["_semgrep-autofix", "_semgrep"])
+def test_semgrep_preserves_owned_ignore_symlink(
+    tmp_path: pathlib.Path, recipe: str,
+) -> None:
+    project = tmp_path / "project"
+    tests = project / "tests"
+    tests.mkdir(parents=True)
+    original_ignore = tmp_path / "owned-ignore"
+    sentinel = "tests/\n"
+    original_ignore.write_text(sentinel)
+    ignore = project / ".semgrepignore"
+    ignore.symlink_to(original_ignore)
+    init_git_repo(project)
+    assert run_git(project, "add", ".semgrepignore").returncode == 0
+    commit_without_hooks(project, "existing ignore")
+    source = tests / "test_example.py"
+    source.write_text("def test_x(monkeypatch):\n    monkeypatch.setattr(x, 'y', z)\n")
+    assert run_git(project, "add", "tests/test_example.py").returncode == 0
+
+    result = run_just(ROOT / "justfiles" / "shared.just", project, recipe)
+
+    output = result.stdout + result.stderr
+    assert ignore.is_symlink(), output
+    assert ignore.readlink() == original_ignore
+    assert original_ignore.read_text() == sentinel
+    if recipe == "_semgrep-autofix":
+        assert result.returncode == 0, output
+        assert re.search(r"Ran \d+ rules on 1 file: [1-9]\d* finding", output), output
+        assert re.search(r"semgrep autofix: [1-9]\d* advisory finding group\(s\); CI-tier verification owns them", output), output
+        assert not re.search(r"\(\d+ blocking\)", output), output
+    else:
+        assert result.returncode != 0, output
+        assert "py-no-monkeypatch" in output
+    assert run_git(project, "diff", "--exit-code", "--", ".semgrepignore").returncode == 0
+
+
+@pytest.mark.parametrize("recipe", ["_semgrep-autofix", "_semgrep"])
 def test_semgrep_preserves_tracked_ignore_and_fails_loud_on_backup_failure(
-    tmp_path: pathlib.Path,
+    tmp_path: pathlib.Path, recipe: str,
 ) -> None:
     """#225 Defect 1: the _semgrep gate overwrites .semgrepignore to force the
     QC exclude set, backing up any pre-existing file for restore-on-exit. A
@@ -1750,20 +1790,32 @@ def test_semgrep_preserves_tracked_ignore_and_fails_loud_on_backup_failure(
     tracked_ignore = project / ".semgrepignore"
     sentinel = "tests/fixtures/user-owned-exclusion/**\n"
     tracked_ignore.write_text(sentinel)
+    init_git_repo(project)
+    assert run_git(project, "add", ".semgrepignore").returncode == 0
+    commit_without_hooks(project, "existing ignore")
+    (project / "example.py").write_text("value = 1\n")
+    assert run_git(project, "add", "example.py").returncode == 0
 
     shim_dir = tmp_path / "shim"
     shim_dir.mkdir()
     mktemp_shim = shim_dir / "mktemp"
-    mktemp_shim.write_text("#!/usr/bin/env bash\nexit 1\n")
+    real_mktemp = shutil.which("mktemp")
+    assert real_mktemp is not None
+    mktemp_shim.write_text(
+        '#!/usr/bin/env bash\nif [ "$#" -eq 1 ] && [ "$1" = "-d" ]; then exit 1; fi\n'
+        f'exec {shlex.quote(real_mktemp)} "$@"\n',
+    )
     mktemp_shim.chmod(0o755)
     env = os.environ | {"PATH": f"{shim_dir}:{os.environ['PATH']}"}
 
-    result = run_just(ROOT / "justfiles" / "shared.just", project, "_semgrep", env=env)
+    result = run_just(ROOT / "justfiles" / "shared.just", project, recipe, env=env)
 
     output = result.stdout + result.stderr
     assert result.returncode != 0, output
     assert tracked_ignore.read_text() == sentinel, f"tracked .semgrepignore was clobbered:\n{output}"
+    assert "failed to allocate a backup for .semgrepignore" in output, output
     assert TRIAGE_MARKER in output, output
+    assert run_git(project, "diff", "--exit-code", "--", ".semgrepignore").returncode == 0
 
 
 def write_fake_npx_slop_scan(tmp_path: pathlib.Path, payload: dict[str, Any]) -> pathlib.Path:
@@ -2851,6 +2903,100 @@ def test_eslint_runner_enforces_only_changed_vue_lines_in_ci(
     assert "no-explicit-any" in output
 
 
+def test_bun_lizard_local_and_ci_gate_the_same_complexity_regressions(
+    tmp_path: pathlib.Path,
+) -> None:
+    upstream = tmp_path / "upstream"
+    upstream.mkdir()
+    init_git_repo(upstream)
+    assert run_git(upstream, "branch", "-M", "trunk").returncode == 0
+    complex_function = (
+        "export function existing(value: number): number {\n"
+        + "".join(f"  if (value === {i}) return {i};\n" for i in range(9))
+        + "  return -1;\n}\n"
+    )
+    (upstream / "legacy.ts").write_text(complex_function)
+    assert run_git(upstream, "add", ".").returncode == 0
+    commit_without_hooks(upstream, "legacy complexity")
+    project = tmp_path / "downstream"
+    cloned = run_git(tmp_path, "clone", str(upstream), str(project))
+    assert cloned.returncode == 0, cloned.stderr
+    assert run_git(project, "config", "user.email", "test@example.invalid").returncode == 0
+    assert run_git(project, "config", "user.name", "Test User").returncode == 0
+    base = run_git(project, "rev-parse", "HEAD").stdout.strip()
+    recipe = ROOT / "justfiles" / "bun.just"
+
+    (project / "legacy.ts").write_text(complex_function.replace("return -1;", "return -2;"))
+    assert run_git(project, "add", ".").returncode == 0
+    commit_without_hooks(project, "change without new complexity")
+    ci_env = {**os.environ, "DIFF_COVER_BASE": base, "QC_TIER": "test-ci"}
+    ci = run_just(recipe, project, "_lizard-bun", env=ci_env)
+    assert ci.returncode == 0, ci.stdout + ci.stderr
+    local = run_just(recipe, project, "_lizard-bun")
+    assert local.returncode == 0, local.stdout + local.stderr
+    ambient = run_just(recipe, project, "_lizard-bun", env={**ci_env, "QC_TIER": "ambient"})
+    assert ambient.returncode == 1, ambient.stdout + ambient.stderr
+    assert "existing@" in ambient.stdout
+
+    new_function = complex_function.replace("existing(", "newComplexity(")
+    (project / "new.ts").write_text(new_function)
+    untracked = run_just(recipe, project, "_lizard-bun")
+    assert untracked.returncode == 1, untracked.stdout + untracked.stderr
+    assert "newComplexity@new.ts" in untracked.stdout
+    assert "existing@legacy.ts" not in untracked.stdout.split("ERROR: lizard found new complexity warnings")[-1]
+    (project / "new.ts").unlink()
+
+    (project / "legacy.ts").write_text(complex_function + new_function)
+    dirty = run_just(recipe, project, "_lizard-bun")
+    assert dirty.returncode == 1, dirty.stdout + dirty.stderr
+    assert "newComplexity@legacy.ts" in dirty.stdout
+    assert run_git(project, "add", ".").returncode == 0
+    commit_without_hooks(project, "introduce complexity regression")
+    for env in (os.environ.copy(), ci_env):
+        regression = run_just(recipe, project, "_lizard-bun", env=env)
+        assert regression.returncode == 1, regression.stdout + regression.stderr
+        assert "newComplexity@legacy.ts" in regression.stdout
+
+
+def test_bun_lizard_comparison_uses_common_ancestor_and_requires_a_base(
+    tmp_path: pathlib.Path,
+) -> None:
+    project = tmp_path / "downstream"
+    project.mkdir()
+    init_git_repo(project)
+    assert run_git(project, "branch", "-M", "trunk").returncode == 0
+    source = project / "main.ts"
+    source.write_text("export function f(value: number) { return value; }\n")
+    assert run_git(project, "add", ".").returncode == 0
+    commit_without_hooks(project, "common ancestor")
+    recipe = ROOT / "justfiles" / "bun.just"
+    missing = run_just(recipe, project, "_lizard-bun")
+    assert missing.returncode == 2, missing.stdout + missing.stderr
+    assert "no local comparison ref resolves" in missing.stderr
+    invalid = run_just(recipe, project, "_lizard-bun", env={**os.environ, "DIFF_COVER_BASE": "absent"})
+    assert invalid.returncode == 2, invalid.stdout + invalid.stderr
+    assert "DIFF_COVER_BASE does not resolve" in invalid.stderr
+    assert run_git(project, "branch", "-M", "main").returncode == 0
+    assert run_git(project, "switch", "-c", "feature").returncode == 0
+    complex_function = (
+        "export function f(value: number): number {\n"
+        + "".join(f"  if (value === {i}) return {i};\n" for i in range(9))
+        + "  return -1;\n}\n"
+    )
+    source.write_text(complex_function)
+    assert run_git(project, "add", ".").returncode == 0
+    commit_without_hooks(project, "feature introduces warning")
+    assert run_git(project, "switch", "main").returncode == 0
+    source.write_text(complex_function.replace("return -1;", "return -2;"))
+    assert run_git(project, "add", ".").returncode == 0
+    commit_without_hooks(project, "independent upstream warning")
+    assert run_git(project, "switch", "feature").returncode == 0
+    for env in (os.environ.copy(), {**os.environ, "DIFF_COVER_BASE": "main"}):
+        regression = run_just(recipe, project, "_lizard-bun", env=env)
+        assert regression.returncode == 1, regression.stdout + regression.stderr
+        assert "f@main.ts" in regression.stdout
+
+
 def test_bun_lizard_scans_only_changed_authored_files_in_ci(
     tmp_path: pathlib.Path,
 ) -> None:
@@ -3577,8 +3723,6 @@ def test_diff_cover_resolves_local_and_remote_base_refs(tmp_path: pathlib.Path) 
     assert "origin/main...HEAD" in remote.stdout
     assert "diff_cover_project.py (100%)" in remote.stdout
 
-    # A local base takes precedence over a different remote-tracking base.
-    # Here main has advanced to HEAD: the actual coverage report must have no diff.
     assert run_git(project, "branch", "main", "HEAD").returncode == 0
     local = run_just(justfile, project, "_diff-cover", env=env)
     assert local.returncode == 0, local.stdout + local.stderr

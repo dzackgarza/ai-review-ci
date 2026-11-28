@@ -146,9 +146,40 @@ The tiers are:
 
 - ambient: scheduled full-tree maintenance diagnostics, also recorded rather than block publication.
 
+Bun complexity checks compare warnings in changed authored files against the
+common ancestor of HEAD and `DIFF_COVER_BASE`. For local runs without that
+input, the comparison ref is the locally known remote default (`origin/HEAD`),
+`origin/main`, or local `main`, in that order. Set `DIFF_COVER_BASE` explicitly
+for other targets; an unresolvable comparison fails rather than silently
+passing. The working tree, including non-ignored untracked source, is checked
+against that ancestor. The ambient tier continues to report all complexity
+warnings throughout the tree.
+
 During implementation, use narrowly targeted tests for the active capability.
 Complete suites are CI work.
 Refactoring, typing, optimization, deduplication and style cleanup are later roadmap phases, executed by fresh agents rather than interrupting implementation.
+
+### Bun implementation details
+
+The central Bun justfile owns tool configuration and exclusions from
+`qc-excludes.toml`. Configuration filename checks follow the tools' own
+discovery rules (Biome's `ConfigName::BIOME_JSON`, ESLint's
+`FLAT_CONFIG_FILENAMES`, Knip's configuration documentation and lint-staged's
+`CONFIG_FILE_NAMES`); Knip and lint-staged can also read package.json keys.
+ESLint plugins are installed next to the central flat config because ESM
+imports resolve relative to that file, not NODE_PATH or global installs.
+Other tools run ephemerally through Bun or uv.
+
+Bun CI runs the suite once through the coverage recipe, including in composed
+language profiles. A project with separate test scripts may select its full
+suite through `test:ci`; the script must produce the root `lcov.info`.
+A failing suite still delivers measured coverage to diff-cover and retains
+its own failure status. Playwright projects prove coverage through the
+app-boot end-to-end run instead of unit lcov. Source discovery distinguishes
+ripgrep's empty selection (exit 1) from actual errors. The slop-scan recipe
+places the central configuration at the scan root and evaluates its JSON
+output, since the scan command itself has no fail-on flag; scanner errors
+remain visible.
 
 ### Pytest timing history
 
