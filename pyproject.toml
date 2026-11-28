@@ -21,6 +21,7 @@ dev = [
     "PyYAML",
     "types-PyYAML",
     "types-unidiff>=0.7.0.20260518",
+    "websocket-client>=1.9.2",
 ]
 
 [build-system]
@@ -30,9 +31,10 @@ build-backend = "hatchling.build"
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 markers = [
+    "sage_boundary: real Sage runtime tests, run in the Sage CI image",
     "gh_boundary: real GitHub API boundary tests; need GH_TOKEN, deselected by default (#218)",
 ]
-addopts = ["-m", "not gh_boundary"]
+addopts = ["-m", "not gh_boundary and not sage_boundary"]
 
 [tool.importlinter]
 root_packages = ["ai_review_ci"]
@@ -40,6 +42,11 @@ include_external_packages = true
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/ai_review_ci"]
+
+[tool.hatch.build.targets.wheel.force-include]
+".github/workflows/_acceptance.yml" = "ai_review_ci/reusable_workflows/_acceptance.yml"
+".github/workflows/_gates.yml" = "ai_review_ci/reusable_workflows/_gates.yml"
+".github/workflows/_qc.yml" = "ai_review_ci/reusable_workflows/_qc.yml"
 
 [tool.uv.sources]
 automated-reviews = { git = "https://github.com/dzackgarza/automated-reviews.git", rev = "main" }

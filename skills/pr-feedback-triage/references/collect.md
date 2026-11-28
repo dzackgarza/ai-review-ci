@@ -18,7 +18,7 @@ Do not infer the whole review state from inbox summaries, a single API surface, 
 
 ## Stable inline-thread state
 
-Use the skill-shipped collector for the paginated inline-thread worklist:
+Run the skill-shipped collector from inside the target PR worktree for the paginated inline-thread worklist:
 
 ```bash
 python3 "$AI_SKILLS_DIR/pr-feedback-triage/scripts/triage_state.py" \
@@ -26,8 +26,10 @@ python3 "$AI_SKILLS_DIR/pr-feedback-triage/scripts/triage_state.py" \
 ```
 
 It paginates beyond GitHub's first 100 threads and every thread's first 100 comments, keys AI-review findings by `ai-review-fingerprint`, and otherwise hashes the complete visible finding so identity survives line shifts without collapsing distinct findings that share a title.
-It stores resumable machine state under the repository's Git metadata, never in a tracked review ledger.
-Use `--no-write` for a read-only one-shot result.
+It stores resumable machine state under the current worktree's Git metadata, namespaced by the repository and PR, never in a tracked review ledger.
+The collector checks `--repo` (or `GH_REPO` when `--repo` is omitted) against the checkout's GitHub repository, resolved by `gh repo view` without the environment override, before opening any state. For a fork checkout, select its PR base repository using `gh repo set-default` first.
+An existing state file must identify the same repository and PR or collection fails without consuming or replacing it. The reported `state_path` is absolute, and proof anchors resolve from the worktree root even when invoked from a subdirectory.
+Use `--no-write` for a read-only one-shot result; it still validates any existing resume state.
 
 The collector owns inline-thread identity, not the other GitHub surfaces.
 Read the remaining surfaces in the same round:

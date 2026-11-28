@@ -1,50 +1,17 @@
-# Development: local commit/push check staged syntax only; CI owns suites and quality debt.
-# justfile-bun — TypeScript-specific quality control
-#
-# Imports cross-language QC recipes from `justfile` (shared) and adds
-# TypeScript-specific recipes. TypeScript projects delegate to this file:
-#   just -f ~/ai-review-ci/justfiles/bun.just -d . test-commit
-#
-# Shared recipes (imported from justfile):
-#   _no-bypass, _semgrep, _vibecheck, _slop
-#
-# TypeScript-specific recipes:
-#   _coverage, _diff-cover, _knip, _biome, _eslint, _tsc,
-#   _normalize (biome + eslint), _ast-grep, _jscpd, _lizard,
-#   _codeql, _slop-scan, _lint-staged
-#
-# WORKFLOW (three-tier):
-#   just test-commit — preflight, normalization, tsc, bypass check.
-#   just test-push   — commit checks plus the full Bun test suite.
-#   just test-ci     — commit checks, the suite under coverage, and policy-sensitive gates.
-#
-# HOOKS: pre-commit blocks on `just test-commit`; pre-push blocks on `just test-push`.
-#   Run `just install-global-hooks` from ~/ai-review-ci to activate them globally.
-#
-# CONFIG: this justfile resolves configs and artifacts from the ai-review-ci repo.
-
 infra := justfile_directory() / ".."
 configs := infra / "tool-configs"
 artifacts := infra / "tool-artifacts"
 justfiles := infra / "justfiles"
 biome_package := "@biomejs/biome@2.6.4"
 
-# Every config filename these QC tools discover on their own. A project that carries any
-# of them diverges its local run from canonical CI (#292). Each list is the tool's own
-# resolution order: biome ConfigName::BIOME_JSON (biome_fs/src/fs.rs), eslint
-# FLAT_CONFIG_FILENAMES (lib/config/config-loader.js), knip.dev/overview/configuration,
-# lint-staged CONFIG_FILE_NAMES (lib/loadConfig.js).
 local_qc_config_files := "biome.json biome.jsonc .biome.json .biome.jsonc " + \
 	"eslint.config.js eslint.config.mjs eslint.config.cjs eslint.config.ts eslint.config.mts eslint.config.cts " + \
 	"knip.json knip.jsonc .knip.json .knip.jsonc knip.ts knip.js knip.config.ts knip.config.js " + \
 	"lint-staged.config.js lint-staged.config.cjs lint-staged.config.mjs " + \
 	".lintstagedrc .lintstagedrc.js .lintstagedrc.cjs .lintstagedrc.mjs .lintstagedrc.json .lintstagedrc.yaml .lintstagedrc.yml"
-# knip and lint-staged also load config from a package.json key, with no config file present.
 local_qc_manifest_keys := "knip lint-staged"
 
-# private recipes (prefix with _ — never run individually)
 
-# QC file-scope excludes (directories to skip), sourced from qc-excludes.toml.
 _qc-excludes:
 	#!/usr/bin/env bash
 	set -euo pipefail
@@ -53,11 +20,6 @@ _qc-excludes:
 _eslint-deps:
 	#!/usr/bin/env bash
 	set -euo pipefail
-	# ESLint plugins must be installed LOCAL to the tool-configs directory.
-	# ESLint flat config uses ES module imports that resolve relative to the
-	# config file's location — NODE_PATH is ignored for ESM. Global installs
-	# are invisible to the config loader.
-	# All other tools run ephemerally via bun x (see tool-provisioning-and-environment-hygiene).
 	cd "{{configs}}"
 	flock --exclusive . bun install --frozen-lockfile
 
@@ -74,9 +36,6 @@ _bun-test:
 	echo "=== Running: bun test (push tier — no coverage gate) ==="
 	echo "# Runs the project's own test suite; coverage is enforced in CI."
 	unset NODE_ENV
-	# A repo may declare a dedicated push-tier suite (e.g. units plus a browser
-	# smoke subset) as scripts["test:push"]; the full suite then runs in CI via
-	# scripts["test:ci"] (see _coverage).
 	if jq -e '.scripts["test:push"] // empty' package.json >/dev/null 2>&1; then
 		bun run test:push
 		exit 0
@@ -109,22 +68,15 @@ _coverage:
 	set -euo pipefail
 	source "{{artifacts}}/scripts/heavy-gate-lock.sh"
 	unset NODE_ENV
-	# Playwright (e2e-covered) projects prove coverage through the app-boot e2e run in
-	# test-ci, not a unit lcov. Unit-lcov diff-cover does not apply to them.
-	# The suite still runs here once: CI runs no `_bun-test`.
 	if [ -f playwright.config.ts ]; then
 		echo "Playwright project: coverage is proven by the app-boot e2e run; unit lcov is not applicable."
 		exec just --justfile {{justfile()}} -d . _bun-test
 	fi
-	# A repo that split its suite into push/CI tiers runs the full suite here.
-	# The script owns its coverage flags and must leave lcov.info at the repo root.
 	if jq -e '.scripts["test:ci"] // empty' package.json >/dev/null 2>&1; then
 		bun run test:ci
 		exit 0
 	fi
 	if jq -e '.scripts.coverage // empty' package.json >/dev/null 2>&1; then
-		# A red suite still measured the lines it ran: deliver its report to _diff-cover,
-		# then return the suite's own status as this check's result.
 		status=0
 		bun run coverage || status=$?
 		if [ -f coverage/lcov.info ]; then
@@ -305,30 +257,54 @@ _lizard-bun:
 		done
 		return 1
 	}
-	if [[ ${QC_TIER:-} != ambient && -n ${DIFF_COVER_BASE:-} ]]; then
-		if ! git rev-parse --verify "${DIFF_COVER_BASE}^{commit}" >/dev/null 2>&1; then
-			echo "ERROR: lizard: DIFF_COVER_BASE does not resolve: $DIFF_COVER_BASE" >&2
+	if [[ ${QC_TIER:-} != ambient ]]; then
+		base_ref="${DIFF_COVER_BASE:-}"
+		if [[ -z "$base_ref" ]]; then
+			for candidate in origin/HEAD origin/main main; do
+				if git rev-parse --verify "$candidate^{commit}" >/dev/null 2>&1; then
+					base_ref="$candidate"
+					break
+				fi
+			done
+			if [[ -z "$base_ref" ]]; then
+				echo "ERROR: lizard: no local comparison ref resolves (origin/HEAD, origin/main, main); set DIFF_COVER_BASE." >&2
+				exit 2
+			fi
+		elif ! git rev-parse --verify "$base_ref^{commit}" >/dev/null 2>&1; then
+			echo "ERROR: lizard: DIFF_COVER_BASE does not resolve: $base_ref" >&2
 			exit 2
 		fi
+		if ! base_commit="$(git merge-base "$base_ref" HEAD)"; then
+			echo "ERROR: lizard: no common ancestor with $base_ref." >&2
+			exit 2
+		fi
+		echo "# Comparing against $base_ref at $base_commit"
+		scratch="$(mktemp -d)"
+		base_tree="$scratch/base"
+		head_output="$scratch/head.txt"
+		base_output="$scratch/base.txt"
+		changed_manifest="$scratch/changed"
+		cleanup_lizard_diff() {
+			if [[ -d "$base_tree" ]]; then
+				git worktree remove --force "$base_tree" >/dev/null 2>&1 || rm -rf "$base_tree"
+			fi
+			rm -rf "$scratch"
+		}
+		trap cleanup_lizard_diff EXIT
+		git diff --name-only --diff-filter=ACMRT -z "$base_commit" -- . > "$changed_manifest"
+		git ls-files --others --exclude-standard -z -- . >> "$changed_manifest"
 		files=()
 		while IFS= read -r -d '' file; do
 			[[ -f "$file" ]] || continue
 			is_lizard_source "$file" || continue
 			is_excluded_qc_path "$file" && continue
 			files+=("$file")
-		done < <(git diff --name-only --diff-filter=ACMR -z "${DIFF_COVER_BASE}...HEAD" -- .)
+		done < "$changed_manifest"
 		if [ ${#files[@]} -eq 0 ]; then
 			echo "lizard: no changed authored JavaScript, TypeScript, or Vue files."
 			exit 0
 		fi
-		head_output="$(mktemp)"
-		base_output="$(mktemp)"
-		base_tree="$(mktemp -d)"
-		cleanup_lizard_diff() {
-			rm -f "$head_output" "$base_output"
-			git worktree remove --force "$base_tree" >/dev/null 2>&1 || rm -rf "$base_tree"
-		}
-		trap cleanup_lizard_diff EXIT
+		: > "$base_output"
 		set +e
 		uvx lizard -l typescript -C 8 -L 200 -a 7 -i 0 "${files[@]}" | tee "$head_output"
 		head_status=${PIPESTATUS[0]}
@@ -339,7 +315,7 @@ _lizard-bun:
 		if [ "$head_status" -ne 1 ]; then
 			exit "$head_status"
 		fi
-		git worktree add --detach "$base_tree" "$DIFF_COVER_BASE" >/dev/null
+		git worktree add --detach "$base_tree" "$base_commit" >/dev/null
 		base_files=()
 		for file in "${files[@]}"; do
 			[ -f "$base_tree/$file" ] && base_files+=("$file")
@@ -389,8 +365,6 @@ _js-qc-files:
 		:
 	else
 		status=$?
-		# rg uses 1 for an empty selection. Callers own the required-language
-		# diagnostic; source-discovery errors still propagate.
 		if [ "$status" -ne 1 ]; then
 			exit "$status"
 		fi
@@ -432,10 +406,6 @@ _slop-scan:
 		"{{artifacts}}/scripts/emit-triage-directive.sh"
 		exit 1
 	fi
-	# slop-scan scan has no --fail-on flag (only delta does).
-	# Run with --json (stdout) and post-process to enforce findings as failures.
-	# Stderr from npx/slop-scan passes through to terminal.
-	# Place QC-owned slop-scan config in the scan root (tool auto-discovers it).
 	raw_output_file="$(mktemp)"
 	output_file="$(mktemp)"
 	copied_config=0
@@ -546,18 +516,14 @@ _check-ts-project:
 	echo "=== Running: TypeScript project preflight check ==="
 	echo "# Validates project structure, Bun alignment, test presence, and QC config isolation"
 	failed=0
-	# 1. package.json must exist
 	if [ ! -f "package.json" ]; then
 		echo "ERROR: TypeScript project must have a package.json file."
 		failed=1
 	fi
-	# 2. Must use Bun
 	if [ ! -f "bun.lock" ] && [ ! -f "bun.lockb" ]; then
 		echo "ERROR: TypeScript project must use Bun — no bun.lock or bun.lockb found."
 		failed=1
 	fi
-	# 3. Check for local QC tool config overrides.
-	#    Global QC owns these tool configs — projects must not set them locally.
 	report_local_qc_override() {
 		echo "ERROR: Local QC override detected: $1 — global QC owns this tool config."
 		echo "       $2 The global config for this tool already exists in"
@@ -584,14 +550,12 @@ _check-ts-project:
 			done
 		fi
 	fi
-	# 4. tsconfig.json must not disable strict mode
 	if [ -f "tsconfig.json" ]; then
 		if grep -qP '"strict"\s*:\s*false' tsconfig.json 2>/dev/null; then
 			echo "ERROR: tsconfig.json has 'strict: false' — TypeScript strict mode is required by global QC."
 			failed=1
 		fi
 	fi
-	# 5. Tests must exist
 	if ! rg --files -g '*.test.ts' -g '*.test.tsx' -g '*.spec.ts' -g '*.spec.tsx' -g 'tests/' >/dev/null 2>&1; then
 		echo "ERROR: TypeScript project must have tests. No test files found with patterns: *.test.ts, *.test.tsx, *.spec.ts, *.spec.tsx, tests/"
 		"{{artifacts}}/scripts/emit-test-writing-directive.sh"
@@ -609,12 +573,22 @@ _normalize: _eslint-deps
 	echo "============================="
 	echo "=== Running: biome format, lint, and import sorting (auto-fix) ==="
 	echo "# Auto-applies safe and unsafe fixes, formatting, and import sorting"
+	exclude_dirs_output="$(uv run {{artifacts}}/scripts/read_qc_excludes.py {{configs}}/qc-excludes.toml)"
+	exclude_pathspecs=()
+	if [ -n "$exclude_dirs_output" ]; then
+		while IFS= read -r dir; do
+			exclude_pathspecs+=(":(exclude,glob)**/$dir/**")
+		done <<< "$exclude_dirs_output"
+	fi
+	staged_manifest="$(mktemp)"
+	trap 'rm -f "$staged_manifest"' EXIT
+	git diff --cached --name-only --diff-filter=ACMR -z -- . "${exclude_pathspecs[@]}" > "$staged_manifest"
 	files=()
 	while IFS= read -r -d '' file; do
 		case "$file" in
 			*.js|*.jsx|*.mjs|*.cjs|*.ts|*.tsx|*.mts|*.cts|*.vue) files+=("$file") ;;
 		esac
-	done < <(git diff --cached --name-only --diff-filter=ACMR -z)
+	done < "$staged_manifest"
 	if [ ${#files[@]} -eq 0 ]; then
 		echo "No staged JavaScript, TypeScript, or Vue files found"
 		exit 0
@@ -645,41 +619,31 @@ _doctor-preflight:
 	set -euo pipefail
 	uv run --project {{infra}} ai-review-ci doctor-preflight --target .
 
-# public: COMMIT gate — immediate, directly repairable feedback
+[doc("Validate staged source syntax.")]
 test-commit:
     @just -f {{justfiles}}/shared.just -d . _local-check staged
 
-# public: PUSH gate — commit checks plus the full project-owned test suite
+[doc("Validate syntax of outgoing committed changes.")]
 test-push:
     @just -f {{justfiles}}/shared.just -d . _local-check push
 
-# private: the Bun CI gates without the cross-language stack, which a profile that
-# composes several languages runs once (bun-python.just). `_coverage` is the
-# suite's one run: the push tier's `_bun-test` would repeat it.
 _ci-checks:
 	#!/usr/bin/env bash
 	set -euo pipefail
 	export AI_REVIEW_CI_FAILURE_MODE=triage
 	just --justfile {{justfile()}} -d . test-commit _coverage _diff-cover _knip _biome _ast-grep _eslint _jscpd-bun _lizard-bun _slop-scan
 
-# public: CI gate — push checks plus gameable and long-running acceptance gates
+[doc("Collect Bun test and quality diagnostics.")]
 test-ci:
     @python3 "{{justfile_directory()}}/../scripts/ci-triage.py" bun
 
-# `_qc.yml` accepts `tier: ambient` and dispatches `just ambient`, so a profile
-# that does not define it fails every scheduled run before any tool starts.
-# QC_TIER=ambient is what the diff-scoped recipes read to widen from the
-# changed files to the whole tree, so the debt surfaces run here unscoped
-# rather than against a base ref a schedule does not have.
 
-# private: Bun deferred-debt scans, unscoped
 _ambient-bun-debt:
 	#!/usr/bin/env bash
 	set -euo pipefail
 	export QC_TIER=ambient
 	just --justfile {{justfile()}} -d . _knip _jscpd-bun _lizard-bun _slop-scan
 
-# public: AMBIENT audit — whole-tree semgrep and deferred-debt scan, not a PR gate.
-# Every step runs; the audit fails if any did.
+[doc("Collect whole-tree Bun maintenance diagnostics.")]
 ambient:
     @python3 "{{justfile_directory()}}/../scripts/ci-triage.py" bun --tier ambient

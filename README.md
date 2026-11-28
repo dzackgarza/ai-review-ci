@@ -70,6 +70,11 @@ ai-review-ci doctor --target . --json
 ```
 
 The doctor checks the development workflow and delegation without requiring branch protection or label alignment.
+For every ai-review-ci reusable workflow job it checks the caller's `with:` keys against
+the callee's `workflow_call.inputs`, reporting missing required inputs and undeclared
+inputs. For `@main` it uses the canonical workflows from the installed tool version
+(the source checkout for an editable install); other refs are resolved through
+`gh api` at the specified ref. An unresolvable contract is an error, not a successful check.
 Stabilized installations retain the stricter release checks.
 
 ## Global Git hooks
@@ -122,8 +127,9 @@ The log lives under `.git/`, so Git never tracks it.
 
 The tiers are:
 
-- test-commit: validate staged Python, JSON and TOML syntax; test-push: validate outgoing committed changes only, with no type checker, formatter, external dependency installation, test suite, code-style scanner, or performance restriction.
-  Lean, Sage, Rust and Bun source is not subjected to a compile or type gate locally.
+- test-commit: validate staged Python, Sage, JSON and TOML syntax; test-push: validate outgoing committed changes only, with no type checker, formatter, external dependency installation, test suite, code-style scanner, or performance restriction.
+  Changed .sage blobs are preparsed and syntax-compiled (never executed) using the installed Sage launcher: SAGE_BIN if set, otherwise sage on PATH. No Sage invocation is needed when no .sage blob changed.
+  Lean, Rust and Bun source is not subjected to a compile or type gate locally.
 
 - test-ci: run the complete project test suite and individual correctness and code-quality checks on CI; retain each result as a JSON record, individual log, and GitHub job summary.
   Recognized test failures and source-location diagnostics receive stable finding IDs in results.json; unrecognized tool output remains a check-level failure linked to its full log.
@@ -134,9 +140,94 @@ The tiers are:
 
 - ambient: scheduled full-tree maintenance diagnostics, also recorded rather than block publication.
 
+Bun complexity checks compare warnings in changed authored files against the
+common ancestor of HEAD and `DIFF_COVER_BASE`. For local runs without that
+input, the comparison ref is the locally known remote default (`origin/HEAD`),
+`origin/main`, or local `main`, in that order. Set `DIFF_COVER_BASE` explicitly
+for other targets; an unresolvable comparison fails rather than silently
+passing. The working tree, including non-ignored untracked source, is checked
+against that ancestor. The ambient tier continues to report all complexity
+warnings throughout the tree.
+
 During implementation, use narrowly targeted tests for the active capability.
 Complete suites are CI work.
 Refactoring, typing, optimization, deduplication and style cleanup are later roadmap phases, executed by fresh agents rather than interrupting implementation.
+
+### Bun implementation details
+
+The central Bun justfile owns tool configuration and exclusions from
+`qc-excludes.toml`. Configuration filename checks follow the tools' own
+discovery rules (Biome's `ConfigName::BIOME_JSON`, ESLint's
+`FLAT_CONFIG_FILENAMES`, Knip's configuration documentation and lint-staged's
+`CONFIG_FILE_NAMES`); Knip and lint-staged can also read package.json keys.
+ESLint plugins are installed next to the central flat config because ESM
+imports resolve relative to that file, not NODE_PATH or global installs.
+Other tools run ephemerally through Bun or uv.
+
+Bun CI runs the suite once through the coverage recipe, including in composed
+language profiles. A project with separate test scripts may select its full
+suite through `test:ci`; the script must produce the root `lcov.info`.
+A failing suite still delivers measured coverage to diff-cover and retains
+its own failure status. Playwright projects prove coverage through the
+app-boot end-to-end run instead of unit lcov. Source discovery distinguishes
+ripgrep's empty selection (exit 1) from actual errors. The slop-scan recipe
+places the central configuration at the scan root and evaluates its JSON
+output, since the scan command itself has no fail-on flag; scanner errors
+remain visible.
+
+### Pytest timing history
+
+Keep timing history out of Git: timings are observations of executions, not
+source files. Local runs accumulate independently in the caller's ignored
+`.ai-review-ci/python/pytest-history/` and `.ai-review-ci/sage/pytest-history/`
+directories; they remain there until removed locally. CI distributes its own
+records as GitHub Actions artifacts, not as repository commits or branch caches.
+
+This covers the Python and bun-python profiles, the Sage profile (including
+coverage and focused runs), the optional Python GitHub-boundary test step
+regardless of caller profile, and Sage acceptance shards. Other profiles and
+tiers do not gain a pytest run merely by enabling history retention.
+
+The reusable workflows `.github/workflows/_qc.yml` and
+`.github/workflows/_acceptance.yml` publish the JSONL records from the central
+pytest recipes after testing, including after test failures when the upload
+step can execute. QC artifacts are named
+`RUN_ID-RUN_ATTEMPT-TIER-PROFILE-python-pytest-history` or
+`RUN_ID-RUN_ATTEMPT-TIER-PROFILE-sage-pytest-history`.
+Acceptance shards publish
+`RUN_ID-RUN_ATTEMPT-sage-pytest-history-SHARD_NAME-SHARD_INDEX` independently
+of the JUnit summary artifacts. The requested retention period is 90 days,
+subject to GitHub's repository and organization limits and earlier deletion.
+No artifact is created if no history was produced. Cancellation, runner
+failure or upload failure can prevent retention.
+
+From a fresh checkout, find the consuming repository's workflow run for the
+revision of interest (for push runs, filter by the tested commit):
+
+```bash
+gh run list --repo OWNER/REPO --commit SHA
+# Select RUN_ID and the exact history artifact name from the run's Artifacts.
+history="$(mktemp -d)"
+gh run download RUN_ID --repo OWNER/REPO --name ARTIFACT_NAME --dir "$history"
+uv run "$HOME/ai-review-ci/tool-artifacts/scripts/pytest_history.py" "$history"
+```
+
+Download the other relevant artifacts into the same history directory to
+compare runs; the reader accepts optional test-node substrings after the
+directory argument. The Actions run page identifies the run and attempt;
+for a pull request the actual checkout can be a merge commit rather than
+the PR head. Check the full `commit` in each JSONL session record to identify
+the tested revision. A dirty session records its base HEAD, not a unique
+identity for the modified tree; an unversioned session has no commit.
+An interrupted session lacks a finish record. Neither dirty runs nor
+unfinished tests establish a complete result for an exact revision.
+Compare durations under comparable runner, dependency and test-selection
+conditions: the history itself does not establish environment equivalence.
+
+This is a finite cross-checkout retention policy, not a permanent archive:
+local-only runs, runs before adoption, and expired or deleted CI artifacts
+cannot be retrieved through this mechanism. Keep a downloaded copy outside
+Git if longer retention is needed.
 
 ### Lean QC prerequisites
 

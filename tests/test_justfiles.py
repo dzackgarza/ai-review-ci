@@ -1801,7 +1801,6 @@ def test_semgrep_preserves_tracked_ignore_and_fails_loud_on_backup_failure(
     mktemp_shim = shim_dir / "mktemp"
     real_mktemp = shutil.which("mktemp")
     assert real_mktemp is not None
-    # Fail the ignore backup allocation, not report or staged-file allocation.
     mktemp_shim.write_text(
         '#!/usr/bin/env bash\nif [ "$#" -eq 1 ] && [ "$1" = "-d" ]; then exit 1; fi\n'
         f'exec {shlex.quote(real_mktemp)} "$@"\n',
@@ -2494,13 +2493,14 @@ def test_eslint_flat_config_imports_with_declared_tool_config_deps(
     assert "**/central-owned/**" in ignores
 
 
+@pytest.mark.parametrize("generated_dir", [".webpack/main", "src/generated"])
 def test_eslint_ignores_generated_typescript_but_reports_authored_violation(
-    tmp_path: pathlib.Path,
+    tmp_path: pathlib.Path, generated_dir: str,
 ) -> None:
     tool_config = tmp_path / "tool-configs"
     project = tmp_path / "downstream"
     authored = project / "src"
-    generated = project / ".webpack" / "main"
+    generated = project / generated_dir
     tool_config.mkdir()
     authored.mkdir(parents=True)
     generated.mkdir(parents=True)
@@ -2548,7 +2548,7 @@ def test_eslint_ignores_generated_typescript_but_reports_authored_violation(
     output = lint.stdout + lint.stderr
     assert lint.returncode != 0, output
     assert "src/owned.ts" in output
-    assert ".webpack/main/generated.ts" not in output
+    assert f"{generated_dir}/generated.ts" not in output
     assert "@typescript-eslint/no-explicit-any" in output
 
 
@@ -2901,6 +2901,100 @@ def test_eslint_runner_enforces_only_changed_vue_lines_in_ci(
     output = lint.stdout + lint.stderr
     assert lint.returncode != 0, output
     assert "no-explicit-any" in output
+
+
+def test_bun_lizard_local_and_ci_gate_the_same_complexity_regressions(
+    tmp_path: pathlib.Path,
+) -> None:
+    upstream = tmp_path / "upstream"
+    upstream.mkdir()
+    init_git_repo(upstream)
+    assert run_git(upstream, "branch", "-M", "trunk").returncode == 0
+    complex_function = (
+        "export function existing(value: number): number {\n"
+        + "".join(f"  if (value === {i}) return {i};\n" for i in range(9))
+        + "  return -1;\n}\n"
+    )
+    (upstream / "legacy.ts").write_text(complex_function)
+    assert run_git(upstream, "add", ".").returncode == 0
+    commit_without_hooks(upstream, "legacy complexity")
+    project = tmp_path / "downstream"
+    cloned = run_git(tmp_path, "clone", str(upstream), str(project))
+    assert cloned.returncode == 0, cloned.stderr
+    assert run_git(project, "config", "user.email", "test@example.invalid").returncode == 0
+    assert run_git(project, "config", "user.name", "Test User").returncode == 0
+    base = run_git(project, "rev-parse", "HEAD").stdout.strip()
+    recipe = ROOT / "justfiles" / "bun.just"
+
+    (project / "legacy.ts").write_text(complex_function.replace("return -1;", "return -2;"))
+    assert run_git(project, "add", ".").returncode == 0
+    commit_without_hooks(project, "change without new complexity")
+    ci_env = {**os.environ, "DIFF_COVER_BASE": base, "QC_TIER": "test-ci"}
+    ci = run_just(recipe, project, "_lizard-bun", env=ci_env)
+    assert ci.returncode == 0, ci.stdout + ci.stderr
+    local = run_just(recipe, project, "_lizard-bun")
+    assert local.returncode == 0, local.stdout + local.stderr
+    ambient = run_just(recipe, project, "_lizard-bun", env={**ci_env, "QC_TIER": "ambient"})
+    assert ambient.returncode == 1, ambient.stdout + ambient.stderr
+    assert "existing@" in ambient.stdout
+
+    new_function = complex_function.replace("existing(", "newComplexity(")
+    (project / "new.ts").write_text(new_function)
+    untracked = run_just(recipe, project, "_lizard-bun")
+    assert untracked.returncode == 1, untracked.stdout + untracked.stderr
+    assert "newComplexity@new.ts" in untracked.stdout
+    assert "existing@legacy.ts" not in untracked.stdout.split("ERROR: lizard found new complexity warnings")[-1]
+    (project / "new.ts").unlink()
+
+    (project / "legacy.ts").write_text(complex_function + new_function)
+    dirty = run_just(recipe, project, "_lizard-bun")
+    assert dirty.returncode == 1, dirty.stdout + dirty.stderr
+    assert "newComplexity@legacy.ts" in dirty.stdout
+    assert run_git(project, "add", ".").returncode == 0
+    commit_without_hooks(project, "introduce complexity regression")
+    for env in (os.environ.copy(), ci_env):
+        regression = run_just(recipe, project, "_lizard-bun", env=env)
+        assert regression.returncode == 1, regression.stdout + regression.stderr
+        assert "newComplexity@legacy.ts" in regression.stdout
+
+
+def test_bun_lizard_comparison_uses_common_ancestor_and_requires_a_base(
+    tmp_path: pathlib.Path,
+) -> None:
+    project = tmp_path / "downstream"
+    project.mkdir()
+    init_git_repo(project)
+    assert run_git(project, "branch", "-M", "trunk").returncode == 0
+    source = project / "main.ts"
+    source.write_text("export function f(value: number) { return value; }\n")
+    assert run_git(project, "add", ".").returncode == 0
+    commit_without_hooks(project, "common ancestor")
+    recipe = ROOT / "justfiles" / "bun.just"
+    missing = run_just(recipe, project, "_lizard-bun")
+    assert missing.returncode == 2, missing.stdout + missing.stderr
+    assert "no local comparison ref resolves" in missing.stderr
+    invalid = run_just(recipe, project, "_lizard-bun", env={**os.environ, "DIFF_COVER_BASE": "absent"})
+    assert invalid.returncode == 2, invalid.stdout + invalid.stderr
+    assert "DIFF_COVER_BASE does not resolve" in invalid.stderr
+    assert run_git(project, "branch", "-M", "main").returncode == 0
+    assert run_git(project, "switch", "-c", "feature").returncode == 0
+    complex_function = (
+        "export function f(value: number): number {\n"
+        + "".join(f"  if (value === {i}) return {i};\n" for i in range(9))
+        + "  return -1;\n}\n"
+    )
+    source.write_text(complex_function)
+    assert run_git(project, "add", ".").returncode == 0
+    commit_without_hooks(project, "feature introduces warning")
+    assert run_git(project, "switch", "main").returncode == 0
+    source.write_text(complex_function.replace("return -1;", "return -2;"))
+    assert run_git(project, "add", ".").returncode == 0
+    commit_without_hooks(project, "independent upstream warning")
+    assert run_git(project, "switch", "feature").returncode == 0
+    for env in (os.environ.copy(), {**os.environ, "DIFF_COVER_BASE": "main"}):
+        regression = run_just(recipe, project, "_lizard-bun", env=env)
+        assert regression.returncode == 1, regression.stdout + regression.stderr
+        assert "f@main.ts" in regression.stdout
 
 
 def test_bun_lizard_scans_only_changed_authored_files_in_ci(
@@ -3629,8 +3723,6 @@ def test_diff_cover_resolves_local_and_remote_base_refs(tmp_path: pathlib.Path) 
     assert "origin/main...HEAD" in remote.stdout
     assert "diff_cover_project.py (100%)" in remote.stdout
 
-    # A local base takes precedence over a different remote-tracking base.
-    # Here main has advanced to HEAD: the actual coverage report must have no diff.
     assert run_git(project, "branch", "main", "HEAD").returncode == 0
     local = run_just(justfile, project, "_diff-cover", env=env)
     assert local.returncode == 0, local.stdout + local.stderr
@@ -5055,6 +5147,53 @@ def test_biome_preserves_structured_text_and_fixture_inputs(tmp_path: pathlib.Pa
         assert (project / name).read_text() == content, name
     assert owned.read_text() == formatted
     assert not (project / "biome.json").exists()
+
+
+@pytest.mark.parametrize("include_authored", [False, True])
+def test_bun_normalize_preserves_generator_output(
+    tmp_path: pathlib.Path, include_authored: bool
+) -> None:
+    project = tmp_path / "bun-project"
+    generated = project / "src" / "generated" / "openapi.ts"
+    generated.parent.mkdir(parents=True)
+    init_git_repo(project)
+    spec = project / "openapi.json"
+    spec.write_text(json.dumps({
+        "openapi": "3.1.0",
+        "info": {"title": "Fixture", "version": "1.0.0"},
+        "paths": {"/version": {"get": {"responses": {"200": {
+            "description": "OK",
+            "content": {"application/json": {"schema": {"type": "string"}}},
+        }}}}},
+    }))
+    generator = [
+        "bun", "x", "--package", "openapi-typescript@7.13.0",
+        "openapi-typescript", str(spec), "--default-non-nullable=false",
+    ]
+    before = subprocess.check_output(generator, cwd=project)
+    generated.write_bytes(before)
+    authored = project / "src" / "generated-client.js"
+    if include_authored:
+        authored.write_text("export const value={x:1}\n")
+    assert run_git(project, "add", ".").returncode == 0
+
+    commit_check = run_just(ROOT / "justfiles" / "bun.just", project, "test-commit")
+    assert commit_check.returncode == 0, commit_check.stdout + commit_check.stderr
+    assert generated.read_bytes() == before
+    result = run_just(ROOT / "justfiles" / "bun.just", project, "_normalize")
+
+    assert generated.read_bytes() == before, result.stdout + result.stderr
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert subprocess.check_output(generator, cwd=project) == generated.read_bytes()
+    assert run_git(project, "diff", "--exit-code", "--", str(generated)).returncode == 0
+    if include_authored:
+        assert authored.read_text() == "export const value = { x: 1 };\n"
+        result = run_just(ROOT / "justfiles" / "bun.just", project, "_biome")
+        assert result.returncode == 0, result.stdout + result.stderr
+        authored.write_text("export const value={x:1}\n")
+        result = run_just(ROOT / "justfiles" / "bun.just", project, "_biome")
+        assert result.returncode != 0
+        assert "generated-client.js format" in result.stdout + result.stderr
 
 
 def test_biome_still_blocks_unformatted_files(tmp_path: pathlib.Path) -> None:

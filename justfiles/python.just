@@ -22,6 +22,7 @@ infra := justfile_directory() / ".."
 configs := infra / "tool-configs"
 artifacts := infra / "tool-artifacts"
 justfiles := infra / "justfiles"
+pytest_history := "-p qc_test_history --qc-history-dir .ai-review-ci/python/pytest-history"
 
 # public: print the wiring contract for putting a Python project on this QC
 setup:
@@ -420,7 +421,18 @@ _ci-ruff-format:
 	[ "${#python_files[@]}" -gt 0 ] || exit 0
 	uvx --from ruff ruff format --check --config {{configs}}/ruff-global.toml "${python_files[@]}"
 
-_pytest: _install-tools
+_python-pytest-history:
+	#!/usr/bin/env bash
+	set -euo pipefail
+	mkdir -p .ai-review-ci
+	ignore=.ai-review-ci/.gitignore
+	if [ ! -e "$ignore" ]; then
+		printf '*\n' >"$ignore"
+	elif ! grep -Fxq -e '*' -e '/python/pytest-history/' "$ignore"; then
+		printf '\n/python/pytest-history/\n' >>"$ignore"
+	fi
+
+_pytest: _install-tools _python-pytest-history
 	#!/usr/bin/env bash
 	set -euo pipefail
 	source "{{artifacts}}/scripts/heavy-gate-lock.sh"
@@ -446,7 +458,7 @@ _pytest: _install-tools
 		done
 	fi
 	export PYTHONPATH="{{artifacts}}/pytest_plugins${PYTHONPATH:+:$PYTHONPATH}"
-	if uvx --python 3.14 --from pytest "${with_args[@]}" pytest -p qc_xfail_issues; then
+	if uvx --python 3.14 --from pytest "${with_args[@]}" pytest -p qc_xfail_issues {{pytest_history}}; then
 		:
 	else
 		ec=$?
@@ -457,7 +469,7 @@ _pytest: _install-tools
 
 # public: isolated real-GitHub boundary tests; caller scopes GH_TOKEN to this recipe
 # and the downstream project owns gh_boundary marker registration and default deselection.
-test-gh-boundary: _install-tools
+test-gh-boundary: _install-tools _python-pytest-history
 	#!/usr/bin/env bash
 	set -euo pipefail
 	source "{{artifacts}}/scripts/heavy-gate-lock.sh"
@@ -482,7 +494,7 @@ test-gh-boundary: _install-tools
 		done
 	fi
 	export PYTHONPATH="{{artifacts}}/pytest_plugins${PYTHONPATH:+:$PYTHONPATH}"
-	if uvx --python 3.14 --from pytest "${with_args[@]}" pytest -p qc_xfail_issues -m gh_boundary; then
+	if uvx --python 3.14 --from pytest "${with_args[@]}" pytest -p qc_xfail_issues {{pytest_history}} -m gh_boundary; then
 		:
 	else
 		ec=$?
@@ -491,7 +503,7 @@ test-gh-boundary: _install-tools
 		exit $ec
 	fi
 
-_pytest_with_coverage: _install-tools
+_pytest_with_coverage: _install-tools _python-pytest-history
 	#!/usr/bin/env bash
 	set -euo pipefail
 	source "{{artifacts}}/scripts/heavy-gate-lock.sh"
@@ -526,7 +538,7 @@ _pytest_with_coverage: _install-tools
 		done
 	fi
 	export PYTHONPATH="{{artifacts}}/pytest_plugins${PYTHONPATH:+:$PYTHONPATH}"
-	if uvx --python 3.14 --from coverage "${with_args[@]}" coverage run -m pytest -p qc_xfail_issues; then
+	if uvx --python 3.14 --from coverage "${with_args[@]}" coverage run -m pytest -p qc_xfail_issues {{pytest_history}}; then
 		:
 	else
 		ec=$?

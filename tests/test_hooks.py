@@ -60,6 +60,7 @@ def hook_source_repo(tmp_path: pathlib.Path) -> pathlib.Path:
     shutil.copy(ROOT / "repo-hooks" / "lfs-hooks.sh", target_dir / "lfs-hooks.sh")
     (repo / "scripts").mkdir()
     shutil.copy(ROOT / "scripts" / "local-check.py", repo / "scripts" / "local-check.py")
+    shutil.copy(ROOT / "scripts" / "check-sage-syntax.py", repo / "scripts" / "check-sage-syntax.py")
     shutil.copy(ROOT / "scripts" / "hook-timing.py", repo / "scripts" / "hook-timing.py")
     (repo / "justfiles").mkdir()
     shutil.copy(ROOT / "justfiles" / "qc-tooling.just", repo / "justfiles" / "qc-tooling.just")

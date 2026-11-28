@@ -80,8 +80,6 @@ def test_install_writes_pr_template_with_gate_marker(tmp_path: pathlib.Path) -> 
     _write_pr_template(repo)
     dest = repo / ".github" / PR_TEMPLATE
     assert dest.is_file()
-    # The distributed template carries the marker, which is what opts the target
-    # repo into check_pr_description marker enforcement (#154).
     text = dest.read_text(encoding="utf-8")
     assert POLICY_GATE_MARKER in text
     assert "## Issue-scoped lifecycle gate — required" in text
@@ -92,31 +90,19 @@ def test_install_writes_pr_template_with_gate_marker(tmp_path: pathlib.Path) -> 
 
 
 def test_install_writes_canonical_aislop_config(tmp_path: pathlib.Path) -> None:
-    # #228: aislop has no --config flag — it reads .aislop/config.yml from the
-    # scanned directory root — so the uniform central policy governs a repo only
-    # if install physically lands this file in it. Run the real writer against a
-    # real tmp target and assert the config lands with python-print-debug
-    # disabled (the owner-policy payload). Real file boundary, no mock.
     repo = _git_repo(tmp_path)
     _write_aislop_config(repo)
     dest = repo / AISLOP_CONFIG
     assert dest.is_file()
     config = yaml.safe_load(dest.read_text())
     assert config["rules"]["ai-slop/python-print-debug"] == "off"
-    # No per-repo threshold / opt-in: it is the uniform central standard.
     assert "failBelow" not in (config.get("ci") or {})
 
 
 def test_distributed_aislop_config_matches_repo_own_config() -> None:
-    # #228: the config install distributes MUST be identical to the one governing
-    # ai-review-ci's own scan — otherwise the fleet standard and the head repo's
-    # own gate silently diverge. The packaged canonical is the single source; the repo-root
-    # copy that aislop reads for the self-scan must stay byte-identical to it.
     packaged = (ROOT / "src" / "ai_review_ci" / "data" / "aislop-config.yml").read_text()
     repo_own = (ROOT / ".aislop" / "config.yml").read_text()
     assert repo_own == packaged
-    # And the comment must not still claim the config is undistributed (#205 was
-    # reversed by #228); the stale claim would be an outright false statement.
     assert "NOT distributed" not in packaged
 
 
@@ -168,7 +154,6 @@ def test_install_writes_scheduled_ambient_workflow(tmp_path: pathlib.Path, profi
     _write_trigger_workflows(repo, profile)
 
     ambient = yaml.safe_load((repo / ".github" / "workflows" / AMBIENT_WORKFLOW).read_text())
-    # PyYAML reads the bare key `on` as True.
     triggers = ambient[True]
     assert [entry["cron"] for entry in triggers["schedule"]]
     assert "pull_request" not in triggers and "push" not in triggers
@@ -178,7 +163,6 @@ def test_install_writes_scheduled_ambient_workflow(tmp_path: pathlib.Path, profi
 
 
 def test_install_writes_no_ambient_workflow_for_docs_and_configs(tmp_path: pathlib.Path) -> None:
-    # docs-and-configs runs no semgrep in any tier, so it has no ambient audit.
     repo = _git_repo(tmp_path)
     _write_trigger_workflows(repo, "docs-and-configs")
 
@@ -389,7 +373,6 @@ def test_gates_qc_doctor_grants_labels_read_scope() -> None:
     perms = _workflow_jobs("_gates.yml")["qc-doctor"].get("permissions")
     assert isinstance(perms, dict), "qc-doctor job must declare least-privilege permissions"
     assert perms.get("issues") == "read", f"qc-doctor job must grant issues: read so the label-alignment check's `gh label list` call is verifiable; got permissions={perms!r}"
-    # Least privilege: read scope only, never widened to write.
     assert "write" not in perms.values()
 
 
@@ -425,36 +408,15 @@ def test_install_refuses_overwriting_repo_owned_scaffold(
 def test_skip_scaffold_final_proof_adopts_brownfield_non_delegating_justfile(
     tmp_path: pathlib.Path,
 ) -> None:
-    # Brownfield adoption (#202): a repo that predates ai-review-ci owns a
-    # substantive, non-delegating top-level justfile. Under --skip-scaffold the
-    # installer writes the triggers and PR template and leaves the
-    # justfile untouched — justfile delegation/conformance convergence is
-    # deferred to a `doctor` finding by design. The final proof step must
-    # therefore reach SUCCESS on exactly this intended-success state: everything
-    # ai-review-ci installs is present, and the ONLY outstanding doctor findings
-    # are the deferred justfile delegation/conformance ones.
-    #
-    # Regression guard: before the fix the proof step ran doctor and hard-exited
-    # on doctor's (by-design) `misconfigured` status, so a fully-adopted repo
-    # reported install failure on the very case --skip-scaffold exists to serve.
-    # This exercises the real proof boundary (a real `doctor` run against the
-    # installed file state) and reds if that abort regresses. It does NOT pass
-    # via an earlier-boundary failure: it runs the proof step directly and
-    # asserts it *returns*, then asserts the success end state.
     repo = _git_repo(tmp_path)
     (repo / "pyproject.toml").write_text('[project]\nname = "target"\nversion = "0.1.0"\n')
     existing = repo / "justfile"
     brownfield_justfile = "# pre-existing brownfield justfile\ntest:\n    @true\n"
     existing.write_text(brownfield_justfile)
-    # Everything install writes under --skip-scaffold (the scaffold itself is skipped):
     _write_trigger_workflows(repo, "python")
     _write_pr_template(repo)
-    # Must NOT abort: the only outstanding doctor findings are the deferred
-    # justfile delegation/conformance ones. A regressed (strict) proof step
-    # raises SystemExit here.
     _prove_installation(repo, skip_scaffold=True)
 
-    # Success end state: adoption completed and the brownfield justfile is intact.
     assert existing.read_text() == brownfield_justfile
     assert not (repo / ".ai-review-ci.toml").exists()
     assert (repo / ".github" / "workflows" / PR_WORKFLOW).is_file()
@@ -464,39 +426,21 @@ def test_skip_scaffold_final_proof_still_aborts_on_non_justfile_fault(
     tmp_path: pathlib.Path,
     capsys: pytest.CaptureFixture[str],
 ) -> None:
-    # Narrowness invariant (#202): --skip-scaffold defers ONLY justfile
-    # delegation/conformance convergence. Every other doctor misconfiguration
-    # must still make the final proof fail loud — the tolerance is not a blanket
-    # "ignore doctor findings". Here the brownfield repo is missing the installed
-    # trigger workflows (a `workflow`-surface fault, non-deferred), so even under
-    # skip_scaffold the proof step must abort. A blanket-suppression regression
-    # would let this pass; pytest.raises(SystemExit) reds on it.
     repo = _git_repo(tmp_path)
     (repo / "pyproject.toml").write_text('[project]\nname = "target"\nversion = "0.1.0"\n')
     (repo / "justfile").write_text("# pre-existing brownfield justfile\ntest:\n    @true\n")
-    # Triggers deliberately NOT written: a genuine non-deferred fault remains.
 
     with pytest.raises(SystemExit):
         _prove_installation(repo, skip_scaffold=True)
 
     err = capsys.readouterr().err
     assert "FATAL: ai-review-ci doctor final proof failed" in err
-    # The non-deferred fault is surfaced, not suppressed.
     assert "workflow" in err
 
 
 def test_cli_install_skip_scaffold_bypasses_scaffold_overwrite_guard(
     tmp_path: pathlib.Path,
 ) -> None:
-    # Brownfield guard-bypass (#202): --skip-scaffold is the explicit opt-in that
-    # lets install proceed on a repo that already owns a top-level justfile
-    # instead of hard-exiting at the scaffold-overwrite guard. This proves the
-    # CLI threads the flag end to end: the scaffold guard does NOT fire, the
-    # existing justfile is left untouched, and the triggers are written.
-    # Full adoption completion is proven at the proof-step boundary by
-    # test_skip_scaffold_final_proof_adopts_brownfield_non_delegating_justfile;
-    # here execution reaches the real gh branch-protection boundary and fails
-    # there only because the gh target repo is unavailable.
     repo = _git_repo(tmp_path)
     (repo / "pyproject.toml").write_text('[project]\nname = "target"\nversion = "0.1.0"\n')
     existing = repo / "justfile"
@@ -516,9 +460,6 @@ def test_cli_install_skip_scaffold_bypasses_scaffold_overwrite_guard(
 def test_cli_install_without_skip_scaffold_still_refuses_existing_justfile(
     tmp_path: pathlib.Path,
 ) -> None:
-    # Adoption is opt-in: the genuine unsafe-overwrite guard stays live. Without
-    # --skip-scaffold a pre-existing justfile still hard-exits and nothing is
-    # written (#202 keeps the honest refusal for the accidental case).
     repo = _git_repo(tmp_path)
     (repo / "justfile").write_text("test-commit:\n    @true\n")
 
@@ -543,9 +484,6 @@ def test_qc_workflow_declares_gh_boundary_opt_in_disabled_by_default() -> None:
 
 
 def test_qc_tier_step_does_not_export_gh_token_tier_wide() -> None:
-    # #218: GH_TOKEN must not sit on the whole "Run QC tier" step (nor the job
-    # env it inherits), where every QC recipe and every npx/uvx tool runner
-    # (semgrep, ai-slop, aislop) would execute with the token in its environment.
     data = yaml.safe_load((_WORKFLOWS_DIR / "_qc.yml").read_text())
     job = data["jobs"]["qc"]
     assert "GH_TOKEN" not in (job.get("env") or {})
@@ -575,8 +513,6 @@ def test_qc_workflow_installs_project_profile_before_running_acceptance() -> Non
 
 
 def test_sage_ci_runs_the_setup_recipe_in_the_published_runtime() -> None:
-    # #491: the Sage image is the only provider of SAGE_BIN, so a caller's setup
-    # recipe runs inside it, with the node and bun a runner would carry.
     job = _workflow_jobs("_qc.yml")["qc"]
     assert job["container"] == "${{ inputs.profile == 'sage' && inputs.tier == 'test-ci' && 'ghcr.io/dzackgarza/sage:develop' || '' }}"
     assert job["defaults"]["run"]["shell"] == "bash"
@@ -620,8 +556,6 @@ def test_qc_workflow_runs_validated_project_setup_before_acceptance() -> None:
 
 
 def test_qc_workflow_caches_project_setup_around_the_recipe(tmp_path: pathlib.Path) -> None:
-    # #459: the cache is restored before the setup recipe and saved right after
-    # it, before the QC tier, under a key that follows the caller's key files.
     job = _workflow_jobs("_qc.yml")["qc"]
     names = [step.get("name") for step in job["steps"]]
     key_step = job["steps"][names.index("Key the project CI environment cache")]
@@ -661,9 +595,6 @@ def test_qc_workflow_caches_project_setup_around_the_recipe(tmp_path: pathlib.Pa
 
 
 def test_qc_workflow_setup_cache_follows_the_period_of_a_rolling_source(tmp_path: pathlib.Path) -> None:
-    # A setup recipe that installs from a rolling repository (TeX Live) has no
-    # pin in its key files; with setup_cache_period the key also holds the ISO
-    # week, so the cache follows upstream once a week.
     job = _workflow_jobs("_qc.yml")["qc"]
     key_step = next(step for step in job["steps"] if step.get("name") == "Key the project CI environment cache")
     validation = next(step for step in job["steps"] if step.get("name") == "Validate inputs")
@@ -710,10 +641,6 @@ def test_qc_workflow_accepts_only_remote_acceptance_tiers() -> None:
 
 
 def test_qc_scopes_gh_token_to_explicitly_opted_in_gh_boundary_step() -> None:
-    # #218: only an explicit caller opt-in permits real-boundary GitHub tests to
-    # receive the token, in their own step running the canonical Python profile
-    # recipe — never the tier-wide `just "$QC_TIER"` run that drives third-party
-    # tool runners.
     job = _workflow_jobs("_qc.yml")["qc"]
     token_steps = [step for step in job["steps"] if isinstance(step, dict) and (step.get("env") or {}).get("GH_TOKEN") == "${{ github.token }}"]
     assert len(token_steps) == 1, token_steps
@@ -776,8 +703,6 @@ def test_qc_push_diff_uses_previous_commit_and_branch_scoped_debt(tmp_path: path
                     "-c", "core.hooksPath=/dev/null", "commit", "-q", "-m", "base"],
                    cwd=repo, check=True)
     base = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=repo, text=True).strip()
-    # The resolver fetches the default branch from origin, as a checkout of
-    # workflow_dispatch needs.
     origin = tmp_path / "origin.git"
     subprocess.run(["git", "init", "-q", "--bare", str(origin)], check=True)
     subprocess.run(["git", "remote", "add", "origin", str(origin)], cwd=repo, check=True)
@@ -790,8 +715,6 @@ def test_qc_push_diff_uses_previous_commit_and_branch_scoped_debt(tmp_path: path
                    cwd=repo, check=True)
     output = tmp_path / "github-env"
     output.write_text("")
-    # The resolver adds the workspace to the global safe.directory list; the
-    # global configuration of the test is a file of its own.
     env = os.environ | {
         "DIFF_COVER_BASE": "0" * 40,
         "GITHUB_ENV": str(output),
@@ -808,3 +731,37 @@ def test_qc_push_diff_uses_previous_commit_and_branch_scoped_debt(tmp_path: path
                             cwd=repo, env=env, text=True, capture_output=True)
     assert result.returncode == 0, result.stdout + result.stderr
     assert output.read_text() == ""
+
+
+@pytest.mark.parametrize("profile", ["python", "sage"])
+def test_qc_retains_pytest_history_after_all_test_steps(profile: str) -> None:
+    steps = _workflow_jobs("_qc.yml")["qc"]["steps"]
+    upload = next(step for step in steps if step.get("name") == f"Retain {profile} pytest history")
+    assert steps.index(upload) > next(i for i, step in enumerate(steps) if step.get("name") == "Run gh-boundary tests")
+    assert upload["if"] == "always()"
+    assert upload["uses"].startswith("actions/upload-artifact@")
+    assert upload["with"] == {
+        "name": "${{ github.run_id }}-${{ github.run_attempt }}-${{ inputs.tier }}-${{ inputs.profile }}-" + profile + "-pytest-history",
+        "path": f".ai-review-ci/{profile}/pytest-history/*.jsonl",
+        "include-hidden-files": True,
+        "if-no-files-found": "ignore",
+        "retention-days": 90,
+    }
+
+
+def test_acceptance_retains_each_shards_pytest_history_separately() -> None:
+    jobs = _workflow_jobs("_acceptance.yml")
+    steps = jobs["shard"]["steps"]
+    upload = next(step for step in steps if step.get("name") == "Retain Sage pytest history")
+    assert steps.index(upload) > next(i for i, step in enumerate(steps) if step.get("name") == "Run the shard")
+    assert upload["if"] == "always()"
+    assert upload["uses"].startswith("actions/upload-artifact@")
+    assert upload["with"] == {
+        "name": "${{ github.run_id }}-${{ github.run_attempt }}-sage-pytest-history-${{ matrix.name }}-${{ matrix.shard }}",
+        "path": ".ai-review-ci/sage/pytest-history/*.jsonl",
+        "include-hidden-files": True,
+        "if-no-files-found": "ignore",
+        "retention-days": 90,
+    }
+    download = next(step for step in jobs["summary"]["steps"] if step.get("uses", "").startswith("actions/download-artifact@"))
+    assert download["with"]["pattern"] == "acceptance-*"

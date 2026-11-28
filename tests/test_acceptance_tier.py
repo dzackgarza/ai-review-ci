@@ -22,7 +22,6 @@ ROOT = pathlib.Path(__file__).resolve().parents[1]
 SAGE_JUSTFILE = ROOT / "justfiles" / "sage.just"
 
 PYPROJECT = '[project]\nname = "acceptance-target"\nversion = "0.1.0"\n\n[tool.pytest.ini_options]\npythonpath = ["."]\n'
-# The target's one product module; each suite case records through it that it ran.
 RECORD = 'from pathlib import Path\n\n\ndef record(name):\n    Path(f"ran-{name}").touch()\n'
 UNIT_CASE = 'from record import record\n\n\ndef test_unit():\n    record("unit")\n'
 ACCEPTANCE_CASE = 'from record import record\n\n\ndef test_family():\n    record("acceptance")\n'
@@ -42,7 +41,6 @@ def target_repository(root: pathlib.Path, files: dict[str, str]) -> pathlib.Path
         path = project / relative_path
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(contents)
-    # The suite recipes record each run against the target's HEAD commit.
     assert run(["git", "add", "."], project).returncode == 0
     committed = run(
         ["git", "-c", "user.name=QC Test", "-c", "user.email=qc@example.invalid", "-c", "core.hooksPath=/dev/null", "commit", "-q", "-m", "fixture"],
@@ -59,7 +57,7 @@ def interpreter(tmp_path_factory: pytest.TempPathFactory) -> dict[str, str]:
     venv = root / "venv"
     created = run(["uv", "venv", "--quiet", "--python", "3.14", str(venv)], root)
     assert created.returncode == 0, created.stdout + created.stderr
-    installed = run(["uv", "pip", "install", "--quiet", "--python", str(venv / "bin" / "python"), "pytest", "coverage"], root)
+    installed = run(["uv", "pip", "install", "--quiet", "--python", str(venv / "bin" / "python"), "pytest", "coverage", "pytest-shard"], root)
     assert installed.returncode == 0, installed.stdout + installed.stderr
     startup = root / "startup" / "sage"
     startup.mkdir(parents=True)
@@ -88,6 +86,40 @@ def test_sage_suite_recipes_run_every_test_except_the_acceptance_suite(
     assert result.returncode == 0, output
     assert (project / "ran-unit").exists(), output
     assert not (project / "ran-acceptance").exists(), output
+    assert_history(project, "tests/test_unit.py::test_unit", 0)
+
+
+def assert_history(project: pathlib.Path, nodeid: str, exitstatus: int) -> None:
+    revision = run(["git", "rev-parse", "HEAD"], project).stdout.strip()
+    records = list((project / ".ai-review-ci/sage/pytest-history").glob("*.jsonl"))
+    assert len(records) == 1
+    session, started, test, finish = map(json.loads, records[0].read_text().splitlines())
+    assert session["type"] == "session" and session["commit"] == revision
+    assert session["dirty"] is False
+    assert started["nodeid"] == test["nodeid"] == nodeid
+    assert test["duration"] > 0
+    assert test["outcome"] == ("passed" if exitstatus == 0 else "failed")
+    assert finish["exitstatus"] == exitstatus
+    assert run(["git", "check-ignore", str(records[0])], project).returncode == 0
+
+
+@pytest.mark.parametrize("fails", [False, True])
+def test_sage_acceptance_shard_records_history(tmp_path: pathlib.Path, interpreter: dict[str, str], fails: bool) -> None:
+    case = "def test_family():\n    assert False\n" if fails else ACCEPTANCE_CASE
+    project = target_repository(
+        tmp_path,
+        {"tests/test_unit.py": UNIT_CASE, "tests/acceptance/test_family.py": case},
+    )
+    env = os.environ | interpreter
+    result = run(
+        ["just", "--justfile", str(SAGE_JUSTFILE), "-d", str(project),
+         "_sage-acceptance-shard", "test_family.py", "test_family", "0", "1"],
+        project, env,
+    )
+    assert result.returncode == int(fails), result.stdout + result.stderr
+    assert not (project / "ran-unit").exists()
+    assert (project / ".ai-review-ci/acceptance/test_family-0/junit.xml").is_file()
+    assert_history(project, "tests/acceptance/test_family.py::test_family", int(fails))
 
 
 def test_sage_test_discovery_leaves_acceptance_sage_files_to_the_acceptance_workflow(tmp_path: pathlib.Path) -> None:

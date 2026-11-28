@@ -1,28 +1,3 @@
-# Reusable acceptance tier (#478). The push and CI tiers run every test except
-# tests/acceptance/; this workflow runs that suite on every push of the caller.
-# Each file is split into pytest-shard shards so no job nears the 6-hour
-# hosted-runner limit, and the summary job collates every shard's JUnit report
-# into one failure list (the run summary and the acceptance-summary artifact).
-#
-# The caller's setup_recipe runs in the Sage image before its shard. It makes
-# the project and its dependencies importable by the Sage interpreter: install
-# them with "$SAGE_BIN" -pip, or export PYTHONPATH through $GITHUB_ENV.
-#
-# A caller runs it on every push and never cancels a run in progress:
-#
-#   on:
-#     push: {}
-#   concurrency:
-#     group: acceptance-${{ github.ref }}
-#     cancel-in-progress: false
-#   jobs:
-#     acceptance:
-#       uses: dzackgarza/ai-review-ci/.github/workflows/_acceptance.yml@main
-#       with:
-#         infra_ref: main
-#         setup_recipe: ci-provision-sage
-#         shards: '{"test_family.sage": 4}'
-#         image: ghcr.io/<owner>/<repo>-sage:py314
 name: Acceptance (reusable)
 on:
   workflow_call:
@@ -48,7 +23,6 @@ permissions:
   packages: read
 defaults:
   run:
-    # Explicit bash runs with pipefail; a container job's default shell is sh.
     shell: bash
 jobs:
   plan:
@@ -70,8 +44,6 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 360
     container:
-      # The caller's image: a project on a newer Python than the stock
-      # sagemath images (3.12) publishes its own rebuild.
       image: ${{ inputs.image }}
       credentials:
         username: ${{ github.actor }}
@@ -110,6 +82,15 @@ jobs:
           name: acceptance-${{ matrix.name }}-${{ matrix.shard }}
           path: .ai-review-ci/acceptance/
           include-hidden-files: true
+      - name: Retain Sage pytest history
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: ${{ github.run_id }}-${{ github.run_attempt }}-sage-pytest-history-${{ matrix.name }}-${{ matrix.shard }}
+          path: .ai-review-ci/sage/pytest-history/*.jsonl
+          include-hidden-files: true
+          if-no-files-found: ignore
+          retention-days: 90
   summary:
     needs: shard
     if: always()
