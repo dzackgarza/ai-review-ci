@@ -60,6 +60,9 @@ def _require_managed_gate(target: Path) -> None:
 
 def _candidate_gate(target: Path, tree: str, base: str) -> int:
     """Evaluate the exact staged tree without exposing the caller's checkout or index."""
+    ignored_runtime = _git_output(
+        target, "ls-files", "--others", "--ignored", "--exclude-standard", "--directory", "-z",
+    )
     local_git_vars = set(_git_output(target, "rev-parse", "--local-env-vars").splitlines())
     env = {key: value for key, value in os.environ.items() if key not in local_git_vars}
     with TemporaryDirectory(prefix="ai-review-ci-red-commit-") as tmp:
@@ -79,8 +82,16 @@ def _candidate_gate(target: Path, tree: str, base: str) -> int:
             if recipe.returncode != 0:
                 _reject("the staged candidate has no runnable test-commit recipe.")
             gate = subprocess.run(["just", "test-commit"], cwd=checkout, env=env)
-            if gate.returncode < 0:
+            if gate.returncode < 0 or gate.returncode >= 128:
                 _reject("the commit gate was terminated before returning a verdict.")
+            if gate.returncode in (126, 127):
+                _reject("the commit gate runtime is unavailable (command could not execute).")
+            if gate.returncode != 0 and ignored_runtime:
+                _reject(
+                    "the isolated gate failed with ignored checkout content omitted; "
+                    "runtime parity cannot be established. Run from a clean checkout "
+                    "with the gate runtime available outside the checkout."
+                )
             return gate.returncode
         finally:
             subprocess.run(

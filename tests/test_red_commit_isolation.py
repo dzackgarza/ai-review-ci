@@ -1,6 +1,8 @@
 """Exercise red-commit against real Git indexes and mutating Just recipes."""
 
 from pathlib import Path
+import subprocess
+import sys
 
 import pytest
 
@@ -130,3 +132,49 @@ def test_missing_managed_hook_cannot_authorize_bypass(repo: Path) -> None:
     assert "no installed ai-review-ci pre-commit gate" in result.stderr
     assert "formatter ran" not in result.stdout
     assert _state(repo) == before
+
+
+def _stage_local_runtime_gate(repo: Path, recipe: str) -> None:
+    (repo / ".gitignore").write_text(".venv/\n")
+    runtime = repo / ".venv" / "bin"
+    runtime.mkdir(parents=True)
+    (runtime / "python").symlink_to(sys.executable)
+    (repo / "justfile").write_text(recipe)
+    (repo / "example.py").write_text("x = 1\n")
+    _git(repo, "add", ".gitignore", "justfile", "example.py")
+    _git(repo, "commit", "--no-verify", "-m", "local runtime baseline")
+    (repo / "example.py").write_text("x = 2\n")
+    _git(repo, "add", "example.py")
+
+
+@pytest.mark.parametrize("command", [
+    "./.venv/bin/python -m py_compile example.py",
+    "test -x .venv/bin/python",
+])
+def test_missing_ignored_runtime_cannot_authorize_green_candidate(
+    repo: Path, command: str
+) -> None:
+    _stage_local_runtime_gate(repo, f"test-commit:\n    @{command}\n")
+    ordinary = subprocess.run(["just", "test-commit"], cwd=repo, check=False)
+    assert ordinary.returncode == 0
+    head = _git(repo, "rev-parse", "HEAD").stdout
+    index = _git(repo, "diff", "--cached", "--binary").stdout
+    result = _red_commit(repo, "--issue", "444", "-m", "not a red proof")
+    assert result.returncode != 0, result.stdout + result.stderr
+    assert "runtime" in result.stderr or "unavailable" in result.stderr
+    assert _git(repo, "rev-parse", "HEAD").stdout == head
+    assert _git(repo, "diff", "--cached", "--binary").stdout == index
+    assert (repo / ".venv" / "bin" / "python").is_symlink()
+    assert (repo / "example.py").read_text() == "x = 2\n"
+    assert _git(repo, "worktree", "list", "--porcelain").stdout.count("worktree ") == 1
+
+
+@pytest.mark.parametrize("command", ["exit 126", "exit 127"])
+def test_unavailable_gate_status_cannot_authorize_bypass(repo: Path, command: str) -> None:
+    (repo / "justfile").write_text(f"test-commit:\n    @{command}\n")
+    _git(repo, "add", "justfile")
+    head = _git(repo, "rev-parse", "HEAD").stdout
+    result = _red_commit(repo, "--issue", "444", "-m", "unavailable")
+    assert result.returncode != 0, result.stdout + result.stderr
+    assert "unavailable" in result.stderr
+    assert _git(repo, "rev-parse", "HEAD").stdout == head

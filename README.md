@@ -100,7 +100,8 @@ Existing global installations should rerun `just install-global-hooks` to instal
 A project adds its own cheap checks as extra lines in its root `test-commit` and `test-push` recipes, after the delegated line.
 
 For an intentionally failing commit gate, `ai-review-ci red-commit --issue <number> -m "<message>"` tests the staged candidate in a temporary Git worktree.
-The route rejects exempt repositories, missing gates, and passing candidates without running formatters in the original checkout.
+The route rejects exempt repositories, missing or unavailable gates, and passing candidates without running formatters in the original checkout.
+An isolated failure with ignored local checkout content (such as a virtual environment) omitted is not a red verdict: use a clean checkout with the gate runtime provisioned outside it. Ignored local content is never linked into the candidate, where a mutating recipe could modify it.
 A failing candidate commits the original staged content with the issue's `Red-Proof` trailer; unstaged changes and gate-generated edits are not included.
 Use an ordinary commit for a failing test that nevertheless passes the development syntax gate.
 There is no side-channel script.
