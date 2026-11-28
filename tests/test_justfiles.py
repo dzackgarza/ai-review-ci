@@ -1691,6 +1691,9 @@ def test_semgrep_scans_tests_tree_for_banned_test_patterns(tmp_path: pathlib.Pat
         )
     )
 
+    init_git_repo(project)
+    assert run_git(project, "add", "tests/test_thing.py").returncode == 0
+
     result = run_just(ROOT / "justfiles" / "shared.just", project, "_semgrep")
 
     output = result.stdout + result.stderr
@@ -1737,8 +1740,45 @@ def test_semgrep_ignores_generated_yarn_and_labextension_output(
         assert path.name not in output, f"{path} was scanned:\n{output}"
 
 
+@pytest.mark.parametrize("recipe", ["_semgrep-autofix", "_semgrep"])
+def test_semgrep_preserves_owned_ignore_symlink(
+    tmp_path: pathlib.Path, recipe: str,
+) -> None:
+    project = tmp_path / "project"
+    tests = project / "tests"
+    tests.mkdir(parents=True)
+    original_ignore = tmp_path / "owned-ignore"
+    sentinel = "tests/\n"
+    original_ignore.write_text(sentinel)
+    ignore = project / ".semgrepignore"
+    ignore.symlink_to(original_ignore)
+    init_git_repo(project)
+    assert run_git(project, "add", ".semgrepignore").returncode == 0
+    commit_without_hooks(project, "existing ignore")
+    source = tests / "test_example.py"
+    source.write_text("def test_x(monkeypatch):\n    monkeypatch.setattr(x, 'y', z)\n")
+    assert run_git(project, "add", "tests/test_example.py").returncode == 0
+
+    result = run_just(ROOT / "justfiles" / "shared.just", project, recipe)
+
+    output = result.stdout + result.stderr
+    assert ignore.is_symlink(), output
+    assert ignore.readlink() == original_ignore
+    assert original_ignore.read_text() == sentinel
+    if recipe == "_semgrep-autofix":
+        assert result.returncode == 0, output
+        assert re.search(r"Ran \d+ rules on 1 file: [1-9]\d* finding", output), output
+        assert re.search(r"semgrep autofix: [1-9]\d* advisory finding group\(s\); CI-tier verification owns them", output), output
+        assert not re.search(r"\(\d+ blocking\)", output), output
+    else:
+        assert result.returncode != 0, output
+        assert "py-no-monkeypatch" in output
+    assert run_git(project, "diff", "--exit-code", "--", ".semgrepignore").returncode == 0
+
+
+@pytest.mark.parametrize("recipe", ["_semgrep-autofix", "_semgrep"])
 def test_semgrep_preserves_tracked_ignore_and_fails_loud_on_backup_failure(
-    tmp_path: pathlib.Path,
+    tmp_path: pathlib.Path, recipe: str,
 ) -> None:
     """#225 Defect 1: the _semgrep gate overwrites .semgrepignore to force the
     QC exclude set, backing up any pre-existing file for restore-on-exit. A
@@ -1750,20 +1790,32 @@ def test_semgrep_preserves_tracked_ignore_and_fails_loud_on_backup_failure(
     tracked_ignore = project / ".semgrepignore"
     sentinel = "tests/fixtures/user-owned-exclusion/**\n"
     tracked_ignore.write_text(sentinel)
+    init_git_repo(project)
+    assert run_git(project, "add", ".semgrepignore").returncode == 0
+    commit_without_hooks(project, "existing ignore")
+    (project / "example.py").write_text("value = 1\n")
+    assert run_git(project, "add", "example.py").returncode == 0
 
     shim_dir = tmp_path / "shim"
     shim_dir.mkdir()
     mktemp_shim = shim_dir / "mktemp"
-    mktemp_shim.write_text("#!/usr/bin/env bash\nexit 1\n")
+    real_mktemp = shutil.which("mktemp")
+    assert real_mktemp is not None
+    mktemp_shim.write_text(
+        '#!/usr/bin/env bash\nif [ "$#" -eq 1 ] && [ "$1" = "-d" ]; then exit 1; fi\n'
+        f'exec {shlex.quote(real_mktemp)} "$@"\n',
+    )
     mktemp_shim.chmod(0o755)
     env = os.environ | {"PATH": f"{shim_dir}:{os.environ['PATH']}"}
 
-    result = run_just(ROOT / "justfiles" / "shared.just", project, "_semgrep", env=env)
+    result = run_just(ROOT / "justfiles" / "shared.just", project, recipe, env=env)
 
     output = result.stdout + result.stderr
     assert result.returncode != 0, output
     assert tracked_ignore.read_text() == sentinel, f"tracked .semgrepignore was clobbered:\n{output}"
+    assert "failed to allocate a backup for .semgrepignore" in output, output
     assert TRIAGE_MARKER in output, output
+    assert run_git(project, "diff", "--exit-code", "--", ".semgrepignore").returncode == 0
 
 
 def write_fake_npx_slop_scan(tmp_path: pathlib.Path, payload: dict[str, Any]) -> pathlib.Path:
