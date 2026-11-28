@@ -9,6 +9,7 @@ source = { editable = "." }
 dependencies = [
     { name = "automated-reviews" },
     { name = "cyclopts" },
+    { name = "packaging" },
     { name = "pydantic" },
     { name = "pygments" },
     { name = "pytest" },
@@ -28,6 +29,7 @@ dev = [
 requires-dist = [
     { name = "automated-reviews", git = "https://github.com/dzackgarza/automated-reviews.git?rev=main" },
     { name = "cyclopts" },
+    { name = "packaging" },
     { name = "pydantic", specifier = ">=2" },
     { name = "pygments", specifier = ">=2.21.0" },
     { name = "pytest", specifier = ">=9.1.1" },
