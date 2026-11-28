@@ -10,6 +10,9 @@ if [ "${1:-}" != "--" ]; then
 fi
 shift
 
+exec {ignore_lock}<.
+flock -x "$ignore_lock"
+
 ignore_file=".semgrepignore"
 had_preexisting=0
 backup_dir=""
@@ -23,8 +26,6 @@ if [ -e "$ignore_file" ] || [ -L "$ignore_file" ]; then
 		echo "ERROR: failed to allocate a backup for $ignore_file; original is untouched." >&2
 		exit 1
 	fi
-	# Copy the directory entry, not a symlink's target. Do not remove the
-	# original until the backup succeeds.
 	if ! cp -a -- "$ignore_file" "$backup_dir/original"; then
 		rm -rf -- "$backup_dir"
 		echo "ERROR: failed to back up the existing $ignore_file; aborting before the QC exclude set overwrites it." >&2
@@ -42,8 +43,6 @@ restore_semgrepignore() {
 }
 trap restore_semgrepignore EXIT
 
-# Unlink before writing, so even a dangling symlink cannot redirect writes
-# outside the checkout.
 if [ "$had_preexisting" -eq 1 ]; then
 	rm -f -- "$ignore_file"
 fi
