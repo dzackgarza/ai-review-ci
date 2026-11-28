@@ -12,7 +12,8 @@ review log or a top-level disposition ledger.
 Usage:
   triage_state.py [--repo owner/name] [--pr N] [--json] [--no-write]
 
-Defaults: --repo and --pr are derived from the current branch's PR when omitted.
+Run inside the target PR worktree. --repo must match its GitHub repository;
+--pr defaults to the current branch's PR when omitted.
 Requires: gh (authenticated) and git. Standard library only.
 """
 
@@ -21,6 +22,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import os
 import re
 import subprocess
 import sys
@@ -73,8 +75,19 @@ query($owner: String!, $name: String!, $pr: Int!, $cursor: String) {
 """
 
 
-def run(args: list[str]) -> subprocess.CompletedProcess[str]:
-    return subprocess.run(args, capture_output=True, text=True, check=False)
+def run(
+    args: list[str],
+    *,
+    cwd: Path | None = None,
+    env: dict[str, str] | None = None,
+) -> subprocess.CompletedProcess[str]:
+    return subprocess.run(
+        args, cwd=cwd, env=env, capture_output=True, text=True, check=False,
+    )
+
+
+def checkout_environment() -> dict[str, str]:
+    return {key: value for key, value in os.environ.items() if key != "GH_REPO"}
 
 
 def gh_graphql(query: str, **variables: object) -> dict:
@@ -82,7 +95,7 @@ def gh_graphql(query: str, **variables: object) -> dict:
     for key, value in variables.items():
         flag = "-F" if isinstance(value, int) and not isinstance(value, bool) else "-f"
         args.extend([flag, f"{key}={value}"])
-    result = run(args)
+    result = run(args, env=checkout_environment())
     if result.returncode != 0:
         sys.exit(f"gh graphql failed: {result.stderr.strip()[:400]}")
     try:
@@ -143,20 +156,44 @@ def _deletion_fields_are_valid(body: str) -> bool:
     )
 
 
-def resolve_target(repo: str | None, pr: int | None) -> tuple[str, int]:
-    if not repo:
-        result = run(
-            ["gh", "repo", "view", "--json", "nameWithOwner", "-q", ".nameWithOwner"]
+def resolve_target(repo: str | None, pr: int | None) -> tuple[str, int, Path]:
+    git_root = run(["git", "rev-parse", "--show-toplevel"])
+    if git_root.returncode != 0 or not git_root.stdout.strip():
+        sys.exit("Could not resolve Git worktree; run inside the target PR checkout.")
+    root = Path(git_root.stdout.strip())
+    checkout_env = checkout_environment()
+    result = run(
+        ["gh", "repo", "view", "--json", "nameWithOwner", "-q", ".nameWithOwner"],
+        cwd=root,
+        env=checkout_env,
+    )
+    checkout_repo = result.stdout.strip()
+    if result.returncode != 0 or not checkout_repo or "/" not in checkout_repo:
+        sys.exit(f"Could not identify GitHub repository for checkout {root}: {result.stderr.strip()}")
+    if repo is None and "GH_REPO" in os.environ:
+        requested = run(
+            ["gh", "repo", "view", os.environ["GH_REPO"],
+             "--json", "nameWithOwner", "-q", ".nameWithOwner"],
+            cwd=root,
+            env=checkout_env,
         )
-        repo = result.stdout.strip()
-    if not pr:
-        result = run(["gh", "pr", "view", "--json", "number", "-q", ".number"])
+        if requested.returncode != 0 or not requested.stdout.strip():
+            sys.exit(f"Could not resolve GH_REPO: {requested.stderr.strip()}")
+        repo = requested.stdout.strip()
+    if repo is not None and repo.casefold() != checkout_repo.casefold():
+        sys.exit(f"Requested repository {repo} does not match checkout repository {checkout_repo} at {root}.")
+    if pr is None:
+        result = run(
+            ["gh", "pr", "view", "--json", "number", "-q", ".number"],
+            cwd=root,
+            env=checkout_env,
+        )
         if result.returncode != 0 or not result.stdout.strip():
             sys.exit("No PR for the current branch; pass --pr N.")
         pr = int(result.stdout.strip())
-    if not repo or "/" not in repo:
-        sys.exit("Could not resolve --repo owner/name.")
-    return repo, int(pr)
+    if pr < 1:
+        sys.exit("PR number must be positive.")
+    return checkout_repo, pr, root
 
 
 def _remaining_comments(thread_id: str, cursor: str) -> list[dict]:
@@ -412,12 +449,15 @@ def disposition_of(thread: dict) -> dict | None:
     return candidates[-1] if candidates else None
 
 
-def state_path(repo: str, pr: int) -> Path:
+def state_path(repo: str, pr: int, root: Path) -> Path:
     repo_slug = re.sub(r"[^A-Za-z0-9_.-]+", "-", repo).strip("-")
     result = run(
         [
             "git",
+            "-C",
+            str(root),
             "rev-parse",
+            "--path-format=absolute",
             "--git-path",
             f"ai-review-ci/{repo_slug}/pr-feedback-triage-{pr}.json",
         ]
@@ -427,7 +467,7 @@ def state_path(repo: str, pr: int) -> Path:
     return Path(result.stdout.strip())
 
 
-def load_previous(path: Path) -> dict[str, dict]:
+def load_previous(path: Path, repo: str, pr: int) -> dict[str, dict]:
     if not path.exists():
         return {}
     try:
@@ -436,6 +476,19 @@ def load_previous(path: Path) -> dict[str, dict]:
         sys.exit(f"Could not read triage state {path}: {error}")
     if not isinstance(payload, dict):
         sys.exit(f"Invalid triage state {path}: expected a JSON object.")
+    stored_repo = payload.get("repo")
+    stored_pr = payload.get("pr")
+    if (
+        not isinstance(stored_repo, str)
+        or stored_repo.casefold() != repo.casefold()
+        or not isinstance(stored_pr, int)
+        or isinstance(stored_pr, bool)
+        or stored_pr != pr
+    ):
+        sys.exit(
+            f"Invalid triage state {path}: identity {stored_repo!r} PR {stored_pr!r} "
+            f"does not match {repo} PR {pr}."
+        )
     records = payload.get("records", [])
     if not isinstance(records, list):
         sys.exit(f"Invalid triage state {path}: records must be an array.")
@@ -590,9 +643,9 @@ def main() -> None:
     )
     args = parser.parse_args()
 
-    repo, pr = resolve_target(args.repo, args.pr)
-    path = state_path(repo, pr)
-    previous = load_previous(path)
+    repo, pr, root = resolve_target(args.repo, args.pr)
+    path = state_path(repo, pr, root)
+    previous = load_previous(path, repo, pr)
     head_sha, threads = fetch_threads(repo, pr)
     pr_commits = fetch_pr_commit_shas(repo, pr)
     records = build_records(
@@ -600,7 +653,7 @@ def main() -> None:
         previous,
         head_sha,
         pr_commits=pr_commits,
-        repo_root=Path.cwd(),
+        repo_root=root,
     )
 
     counts: dict[str, int] = {}

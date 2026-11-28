@@ -2,7 +2,9 @@ from __future__ import annotations
 
 import importlib.util
 import json
+import os
 import subprocess
+import sys
 from pathlib import Path
 from types import ModuleType
 
@@ -250,26 +252,16 @@ Deleted artifact: None
     assert "proof anchor tests/test_missing.py::test_evidence does not exist" in record["disp"]["validation_errors"]
 
 
-def test_state_path_is_namespaced_by_repository(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
+def test_state_path_is_namespaced_by_repository(tmp_path: Path) -> None:
     triage = load_triage_state()
-    calls: list[list[str]] = []
+    checkout = git_checkout(tmp_path / "checkout", FIRST_REPO)
 
-    def fake_run(args: list[str]) -> subprocess.CompletedProcess[str]:
-        calls.append(args)
-        return subprocess.CompletedProcess(args, 0, ".git/ai-review-ci/state.json\n", "")
+    first = triage.state_path("owner/first", 7, checkout)
+    second = triage.state_path("owner/second", 7, checkout)
+    another_pr = triage.state_path("owner/first", 8, checkout)
 
-    monkeypatch.setattr(triage, "run", fake_run)
-
-    triage.state_path("owner/first", 7)
-    first = calls[-1][-1]
-    triage.state_path("owner/second", 7)
-    second = calls[-1][-1]
-
-    assert first != second
-    assert "owner-first" in first
-    assert "owner-second" in second
+    assert len({first, second, another_pr}) == 3
+    assert all(path.is_relative_to(checkout / ".git") for path in (first, second, another_pr))
 
 
 def test_load_previous_rejects_non_object_state(tmp_path: Path) -> None:
@@ -278,7 +270,23 @@ def test_load_previous_rejects_non_object_state(tmp_path: Path) -> None:
     path.write_text(json.dumps([]), encoding="utf-8")
 
     with pytest.raises(SystemExit, match="expected a JSON object"):
-        triage.load_previous(path)
+        triage.load_previous(path, "owner/repo", 7)
+
+
+def test_load_previous_resumes_only_complete_dispositions_for_matching_identity(tmp_path: Path) -> None:
+    triage = load_triage_state()
+    path = tmp_path / "state.json"
+    complete = {"verdict": "rejected", "complete": True}
+    path.write_text(json.dumps({
+        "repo": "owner/repo", "pr": 7,
+        "records": [
+            {"key": "completed", "disp": complete},
+            {"key": "pending", "disp": {"verdict": "rejected", "complete": False}},
+            {"key": "new", "disp": None},
+        ],
+    }))
+
+    assert triage.load_previous(path, "OWNER/Repo", 7) == {"completed": complete}
 
 
 def test_fetch_threads_fails_loudly_for_missing_repository(
@@ -370,3 +378,126 @@ def test_fetch_threads_paginates_comments_and_returns_head_sha(
 
     assert head_sha == "a" * 40
     assert len(threads[0]["comments"]["nodes"]) == 101
+
+
+FIRST_REPO = "dzackgarza/ai-review-ci"
+FIRST_PR = 529
+SECOND_REPO = "dzackgarza/sage-lsp-server"
+SECOND_PR = 5
+
+
+def git_checkout(path: Path, repo: str) -> Path:
+    subprocess.run(["git", "init", "--quiet", str(path)], check=True)
+    subprocess.run(
+        ["git", "remote", "add", "origin", f"https://github.com/{repo}.git"],
+        cwd=path, check=True,
+    )
+    subprocess.run(
+        ["git", "-c", "user.name=Triage fixture", "-c", "user.email=fixture@example.test",
+         "-c", "core.hooksPath=/dev/null", "commit", "--quiet", "--allow-empty", "-m", "fixture"],
+        cwd=path, check=True,
+    )
+    return path
+
+
+def run_collector(
+    checkout: Path, repo: str | None, pr: int, *options: str,
+    gh_repo: str | None = None,
+) -> subprocess.CompletedProcess[str]:
+    env = {key: value for key, value in os.environ.items() if key != "GH_REPO"}
+    if gh_repo is not None:
+        env["GH_REPO"] = gh_repo
+    command = [sys.executable, str(SCRIPT), "--pr", str(pr), "--json", *options]
+    if repo is not None:
+        command.extend(["--repo", repo])
+    return subprocess.run(
+        command, cwd=checkout, env=env, capture_output=True, text=True, check=False,
+    )
+
+
+def metadata_path(checkout: Path, repo: str, pr: int) -> Path:
+    slug = repo.replace("/", "-")
+    return Path(subprocess.check_output(
+        ["git", "rev-parse", "--path-format=absolute", "--git-path",
+         f"ai-review-ci/{slug}/pr-feedback-triage-{pr}.json"],
+        cwd=checkout, text=True,
+    ).strip())
+
+
+@pytest.mark.gh_boundary
+@pytest.mark.parametrize("requested_repo", [SECOND_REPO, None])
+def test_collector_rejects_mismatched_checkout(
+    tmp_path: Path, requested_repo: str | None,
+) -> None:
+    checkout = git_checkout(tmp_path / "first", FIRST_REPO)
+    result = run_collector(checkout, requested_repo, SECOND_PR, gh_repo=SECOND_REPO)
+
+    assert result.returncode != 0, result.stdout
+    assert FIRST_REPO in result.stderr
+    assert SECOND_REPO in result.stderr
+    assert not metadata_path(checkout, SECOND_REPO, SECOND_PR).exists()
+
+
+@pytest.mark.gh_boundary
+@pytest.mark.parametrize("foreign_identity", [
+    {"repo": SECOND_REPO, "pr": FIRST_PR},
+    {"repo": FIRST_REPO, "pr": FIRST_PR + 1},
+    {"repo": FIRST_REPO},
+    {"pr": FIRST_PR},
+])
+def test_collector_rejects_foreign_resume_state(
+    tmp_path: Path, foreign_identity: dict[str, str | int],
+) -> None:
+    checkout = git_checkout(tmp_path / "first", FIRST_REPO)
+    path = metadata_path(checkout, FIRST_REPO, FIRST_PR)
+    path.parent.mkdir(parents=True)
+    path.write_text(json.dumps({**foreign_identity, "records": []}))
+    before = path.read_bytes()
+
+    result = run_collector(checkout, FIRST_REPO, FIRST_PR, "--no-write")
+
+    assert result.returncode != 0, result.stdout
+    assert "triage state" in result.stderr
+    assert "identity" in result.stderr
+    assert path.read_bytes() == before
+
+
+@pytest.mark.gh_boundary
+def test_collector_keeps_repositories_and_worktrees_isolated(tmp_path: Path) -> None:
+    first = git_checkout(tmp_path / "first", FIRST_REPO)
+    second = git_checkout(tmp_path / "second", SECOND_REPO)
+    linked = tmp_path / "linked"
+    subprocess.run(["git", "worktree", "add", "--quiet", "--detach", str(linked)],
+                   cwd=first, check=True)
+    nested = linked / "nested"
+    nested.mkdir()
+
+    def collect(checkout: Path, repo: str, pr: int) -> Path:
+        result = run_collector(checkout, repo, pr)
+        assert result.returncode == 0, result.stderr
+        path = metadata_path(checkout, repo, pr)
+        emitted = Path(json.loads(result.stdout)["state_path"])
+        assert emitted.is_absolute()
+        assert emitted == path
+        state = json.loads(path.read_text())
+        assert (state["repo"], state["pr"]) == (repo, pr)
+        head = subprocess.check_output(
+            ["gh", "pr", "view", str(pr), "--repo", repo, "--json", "headRefOid", "-q", ".headRefOid"],
+            text=True,
+        ).strip()
+        assert state["head_sha"] == head
+        return path
+
+    first_path = collect(first, FIRST_REPO, FIRST_PR)
+    first_bytes = first_path.read_bytes()
+    second_path = collect(second, SECOND_REPO, SECOND_PR)
+    second_bytes = second_path.read_bytes()
+    linked_path = collect(nested, FIRST_REPO, FIRST_PR)
+    assert len({first_path, second_path, linked_path}) == 3
+    assert first_path.read_bytes() == first_bytes
+    assert second_path.read_bytes() == second_bytes
+    result = run_collector(first, None, FIRST_PR, "--no-write", gh_repo=FIRST_REPO)
+    assert result.returncode == 0, result.stderr
+    assert json.loads(result.stdout)["state_path"] is None
+    assert first_path.read_bytes() == first_bytes
+    assert not any((checkout / ".pr").exists() for checkout in (first, second, linked))
