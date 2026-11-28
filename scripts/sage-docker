@@ -94,7 +94,11 @@ if [[ "$mode" == sage-docker-update ]]; then
         current=
     fi
     if [[ -z "$current" ]]; then
+        volume_names=$(docker volume ls --format '{{.Name}}')
         docker run -d --label "sage-docker.config=$run_config" "${run_options[@]}" "$image" infinity
+        if ! grep -Fxq sage-tree <<< "$volume_names"; then
+            printf '%s\n' "$image_revision" > "$volume_root/sage-tree/image-revision"
+        fi
     elif [[ $(docker inspect --format '{{.State.Running}}' "$container") == false ]]; then
         docker start "$container"
     fi

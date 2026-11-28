@@ -83,6 +83,28 @@ def test_justfile_shebang_recipe_is_not_a_comment(tmp_path: Path) -> None:
             assert "justfile:5: remove code comment" in result.stderr
 
 
+def test_pep723_inline_script_metadata_is_not_a_comment(tmp_path: Path) -> None:
+    checker = Path(__file__).resolve().parents[1] / "scripts/check_staged_comments.py"
+    subprocess.run(["git", "init", "-q"], cwd=tmp_path, check=True)
+    path = tmp_path / "docs_query.py"
+    script = (
+        "#!/usr/bin/env -S uv run --script\n"
+        "# /// script\n"
+        '# requires-python = ">=3.12"\n'
+        '# dependencies = ["networkx>=3.4"]\n'
+        "# ///\n"
+        "import networkx\n"
+        "graph = networkx.DiGraph()\n"
+    )
+    for source, expected in [(script, 0), (script + "# note\n", 1)]:
+        path.write_text(source)
+        subprocess.run(["git", "add", "-f", "--", "docs_query.py"], cwd=tmp_path, check=True)
+        result = subprocess.run([sys.executable, checker], cwd=tmp_path, capture_output=True, text=True)
+        assert result.returncode == expected, result.stderr
+        if expected:
+            assert "docs_query.py:8: remove code comment" in result.stderr
+
+
 def test_semgrep_rule_fixture_annotations_are_not_code_comments(tmp_path: Path) -> None:
     checker = Path(__file__).resolve().parents[1] / "scripts/check_staged_comments.py"
     subprocess.run(["git", "init", "-q"], cwd=tmp_path, check=True)
@@ -164,6 +186,8 @@ def test_script_metadata_passes_pre_commit_but_staged_explanatory_comment_fails(
     ("a.py", '# /// script\n# dependencies = 42\n# ///\nprint(42)\n', 1),
     ("a.py", '# /// script\n# dependencies = ["not a dependency?"]\n# ///\nprint(42)\n', 1),
     ("a.py", '# /// script\n# requires-python = "not a version specifier"\n# ///\nprint(42)\n', 1),
+    ("a.py", '# /// script\n# dependencies = [""]\n# ///\nprint(42)\n', 1),
+    ("a.py", '# /// script\n# dependencies = ["numpy; invalid_marker == \'x\'"]\n# ///\nprint(42)\n', 1),
     ("a.py", '# /// custom\n# dependencies = []\n# ///\nprint(42)\n', 1),
     ("a.py", '# /// script\n# dependencies = []\n# ///\n# ordinary comment\nprint(42)\n', 4),
     ("a.py", '# /// script\n# dependencies = []\n# ///\n\n# /// script\n# dependencies = []\n# ///\nprint(42)\n', 1),

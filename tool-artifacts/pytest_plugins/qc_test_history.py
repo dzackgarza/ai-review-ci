@@ -1,10 +1,11 @@
 r"""Stream one timing record per pytest run into a history directory.
 
-Loaded by ``_sage-pytest-run`` (``-p qc_test_history --qc-history-dir DIR``).
+Loaded by the Python and Sage pytest recipes (``-p qc_test_history --qc-history-dir DIR``).
 Each run appends to its own ``DIR/<UTC start>-<commit>.jsonl``, flushing every
 line as it happens:
 
 - ``session``: commit, whether the work tree was dirty, pytest arguments;
+  a source directory without a Git revision has a null commit;
 - ``start``: a test began (so a killed run shows the test it died in);
 - ``test``: a test finished, with its outcome and setup + call + teardown duration;
 - ``finish``: the exit status, written only when the session ends normally.
@@ -35,19 +36,26 @@ class HistoryRecorder:
         directory = Path(config.getoption("--qc-history-dir"))
         directory.mkdir(parents=True, exist_ok=True)
         started = datetime.now(UTC)
-        commit = _git(config.rootpath, "rev-parse", "HEAD").strip()
-        self.handle: TextIO = (directory / f"{started:%Y%m%dT%H%M%S%fZ}-{commit[:12]}.jsonl").open("x")
+        revision = subprocess.run(
+            ["git", "rev-parse", "--verify", "--quiet", "HEAD"],
+            cwd=config.rootpath, capture_output=True, text=True,
+        )
+        if revision.returncode not in (0, 1) and "not a git repository" not in revision.stderr:
+            revision.check_returncode()
+        commit = revision.stdout.strip() or None
+        revision_label = commit[:12] if commit else "unversioned"
+        self.handle: TextIO = (directory / f"{started:%Y%m%dT%H%M%S%fZ}-{revision_label}.jsonl").open("x")
         self.durations: dict[str, float] = {}
         self.outcomes: dict[str, str] = {}
         self._write(
             type="session",
             started=started.isoformat(),
             commit=commit,
-            dirty=bool(_git(config.rootpath, "status", "--porcelain")),
+            dirty=bool(_git(config.rootpath, "status", "--porcelain")) if commit else None,
             args=[str(argument) for argument in config.invocation_params.args],
         )
 
-    def _write(self, **fields: object) -> None:
+    def _write(self, **fields: str | int | float | bool | list[str] | None) -> None:
         self.handle.write(json.dumps(fields) + "\n")
         self.handle.flush()
 

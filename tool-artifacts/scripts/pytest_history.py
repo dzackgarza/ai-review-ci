@@ -38,7 +38,9 @@ def main() -> None:
         if session["type"] != "session":
             sys.exit(f"ERROR: {path} does not begin with a session line")
         run = path.stem.split("-", 1)[0]
-        commit = session["commit"][:12] + ("+dirty" if session["dirty"] else "")
+        commit = session["commit"][:12] if session["commit"] else "unversioned"
+        if session["dirty"]:
+            commit += "+dirty"
         interrupted = "" if events[-1]["type"] == "finish" else "  (interrupted)"
         finished = {event["nodeid"]: event for event in events if event["type"] == "test"}
         started = [event["nodeid"] for event in events if event["type"] == "start"]
