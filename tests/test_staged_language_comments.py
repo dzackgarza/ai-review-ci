@@ -162,6 +162,8 @@ def test_script_metadata_passes_pre_commit_but_staged_explanatory_comment_fails(
     ("a.py", '# /// script\n# dependencies = []\nprint(42)\n', 1),
     ("a.py", '# /// script\n# not TOML\n# ///\nprint(42)\n', 1),
     ("a.py", '# /// script\n# dependencies = 42\n# ///\nprint(42)\n', 1),
+    ("a.py", '# /// script\n# dependencies = ["not a dependency?"]\n# ///\nprint(42)\n', 1),
+    ("a.py", '# /// script\n# requires-python = "not a version specifier"\n# ///\nprint(42)\n', 1),
     ("a.py", '# /// custom\n# dependencies = []\n# ///\nprint(42)\n', 1),
     ("a.py", '# /// script\n# dependencies = []\n# ///\n# ordinary comment\nprint(42)\n', 4),
     ("a.py", '# /// script\n# dependencies = []\n# ///\n\n# /// script\n# dependencies = []\n# ///\nprint(42)\n', 1),

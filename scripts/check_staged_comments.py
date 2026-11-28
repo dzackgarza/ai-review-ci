@@ -5,6 +5,8 @@ import sys
 import tomllib
 from pathlib import Path
 
+from packaging.requirements import InvalidRequirement, Requirement
+from packaging.specifiers import InvalidSpecifier, SpecifierSet
 from pygments.lexers import get_lexer_by_name, get_lexer_for_filename, guess_lexer
 from pygments.lexers.python import PythonLexer
 from pygments.token import Comment
@@ -45,6 +47,12 @@ def script_metadata_range(source: str) -> range:
     if not isinstance(dependencies, list) or not all(isinstance(item, str) for item in dependencies):
         return range(0)
     if not isinstance(metadata.get("requires-python", ""), str) or not isinstance(metadata.get("tool", {}), dict):
+        return range(0)
+    try:
+        for dependency in dependencies:
+            Requirement(dependency)
+        SpecifierSet(metadata.get("requires-python", ""))
+    except (InvalidRequirement, InvalidSpecifier):
         return range(0)
     return range(*match.span())
 
