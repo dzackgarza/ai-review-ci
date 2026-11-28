@@ -98,6 +98,11 @@ On machines using LFS, configure its filters with `git lfs install --skip-repo` 
 Existing global installations should rerun `just install-global-hooks` to install the three post hooks.
 
 A project adds its own cheap checks as extra lines in its root `test-commit` and `test-push` recipes, after the delegated line.
+
+For an intentionally failing commit gate, `ai-review-ci red-commit --issue <number> -m "<message>"` tests the staged candidate in a temporary Git worktree.
+The route rejects exempt repositories, missing gates, and passing candidates without running formatters in the original checkout.
+A failing candidate commits the original staged content with the issue's `Red-Proof` trailer; unstaged changes and gate-generated edits are not included.
+Use an ordinary commit for a failing test that nevertheless passes the development syntax gate.
 There is no side-channel script.
 The hooks have no tool installation step.
 Full suites and broad diagnostics remain in CI.
